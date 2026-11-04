@@ -105,8 +105,40 @@
     <string name="ss_show_share_media_subtitle">Show share options button on detail pages</string>
     <string name="ss_show_external_ratings_title">Show External Ratings</string>
     <string name="ss_show_external_ratings_subtitle">Display critic rating scores (IMDb/TMDB) on details pages</string>
-    <string name="ss_performance_mode_title">Performance Mode</string>
-    <string name="ss_performance_mode_subtitle">Reduces heavy animations and layout calculations for low-end devices</string>
+    <string name="ss_performance_mode_title">Performance Level</string>
+    <string name="ss_performance_mode_subtitle">The master dial: Standard, Streamlined or Essential — granular overrides live in the hub</string>
+    <!-- The Performance hub's granular override rows (the perf_* tri-states). -->
+    <string name="ss_perf_animations_title">Animations</string>
+    <string name="ss_perf_animations_subtitle">App-wide UI animations and motion effects (Auto follows the level)</string>
+    <string name="ss_perf_shared_elements_title">Shared Element Transitions</string>
+    <string name="ss_perf_shared_elements_subtitle">Animate artwork between screens (Auto follows the level)</string>
+    <string name="ss_perf_nav_transitions_title">Navigation Transitions</string>
+    <string name="ss_perf_nav_transitions_subtitle">Animated screen transitions, or instant navigation (Auto follows the level)</string>
+    <string name="ss_perf_image_decode_cap_title">Image Decode Cap</string>
+    <string name="ss_perf_image_decode_cap_subtitle">Cap artwork decode size, or follow the level policy (Auto)</string>
+    <string name="ss_perf_image_crossfade_title">Image Crossfade</string>
+    <string name="ss_perf_image_crossfade_subtitle">Fade images in when they finish loading (Auto follows the level)</string>
+    <string name="ss_perf_blurhash_title">BlurHash Placeholders</string>
+    <string name="ss_perf_blurhash_subtitle">Blurry placeholder art while posters load (Auto follows the level)</string>
+    <string name="ss_perf_quality_badges_title">Quality Badges</string>
+    <string name="ss_perf_quality_badges_subtitle">4K / HDR / Dolby Vision badges on cards (Auto follows the level)</string>
+    <string name="ss_perf_ambient_hero_video_title">Ambient Hero Video</string>
+    <string name="ss_perf_ambient_hero_video_subtitle">Animated video backdrops on detail heroes (Auto follows the level)</string>
+    <string name="ss_perf_backdrop_blur_title">Backdrop Blur</string>
+    <string name="ss_perf_backdrop_blur_subtitle">Blurred backdrop layers behind sheets and players (Auto follows the level)</string>
+    <string name="ss_perf_screensaver_motion_title">Screensaver Motion</string>
+    <string name="ss_perf_screensaver_motion_subtitle">Ken Burns drift on the screensaver (Auto follows the level)</string>
+    <string name="ss_image_memory_cache_title">Image Memory Cache</string>
+    <string name="ss_image_memory_cache_subtitle">Memory-cache size as a percent of the heap (0 = RAM-tiered auto, 5–35 explicit)</string>
+    <!-- The Performance hub's ExoPlayer buffer quartet (the playback-domain rows). -->
+    <string name="ss_exo_initial_buffer_ms_title">Initial Buffer</string>
+    <string name="ss_exo_initial_buffer_ms_subtitle">Audio/video buffered before playback starts (250–5000 ms)</string>
+    <string name="ss_exo_rebuffer_ms_title">Rebuffer Target</string>
+    <string name="ss_exo_rebuffer_ms_subtitle">Buffered amount needed to resume after a stall (500–10000 ms)</string>
+    <string name="ss_exo_target_buffer_mb_title">Target Buffer Size</string>
+    <string name="ss_exo_target_buffer_mb_subtitle">Total forward buffer in MB (0 = engine-derived auto, 5–512 explicit)</string>
+    <string name="ss_exo_retain_back_buffer_title">Retain Back Buffer</string>
+    <string name="ss_exo_retain_back_buffer_subtitle">Keep the back buffer regardless of keyframe boundaries (instant rewind, higher memory)</string>
     <string name="ss_reduce_motion_title">Reduce Motion</string>
     <string name="ss_reduce_motion_subtitle">Disable parallax transitions and extreme list scaling effects</string>
     <string name="ss_blue_light_filter_title">Blue Light Filter</string>

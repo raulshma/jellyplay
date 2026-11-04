@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.feature.settings.NotificationSettingsScreen
 import com.raulshma.jellyplay.feature.settings.PinnedHomeSectionsScreen
 import com.raulshma.jellyplay.feature.settings.PrivacyDataScreen
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsScreen
+import com.raulshma.jellyplay.feature.settings.PerformanceSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SecuritySettingsScreen
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
@@ -102,6 +103,12 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onCustomizeShortcuts = {
                 navigator.navigate(Route.ShortcutsCustomize(com.raulshma.jellyplay.core.model.ShortcutSurface.OVERFLOW))
             },
+            // The Performance group's "Customize…" row: the master dial lives
+            // in the hub — the appearance-side quick picker deep-links there,
+            // highlighting the master row.
+            onOpenPerformanceHub = {
+                navigator.navigate(Route.PerformanceSettings(highlightSettingId = "performance_mode"))
+            },
         )
     }
 
@@ -164,6 +171,20 @@ fun EntryProviderScope<NavKey>.settingsSection(
             SettingsNavActions(onNavigate = { route -> navigator.navigate(route) })
         }
         PlaybackSettingsScreen(
+            onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
+            navActions = navActions,
+        )
+    }
+
+    entry<Route.PerformanceSettings> { entry ->
+        // The Performance hub's cross-reference rows (the device-profile
+        // Re-detect row, the Exo-engine back-buffer row) drill into the
+        // playback screen through the same navigator-backed facade.
+        val navActions = remember(navigator) {
+            SettingsNavActions(onNavigate = { route -> navigator.navigate(route) })
+        }
+        PerformanceSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
             navActions = navActions,

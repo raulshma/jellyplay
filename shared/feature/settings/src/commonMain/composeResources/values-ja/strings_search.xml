@@ -97,8 +97,8 @@
     <string name="ss_show_share_media_subtitle">詳細ページに共有オプションボタンを表示します</string>
     <string name="ss_show_external_ratings_title">外部評価を表示</string>
     <string name="ss_show_external_ratings_subtitle">詳細ページに批評家の評価スコア (IMDb/TMDB) を表示します</string>
-    <string name="ss_performance_mode_title">パフォーマンスモード</string>
-    <string name="ss_performance_mode_subtitle">低スペックデバイス向けに重いアニメーションとレイアウト計算を削減します</string>
+    <string name="ss_performance_mode_title">パフォーマンスレベル</string>
+    <string name="ss_performance_mode_subtitle">マスター ダイヤル：標準 / 軽量 / 最低限 — 細かい上書きはパフォーマンスハブにあります</string>
     <string name="ss_reduce_motion_title">モーションを減らす</string>
     <string name="ss_reduce_motion_subtitle">視差トランジションや極端なリストスケーリング効果を無効にします</string>
     <string name="ss_blue_light_filter_title">ブルーライトフィルター</string>

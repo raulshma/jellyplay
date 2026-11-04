@@ -66,6 +66,12 @@ enum class NavTransitionKind {
  * All inputs the transition decision needs, with Compose/Route types already
  * flattened to plain enums/booleans. This keeps [NavTransitionPolicy] pure and
  * unit-testable.
+ *
+ * [isReducedMotion] is the CALLER'S fold of "transitions must be instant":
+ * the reduced-motion posture (`ResolvedPerformanceConfig.reducedMotion` =
+ * animation suppression OR the accessibility flag) OR the resolved
+ * `navTransitionsInstant` override. The policy stays a pure consumer — the
+ * config fold happens once at the read site (MainNavDisplay).
  */
 data class NavTransitionContext(
     val targetClass: NavRouteClass,
@@ -98,7 +104,9 @@ interface NavTransitionPolicy {
 object DefaultNavTransitionPolicy : NavTransitionPolicy {
 
     override fun kind(context: NavTransitionContext): NavTransitionKind {
-        // Reduce-motion flattens everything to instant, regardless of route.
+        // The caller's instant-fold (reduced-motion posture OR the resolved
+        // navTransitionsInstant override) flattens everything to instant,
+        // regardless of route.
         if (context.isReducedMotion) return NavTransitionKind.INSTANT
 
         val target = context.targetClass

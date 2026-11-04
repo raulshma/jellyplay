@@ -41,7 +41,8 @@ internal enum class BackdropLayer { NONE, BLUR_HASH, AMBIENT }
 @Stable
 internal data class HomeBackdropState(
     val enabled: Boolean,
-    val performanceMode: Boolean,
+    /** The resolved posture's backdrop-blur row (false suppresses the layer). */
+    val backdropBlur: Boolean,
     val oledMode: Boolean,
     val isLightTheme: Boolean,
     /** BlurHash of the current hero backdrop, if any. */
@@ -53,17 +54,18 @@ internal data class HomeBackdropState(
 )
 
 /**
- * Whether the backdrop should render at all. Suppressed when disabled, in
- * performance mode (matches `MediaImage`'s blurhash gating), and in light
- * themes. The colourful ambient/blurhash layers sit full-screen behind a
- * scrolling list, which destroys text contrast on a light background — so
- * light mode shows the plain [HomeBackdropState.backgroundColor] (the
- * resolved `colorScheme.background`) instead. This mirrors the detail screen,
- * which fades its hero into the plain theme background in light mode rather
- * than darkening it. Pure so it can be unit-tested without a composition.
+ * Whether the backdrop should render at all. Suppressed when disabled, when
+ * the resolved posture's backdrop row is off (PERFORMANCE suppresses via
+ * AUTO — matches `MediaImage`'s blurhash gating), and in light themes. The
+ * colourful ambient/blurhash layers sit full-screen behind a scrolling list,
+ * which destroys text contrast on a light background — so light mode shows
+ * the plain [HomeBackdropState.backgroundColor] (the resolved
+ * `colorScheme.background`) instead. This mirrors the detail screen, which
+ * fades its hero into the plain theme background in light mode rather than
+ * darkening it. Pure so it can be unit-tested without a composition.
  */
 internal fun shouldRenderBackdrop(state: HomeBackdropState): Boolean =
-    state.enabled && !state.performanceMode && !state.isLightTheme
+    state.enabled && state.backdropBlur && !state.isLightTheme
 
 /**
  * Picks the active [BackdropLayer] from the resolved state. Pure for testing.
@@ -188,8 +190,9 @@ internal fun rememberFocusBackdropState(
  *  3. **Nothing** — the flat [HomeBackdropState.backgroundColor] shows through.
  *
  * Performance & accessibility:
- *  - Suppressed entirely in `performanceMode` (matches `MediaImage`'s blurhash
- *    nulling) so low-end devices pay zero cost.
+ *  - Suppressed entirely when the resolved posture's backdrop row is off
+ *    (`ResolvedPerformanceConfig.backdropBlur` — PERFORMANCE via AUTO; matches
+ *    `MediaImage`'s blurhash nulling) so low-end devices pay zero cost.
  *  - Suppressed entirely in light themes (see [shouldRenderBackdrop]); the
  *    flat [HomeBackdropState.backgroundColor] shows through instead, keeping
  *    list content legible on a light surface.

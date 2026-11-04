@@ -14,6 +14,10 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PerformanceDetection
+import com.raulshma.jellyplay.core.model.PerformanceLevel
+import com.raulshma.jellyplay.core.model.ExoBufferPosture
+import com.raulshma.jellyplay.feature.player.video.engine.exoTargetBufferBytesFromMb
+import com.raulshma.jellyplay.feature.player.video.engine.exoBufferPosture
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -230,6 +234,39 @@ class VideoPlayerViewModel(
      */
     val performanceDetection: StateFlow<PerformanceDetection?>
         get() = stores.performanceResolver.detection
+
+    /**
+     * The master UI-performance LEVEL (the appearance domain's one dial —
+     * Settings → Performance): the diagnostics surfaces read it (the stats
+     * overlay's Level row, the playback-options sheet's read-only Level
+     * line). Deliberately DISTINCT from the playback VIDEO performance
+     * profile (issue #186's device-tier system, which rides
+     * [VideoPlayerUiState.uiPrefs]) — the two labels never blur.
+     */
+    val performanceLevel: StateFlow<PerformanceLevel> = stateIn(
+        initial = PerformanceLevel.STANDARD,
+        flow = stores.appearance.appearance
+            .map { it.performanceLevel }
+            .distinctUntilChanged(),
+    )
+
+    /**
+     * The effective ExoPlayer buffer posture — the four `DefaultLoadControl`
+     * numbers the engine-config fold writes (the playback slice's buffer
+     * prefs, the MB row through the shared [exoTargetBufferBytesFromMb]
+     * conversion). The stats overlay's Buffer rows render it when the active
+     * engine is ExoPlayer; the values ARE the engine config's — derived from
+     * the same aggregate the config builds from, never polled off the
+     * running engine.
+     */
+    val exoBufferPosture: StateFlow<ExoBufferPosture> = stateIn(
+        initial = ExoBufferPosture(),
+        flow = stores.aggregateStore.aggregate
+            .map { agg ->
+                agg.playback.exoBufferPosture()
+            }
+            .distinctUntilChanged(),
+    )
 
     /**
      * Low-frequency view of the segment / up-next overlays, derived by folding

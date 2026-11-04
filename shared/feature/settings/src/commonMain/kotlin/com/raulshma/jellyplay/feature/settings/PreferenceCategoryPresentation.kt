@@ -59,6 +59,7 @@ import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.HasDisplayName
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -431,7 +432,30 @@ private val appearanceDiffFields: List<DiffField<*>> = diffRows(
     spec("ss_contrast_title", { it.appearance.contrastLevel }, { v -> v.enumDisplay() })
     hand(DiffField(Res.string.ss_style_accent_title, { it.appearance.accentColorSwatch }, ::identity))
     spec("settings_theme_style", { it.appearance.colorStyle }, { v -> v.enumDisplay() })
-    spec("ss_performance_mode_title", { it.appearance.performanceMode }, Boolean::onOff)
+    // The master level (the row's search face kept the performance_mode key;
+    // the read is the level itself since the hub wave — the boolean is the
+    // derived projection). Its face resolves through the PreferenceEnumNames
+    // seam, the same localized words the settings pickers and the player
+    // sheet's Level line render.
+    spec(
+        "ss_performance_mode_title",
+        { it.appearance.performanceLevel },
+        enumLabel = PerformanceLevel::labelResource,
+    )
+    // The Performance hub's granular rows (the tri-state overrides + the
+    // image knobs) — the reads the hub's fused rows land beside.
+    spec("ss_perf_animations_title", { it.appearance.perfAnimations }, { v -> v.enumDisplay() })
+    spec("ss_perf_shared_elements_title", { it.appearance.perfSharedElements }, { v -> v.enumDisplay() })
+    spec("ss_perf_nav_transitions_title", { it.appearance.perfNavTransitions }, { v -> v.enumDisplay() })
+    spec("ss_perf_image_decode_cap_title", { it.appearance.perfImageDecodeCap }, { v -> v.enumDisplay() })
+    spec("ss_perf_image_crossfade_title", { it.appearance.perfImageCrossfade }, { v -> v.enumDisplay() })
+    spec("ss_perf_blurhash_title", { it.appearance.perfBlurhash }, { v -> v.enumDisplay() })
+    spec("ss_perf_quality_badges_title", { it.appearance.perfQualityBadges }, { v -> v.enumDisplay() })
+    spec("ss_perf_ambient_hero_video_title", { it.appearance.perfAmbientHeroVideo }, { v -> v.enumDisplay() })
+    spec("ss_perf_backdrop_blur_title", { it.appearance.perfBackdropBlur }, { v -> v.enumDisplay() })
+    spec("ss_perf_screensaver_motion_title", { it.appearance.perfScreensaverMotion }, { v -> v.enumDisplay() })
+    // The image memory-cache percent (0 = the RAM-tiered auto; else 5..35).
+    spec("ss_image_memory_cache_title", { it.appearance.imageMemoryCachePercent }, ::memoryCachePercent)
     spec("ss_reduce_motion_title", { it.appearance.reduceMotionEnabled }, Boolean::onOff)
     hand(DiffField(Res.string.diff_synthwave_mode, { it.appearance.themeVariant == "synthwave" }, Boolean::onOff))
     hand(DiffField(Res.string.diff_soothing_mode, { it.appearance.themeVariant == "soothing" }, Boolean::onOff))
@@ -601,6 +625,13 @@ private val playbackDiffFields: List<DiffField<*>> = diffRows(
     spec("ss_video_speed_preset_set_title", { it.videoPlayer.videoSpeedPresetSet }, { v -> v.enumDisplay() })
     spec("ss_video_autoplay_wifi_only_title", { it.videoPlayer.videoAutoplayWifiOnly }, Boolean::onOff)
     spec("ss_video_confirm_exit_title", { it.videoPlayer.videoConfirmExit }, Boolean::onOff)
+    // The Performance hub's ExoPlayer load-control quartet (the
+    // performance_settings route kind — the rows render in the hub, the keys
+    // reset with PLAYBACK). The 0 sentinels render Auto.
+    spec("ss_exo_initial_buffer_ms_title", { it.playback.exoInitialBufferMs }, Int::milliseconds)
+    spec("ss_exo_rebuffer_ms_title", { it.playback.exoRebufferMs }, Int::milliseconds)
+    spec("ss_exo_target_buffer_mb_title", { it.playback.exoTargetBufferMb }, ::targetBufferMb)
+    spec("ss_exo_retain_back_buffer_title", { it.playback.exoRetainBackBuffer }, Boolean::onOff)
 }
 
 private val audioDiffFields: List<DiffField<*>> = diffRows(
@@ -950,6 +981,15 @@ private val miscAppDiffFields: List<DiffField<*>> = diffRows(
 private fun <T> identity(value: T): String = value.toString()
 private fun hour(hour: Int): String = "$hour:00"
 private fun milliseconds(ms: Long): String = "$ms ms"
+
+/** The Int-valued milliseconds face (the exo buffer rows' diff values). */
+private fun Int.milliseconds(): String = "$this ms"
+
+/** The target-buffer MB face: `0` is the engine-derived AUTO sentinel. */
+private fun targetBufferMb(mb: Int): String = if (mb == 0) "Auto" else "$mb MB"
+
+/** The image memory-cache percent face: `0` is the RAM-tiered AUTO sentinel. */
+private fun memoryCachePercent(percent: Int): String = if (percent == 0) "Auto" else "$percent%"
 private fun minutesSuffix(minutes: Int): String = "$minutes min"
 private fun decibels(gain: Int): String = "$gain dB"
 private fun speedMultiplier(speed: Float): String = speed.fmt1() + "x"

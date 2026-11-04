@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
  *    occupies in [SETTINGS_ENTRANCE_SECTIONS] but no phone section ever reads
  *    it — the phone axis skips tvOnly entries, which is why `group_idle_ambient`
  *    keeps phone 17 while its tv step shifts to 18.
- *  - `item_notifications` keeps its (11, 11) slot and the capability-gated
+ *  - `item_notifications` keeps its (13, 13) slot and the capability-gated
  *    `group_idle_ambient` / `group_discord_presence` / `group_shell_hooks`
  *    groups keep their slots even though those sections only compose where
  *    the matching `settingsCapabilities` flag holds — the literal numbering
@@ -37,22 +37,23 @@ class SettingsEntranceStepsTest {
         "group_jellyplay" to (6 to 6),
         "item_home" to (7 to 7),
         "item_appearance" to (8 to 8),
-        "item_playback" to (9 to 9),
-        "item_audio" to (10 to 10),
-        "item_language" to (11 to 11),
-        "item_notifications" to (12 to 12),
-        "item_storage" to (13 to 13),
-        "item_security" to (14 to 14),
-        "item_privacy_data" to (15 to 15),
-        "item_backup" to (16 to 16),
-        "group_screensaver" to (17 to 17),
-        "group_idle_ambient" to (17 to 18),
-        "group_discord_presence" to (18 to 19),
-        "group_shell_hooks" to (19 to 20),
-        "item_experimental" to (20 to 21),
-        "item_integrations" to (21 to 22),
-        "item_about" to (22 to 23),
-        "item_whatsnew" to (23 to 24),
+        "item_performance" to (9 to 9),
+        "item_playback" to (10 to 10),
+        "item_audio" to (11 to 11),
+        "item_language" to (12 to 12),
+        "item_notifications" to (13 to 13),
+        "item_storage" to (14 to 14),
+        "item_security" to (15 to 15),
+        "item_privacy_data" to (16 to 16),
+        "item_backup" to (17 to 17),
+        "group_screensaver" to (18 to 18),
+        "group_idle_ambient" to (18 to 19),
+        "group_discord_presence" to (19 to 20),
+        "group_shell_hooks" to (20 to 21),
+        "item_experimental" to (21 to 22),
+        "item_integrations" to (22 to 23),
+        "item_about" to (23 to 24),
+        "item_whatsnew" to (24 to 25),
     )
 
     @Test
@@ -81,9 +82,9 @@ class SettingsEntranceStepsTest {
         // sections after it one tv step but no phone step (the capability-
         // gated idle-ambient / discord-presence / shell-hooks groups keep
         // their slots on both axes).
-        assertEquals(20 to 21, settingsEntranceStep("item_experimental")?.let { it.phone to it.tv })
-        assertEquals(21 to 22, settingsEntranceStep("item_integrations")?.let { it.phone to it.tv })
-        assertEquals(22 to 23, settingsEntranceStep("item_about")?.let { it.phone to it.tv })
+        assertEquals(21 to 22, settingsEntranceStep("item_experimental")?.let { it.phone to it.tv })
+        assertEquals(22 to 23, settingsEntranceStep("item_integrations")?.let { it.phone to it.tv })
+        assertEquals(23 to 24, settingsEntranceStep("item_about")?.let { it.phone to it.tv })
     }
 
     @Test

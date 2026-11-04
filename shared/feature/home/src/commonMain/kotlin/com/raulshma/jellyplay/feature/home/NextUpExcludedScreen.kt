@@ -139,6 +139,7 @@ fun NextUpExcludedScreen(
                     items(
                         count = state.series.size,
                         key = { index -> state.series[index].id },
+                        contentType = { "nextUpExcludedRow" },
                     ) { index ->
                         NextUpExcludedRow(
                             series = state.series[index],

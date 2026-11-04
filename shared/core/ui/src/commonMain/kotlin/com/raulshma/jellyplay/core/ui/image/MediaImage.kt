@@ -33,6 +33,9 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.isOriginal
 import coil3.size.pxOrElse
+import com.raulshma.jellyplay.core.model.DECODE_FULL_BLEED_TIER_PX
+import com.raulshma.jellyplay.core.model.DECODE_FULL_BLEED_THRESHOLD_PX
+import com.raulshma.jellyplay.core.model.ResolvedPerformanceConfig
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import coil3.size.Size as CoilSize
@@ -52,37 +55,75 @@ import org.jetbrains.compose.resources.stringResource
 private val DefaultDecodeSize = CoilSize(384, 384)
 
 /**
- * The decode size a [MediaImage] request actually runs at: [size] unchanged
- * unless performance mode is on AND the caller allows the clamp, in which
- * case fixed-pixel requests collapse to the tiered thumbnail (768² for
- * full-bleed ≥1080 requests, 256² otherwise). [CoilSize.isOriginal] is never
- * clamped.
+ * The decode size a [MediaImage] request actually runs at, under the resolved
+ * performance posture [config]. Branch structure (byte-compatible with the
+ * legacy `performanceMode` boolean clamp):
  *
- * Public because two consumers must reproduce the DISPLAY request's decode
+ *  - [CoilSize.isOriginal] is never clamped (the full-screen photo viewer
+ *    needs the unmodified resolution).
+ *  - [performanceModeAware] = false opts the request out entirely — the
+ *    full-bleed hero/backdrop call sites rely on it (capping a single
+ *    full-screen image to thumbnail resolution looks badly blurry, and there
+ *    is only ever one such image on screen so the memory saving is
+ *    negligible).
+ *  - No resolved tiers (both decode fields null — the STANDARD/BALANCED AUTO
+ *    fold, today's performance-mode-OFF, or the explicit
+ *    `ImageDecodeCap.UNLIMITED` pick): the requested size passes through
+ *    unchanged at any level.
+ *  - The tiered pair (the PERFORMANCE-AUTO fold — the historical
+ *    performance-mode-ON clamp): ≥1080 requests decode at the cap tier so a
+ *    full-bleed hero stays crisp, everything smaller collapses to the
+ *    small-request tier.
+ *  - A cap without a floor (an explicit `ImageDecodeCap` row): the chosen
+ *    pixel height caps EVERY non-original request — flat, by design (the
+ *    explicit rows have no small/large tiering).
+ *
+ * Public because three consumers must reproduce the DISPLAY request's decode
  * size exactly: the home-hero rotation prefetch (a preload computed at a
  * different size produces a separate memory-cache key, so the display path
- * would re-fetch and re-decode) and the list→detail placeholder handoff
+ * would re-fetch and re-decode), the list→detail placeholder handoff
  * ([rememberMediaImageMemoryCacheKey] — Coil embeds the size string in the
  * auto-derived memory-cache key, so a handoff key built at the wrong size
- * never hits). Keep this the single definition of the clamp.
+ * never hits), and the display path itself. Keep this the single definition
+ * of the clamp.
  */
 fun mediaImageDecodeSize(
     size: CoilSize,
-    performanceMode: Boolean,
+    config: ResolvedPerformanceConfig,
     performanceModeAware: Boolean = true,
-): CoilSize = when {
-    size.isOriginal -> size
-    performanceMode && performanceModeAware -> {
-        // Performance mode clamp, tiered by the requested size so full-bleed
-        // callers (hero, detail backdrop) still get a sharp-enough decode
-        // instead of being crushed to poster-thumbnail resolution.
+): CoilSize {
+    if (size.isOriginal) return size
+    if (!performanceModeAware) return size
+    // (Local copies: a public-API property from another module never
+    // smart-casts.)
+    val capPx = config.imageDecodeCapPx
+    val floorPx = config.decodeSmallRequestFloorPx
+    // Both tiers null — the STANDARD/BALANCED AUTO posture (today's
+    // performance-OFF: requested bounds pass through) or the explicit
+    // UNLIMITED pick: no clamp at any level.
+    if (capPx == null && floorPx == null) return size
+    // The resolved tiered pair (the PERFORMANCE-AUTO fold — the historical
+    // performance-mode clamp): ≥1080 requests decode at the cap tier so
+    // full-bleed callers stay sharp-enough instead of being crushed to
+    // poster-thumbnail resolution, everything smaller collapses to the small
+    // tier. By construction the pair always carries both tiers; the elvis is
+    // a defensive read against hand-built configs.
+    if (floorPx != null) {
+        val capTier = capPx ?: DECODE_FULL_BLEED_TIER_PX
         val largest = maxOf(
             size.width.pxOrElse { 0 },
             size.height.pxOrElse { 0 },
         )
-        if (largest >= 1080) CoilSize(768, 768) else CoilSize(256, 256)
+        return if (largest >= DECODE_FULL_BLEED_THRESHOLD_PX) {
+            CoilSize(capTier, capTier)
+        } else {
+            CoilSize(floorPx, floorPx)
+        }
     }
-    else -> size
+    // A cap without a floor is the explicit ImageDecodeCap pick: the user's
+    // chosen pixel height caps EVERY non-original request — flat by design.
+    val flatCap = capPx ?: return size
+    return CoilSize(flatCap, flatCap)
 }
 
 /**
@@ -127,17 +168,21 @@ private const val COIL_SIZE_EXTRA_KEY = "coil#size"
  */
 @Composable
 fun rememberMediaImageMemoryCacheKey(url: String?, size: CoilSize): MemoryCache.Key? {
-    val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
+    // The SAME resolved posture the display path clamps with — the handoff
+    // key must embed the display request's exact decode-size string or the
+    // placeholder lookup misses (the ONE-definition contract on
+    // [mediaImageDecodeSize]).
+    val perfConfig = com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig.current
     val qualityCap = com.raulshma.jellyplay.core.ui.components.LocalImageQualityCap.current
     val effectiveUrl = if (url.isNullOrEmpty()) null else mediaImageUrl(url, qualityCap)
-    return remember(effectiveUrl, size, performanceMode) {
+    return remember(effectiveUrl, size, perfConfig) {
         if (effectiveUrl.isNullOrEmpty()) {
             null
         } else {
             MemoryCache.Key(
                 key = effectiveUrl,
                 extras = mapOf(
-                    COIL_SIZE_EXTRA_KEY to mediaImageDecodeSize(size, performanceMode).toString(),
+                    COIL_SIZE_EXTRA_KEY to mediaImageDecodeSize(size, perfConfig).toString(),
                 ),
             )
         }
@@ -178,10 +223,11 @@ fun MediaImage(
     size: CoilSize = DefaultDecodeSize,
     colorFilter: ColorFilter? = null,
     placeholderIcon: ImageVector = Tabler.Outline.Photo,
-    // Performance mode lowers decode size to save memory. Full-screen images
-    // (hero, detail backdrop) opt out via performanceModeAware = false — capping
-    // a single full-bleed image to 256² looks badly blurry, and there is only
-    // ever one such image on screen so the memory saving is negligible.
+    // The resolved performance posture lowers decode size to save memory (see
+    // [mediaImageDecodeSize]). Full-screen images (hero, detail backdrop) opt
+    // out via performanceModeAware = false — capping a single full-bleed image
+    // to thumbnail resolution looks badly blurry, and there is only ever one
+    // such image on screen so the memory saving is negligible.
     performanceModeAware: Boolean = true,
     /**
      * Coil's placeholder-memory-cache handoff for the list→detail transition:
@@ -199,23 +245,27 @@ fun MediaImage(
      */
     placeholderMemoryCacheKey: MemoryCache.Key? = null,
 ) {
-    val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
-    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+    val perfConfig = com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig.current
     val qualityCap = com.raulshma.jellyplay.core.ui.components.LocalImageQualityCap.current
     // Data-saver (the network-domain master + the shell's metered signal)
     // holds back EVERY media image — the blurHash keeps showing; the request
     // re-runs on its own when the connection stops being metered.
     val dataSaverActive = com.raulshma.jellyplay.core.ui.components.rememberImagesDataSaverActive()
-    // Performance mode lowers decode size to save memory, but callers that
+    // The resolved posture lowers decode size to save memory, but callers that
     // explicitly request [Size.ORIGINAL] (e.g. the full-screen photo viewer)
-    // need the unmodified resolution — capping them to 256² produces blurry
-    // photos. Clamp only the fixed-pixel defaults, never ORIGINAL.
-    val effectiveSize = mediaImageDecodeSize(size, performanceMode, performanceModeAware)
-    val effectiveBlurHash = if (performanceMode) null else blurHash
-    // Crossfade is a motion effect, so disable it under either performance mode
-    // or reduce motion (blurHash is a memory/quality optimization and stays
-    // gated on performance mode alone).
-    val effectiveCrossfade = if (reducedMotion) false else crossfade
+    // need the unmodified resolution — capping them produces blurry photos.
+    // Clamp only the fixed-pixel defaults, never ORIGINAL (see
+    // [mediaImageDecodeSize] for the full policy).
+    val effectiveSize = mediaImageDecodeSize(size, perfConfig, performanceModeAware)
+    // BlurHash placeholders are a memory/CPU optimization gated on the
+    // resolved placeholders row (was: performance mode alone).
+    val effectiveBlurHash = if (perfConfig.blurHashPlaceholders) blurHash else null
+    // Crossfade is a motion effect, so it needs BOTH the resolved crossfade
+    // row AND a not-reduced motion posture (the config's reducedMotion fold =
+    // suppressAnimations || reduce-motion, preserving the legacy "off when
+    // performance mode OR reduce motion" behavior). The blurHash gate above
+    // stays a pure memory/quality optimization and ignores the motion fold.
+    val effectiveCrossfade = if (perfConfig.imageCrossfade && !perfConfig.reducedMotion) crossfade else false
     val effectiveUrl = remember(url, qualityCap) { mediaImageUrl(url, qualityCap) }
     val context = LocalPlatformContext.current
     val imageRequest = remember(effectiveUrl, effectiveSize, effectiveCrossfade, placeholderMemoryCacheKey) {

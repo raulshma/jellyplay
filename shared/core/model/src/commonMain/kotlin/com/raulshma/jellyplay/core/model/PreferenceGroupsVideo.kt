@@ -109,6 +109,19 @@ data class PlaybackPreferences(
     val spatialAudioEnabled: Boolean = false,
     /** Qualifies [spatialAudioEnabled] to headphone-class outputs only. */
     val spatialAudioOnlyHeadphones: Boolean = true,
+    /**
+     * ExoPlayer `DefaultLoadControl` `bufferForPlaybackMs` (250–5 000 ms) —
+     * a direct engine input, not a ceiling: a user-explicit value applies
+     * verbatim after the store's clamp. Default 1 000 preserves the engine's
+     * historical hardcoded value.
+     */
+    val exoInitialBufferMs: Int = 1_000,
+    /** ExoPlayer `bufferForPlaybackAfterRebufferMs` (500–10 000 ms). Default 3 000. */
+    val exoRebufferMs: Int = 3_000,
+    /** ExoPlayer target buffer in MB; `0` = AUTO (engine default `-1`). Explicit values clamp to 5–512. */
+    val exoTargetBufferMb: Int = 0,
+    /** Whether the back buffer is retained regardless of keyframe boundaries. Default false. */
+    val exoRetainBackBuffer: Boolean = false,
     val frameRateMatching: Boolean = false,
     /**
      * Granular refresh-rate / resolution switching mode. Supersedes

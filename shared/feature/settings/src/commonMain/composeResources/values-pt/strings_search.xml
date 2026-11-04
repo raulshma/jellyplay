@@ -97,8 +97,8 @@
     <string name="ss_show_share_media_subtitle">Mostrar botão de opções de partilha nas páginas de detalhes</string>
     <string name="ss_show_external_ratings_title">Mostrar Classificações Externas</string>
     <string name="ss_show_external_ratings_subtitle">Apresentar pontuações de críticos (IMDb/TMDB) nas páginas de detalhes</string>
-    <string name="ss_performance_mode_title">Modo de Desempenho</string>
-    <string name="ss_performance_mode_subtitle">Reduz animações pesadas e cálculos de disposição para dispositivos modestos</string>
+    <string name="ss_performance_mode_title">Nível de desempenho</string>
+    <string name="ss_performance_mode_subtitle">O comando principal: Padrão, Otimizado ou Essencial — as substituições granulares ficam no hub de Desempenho</string>
     <string name="ss_reduce_motion_title">Reduzir Movimento</string>
     <string name="ss_reduce_motion_subtitle">Desativar transições de paralaxe e efeitos extremos de escala em listas</string>
     <string name="ss_blue_light_filter_title">Filtro de Luz Azul</string>

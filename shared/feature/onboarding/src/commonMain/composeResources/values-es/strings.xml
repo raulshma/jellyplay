@@ -119,10 +119,10 @@
     <!-- PerformanceStep -->
     <string name="onboarding_performance_title">Rendimiento</string>
     <string name="onboarding_performance_subtitle">Optimiza la app para tu dispositivo</string>
-    <string name="onboarding_performance_mode">Modo de rendimiento</string>
-    <string name="onboarding_performance_description">Reduce animaciones, transiciones y calidad de imagen para un rendimiento más fluido en dispositivos de gama baja. Puedes cambiarlo más adelante en Ajustes.</string>
-    <string name="onboarding_performance_enable">Activar modo de rendimiento</string>
-    <string name="onboarding_performance_enable_subtitle">Optimización para dispositivos de gama baja</string>
+    <string name="onboarding_performance_mode">Rendimiento</string>
+    <string name="onboarding_performance_description">Alterna entre los niveles Estándar y Rendimiento: el nivel de Rendimiento suprime animaciones, transiciones y trabajo de imagen para una reproducción más fluida en dispositivos de gama baja. Ajusta cada efecto y elige Equilibrado cuando quieras en Ajustes → Rendimiento.</string>
+    <string name="onboarding_performance_enable">Activar el nivel de rendimiento</string>
+    <string name="onboarding_performance_enable_subtitle">Optimización para dispositivos de gama baja (el nivel de Rendimiento)</string>
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="onboarding_feature_syncplay">SyncPlay – ver juntos</string>

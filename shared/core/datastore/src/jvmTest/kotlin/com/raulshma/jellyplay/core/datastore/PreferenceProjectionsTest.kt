@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.InputPattern
 import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.SecurityPreferences
@@ -203,6 +204,18 @@ class PreferenceProjectionsTest {
         assertNotEquals(screenBefore, screenAfter)
         assertEquals(ThemeMode.DARK, screenAfter.themeMode)
         assertEquals(!screenBefore.homeHeroEnabled, screenAfter.homeHeroEnabled)
+    }
+
+    @Test
+    fun `a performance-level write reaches the appearance-screen projection`() = runTest {
+        // The Appearance screen's group summary folds the master LEVEL, not the
+        // derived legacy boolean — a projection that drops performanceLevel
+        // (the level never leaving the hub lane) fails this pin.
+        graph.appearanceStore.setPerformanceLevel(PerformanceLevel.BALANCED)
+        val projected = projections.appearanceScreenPreferences.first()
+        assertEquals(PerformanceLevel.BALANCED, projected.performanceLevel)
+        // The derived legacy boolean rides along (level != PERFORMANCE → false).
+        assertEquals(false, projected.performanceMode)
     }
 
     @Test

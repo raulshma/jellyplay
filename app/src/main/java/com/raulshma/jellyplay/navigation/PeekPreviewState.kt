@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig
 import com.raulshma.jellyplay.core.ui.preview.MediaPreviewController
 
 /**
@@ -35,7 +36,6 @@ internal data class PeekPreviewState(
 internal fun rememberPeekPreviewState(
     peekEnabled: Boolean,
     isTv: Boolean,
-    performanceMode: Boolean,
 ): PeekPreviewState {
     // Press-and-hold "peek" preview (Instagram-style). Remembered once at the
     // root and provided via LocalMediaPreviewController; the overlay collects it
@@ -46,11 +46,16 @@ internal fun rememberPeekPreviewState(
         MediaPreviewController()
     }
     val mediaPreviewState by mediaPreviewController.state.collectAsStateWithLifecycle()
-    // Blur the live content behind the peek overlay. Skipped on TV (no peek), in
-    // performance mode (Modifier.blur over the full tree is GPU-costly), and when
-    // the feature is disabled — in which case mediaPreviewState is always null.
+    // The resolved posture's backdrop row gates the blur (was: the raw
+    // performanceMode boolean) — Modifier.blur over the full tree is
+    // GPU-costly, so the aggressive posture opts out. PERFORMANCE suppresses
+    // via AUTO; an explicit backdrop OFF kills the blur at any level.
+    val backdropBlurAllowed = LocalPerformanceConfig.current.backdropBlur
+    // Blur the live content behind the peek overlay. Skipped on TV (no peek),
+    // when the posture suppresses the backdrop blur, and when the feature is
+    // disabled — in which case mediaPreviewState is always null.
     val previewBlur by animateFloatAsState(
-        targetValue = if (peekEnabled && !isTv && !performanceMode && mediaPreviewState != null) 14f else 0f,
+        targetValue = if (peekEnabled && !isTv && backdropBlurAllowed && mediaPreviewState != null) 14f else 0f,
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "previewBackdropBlur",
     )

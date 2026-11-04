@@ -17,12 +17,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
+import com.raulshma.jellyplay.core.ui.model.labelResource
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
@@ -224,6 +226,21 @@ internal fun SettingsBrowsePane(
                         subtitle = appearanceSummarySubtitle(preferences),
                         index = 0, count = 1,
                         onClick = { openSetting(AppearanceEntrance.rowId) { Route.AppearanceSettings(it) } },
+                    )
+                }
+
+                settingsSection(PerformanceEntrance.section.key, isTv) {
+                    // The value face, not the static explainer sentence — the
+                    // explainer wrapped to two lines in most locales and broke
+                    // the root list's uniform row height. Same value pattern as
+                    // the playback/audio/language entrances beside it; the hub
+                    // screen owns the explanatory copy.
+                    SettingListItem(
+                        icon = PerformanceEntrance.icon,
+                        title = stringResource(PerformanceEntrance.titleRes),
+                        subtitle = preferences.performanceLevel.localizedDisplayName(),
+                        index = 0, count = 1,
+                        onClick = { openSetting(PerformanceEntrance.rowId) { Route.PerformanceSettings(it) } },
                     )
                 }
 
@@ -462,7 +479,13 @@ internal fun appearanceSummaryParts(preferences: SettingsScreenPreferences): Lis
             preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() },
         ),
     )
-    if (preferences.performanceMode) add(SettingsSummaryPart.Token(Res.string.settings_performance_token))
+    // The master level's own face off the level, not the derived legacy
+    // boolean — the middle/essential faces must surface too. The face resolves
+    // through the PreferenceEnumNames seam (same localized words as the
+    // pickers and the player sheet's Level line — never the raw enum name).
+    if (preferences.performanceLevel != PerformanceLevel.STANDARD) {
+        add(SettingsSummaryPart.Token(preferences.performanceLevel.labelResource()))
+    }
 }
 
 /**

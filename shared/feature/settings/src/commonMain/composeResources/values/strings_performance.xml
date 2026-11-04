@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Performance hub screen family: the master level dial, the -->
+    <!-- granular effect overrides (motion/images/ambient), the ExoPlayer -->
+    <!-- buffer rows, the picker faces and the cross-reference rows. -->
+    <!-- Level faces (the master picker + its per-level descriptions). -->
+    <string name="settings_perf_level_standard_desc">Full effects: BlurHash placeholders, image crossfade, quality badges, ambient hero video, backdrop blur, screensaver motion and animated transitions</string>
+    <string name="settings_perf_level_balanced_desc">Keeps animations, badges, ambient effects and BlurHash placeholders; drops image crossfade</string>
+    <string name="settings_perf_level_performance_desc">Suppresses every decorative effect: no animations, no placeholders or crossfade, instant transitions and an aggressive image decode cap</string>
+    <!-- Tri-state override faces. -->
+    <string name="settings_perf_override_auto">Auto</string>
+    <string name="settings_perf_override_on">On</string>
+    <string name="settings_perf_override_off">Off</string>
+    <string name="settings_perf_auto_effective">Auto (%1$s → %2$s)</string>
+    <!-- Image decode cap faces. -->
+    <string name="settings_perf_decode_auto">Auto (follows level)</string>
+    <string name="settings_perf_decode_unlimited">Unlimited</string>
+    <string name="settings_perf_decode_1080">Cap at 1080p</string>
+    <string name="settings_perf_decode_720">Cap at 720p</string>
+    <string name="settings_perf_decode_512">Cap at 512p</string>
+    <string name="settings_perf_decode_256">Cap at 256p</string>
+    <!-- Image memory-cache face. -->
+    <string name="settings_perf_image_cache_auto">Auto (RAM-tiered)</string>
+    <!-- Playback buffer face. -->
+    <string name="settings_perf_buffer_auto">Auto (engine default)</string>
+    <!-- Hub group headers. -->
+    <string name="settings_perf_group_motion">Motion &amp; Transitions</string>
+    <string name="settings_perf_group_images">Images</string>
+    <string name="settings_perf_group_ambient">Ambient Effects</string>
+    <string name="settings_perf_group_buffers">Playback Buffers</string>
+    <!-- Cross-reference rows (the engine-lane knobs the hub links to instead of duplicating). -->
+    <string name="settings_perf_crossref_profile_title">Device Profile &amp; Re-detect</string>
+    <string name="settings_perf_crossref_profile_subtitle">The detected device tier and its Re-detect action live in Playback → Advanced Video</string>
+    <string name="settings_perf_crossref_back_buffer_title">Back-Buffer Duration</string>
+    <string name="settings_perf_crossref_back_buffer_subtitle">The engine-domain back-buffer row lives in Playback → Engine Config (ExoPlayer)</string>
+    <!-- The appearance screen's quick picker row: the deep-link into the hub. -->
+    <string name="settings_perf_customize">Customize…</string>
+    <string name="settings_perf_customize_subtitle">All granular performance rows live in the Performance hub</string>
+    <!-- The hub rows' screen faces (the appearance-side overrides + image knobs). -->
+    <string name="settings_perf_animations">Animations</string>
+    <string name="settings_perf_shared_elements">Shared Element Transitions</string>
+    <string name="settings_perf_nav_transitions">Navigation Transitions</string>
+    <string name="settings_perf_image_decode_cap">Image Decode Cap</string>
+    <string name="settings_perf_image_crossfade">Image Crossfade</string>
+    <string name="settings_perf_blurhash">BlurHash Placeholders</string>
+    <string name="settings_perf_quality_badges">Quality Badges</string>
+    <string name="settings_perf_image_memory_cache">Image Memory Cache</string>
+    <string name="settings_perf_ambient_hero_video">Ambient Hero Video</string>
+    <string name="settings_perf_backdrop_blur">Backdrop Blur</string>
+    <string name="settings_perf_screensaver_motion">Screensaver Motion</string>
+    <!-- The buffer rows' screen faces (the playback-domain quartet). -->
+    <string name="settings_perf_exo_initial_buffer">Initial Buffer</string>
+    <string name="settings_perf_exo_rebuffer">Rebuffer Target</string>
+    <string name="settings_perf_exo_target_buffer">Target Buffer Size</string>
+    <string name="settings_perf_exo_retain_back_buffer">Retain Back Buffer</string>
+</resources>

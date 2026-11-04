@@ -119,10 +119,10 @@
     <!-- PerformanceStep -->
     <string name="onboarding_performance_title">Performance</string>
     <string name="onboarding_performance_subtitle">Optimisez l'application pour votre appareil</string>
-    <string name="onboarding_performance_mode">Mode performance</string>
-    <string name="onboarding_performance_description">Réduit les animations, les transitions et la qualité d'image pour des performances plus fluides sur les appareils d'entrée de gamme. Vous pourrez modifier cela plus tard dans les Paramètres.</string>
-    <string name="onboarding_performance_enable">Activer le mode performance</string>
-    <string name="onboarding_performance_enable_subtitle">Optimisation pour appareils d'entrée de gamme</string>
+    <string name="onboarding_performance_mode">Performances</string>
+    <string name="onboarding_performance_description">Bascule entre les niveaux Standard et Performances : le niveau Performances supprime animations, transitions et travail des images pour une lecture plus fluide sur les appareils modestes. Ajustez chaque effet et choisissez Équilibré à tout moment dans Paramètres → Performances.</string>
+    <string name="onboarding_performance_enable">Activer le niveau Performances</string>
+    <string name="onboarding_performance_enable_subtitle">Optimisation pour appareils d’entrée de gamme (le niveau Performances)</string>
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="onboarding_feature_syncplay">SyncPlay — regarder ensemble</string>

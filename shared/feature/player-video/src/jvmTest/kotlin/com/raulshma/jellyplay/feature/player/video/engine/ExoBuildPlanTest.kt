@@ -1,18 +1,21 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.ExoBufferPosture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * Pins for the Exo rebuild's build-plan fold ([ExoBuildPlan.of] over
  * [ExoBuildInputs], commonMain): the passthrough-vs-in-sink sink split, the
  * decoder-mode → extension-renderer-mode mapping, the ASS session verdict
  * with its extractor pairing co-derivation, and the load-control derivation
- * (including the back-buffer clamp). The androidMain engine executes the
- * plan as Exo API assembly and is not unit-testable; this is the pin that
- * the verdict ladder cannot drift.
+ * (the back-buffer clamp, the verbatim -1 target sentinel, and the
+ * historical literals riding as defaulted inputs). The androidMain engine
+ * executes the plan as Exo API assembly and is not unit-testable; this is
+ * the pin that the verdict ladder cannot drift.
  */
 class ExoBuildPlanTest {
 
@@ -94,11 +97,39 @@ class ExoBuildPlanTest {
         assertEquals(10_000, loadControl.minBufferMs)
         assertEquals(30_000, loadControl.maxBufferMs)
         // The DefaultLoadControl start thresholds and the unbounded target:
-        // the executor carries no numbers of its own.
-        assertEquals(1_000, loadControl.bufferForPlaybackMs)
-        assertEquals(3_000, loadControl.bufferForPlaybackAfterRebufferMs)
-        assertEquals(-1, loadControl.targetBufferBytes)
-        assertEquals(false, loadControl.retainBackBuffer)
+        // no literal lives in the plan anymore — the historical numbers ride
+        // as the posture's defaults, so a default-input plan reproduces the
+        // historical posture and the executor carries no numbers of its own.
+        assertEquals(ExoBufferPosture(), loadControl.bufferPosture)
+    }
+
+    @Test
+    fun loadControl_startThresholdsTargetAndRetain_flowThroughFromInputs() {
+        // Every load-control number must trace to an input: explicit inputs
+        // land verbatim in the plan, no default substitution anywhere.
+        val posture = ExoBufferPosture(
+            initialBufferMs = 2_500,
+            rebufferBufferMs = 7_500,
+            targetBufferBytes = 64 * 1024 * 1024,
+            retainBackBuffer = true,
+        )
+        val plan = ExoBuildPlan.of(baseline.copy(bufferPosture = posture))
+
+        assertEquals(posture, plan.loadControl.bufferPosture)
+    }
+
+    @Test
+    fun targetBufferBytesSentinel_roundTripsVerbatim() {
+        // -1 is Media3's C.LENGTH_UNSET sentinel ("derive the target from
+        // the selected tracks"): it must survive the fold untouched — the
+        // back-buffer clamp must NOT generalize to it, or "auto" would
+        // silently become "0 bytes".
+        assertEquals(
+            ExoBufferPosture(targetBufferBytes = -1),
+            ExoBuildPlan.of(
+                baseline.copy(bufferPosture = ExoBufferPosture(targetBufferBytes = -1)),
+            ).loadControl.bufferPosture,
+        )
     }
 
     @Test

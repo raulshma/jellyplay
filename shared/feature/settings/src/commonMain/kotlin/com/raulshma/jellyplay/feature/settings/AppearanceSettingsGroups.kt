@@ -3,10 +3,13 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.DetailBackdropResolution
 import com.raulshma.jellyplay.core.model.DetailChapterCardSize
 import com.raulshma.jellyplay.core.model.DetailDensity
@@ -18,6 +21,7 @@ import com.raulshma.jellyplay.core.model.SmartPlayPriority
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
+import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.core.ui.reorder.rememberReorderableOrderedList
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -50,7 +54,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_news
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_sections_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_perf_customize
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_perf_customize_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduced_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_section_order
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_section_order_custom
@@ -114,10 +119,15 @@ private fun appearanceLibrarySummary(preferences: AppearanceScreenPreferences): 
 
 @Composable
 private fun appearancePerformanceSummary(preferences: AppearanceScreenPreferences): String {
-    val parts = mutableListOf<String>()
-    if (preferences.performanceMode) parts.add(stringResource(Res.string.settings_performance_mode))
-    if (preferences.reduceMotionEnabled) parts.add(stringResource(Res.string.settings_reduced_motion))
-    return parts.joinToString(", ").ifEmpty { stringResource(Res.string.settings_standard_experience) }
+    // The master level's face (Standard falls through to the level-less
+    // "standard experience" default); reduced motion stays its own term.
+    val level = preferences.performanceLevel
+        .takeIf { it != PerformanceLevel.STANDARD }
+        ?.localizedDisplayName()
+    val reducedMotion = if (preferences.reduceMotionEnabled) stringResource(Res.string.settings_reduced_motion) else null
+    return listOfNotNull(level, reducedMotion)
+        .joinToString(", ")
+        .ifEmpty { stringResource(Res.string.settings_standard_experience) }
 }
 
 @Composable
@@ -874,13 +884,21 @@ internal fun AppearanceLibraryGroup(
     }
 }
 
-/** The advanced-gated `appearance.performance` group. */
+/**
+ * The advanced-gated `appearance.performance` group: the master level quick
+ * picker + the hub Customize deep-link (both screen-local — the catalog row
+ * for the master dial is the Performance hub's) beside the declared Reduce
+ * Motion toggle.
+ */
 @Composable
 internal fun AppearancePerformanceGroup(
     preferences: AppearanceScreenPreferences,
     highlightSettingId: String?,
     viewModel: AppearanceSettingsViewModel,
+    onOpenPerformanceHub: () -> Unit,
+    activePicker: MutableState<PickerState<*>?>,
 ) {
+    val performanceLevel by viewModel.performanceLevel.collectAsStateWithLifecycle()
     SettingsGroup(
         icon = Tabler.Outline.Bolt,
         title = stringResource(Res.string.settings_performance),
@@ -888,25 +906,54 @@ internal fun AppearancePerformanceGroup(
         modifier = Modifier.padding(vertical = 8.dp),
         initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearancePerformance.itemIdSet,
     ) {
-        // Derived by rowTotalFor from the performance declaration (both rows
-        // ride the advanced toggle — the structural gate around this group).
-        val perfTotal = rowTotalFor(SettingsScreenGroups.appearancePerformance, RowAdmissionFlags(showAdvanced = true))
-        SettingToggleItem(
-            icon = Tabler.Outline.Gauge,
-            title = rowTitle(AppearanceRows.PerformanceMode),
-            subtitle = rowSubtitle(AppearanceRows.PerformanceMode),
-            checked = preferences.performanceMode,
-            highlighted = highlightSettingId == AppearanceRows.PerformanceMode.id,
+        // The declared Reduce Motion row plus the TWO screen-local rows (the
+        // level quick picker and the Customize deep-link) — the explicit +2.
+        val perfTotal =
+            rowTotalFor(SettingsScreenGroups.appearancePerformance, RowAdmissionFlags(showAdvanced = true)) + 2
+        // The master level quick picker — the repurposed old performance-mode
+        // toggle's face. The full dial (per-level descriptions + the granular
+        // overrides) lives in the Performance hub; this picker writes the
+        // SAME setPerformanceLevel command, so the two faces can never
+        // disagree. The search id "performance_mode" stays stable (the hub's
+        // level group owns the catalog row).
+        val levelTitle = rowTitle(PerformanceRows.PerformanceLevel)
+        // The picker's faces resolve outside its plain (non-composable) lambda.
+        val levelLabels = PerformanceLevel.entries.associateWith { performanceLevelLabel(it) }
+        SettingListItem(
+            icon = rowIcon(PerformanceRows.PerformanceLevel),
+            title = levelTitle,
+            subtitle = performanceLevelLabel(performanceLevel),
+            trailingText = performanceLevelLabel(performanceLevel),
+            highlighted = highlightSettingId == PerformanceRows.PerformanceLevel.id,
             index = 0, count = perfTotal,
-            onCheckedChange = { viewModel.edit { scope -> scope.appearance.setPerformanceMode(it) } },
+            onClick = {
+                activePicker.value = PickerState.List(
+                    title = levelTitle,
+                    items = PerformanceLevel.entries,
+                    label = { levelLabels.getValue(it) },
+                    isSelected = { it == performanceLevel },
+                    onSelect = { viewModel.edit { scope -> scope.appearance.setPerformanceLevel(it) } },
+                )
+            },
+        )
+        // The Customize deep-link: every granular performance row lives in
+        // the hub — this screen surfaces only the quick dial.
+        SettingListItem(
+            icon = Tabler.Outline.Settings,
+            title = stringResource(Res.string.settings_perf_customize),
+            subtitle = stringResource(Res.string.settings_perf_customize_subtitle),
+            trailingText = "",
+            highlighted = false,
+            index = 1, count = perfTotal,
+            onClick = onOpenPerformanceHub,
         )
         SettingToggleItem(
-            icon = Tabler.Outline.Activity,
+            icon = rowIcon(AppearanceRows.ReduceMotion),
             title = rowTitle(AppearanceRows.ReduceMotion),
             subtitle = rowSubtitle(AppearanceRows.ReduceMotion),
             checked = preferences.reduceMotionEnabled,
             highlighted = highlightSettingId == AppearanceRows.ReduceMotion.id,
-            index = 1, count = perfTotal,
+            index = 2, count = perfTotal,
             onCheckedChange = { viewModel.edit { scope -> scope.appearance.setReduceMotionEnabled(it) } },
         )
     }

@@ -80,6 +80,7 @@ internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("group_jellyplay"),
     HomeEntrance.section,
     AppearanceEntrance.section,
+    PerformanceEntrance.section,
     PlaybackEntrance.section,
     AudioEntrance.section,
     LanguageEntrance.section,

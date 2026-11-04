@@ -10,7 +10,10 @@ import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.ImageDecodeCap
 import com.raulshma.jellyplay.core.model.LayoutMode
+import com.raulshma.jellyplay.core.model.PerformanceLevel
+import com.raulshma.jellyplay.core.model.PerformanceOverride
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.TvOverscan
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +60,20 @@ class AppearanceStoreTest {
         assertEquals("emerald", slice.auroraAccent)
         assertEquals("rose", slice.sakuraAccent)
         assertEquals("cobalt", slice.vectorPopAccent)
+        // The performance posture defaults to today's mode-OFF semantics.
+        assertEquals(PerformanceLevel.STANDARD, slice.performanceLevel)
+        assertFalse(slice.performanceMode)
+        assertEquals(PerformanceOverride.AUTO, slice.perfAnimations)
+        assertEquals(PerformanceOverride.AUTO, slice.perfSharedElements)
+        assertEquals(PerformanceOverride.AUTO, slice.perfNavTransitions)
+        assertEquals(ImageDecodeCap.AUTO, slice.perfImageDecodeCap)
+        assertEquals(PerformanceOverride.AUTO, slice.perfImageCrossfade)
+        assertEquals(PerformanceOverride.AUTO, slice.perfBlurhash)
+        assertEquals(PerformanceOverride.AUTO, slice.perfQualityBadges)
+        assertEquals(PerformanceOverride.AUTO, slice.perfAmbientHeroVideo)
+        assertEquals(PerformanceOverride.AUTO, slice.perfBackdropBlur)
+        assertEquals(PerformanceOverride.AUTO, slice.perfScreensaverMotion)
+        assertEquals(0, slice.imageMemoryCachePercent)
     }
 
     @Test
@@ -174,6 +191,154 @@ class AppearanceStoreTest {
         assertEquals(false, slice.hapticsEnabled)
     }
 
+    // ------------------------------------------------------------------
+    // The performance master: legacy fallback, the pairing write, and the
+    // granular rows' write-throughs.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `legacy performance_mode boolean alone derives the level`() = runTest {
+        dataStore.edit { it[AppearanceStore.Keys.PERFORMANCE_MODE] = true }
+        val slice = store.appearance.first()
+        assertEquals(PerformanceLevel.PERFORMANCE, slice.performanceLevel)
+        assertTrue(slice.performanceMode)
+    }
+
+    @Test
+    fun `legacy performance_mode false reads STANDARD`() = runTest {
+        dataStore.edit { it[AppearanceStore.Keys.PERFORMANCE_MODE] = false }
+        val slice = store.appearance.first()
+        assertEquals(PerformanceLevel.STANDARD, slice.performanceLevel)
+        assertFalse(slice.performanceMode)
+    }
+
+    @Test
+    fun `setPerformanceLevel mirrors the legacy boolean both ways`() = runTest {
+        store.setPerformanceLevel(PerformanceLevel.BALANCED)
+        var slice = store.appearance.first()
+        assertEquals(PerformanceLevel.BALANCED, slice.performanceLevel)
+        assertFalse(slice.performanceMode)
+        assertFalse(dataStore.data.first()[AppearanceStore.Keys.PERFORMANCE_MODE] ?: true)
+
+        store.setPerformanceLevel(PerformanceLevel.PERFORMANCE)
+        slice = store.appearance.first()
+        assertEquals(PerformanceLevel.PERFORMANCE, slice.performanceLevel)
+        assertTrue(slice.performanceMode)
+        assertTrue(dataStore.data.first()[AppearanceStore.Keys.PERFORMANCE_MODE] ?: false)
+
+        store.setPerformanceLevel(PerformanceLevel.STANDARD)
+        slice = store.appearance.first()
+        assertEquals(PerformanceLevel.STANDARD, slice.performanceLevel)
+        assertFalse(slice.performanceMode)
+        assertFalse(dataStore.data.first()[AppearanceStore.Keys.PERFORMANCE_MODE] ?: true)
+    }
+
+    @Test
+    fun `setPerformanceMode compat wrapper maps onto the level`() = runTest {
+        store.setPerformanceMode(true)
+        assertEquals(PerformanceLevel.PERFORMANCE, store.appearance.first().performanceLevel)
+        store.setPerformanceMode(false)
+        assertEquals(PerformanceLevel.STANDARD, store.appearance.first().performanceLevel)
+    }
+
+    @Test
+    fun `writing BALANCED over a legacy-true install flips both keys`() = runTest {
+        dataStore.edit { it[AppearanceStore.Keys.PERFORMANCE_MODE] = true }
+        store.setPerformanceLevel(PerformanceLevel.BALANCED)
+        val stored = dataStore.data.first()
+        assertEquals("BALANCED", stored[AppearanceStore.Keys.PERFORMANCE_LEVEL])
+        assertEquals(false, stored[AppearanceStore.Keys.PERFORMANCE_MODE] ?: true)
+        assertEquals(PerformanceLevel.BALANCED, store.appearance.first().performanceLevel)
+    }
+
+    @Test
+    fun `corrupt performance_level falls back to STANDARD`() = runTest {
+        store.setPerformanceLevel(PerformanceLevel.PERFORMANCE)
+        dataStore.edit { it[AppearanceStore.Keys.PERFORMANCE_LEVEL] = "nonsense" }
+        val slice = store.appearance.first()
+        assertEquals(PerformanceLevel.STANDARD, slice.performanceLevel)
+        assertFalse(slice.performanceMode)
+    }
+
+    @Test
+    fun `performance override rows round-trip`() = runTest {
+        store.setPerfAnimations(PerformanceOverride.ON)
+        store.setPerfSharedElements(PerformanceOverride.OFF)
+        store.setPerfNavTransitions(PerformanceOverride.ON)
+        store.setPerfImageDecodeCap(ImageDecodeCap.P720)
+        store.setPerfImageCrossfade(PerformanceOverride.OFF)
+        store.setPerfBlurhash(PerformanceOverride.ON)
+        store.setPerfQualityBadges(PerformanceOverride.OFF)
+        store.setPerfAmbientHeroVideo(PerformanceOverride.ON)
+        store.setPerfBackdropBlur(PerformanceOverride.OFF)
+        store.setPerfScreensaverMotion(PerformanceOverride.ON)
+        val slice = store.appearance.first()
+        assertEquals(PerformanceOverride.ON, slice.perfAnimations)
+        assertEquals(PerformanceOverride.OFF, slice.perfSharedElements)
+        assertEquals(PerformanceOverride.ON, slice.perfNavTransitions)
+        assertEquals(ImageDecodeCap.P720, slice.perfImageDecodeCap)
+        assertEquals(PerformanceOverride.OFF, slice.perfImageCrossfade)
+        assertEquals(PerformanceOverride.ON, slice.perfBlurhash)
+        assertEquals(PerformanceOverride.OFF, slice.perfQualityBadges)
+        assertEquals(PerformanceOverride.ON, slice.perfAmbientHeroVideo)
+        assertEquals(PerformanceOverride.OFF, slice.perfBackdropBlur)
+        assertEquals(PerformanceOverride.ON, slice.perfScreensaverMotion)
+    }
+
+    @Test
+    fun `corrupt override enum falls back to AUTO`() = runTest {
+        store.setPerfAnimations(PerformanceOverride.ON)
+        dataStore.edit { it[AppearanceStore.Keys.PERF_ANIMATIONS] = "MAYBE" }
+        assertEquals(PerformanceOverride.AUTO, store.appearance.first().perfAnimations)
+    }
+
+    @Test
+    fun `image memory cache percent clamps to the AUTO sentinel or the 5 to 35 band`() = runTest {
+        // 0 = the AUTO sentinel, preserved as-is.
+        store.setImageMemoryCachePercent(0)
+        assertEquals(0, store.appearance.first().imageMemoryCachePercent)
+        // In-band values pass through.
+        store.setImageMemoryCachePercent(5)
+        assertEquals(5, store.appearance.first().imageMemoryCachePercent)
+        store.setImageMemoryCachePercent(20)
+        assertEquals(20, store.appearance.first().imageMemoryCachePercent)
+        store.setImageMemoryCachePercent(35)
+        assertEquals(35, store.appearance.first().imageMemoryCachePercent)
+        // Out-of-band values clamp into the band.
+        store.setImageMemoryCachePercent(3)
+        assertEquals(5, store.appearance.first().imageMemoryCachePercent)
+        store.setImageMemoryCachePercent(40)
+        assertEquals(35, store.appearance.first().imageMemoryCachePercent)
+        store.setImageMemoryCachePercent(-7)
+        assertEquals(5, store.appearance.first().imageMemoryCachePercent)
+        // The AUTO sentinel is reachable again after clamping.
+        store.setImageMemoryCachePercent(0)
+        assertEquals(0, store.appearance.first().imageMemoryCachePercent)
+    }
+
+    @Test
+    fun `restore maps an old-backup boolean-only slice onto the level`() = runTest {
+        // OLD backup shape: performanceMode carried, performanceLevel missing
+        // (kotlinx decodes it at its STANDARD default).
+        store.restore(AppearanceSlice(performanceMode = true))
+        var slice = store.appearance.first()
+        assertEquals(PerformanceLevel.PERFORMANCE, slice.performanceLevel)
+        assertTrue(slice.performanceMode)
+
+        store.restore(AppearanceSlice(performanceMode = false))
+        slice = store.appearance.first()
+        assertEquals(PerformanceLevel.STANDARD, slice.performanceLevel)
+        assertFalse(slice.performanceMode)
+    }
+
+    @Test
+    fun `restore keeps an explicit new-backup level`() = runTest {
+        store.restore(AppearanceSlice(performanceLevel = PerformanceLevel.BALANCED))
+        val slice = store.appearance.first()
+        assertEquals(PerformanceLevel.BALANCED, slice.performanceLevel)
+        assertFalse(slice.performanceMode)
+    }
+
     @Test
     fun `restore(slice) round-trips a fully-populated slice`() = runTest {
         val slice = AppearanceSlice(
@@ -181,7 +346,19 @@ class AppearanceStoreTest {
             themeMode = ThemeMode.DARK,
             contrastLevel = ContrastLevel.HIGH,
             oledMode = true,
+            performanceLevel = PerformanceLevel.PERFORMANCE,
             performanceMode = true,
+            perfAnimations = PerformanceOverride.ON,
+            perfSharedElements = PerformanceOverride.OFF,
+            perfNavTransitions = PerformanceOverride.ON,
+            perfImageDecodeCap = ImageDecodeCap.P512,
+            perfImageCrossfade = PerformanceOverride.OFF,
+            perfBlurhash = PerformanceOverride.ON,
+            perfQualityBadges = PerformanceOverride.OFF,
+            perfAmbientHeroVideo = PerformanceOverride.ON,
+            perfBackdropBlur = PerformanceOverride.OFF,
+            perfScreensaverMotion = PerformanceOverride.ON,
+            imageMemoryCachePercent = 30,
             accentColorSwatch = "violet",
             colorStyle = ColorStyle.VIBRANT,
             themeVariant = "sakura",

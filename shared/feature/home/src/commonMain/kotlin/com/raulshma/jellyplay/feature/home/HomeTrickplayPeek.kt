@@ -16,7 +16,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.ui.components.TrickplayPeekTile
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig
 import com.raulshma.jellyplay.core.ui.image.decodeImageBytes
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import kotlinx.coroutines.Dispatchers
@@ -56,22 +56,26 @@ private const val PEEK_SHEET_MAX_EDGE_PX = 2_048
 /**
  * The gate, in its pure form: the TV focus peek loads only when every
  * suppression leg holds — non-TV never (touch: none), the pref off never,
- * performance mode never, and an item without the projected `Trickplay`
- * element or without a resume position has no tile to show (and no position
- * to resolve one at). Null `trickplayInfo` means "not fetched / offline row",
- * which degrades to nothing rather than a guess — never a server fetch on a
- * maybe.
+ * the resolved posture's animation suppression off never (the sprite-sheet
+ * fetch + decode is exactly the work the aggressive posture opts out of;
+ * the peek tiles are a motion-adjacent flourish, so the granular animations
+ * override kills them too — deliberately NOT the reduced-motion fold, which
+ * would also silence them for accessibility reduce-motion users), and an
+ * item without the projected `Trickplay` element or without a resume
+ * position has no tile to show (and no position to resolve one at). Null
+ * `trickplayInfo` means "not fetched / offline row", which degrades to
+ * nothing rather than a guess — never a server fetch on a maybe.
  */
 internal fun shouldLoadTrickplayPeek(
     isTv: Boolean,
     prefEnabled: Boolean,
-    performanceMode: Boolean,
+    suppressAnimations: Boolean,
     trickplayInfo: TrickplayInfo?,
     playbackPositionTicks: Long?,
 ): Boolean =
     isTv &&
         prefEnabled &&
-        !performanceMode &&
+        !suppressAnimations &&
         trickplayInfo != null &&
         playbackPositionTicks != null &&
         playbackPositionTicks > 0L
@@ -108,7 +112,7 @@ internal fun trickplayTileAt(positionMs: Long, info: TrickplayInfo): TrickplayTi
  * nothing should show. The choreography reuses the settle debounce
  * ([HOME_FOCUS_SETTLE_MS]) so the backdrop repaint and the peek move in
  * lockstep:
- *  - the gate (pref ∧ TV ∧ ¬performance ∧ projected Trickplay ∧ resume
+ *  - the gate (pref ∧ TV ∧ ¬suppressAnimations ∧ projected Trickplay ∧ resume
  *    position) failing short-circuits to null — no flow, no fetch;
  *  - on SETTLED focus (400 ms quiet), the sprite sheet holding the tile is
  *    fetched via [PlaybackRepository.getTrickplayTileImage] and decoded on a
@@ -130,14 +134,14 @@ internal fun rememberWideCardTrickplayPeek(
 ): TrickplayPeekTile? {
     val isTv = LocalTvMode.current
     val prefEnabled = LocalHomeTrickplayPreview.current
-    val performanceMode = LocalPerformanceMode.current
+    val suppressAnimations = LocalPerformanceConfig.current.suppressAnimations
     // The `home_trickplay_peek_ms` hold time (the setter clamps to 1-5 s; a
     // missing provider — a row hosted outside home — keeps the shipped hold).
     val peekHoldMs = (LocalHomeTrickplayPeekMs.current ?: PEEK_HOLD_MS.toInt()).coerceIn(1000, 5000).toLong()
     val enabled = shouldLoadTrickplayPeek(
         isTv = isTv,
         prefEnabled = prefEnabled,
-        performanceMode = performanceMode,
+        suppressAnimations = suppressAnimations,
         trickplayInfo = item.trickplayInfo,
         playbackPositionTicks = item.playbackPositionTicks,
     )

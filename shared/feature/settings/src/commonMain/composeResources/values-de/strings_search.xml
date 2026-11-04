@@ -97,8 +97,8 @@
     <string name="ss_show_share_media_subtitle">Teilen-Schaltfläche auf Detailseiten anzeigen</string>
     <string name="ss_show_external_ratings_title">Externe Bewertungen anzeigen</string>
     <string name="ss_show_external_ratings_subtitle">Kritiker-Bewertungspunkte (IMDb/TMDB) auf Detailseiten anzeigen</string>
-    <string name="ss_performance_mode_title">Leistungsmodus</string>
-    <string name="ss_performance_mode_subtitle">Reduziert rechenintensive Animationen und Layout-Berechnungen für leistungsschwache Geräte</string>
+    <string name="ss_performance_mode_title">Leistungsstufe</string>
+    <string name="ss_performance_mode_subtitle">Der zentrale Regler: Standard, Optimiert oder Essenziell — granulare Anpassungen finden sich im Leistungsbereich</string>
     <string name="ss_reduce_motion_title">Bewegung reduzieren</string>
     <string name="ss_reduce_motion_subtitle">Parallax-Übergänge und extreme Listen-Skalierungseffekte deaktivieren</string>
     <string name="ss_blue_light_filter_title">Blaulichtfilter</string>

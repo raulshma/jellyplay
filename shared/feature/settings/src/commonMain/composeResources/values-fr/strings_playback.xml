@@ -285,7 +285,7 @@
     <string name="settings_offline_playback_desc_streaming">Toujours streamer la copie du serveur en ligne</string>
     <string name="settings_offline_playback_streaming_caveat">Les réglages de qualité du serveur ne s'appliquent qu'en streaming — un téléchargement est toujours lu directement depuis le fichier stocké</string>
     <string name="settings_performance_profile">Profil de performances</string>
-    <string name="settings_performance_profile_ceiling_note">Ajoute une limite au-dessus de votre qualité enregistrée — la valeur la plus basse gagne, vos réglages ne changent jamais. La lecture directe forcée et les fichiers téléchargés peuvent contourner la limite de résolution. Se combine avec la rangée de mode Performance dans Apparence.</string>
+    <string name="settings_performance_profile_ceiling_note">Ajoute une limite au-dessus de votre qualité enregistrée — la valeur la plus basse gagne, vos réglages ne changent jamais. La lecture directe forcée et les fichiers téléchargés peuvent contourner la limite de résolution. Se combine avec le hub du Niveau de performances.</string>
     <string name="settings_performance_profile_auto_detected">Auto · Détecté : %1$s</string>
     <string name="settings_performance_profile_auto_detecting">Auto · Détection…</string>
     <string name="settings_performance_profile_low">Lecture fluide · jusqu’à 1080p / 8 Mbps</string>

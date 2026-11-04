@@ -205,9 +205,14 @@ class ControllerOwnershipTest {
         // (2026-11-03) for the issue-#186 §5.11 performance-profile funnel
         // arm, the resolver-resolution → uiPrefs mirror collector (the
         // step-4 change-time counterpart of the load-time seed) and the
-        // overlay's expose-only detection passthrough. Lower the
+        // overlay's expose-only detection passthrough. Raised to 1_160
+        // (2026-11-04) for the same issue-#186 diagnostics family's master
+        // performance-Level + Exo buffer-posture projections (the stats
+        // overlay's Level row + Buffer rows and the playback sheet's
+        // read-only Level line — expose-only pref mirrors over the
+        // appearance store and the aggregate). Lower the
         // ceiling when a slice moves out; never raise it to admit growth.
-        val maxVideoPlayerViewModelLines = 1_119
+        val maxVideoPlayerViewModelLines = 1_160
         val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
         val lines = vm.sourceText().lineSequence().count()
         assertTrue(

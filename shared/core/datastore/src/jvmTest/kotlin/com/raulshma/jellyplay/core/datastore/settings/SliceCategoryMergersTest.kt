@@ -30,6 +30,9 @@ import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
+import com.raulshma.jellyplay.core.model.ImageDecodeCap
+import com.raulshma.jellyplay.core.model.PerformanceLevel
+import com.raulshma.jellyplay.core.model.PerformanceOverride
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -106,6 +109,18 @@ class SliceCategoryMergersTest {
         contrastLevel = ContrastLevel.HIGH,
         oledMode = true,
         performanceMode = true,
+        performanceLevel = PerformanceLevel.PERFORMANCE,
+        perfAnimations = PerformanceOverride.ON,
+        perfSharedElements = PerformanceOverride.OFF,
+        perfNavTransitions = PerformanceOverride.ON,
+        perfImageDecodeCap = ImageDecodeCap.P720,
+        perfImageCrossfade = PerformanceOverride.OFF,
+        perfBlurhash = PerformanceOverride.ON,
+        perfQualityBadges = PerformanceOverride.OFF,
+        perfAmbientHeroVideo = PerformanceOverride.ON,
+        perfBackdropBlur = PerformanceOverride.OFF,
+        perfScreensaverMotion = PerformanceOverride.ON,
+        imageMemoryCachePercent = 20,
         accentColorSwatch = "violet",
         colorStyle = ColorStyle.VIBRANT,
         themeVariant = "sakura",
@@ -222,6 +237,10 @@ class SliceCategoryMergersTest {
         downmixBoostDb = 3f,
         spatialAudioEnabled = true,
         spatialAudioOnlyHeadphones = false,
+        exoInitialBufferMs = 750,
+        exoRebufferMs = 4_000,
+        exoTargetBufferMb = 96,
+        exoRetainBackBuffer = true,
         frameRateMatching = true,
         refreshRateMode = RefreshRateMode.FRAME_RATE_ONLY,
         keepScreenOnDuringVideo = false,

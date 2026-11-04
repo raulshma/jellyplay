@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.datastore.appearance
 import androidx.datastore.preferences.core.Preferences
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.BackdropDimLevel
 import com.raulshma.jellyplay.core.model.ColorBlindMode
@@ -11,10 +12,13 @@ import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.HapticsIntensity
+import com.raulshma.jellyplay.core.model.ImageDecodeCap
 import com.raulshma.jellyplay.core.model.ImageQualityPreset
 import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.ListDensity
 import com.raulshma.jellyplay.core.model.OverscrollStyle
+import com.raulshma.jellyplay.core.model.PerformanceLevel
+import com.raulshma.jellyplay.core.model.PerformanceOverride
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PressEffectStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -34,9 +38,10 @@ import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
  * each slice field to its row encoding, the single-key setters and `restore`
  * delegate to the rows' derived writes, and `resetKeysFor` filters the rows by
  * reset category — so a row cannot drift from the machinery that reads or
- * writes it. The one migration-carrying read — `theme_variant`'s legacy
- * synthwave/soothing/monochrome boolean fallback — lives in the
- * [THEME_VARIANT] row's derived lambda, documented in place below.
+ * writes it. The migration-carrying reads — `theme_variant`'s legacy
+ * synthwave/soothing/monochrome boolean fallback and `performance_level`'s
+ * legacy `performance_mode` boolean fallback — live in the [THEME_VARIANT] /
+ * [PERFORMANCE_LEVEL] rows' derived lambdas, documented in place below.
  *
  * Not derivable by design (the accepted residuals, the videoplayer/playback
  * precedent):
@@ -66,6 +71,18 @@ object AppearancePreferenceSpecs {
      * `Route.AppearanceSettings()`.
      */
     const val ROUTE_APPEARANCE_SETTINGS = "appearance_settings"
+
+    /**
+     * Route kind shared by every settings-search row that deep-links into the
+     * Performance hub (the master level dial + the granular effect/buffer
+     * overrides) — the plain id the feature layer maps to
+     * `Route.PerformanceSettings()`. Declared beside [ROUTE_APPEARANCE_SETTINGS]
+     * because the hub's appearance-side rows are declared in this object; the
+     * playback domain's buffer rows cross-reference the same constant (the
+     * `ss_cat_playback` rows carry it too), so both domains' catalogs map one
+     * route kind to one hub route.
+     */
+    const val ROUTE_PERFORMANCE_SETTINGS = "performance_settings"
 
     // ------------------------------------------------------------------
     // Theme engine
@@ -128,19 +145,272 @@ object AppearancePreferenceSpecs {
         ),
     )
 
-    val PERFORMANCE_MODE: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
-        keyName = "performance_mode",
-        default = false,
+    /*
+     * The master UI performance level (the one dial over the app's
+     * decorative-effect budget) — the spec-backed successor of the flat
+     * `performance_mode` boolean beside it. The row is a derived STRING slot
+     * persisting the [PerformanceLevel] NAME: absent key falls back to the
+     * legacy boolean (true → PERFORMANCE, false → STANDARD — the
+     * [THEME_VARIANT] legacy-boolean migration pattern), so existing installs
+     * and old backups keep their posture with no migration write; an invalid
+     * stored name serves the default. `setPerformanceLevel` mirrors the
+     * legacy boolean (`level == PERFORMANCE`) on every write so raw legacy
+     * readers and old-app downgrades stay coherent — the boolean row is
+     * therefore never written by its own derived write, only through the
+     * level setter / restore.
+     *
+     * The search entry KEEPS the old row's id ("performance_mode") and its
+     * ss_* title/subtitle keys so the existing search index, deep links and
+     * search strings stay valid; its route kind points at the Performance
+     * hub ([ROUTE_PERFORMANCE_SETTINGS]) — the hub renders the master dial
+     * (the appearance screen keeps a quick picker beside a Customize
+     * deep-link).
+     */
+    val PERFORMANCE_LEVEL: PreferenceSpec<PerformanceLevel> = PreferenceSpec.derived(
+        keyName = "performance_level",
+        default = PerformanceLevel.STANDARD,
         resetCategory = PreferenceResetCategory.APPEARANCE,
+        read = { prefs, raw ->
+            when {
+                raw == null -> when {
+                    PERFORMANCE_MODE.readFrom(prefs) -> PerformanceLevel.PERFORMANCE
+                    else -> PerformanceLevel.STANDARD
+                }
+                // Corruption (an unparseable name) serves the default — same
+                // stance as the enumRow rows; it does NOT re-enter the legacy
+                // fallback (a present-but-garbage slot is not an upgrade).
+                else -> raw.toEnumOrNull<PerformanceLevel>() ?: PerformanceLevel.STANDARD
+            }
+        },
+        encode = { it.name },
         search = PreferenceSearchSpec(
             id = "performance_mode",
             titleKey = "ss_performance_mode_title",
             subtitleKey = "ss_performance_mode_subtitle",
             categoryKey = "ss_cat_appearance",
-            keywords = listOf("performance", "speed", "lag", "battery", "animations"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            keywords = listOf("performance", "speed", "lag", "battery", "animations", "level", "balanced", "tuning"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
             isAdvanced = true,
         ),
+    )
+
+    /**
+     * The legacy `performance_mode` boolean surface. Not projected as a slice
+     * field of its own — the slice's `performanceMode` boolean is DERIVED off
+     * the [PERFORMANCE_LEVEL] row's read. This key is written only by the
+     * level setter / restore (the legacy mirror) and read only by the
+     * [PERFORMANCE_LEVEL] row's migration (and reset with the rest of the
+     * appearance keys); declared so its wire name, default and reset
+     * participation live with the rows instead of as magic literals (the
+     * playback domain's FORCE_DIRECT_PLAY precedent).
+     */
+    val PERFORMANCE_MODE: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "performance_mode",
+        default = false,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+    )
+
+    // ------------------------------------------------------------------
+    // Performance overrides: the granular tri-state rows (AUTO follows the
+    // master level's default; ON/OFF win over every level default) plus the
+    // image memory-cache percent (0 = AUTO, RAM-tiered; else an explicit
+    // percent the owning setter clamps into 5..35).
+    // ------------------------------------------------------------------
+
+    val PERF_ANIMATIONS: PreferenceSpec<PerformanceOverride> = PreferenceSpec.enumRow(
+        keyName = "perf_animations",
+        default = PerformanceOverride.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_animations",
+            titleKey = "ss_perf_animations_title",
+            subtitleKey = "ss_perf_animations_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("animations", "motion", "suppress"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    val PERF_SHARED_ELEMENTS: PreferenceSpec<PerformanceOverride> = PreferenceSpec.enumRow(
+        keyName = "perf_shared_elements",
+        default = PerformanceOverride.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_shared_elements",
+            titleKey = "ss_perf_shared_elements_title",
+            subtitleKey = "ss_perf_shared_elements_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("shared element", "transition", "container"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    val PERF_NAV_TRANSITIONS: PreferenceSpec<PerformanceOverride> = PreferenceSpec.enumRow(
+        keyName = "perf_nav_transitions",
+        default = PerformanceOverride.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_nav_transitions",
+            titleKey = "ss_perf_nav_transitions_title",
+            subtitleKey = "ss_perf_nav_transitions_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("transitions", "navigation", "instant"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    val PERF_IMAGE_DECODE_CAP: PreferenceSpec<ImageDecodeCap> = PreferenceSpec.enumRow(
+        keyName = "perf_image_decode_cap",
+        default = ImageDecodeCap.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_image_decode_cap",
+            titleKey = "ss_perf_image_decode_cap_title",
+            subtitleKey = "ss_perf_image_decode_cap_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("decode", "resolution", "image quality"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    val PERF_IMAGE_CROSSFADE: PreferenceSpec<PerformanceOverride> = PreferenceSpec.enumRow(
+        keyName = "perf_image_crossfade",
+        default = PerformanceOverride.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_image_crossfade",
+            titleKey = "ss_perf_image_crossfade_title",
+            subtitleKey = "ss_perf_image_crossfade_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("crossfade", "fade"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    val PERF_BLURHASH: PreferenceSpec<PerformanceOverride> = PreferenceSpec.enumRow(
+        keyName = "perf_blurhash",
+        default = PerformanceOverride.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_blurhash",
+            titleKey = "ss_perf_blurhash_title",
+            subtitleKey = "ss_perf_blurhash_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("blurhash", "placeholder"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    val PERF_QUALITY_BADGES: PreferenceSpec<PerformanceOverride> = PreferenceSpec.enumRow(
+        keyName = "perf_quality_badges",
+        default = PerformanceOverride.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_quality_badges",
+            titleKey = "ss_perf_quality_badges_title",
+            subtitleKey = "ss_perf_quality_badges_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("badges", "quality"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    val PERF_AMBIENT_HERO_VIDEO: PreferenceSpec<PerformanceOverride> = PreferenceSpec.enumRow(
+        keyName = "perf_ambient_hero_video",
+        default = PerformanceOverride.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_ambient_hero_video",
+            titleKey = "ss_perf_ambient_hero_video_title",
+            subtitleKey = "ss_perf_ambient_hero_video_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("ambient", "hero", "video"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    val PERF_BACKDROP_BLUR: PreferenceSpec<PerformanceOverride> = PreferenceSpec.enumRow(
+        keyName = "perf_backdrop_blur",
+        default = PerformanceOverride.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_backdrop_blur",
+            titleKey = "ss_perf_backdrop_blur_title",
+            subtitleKey = "ss_perf_backdrop_blur_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("blur", "backdrop"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    val PERF_SCREENSAVER_MOTION: PreferenceSpec<PerformanceOverride> = PreferenceSpec.enumRow(
+        keyName = "perf_screensaver_motion",
+        default = PerformanceOverride.AUTO,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "perf_screensaver_motion",
+            titleKey = "ss_perf_screensaver_motion_title",
+            subtitleKey = "ss_perf_screensaver_motion_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("screensaver", "ken burns", "motion"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    /**
+     * The image memory-cache size override, in percent of the heap.
+     * `0` = AUTO (the RAM-tiered default: 12% on small heaps, 20% otherwise);
+     * any explicit value is clamped into 5..35 by the owning setter (the
+     * clamp owner — the [com.raulshma.jellyplay.core.datastore.playback
+     * .PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT] precedent), so
+     * no min/max bounds are declared here (the 0-sentinel + band shape is
+     * not expressible as a contiguous range).
+     */
+    val IMAGE_MEMORY_CACHE_PERCENT: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "image_memory_cache_percent",
+        default = 0,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "image_memory_cache_percent",
+            titleKey = "ss_image_memory_cache_title",
+            subtitleKey = "ss_image_memory_cache_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("memory cache", "ram", "image cache"),
+            routeKind = ROUTE_PERFORMANCE_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    /**
+     * The performance rows as one group (the master level + the granular
+     * overrides beside their legacy boolean), concatenated into [all] — the
+     * reset derivation and the derivation-integrity test iterate the group
+     * exactly like the rest of the declaration.
+     */
+    private val performanceRows: List<PreferenceSpec<*>> = listOf(
+        PERFORMANCE_MODE,
+        PERFORMANCE_LEVEL,
+        PERF_ANIMATIONS,
+        PERF_SHARED_ELEMENTS,
+        PERF_NAV_TRANSITIONS,
+        PERF_IMAGE_DECODE_CAP,
+        PERF_IMAGE_CROSSFADE,
+        PERF_BLURHASH,
+        PERF_QUALITY_BADGES,
+        PERF_AMBIENT_HERO_VIDEO,
+        PERF_BACKDROP_BLUR,
+        PERF_SCREENSAVER_MOTION,
+        IMAGE_MEMORY_CACHE_PERCENT,
     )
 
     // ------------------------------------------------------------------
@@ -748,7 +1018,7 @@ object AppearancePreferenceSpecs {
         THEME_MODE,
         CONTRAST_LEVEL,
         OLED_MODE,
-        PERFORMANCE_MODE,
+        *performanceRows.toTypedArray(),
         ACCENT_COLOR_SWATCH,
         COLOR_STYLE,
         THEME_VARIANT,
@@ -831,7 +1101,18 @@ object AppearancePreferenceSpecs {
         SCHEDULED_THEME_START_HOUR.searchEntry(),
         SCHEDULED_THEME_END_HOUR.searchEntry(),
         HAPTICS_ENABLED.searchEntry(),
-        PERFORMANCE_MODE.searchEntry(),
+        PERFORMANCE_LEVEL.searchEntry(),
+        PERF_ANIMATIONS.searchEntry(),
+        PERF_SHARED_ELEMENTS.searchEntry(),
+        PERF_NAV_TRANSITIONS.searchEntry(),
+        PERF_IMAGE_DECODE_CAP.searchEntry(),
+        PERF_IMAGE_CROSSFADE.searchEntry(),
+        PERF_BLURHASH.searchEntry(),
+        PERF_QUALITY_BADGES.searchEntry(),
+        PERF_AMBIENT_HERO_VIDEO.searchEntry(),
+        PERF_BACKDROP_BLUR.searchEntry(),
+        PERF_SCREENSAVER_MOTION.searchEntry(),
+        IMAGE_MEMORY_CACHE_PERCENT.searchEntry(),
         REDUCE_MOTION_ENABLED.searchEntry(),
         BLUE_LIGHT_FILTER_ENABLED.searchEntry(),
         BLUE_LIGHT_FILTER_STRENGTH.searchEntry(),

@@ -311,6 +311,9 @@
     <string name="core_check_frequency_every_6_hours">A cada 6 horas</string>
     <string name="core_check_frequency_every_12_hours">A cada 12 horas</string>
     <string name="core_check_frequency_every_24_hours">Todos os dias</string>
+    <string name="core_performance_level_standard">Padrão</string>
+    <string name="core_performance_level_balanced">Otimizado</string>
+    <string name="core_performance_level_performance">Essencial</string>
     <string name="core_input_action_toggle_play_pause">Reproduzir / pausar</string>
     <string name="core_input_action_play">Reproduzir</string>
     <string name="core_input_action_pause">Pausar</string>

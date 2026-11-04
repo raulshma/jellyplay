@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.model.MainPreferences
+import com.raulshma.jellyplay.core.model.PerformanceConfigResolver
+import com.raulshma.jellyplay.core.model.performanceOverrides
 import com.raulshma.jellyplay.core.model.OverscrollStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.wallNowMillis
@@ -77,11 +79,13 @@ fun rememberPreferenceDarkTheme(preferences: MainPreferences): Boolean {
 
 /**
  * The full preference-driven UI theme stack used by the app's Activities:
- * motion/performance [CompositionLocalProvider] (the ONE channel feeding both
- * [JellyPlayTheme]'s MotionScheme derivation and every LocalReducedMotion guard)
- * → [JellyPlayTheme] (Material colors/motion/typography from the user's appearance
- * prefs) → [HandModeProvider] → [BlueLightFilterBox] → [colorBlindFilter]
- * modifier → [content].
+ * motion/performance [CompositionLocalProvider] (the ONE channel — the resolved
+ * [com.raulshma.jellyplay.core.model.ResolvedPerformanceConfig] on
+ * `LocalPerformanceConfig`, with the legacy boolean locals as its compat
+ * projections — feeding both [JellyPlayTheme]'s MotionScheme derivation and
+ * every migrated behavior gate) → [JellyPlayTheme] (Material colors/motion/
+ * typography from the user's appearance prefs) → [HandModeProvider] →
+ * [BlueLightFilterBox] → [colorBlindFilter] modifier → [content].
  *
  * Extracted from `MainActivity`'s inline stack so the separate `PlayerActivity`
  * (fullscreen video host) themes the player identically without duplicating the
@@ -100,6 +104,14 @@ fun JellyPlayPreferenceTheme(
     // LocalMotionFlags.kt), so this is the single channel carrying the flags —
     // scheme selection and every LocalReducedMotion call-site guard read the same
     // values and cannot drift apart.
+    // The resolved posture (LocalPerformanceConfig) is folded ONCE here — the
+    // PerformanceConfigResolver's output feeds the theme's scheme derivation
+    // and every migrated behavior gate; the legacy boolean locals are compat
+    // projections of it (LocalPerformanceMode = suppressAnimations, so at
+    // all-AUTO they carry exactly the legacy `level == PERFORMANCE` boolean).
+    // Remembered on the level + every override row + reduce-motion so an
+    // unrelated preference write (theme variant, nav order, ...) doesn't
+    // re-run the fold.
     // The global-chrome locals ride the same channel (backdrop dim, haptic
     // strength, image quality, list density, data saver, press effect, flat
     // cards, overscroll) — all defaulting to the shipped behavior, so a shell
@@ -107,10 +119,31 @@ fun JellyPlayPreferenceTheme(
     // LocalIndication only when the user left the Material ripple.
     val pressIndication = pressEffectIndication(preferences.appPressEffect)
     val overscrollDisabled = preferences.appOverscrollStyle == OverscrollStyle.NONE
+    val perfConfig = remember(
+        preferences.performanceLevel,
+        preferences.perfAnimations,
+        preferences.perfSharedElements,
+        preferences.perfNavTransitions,
+        preferences.perfImageDecodeCap,
+        preferences.perfImageCrossfade,
+        preferences.perfBlurhash,
+        preferences.perfQualityBadges,
+        preferences.perfAmbientHeroVideo,
+        preferences.perfBackdropBlur,
+        preferences.perfScreensaverMotion,
+        preferences.reduceMotionEnabled,
+    ) {
+        PerformanceConfigResolver.resolve(
+            level = preferences.performanceLevel,
+            reduceMotionEnabled = preferences.reduceMotionEnabled,
+            overrides = preferences.performanceOverrides(),
+        )
+    }
     CompositionLocalProvider(
-        LocalPerformanceMode provides preferences.performanceMode,
+        LocalPerformanceConfig provides perfConfig,
+        LocalPerformanceMode provides perfConfig.suppressAnimations,
         LocalReduceMotionEnabled provides preferences.reduceMotionEnabled,
-        LocalReducedMotion provides (preferences.performanceMode || preferences.reduceMotionEnabled),
+        LocalReducedMotion provides perfConfig.reducedMotion,
         LocalBackdropDim provides preferences.appBackdropDim,
         LocalHapticsIntensity provides preferences.hapticsIntensity,
         LocalImageQualityCap provides preferences.imageQualityPreset.quality,

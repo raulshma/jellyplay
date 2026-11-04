@@ -500,6 +500,118 @@ class EngineConfigBuilderTest {
     }
 
     @Test
+    fun buildFromPreferences_playbackBufferRowsFoldAsDirectInputsOnBothPaths() {
+        // The four playback-slice Exo buffer rows are DIRECT engine inputs
+        // (not ceilings): the blob's fields are overwritten verbatim, and
+        // the MB row goes through the AUTO-sentinel conversion. Both build
+        // paths fold identically — they cannot drift.
+        val agg = VideoPlayerAggregate(
+            playback = PlaybackSlice(
+                exoInitialBufferMs = 2_500,
+                exoRebufferMs = 6_000,
+                exoTargetBufferMb = 64,
+                exoRetainBackBuffer = true,
+            ),
+        )
+        val fromPrefs = EngineConfigBuilder.buildFromPreferences(
+            agg = agg,
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = ExoPlayerEngineConfig(),
+        )
+        val exo = fromPrefs.engineSpecific as ExoPlayerEngineConfig
+        assertEquals(2_500, exo.exoInitialBufferMs)
+        assertEquals(6_000, exo.exoRebufferBufferMs)
+        assertEquals(64 * 1_048_576, exo.exoTargetBufferBytes)
+        assertTrue(exo.exoRetainBackBuffer)
+
+        val fromSlices = EngineConfigBuilder.buildFromSlices(
+            subtitleStyle = SubtitleStyle(),
+            videoEffects = VideoEffectsConfig(),
+            dialogueBoostEnabled = false,
+            dialogueBoostStrength = EffectStrength.MODERATE,
+            mediaStreams = emptyList(),
+            effects = baselineEffects(),
+            equalizerEnabled = false,
+            agg = agg,
+            engineSpecific = ExoPlayerEngineConfig(),
+        )
+        assertEquals(exo, fromSlices.engineSpecific)
+    }
+
+    @Test
+    fun buildFromPreferences_autoTargetBufferMb_foldsToTheDeriveFromTracksSentinel() {
+        // The store's 0 AUTO default must land on the blob's -1 (Media3
+        // derives the target from the tracks) — never a raw 0 byte target.
+        val agg = VideoPlayerAggregate(
+            playback = PlaybackSlice(exoTargetBufferMb = 0),
+        )
+        val built = EngineConfigBuilder.buildFromPreferences(
+            agg = agg,
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = ExoPlayerEngineConfig(exoTargetBufferBytes = 999_999),
+        )
+        assertEquals(-1, (built.engineSpecific as ExoPlayerEngineConfig).exoTargetBufferBytes)
+    }
+
+    @Test
+    fun buildFromPreferences_playbackBufferRowsOverrideTheEngineBlob() {
+        // The ENGINE-domain blob also persists buffer-shaped fields, but the
+        // playback slice owns these rows: its values win even when the blob
+        // disagrees (the settings UI edits the playback store — the engine
+        // blob's stale numbers are not a competing source).
+        val agg = VideoPlayerAggregate(
+            playback = PlaybackSlice(
+                exoInitialBufferMs = 4_000,
+                exoRetainBackBuffer = true,
+            ),
+        )
+        val built = EngineConfigBuilder.buildFromPreferences(
+            agg = agg,
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = ExoPlayerEngineConfig(
+                exoInitialBufferMs = 1,
+                exoRebufferBufferMs = 2,
+                exoTargetBufferBytes = 3,
+                exoRetainBackBuffer = false,
+            ),
+        )
+        val exo = built.engineSpecific as ExoPlayerEngineConfig
+        assertEquals(4_000, exo.exoInitialBufferMs)
+        // Rows the playback slice leaves at default fold too — the slice is
+        // the source of truth for ALL four, not a partial overlay.
+        assertEquals(3_000, exo.exoRebufferBufferMs)
+        assertEquals(-1, exo.exoTargetBufferBytes)
+        assertTrue(exo.exoRetainBackBuffer)
+    }
+
+    @Test
+    fun buildFromPreferences_neutralPlaybackSlice_preservesTheHistoricalBufferPosture() {
+        // Untouched install: the pref defaults equal the engine defaults, so
+        // the fold is a byte-level no-op on the buffer fields — the pinned
+        // engine posture (1_000 / 3_000 / derive-from-tracks / no retain)
+        // survives unchanged.
+        val built = EngineConfigBuilder.buildFromPreferences(
+            agg = VideoPlayerAggregate(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = ExoPlayerEngineConfig(
+                exoInitialBufferMs = 1_000,
+                exoRebufferBufferMs = 3_000,
+                exoTargetBufferBytes = -1,
+                exoRetainBackBuffer = false,
+            ),
+        )
+        val exo = built.engineSpecific as ExoPlayerEngineConfig
+        assertEquals(1_000, exo.exoInitialBufferMs)
+        assertEquals(3_000, exo.exoRebufferBufferMs)
+        assertEquals(-1, exo.exoTargetBufferBytes)
+        assertFalse(exo.exoRetainBackBuffer)
+    }
+
+    @Test
     fun buildFromPreferences_decoderAndPassthroughReadFromAgg() {
         val agg = VideoPlayerAggregate(
             playback = PlaybackSlice(decoderMode = DecoderMode.SW_ONLY, audioPassthrough = true),

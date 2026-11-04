@@ -144,6 +144,7 @@ private fun appearanceScreenGroups(
     highlightSettingId: String?,
     viewModel: AppearanceSettingsViewModel,
     onCustomizeShortcuts: () -> Unit,
+    onOpenPerformanceHub: () -> Unit,
     showBlueLightStrengthSheet: () -> Unit,
 ): List<PreferenceScreenGroup> =
     AppearanceSettingsScreenSlots.withContent(
@@ -180,11 +181,13 @@ private fun appearanceScreenGroups(
         )
     },
     // Remaining groups are expert-level; the shell keeps them behind the Advanced gate.
-    { _ ->
+    { activePicker ->
         AppearancePerformanceGroup(
             preferences = preferences,
             highlightSettingId = highlightSettingId,
             viewModel = viewModel,
+            onOpenPerformanceHub = onOpenPerformanceHub,
+            activePicker = activePicker,
         )
     },
     { _ ->
@@ -287,6 +290,8 @@ fun AppearanceSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
     onCustomizeShortcuts: () -> Unit = {},
+    /** The Performance group's "Customize…" row: deep-links into the Performance hub. */
+    onOpenPerformanceHub: () -> Unit = {},
     viewModel: AppearanceSettingsViewModel = koinViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -306,6 +311,7 @@ fun AppearanceSettingsScreen(
             highlightSettingId = highlightSettingId,
             viewModel = viewModel,
             onCustomizeShortcuts = onCustomizeShortcuts,
+            onOpenPerformanceHub = onOpenPerformanceHub,
             showBlueLightStrengthSheet = { showBlueLightStrengthSheet = true },
         ),
         advancedToggle = PreferenceAdvancedToggle(

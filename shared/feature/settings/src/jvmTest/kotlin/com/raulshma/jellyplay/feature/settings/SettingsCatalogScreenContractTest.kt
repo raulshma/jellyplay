@@ -68,6 +68,7 @@ class SettingsCatalogScreenContractTest {
     /** Every fused row vocabulary — one entry per converted domain. */
     private val fusedRowVocabularies: List<List<SettingsRow>> = listOf(
         AppearanceRows.all,
+        PerformanceRows.all,
         HomeRows.all,
         PlaybackRows.all,
         AudioRows.all,
@@ -230,10 +231,20 @@ class SettingsCatalogScreenContractTest {
             "appearance.performance" to emptySet(),
             "appearance.eyeCare" to emptySet(),
             // newsletter_sections' declared row renders as the runtime-
-            // reorderable per-section rows (the enum-driven media-segment
-            // shape) — the screen's total replaces its admitted slot with the
-            // runtime count explicitly.
+            // reorderable rows (the enum-driven media-segment shape) — the
+            // screen's total replaces its admitted slot with the runtime
+            // count explicitly.
             "appearance.newsletter" to emptySet(),
+            // The Performance hub's five groups: the level group's master row
+            // declares Always (fully covered), the four expert groups declare
+            // their advanced base and only compose behind the advanced
+            // structural block. The screens' screen-local cross-reference
+            // rows are the explicit +1/+2 terms at their call sites.
+            "performance.level" to emptySet(),
+            "performance.motion" to emptySet(),
+            "performance.images" to emptySet(),
+            "performance.ambient" to emptySet(),
+            "performance.buffers" to emptySet(),
         )
         undeclaredExceptions.forEach { (groupId, exceptions) ->
             val group = requireNotNull(SettingsScreenGroups.all.firstOrNull { it.id == groupId })
@@ -1664,6 +1675,23 @@ class SettingsCatalogScreenContractTest {
             hiddenRowsFor(playbackSlots, desktop) != hiddenRowsFor(mpvSlots, desktop),
             "the derived playback hint must track the engine branch (the frozen 28 could not)",
         )
+
+        // The performance hub's slots: a plain list (no runtime-keyed hook),
+        // so the shell count equals the plain groups' delta exactly — and
+        // equals the 15-row expert set the FusedRowsRatchetTest pins.
+        val performanceSlots = PerformanceSettingsScreenSlots()
+        val performanceGroups = listOf(
+            SettingsScreenGroups.performanceLevel,
+            SettingsScreenGroups.performanceMotion,
+            SettingsScreenGroups.performanceImages,
+            SettingsScreenGroups.performanceAmbient,
+            SettingsScreenGroups.playbackBuffers,
+        )
+        assertEquals(
+            hiddenRowsFor(performanceGroups, desktop),
+            hiddenRowsFor(performanceSlots, desktop),
+        )
+        assertEquals(15, hiddenRowsFor(performanceSlots, desktop), "the hub hint drifted")
     }
 
     // ── 8. The search-result click action ───────────────────────────────

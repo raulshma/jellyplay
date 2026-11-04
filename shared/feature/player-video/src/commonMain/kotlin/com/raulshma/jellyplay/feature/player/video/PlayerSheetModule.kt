@@ -338,6 +338,9 @@ internal object PlaybackModeSheetModule : PlayerSheetModule {
         val engine by sheets.engineFlow.collectAsStateWithLifecycle()
         val switchableEngines by sheets.switchableEngines.collectAsStateWithLifecycle()
         val localControlBlocked by sheets.localControlBlocked.collectAsStateWithLifecycle()
+        // The master LEVEL mirror (the Performance section's read-only Level
+        // line) — sheet-local like the verdicts above.
+        val performanceLevel by scope.viewModel.performanceLevel.collectAsStateWithLifecycle()
         val uiState = scope.uiState
         PlaybackModeSheet(
             currentMode = uiState.uiPrefs.playbackMode,
@@ -367,6 +370,9 @@ internal object PlaybackModeSheetModule : PlayerSheetModule {
             detectedPerformanceTier = uiState.uiPrefs.detectedPerformanceTier,
             performanceAvailable = performanceProfileAvailable() && !localControlBlocked,
             onPerformanceSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetPerformanceProfile(it)) },
+            // The master LEVEL line (read-only): "Level" (this dial) vs the
+            // "Profile" chips above (issue #186's device-tier system).
+            performanceLevel = performanceLevel,
         )
     }
 }

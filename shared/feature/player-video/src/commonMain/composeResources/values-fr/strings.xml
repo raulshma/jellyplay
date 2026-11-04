@@ -452,4 +452,17 @@
     <string name="player_video_exit_confirm_message">Appuyez à nouveau sur retour — ou confirmez — pour fermer le lecteur.</string>
     <string name="player_video_exit_confirm_confirm">Fermer</string>
     <string name="player_video_exit_confirm_stay">Rester</string>
+    <string name="player_video_stats_level">Niveau</string>
+    <string name="player_video_stats_level_posture_standard">Tous les effets</string>
+    <string name="player_video_stats_level_posture_balanced">La plupart des effets</string>
+    <string name="player_video_stats_level_posture_performance">Effets désactivés</string>
+    <string name="player_video_stats_buffer_initial">Tampon initial</string>
+    <string name="player_video_stats_buffer_rebuffer">Tampon de rebuffering</string>
+    <string name="player_video_stats_buffer_target">Tampon cible</string>
+    <string name="player_video_stats_buffer_auto">Auto</string>
+    <string name="player_video_stats_buffer_back">Tampon arrière</string>
+    <string name="player_video_stats_buffer_back_retained">Conservé</string>
+    <string name="player_video_stats_buffer_back_keyframes">Limité aux images clés</string>
+    <string name="player_video_playback_options_level_line">Niveau : %1$s</string>
+    <string name="player_video_playback_options_level_caption">Réglage des effets pour toute l’application — tous les réglages dans Paramètres → Performances.</string>
 </resources>

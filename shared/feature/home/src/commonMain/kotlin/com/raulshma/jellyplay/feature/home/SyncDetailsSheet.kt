@@ -142,7 +142,7 @@ internal fun SyncDetailsSheet(
                         .heightIn(max = 320.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    items(entries, key = { it.id }) { entry ->
+                    items(entries, key = { it.id }, contentType = { "pendingSyncEntry" }) { entry ->
                         PendingEntryRow(entry = entry, resolved = itemDetails[entry.itemId])
                     }
                 }

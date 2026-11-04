@@ -285,7 +285,7 @@
     <string name="settings_offline_playback_desc_streaming">オンライン時は常にサーバー側のコピーをストリーミング</string>
     <string name="settings_offline_playback_streaming_caveat">サーバーの品質設定はストリーミング時にのみ適用されます — ダウンロードは常に保存ファイルをダイレクト再生します</string>
     <string name="settings_performance_profile">パフォーマンスプロファイル</string>
-    <string name="settings_performance_profile_ceiling_note">保存された画質設定に上限を追加します — 低い方の値が優先され、設定自体は変更されません。強制ダイレクト再生とダウンロード済みファイルは解像度の上限を回避できます。外観のパフォーマンスモード行と組み合わせてください。</string>
+    <string name="settings_performance_profile_ceiling_note">保存された画質設定に上限を追加します — 低い方の値が優先され、設定自体は変更されません。強制ダイレクト再生とダウンロード済みファイルは解像度の上限を回避できます。パフォーマンスレベルのハブと組み合わせてください。</string>
     <string name="settings_performance_profile_auto_detected">オート · 検出: %1$s</string>
     <string name="settings_performance_profile_auto_detecting">オート · 検出中…</string>
     <string name="settings_performance_profile_low">滑らかな再生 · 最大1080p / 8 Mbps</string>

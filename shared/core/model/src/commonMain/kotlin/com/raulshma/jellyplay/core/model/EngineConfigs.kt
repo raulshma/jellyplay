@@ -559,7 +559,68 @@ data class ExoPlayerEngineConfig(
      * through (Media3's own intrinsic-size drawing).
      */
     val bitmapSubtitleScaleMode: BitmapSubtitleScaleMode? = null,
-) : EngineSpecificConfig
+    /**
+     * ExoPlayer `DefaultLoadControl` `bufferForPlaybackMs`: how much
+     * audio/video must be buffered before playback starts. The `1_000`
+     * default preserves the engine's historical hardcoded value.
+     */
+    val exoInitialBufferMs: Int = 1_000,
+    /**
+     * ExoPlayer `DefaultLoadControl` `bufferForPlaybackAfterRebufferMs`: how
+     * much must be buffered to resume after a stall. The `3_000` default
+     * preserves the engine's historical hardcoded value.
+     */
+    val exoRebufferBufferMs: Int = 3_000,
+    /**
+     * ExoPlayer `DefaultLoadControl` target buffer bytes. `-1` (the default)
+     * preserves the historical behavior — Media3 derives the target from the
+     * selected tracks.
+     */
+    val exoTargetBufferBytes: Int = -1,
+    /**
+     * ExoPlayer `DefaultLoadControl` `setRetainBackBufferFromKeyframe`
+     * posture: whether the back buffer is retained regardless of keyframe
+     * boundaries. The `false` default preserves the engine's historical
+     * hardcoded value.
+     */
+    val exoRetainBackBuffer: Boolean = false,
+) : EngineSpecificConfig {
+
+    /**
+     * The four buffer fields as one [ExoBufferPosture] — the clump's
+     * read-side view for the plan fold and the diagnostics surfaces. Derived
+     * (no backing field), so serialization and `copy` are untouched.
+     */
+    val exoBufferPosture: ExoBufferPosture
+        get() = ExoBufferPosture(
+            initialBufferMs = exoInitialBufferMs,
+            rebufferBufferMs = exoRebufferBufferMs,
+            targetBufferBytes = exoTargetBufferBytes,
+            retainBackBuffer = exoRetainBackBuffer,
+        )
+}
+
+/**
+ * The four user-facing `DefaultLoadControl` numbers as ONE carrier: the
+ * start/rebuffer thresholds, the target-bytes (or its `-1`
+ * derive-from-tracks sentinel) and the back-buffer retention posture. The
+ * clump previously rode four near-identical field lists (the engine config
+ * tail, the build-plan inputs, the plan's LoadControlNumbers and the stats
+ * overlay's display model); this type is its one declaration, and every
+ * carrier embeds or derives it. Defaults are the engine's historical
+ * hardcoded posture, so the zero-argument value rebuilds today's behavior.
+ */
+@Immutable
+data class ExoBufferPosture(
+    /** `DefaultLoadControl.bufferForPlaybackMs` — bytes-to-buffer before playback starts. */
+    val initialBufferMs: Int = 1_000,
+    /** `DefaultLoadControl.bufferForPlaybackAfterRebufferMs` — bytes-to-buffer to resume after a stall. */
+    val rebufferBufferMs: Int = 3_000,
+    /** `DefaultLoadControl` target buffer bytes; `-1` = derive from the selected tracks. */
+    val targetBufferBytes: Int = -1,
+    /** `DefaultLoadControl.setRetainBackBufferFromKeyframe` posture. */
+    val retainBackBuffer: Boolean = false,
+)
 
 /**
  * File-path view of the app-level client certificate for engines that do

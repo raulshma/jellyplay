@@ -77,9 +77,9 @@ fun WideMediaCard(
     } else {
         item.seriesName.orEmpty()
     }
-    // Quality chips: gated on the card prefs AND suppressed in
-    // performance mode — the same gate the dominant-color extraction uses.
-    val qualityBadges = if (!LocalPerformanceMode.current && cardPrefs.showQualityBadges) {
+    // Quality chips: gated on the card prefs AND the resolved posture's
+    // qualityBadges row (shown when true; PERFORMANCE suppresses via AUTO).
+    val qualityBadges = if (LocalPerformanceConfig.current.qualityBadges && cardPrefs.showQualityBadges) {
         item.qualityBadges
     } else {
         null

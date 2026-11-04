@@ -82,7 +82,7 @@
     <string name="settings_show_external_ratings">Mostra valutazioni esterne</string>
     <string name="settings_show_external_ratings_subtitle">Mostra i punteggi della critica (IMDb/TMDB) nelle pagine di dettaglio</string>
     <string name="settings_performance">Prestazioni</string>
-    <string name="settings_performance_mode">Modalità prestazioni</string>
+    <string name="settings_performance_mode">Livello di prestazioni</string>
     <string name="settings_performance_mode_subtitle">Riduce animazioni ed effetti per migliori prestazioni su dispositivi modesti</string>
     <string name="settings_reduced_motion">Movimento ridotto</string>
     <string name="settings_standard_experience">Esperienza standard</string>

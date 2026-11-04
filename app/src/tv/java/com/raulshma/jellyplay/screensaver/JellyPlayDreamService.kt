@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.model.DreamImage
+import com.raulshma.jellyplay.core.model.performanceOverrides
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,6 +55,9 @@ class JellyPlayDreamService : DreamService() {
     private val libraryApiClient: LibraryApiClient by lazy { koin.get() }
     private val imageUrlProvider: ImageUrlProvider by lazy { koin.get() }
     private val preferencesStore: ScreensaverStore by lazy { koin.get() }
+    // The resolved performance posture's source (the dream provision seam
+    // below folds it — see the setContent comment).
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore by lazy { koin.get() }
     private val imageProvider by lazy {
         DreamImageProvider(libraryApiClient, imageUrlProvider, applicationContext)
     }
@@ -83,15 +87,55 @@ class JellyPlayDreamService : DreamService() {
                 val prefs by preferencesStore.screensaver.collectAsState(
                     initial = com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice(),
                 )
-                DreamSlideshow(
-                    images = images,
-                    intervalMs = prefs.dreamSlideshowIntervalMs,
-                    kenBurnsEnabled = prefs.dreamKenBurnsEnabled,
-                    transitionStyle = prefs.dreamTransitionStyle,
-                    showTitle = prefs.dreamShowTitle,
-                    dimAfterMs = prefs.dreamDimAfterMs,
-                    dimPercent = prefs.dreamDimPercent,
+                // The dream's motion locals provider: a DreamService composes
+                // OUTSIDE the activities' JellyPlayPreferenceTheme, so until the
+                // resolved posture was provisioned here the motion-local gates
+                // silently read their defaults (the screensaver honored neither
+                // performance mode nor reduce motion). Fold the same posture the
+                // provision seam folds (the ONE PerformanceConfigResolver call,
+                // over the appearance slice's PerformancePosture) and publish the
+                // resolved posture + its compat boolean projections, exactly like
+                // the theme wrapper does — so the slideshow/Ken Burns gates
+                // (screensaverMotion, reducedMotion) read the user's real posture.
+                val appearance by appearanceStore.appearance.collectAsState(
+                    initial = com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice(),
                 )
+                val perfConfig = androidx.compose.runtime.remember(
+                    appearance.performanceLevel,
+                    appearance.perfAnimations,
+                    appearance.perfSharedElements,
+                    appearance.perfNavTransitions,
+                    appearance.perfImageDecodeCap,
+                    appearance.perfImageCrossfade,
+                    appearance.perfBlurhash,
+                    appearance.perfQualityBadges,
+                    appearance.perfAmbientHeroVideo,
+                    appearance.perfBackdropBlur,
+                    appearance.perfScreensaverMotion,
+                    appearance.reduceMotionEnabled,
+                ) {
+                    com.raulshma.jellyplay.core.model.PerformanceConfigResolver.resolve(
+                        level = appearance.performanceLevel,
+                        reduceMotionEnabled = appearance.reduceMotionEnabled,
+                        overrides = appearance.performanceOverrides(),
+                    )
+                }
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.raulshma.jellyplay.core.designsystem.theme.LocalPerformanceConfig provides perfConfig,
+                    com.raulshma.jellyplay.core.designsystem.theme.LocalPerformanceMode provides perfConfig.suppressAnimations,
+                    com.raulshma.jellyplay.core.designsystem.theme.LocalReduceMotionEnabled provides appearance.reduceMotionEnabled,
+                    com.raulshma.jellyplay.core.designsystem.theme.LocalReducedMotion provides perfConfig.reducedMotion,
+                ) {
+                    DreamSlideshow(
+                        images = images,
+                        intervalMs = prefs.dreamSlideshowIntervalMs,
+                        kenBurnsEnabled = prefs.dreamKenBurnsEnabled,
+                        transitionStyle = prefs.dreamTransitionStyle,
+                        showTitle = prefs.dreamShowTitle,
+                        dimAfterMs = prefs.dreamDimAfterMs,
+                        dimPercent = prefs.dreamDimPercent,
+                    )
+                }
             }
         }
 

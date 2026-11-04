@@ -285,7 +285,7 @@
     <string name="settings_offline_playback_desc_streaming">온라인일 때는 항상 서버 복사본을 스트리밍</string>
     <string name="settings_offline_playback_streaming_caveat">서버 품질 설정은 스트리밍에만 적용됩니다 — 다운로드는 항상 저장된 파일을 직접 재생합니다</string>
     <string name="settings_performance_profile">성능 프로필</string>
-    <string name="settings_performance_profile_ceiling_note">저장된 화질 위에 상한을 추가합니다 — 낮은 값이 우선하며 설정 자체는 변경되지 않습니다. 강제 직접 재생과 다운로드한 파일은 해상도 상한을 우회할 수 있습니다. 화면의 성능 모드 행과 함께 사용하세요.</string>
+    <string name="settings_performance_profile_ceiling_note">저장된 화질 위에 상한을 추가합니다 — 낮은 값이 우선하며 설정 자체는 변경되지 않습니다. 강제 직접 재생과 다운로드한 파일은 해상도 상한을 우회할 수 있습니다. 성능 단계 허브와 함께 사용하세요.</string>
     <string name="settings_performance_profile_auto_detected">자동 · 감지됨: %1$s</string>
     <string name="settings_performance_profile_auto_detecting">자동 · 감지 중…</string>
     <string name="settings_performance_profile_low">부드러운 재생 · 최대 1080p / 8 Mbps</string>

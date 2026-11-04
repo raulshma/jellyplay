@@ -592,6 +592,11 @@ class ExoPlayerEngine(
                 minBufferMs = request.minBufferMs,
                 maxBufferMs = request.maxBufferMs,
                 backBufferDurationMs = exoCfg.backBufferDurationMs,
+                // The playback-slice buffer rows arrive folded into exoCfg
+                // (EngineConfigBuilder's Exo arm — direct engine inputs,
+                // defaults = the historical posture below), so the plan's
+                // start/target numbers trace to prefs like every other input.
+                bufferPosture = exoCfg.exoBufferPosture,
             ),
         )
 
@@ -663,11 +668,11 @@ class ExoPlayerEngine(
                 .setBufferDurationsMs(
                     minBufferMs,
                     maxBufferMs,
-                    bufferForPlaybackMs,
-                    bufferForPlaybackAfterRebufferMs,
+                    bufferPosture.initialBufferMs,
+                    bufferPosture.rebufferBufferMs,
                 )
-                .setTargetBufferBytes(targetBufferBytes)
-                .setBackBuffer(backBufferDurationMs, retainBackBuffer)
+                .setTargetBufferBytes(bufferPosture.targetBufferBytes)
+                .setBackBuffer(backBufferDurationMs, bufferPosture.retainBackBuffer)
                 .build()
         }
 

@@ -97,8 +97,8 @@
     <string name="ss_show_share_media_subtitle">상세 페이지에 공유 옵션 버튼을 표시합니다</string>
     <string name="ss_show_external_ratings_title">외부 평점 표시</string>
     <string name="ss_show_external_ratings_subtitle">상세 페이지에 평론가 평점(IMDb/TMDB)을 표시합니다</string>
-    <string name="ss_performance_mode_title">성능 모드</string>
-    <string name="ss_performance_mode_subtitle">저사양 기기를 위해 무거운 애니메이션과 레이아웃 계산을 줄입니다</string>
+    <string name="ss_performance_mode_title">성능 단계</string>
+    <string name="ss_performance_mode_subtitle">기본 다이얼: 표준, 경량 또는 필수 — 세부 재정의는 성능 허브에 있습니다</string>
     <string name="ss_reduce_motion_title">모션 줄이기</string>
     <string name="ss_reduce_motion_subtitle">패럴랙스 전환 및 극단적인 목록 스케일링 효과를 비활성화합니다</string>
     <string name="ss_blue_light_filter_title">블루라이트 필터</string>

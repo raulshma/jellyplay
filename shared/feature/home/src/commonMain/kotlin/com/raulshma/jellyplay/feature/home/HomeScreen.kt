@@ -769,7 +769,8 @@ private fun MainHomeContent(
             )
             // Ambient backdrop: the hero artwork's BlurHash, or a palette-derived
             // gradient when no hero/blurhash is available. Sits behind all content
-            // and above the flat background fill. Suppressed in performance mode.
+            // and above the flat background fill. Suppressed when the resolved
+            // posture's backdrop row is off (PERFORMANCE via AUTO).
             //
             // While a TV card holds focus (and `home_focus_backdrop` is on),
             // the backdrop reads THE CARD's artwork instead — the in-memory
@@ -791,7 +792,7 @@ private fun MainHomeContent(
             HomeBackdrop(
                 state = HomeBackdropState(
                     enabled = state.homeBackdropEnabled,
-                    performanceMode = state.appearance.performanceMode,
+                    backdropBlur = state.appearance.backdropBlur,
                     oledMode = state.appearance.oledMode,
                     isLightTheme = isLightTheme,
                     blurHash = heroController.featuredItem?.blurHashes?.backdrop,

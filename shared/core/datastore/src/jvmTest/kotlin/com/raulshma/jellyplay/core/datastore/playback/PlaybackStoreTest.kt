@@ -104,6 +104,62 @@ class PlaybackStoreTest {
         assertEquals(OfflinePlaybackPreference.PREFER_DOWNLOADED, slice.offlinePlaybackPreference)
         // The toggle defaults ON — the historical auto-PiP behaviour.
         assertTrue(slice.autoEnterPip)
+        // The exo-buffer rows default to today's engine values: 1000/3000 ms,
+        // the AUTO sentinel `0` (Media3's derived target), retain off.
+        assertEquals(1_000, slice.exoInitialBufferMs)
+        assertEquals(3_000, slice.exoRebufferMs)
+        assertEquals(0, slice.exoTargetBufferMb)
+        assertFalse(slice.exoRetainBackBuffer)
+    }
+
+    @Test
+    fun `exo buffer ms rows round-trip and clamp on write`() = runTest {
+        // Write-through: explicit in-range values persist verbatim.
+        store.setExoInitialBufferMs(2_000)
+        store.setExoRebufferMs(6_000)
+        var slice = settledSlice()
+        assertEquals(2_000, slice.exoInitialBufferMs)
+        assertEquals(6_000, slice.exoRebufferMs)
+        // Below-min writes clamp to the rows' floors.
+        store.setExoInitialBufferMs(50)
+        store.setExoRebufferMs(10)
+        slice = settledSlice()
+        assertEquals(250, slice.exoInitialBufferMs)
+        assertEquals(500, slice.exoRebufferMs)
+        // Above-max writes clamp to the rows' ceilings.
+        store.setExoInitialBufferMs(99_999)
+        store.setExoRebufferMs(99_999)
+        slice = settledSlice()
+        assertEquals(5_000, slice.exoInitialBufferMs)
+        assertEquals(10_000, slice.exoRebufferMs)
+    }
+
+    @Test
+    fun `exo target buffer mb keeps the AUTO sentinel and clamps explicit values`() = runTest {
+        // The 0 AUTO sentinel is preserved verbatim — the engine's derived
+        // target (-1) stands.
+        store.setExoTargetBufferMb(0)
+        assertEquals(0, settledSlice().exoTargetBufferMb)
+        // Explicit in-range values persist verbatim.
+        store.setExoTargetBufferMb(64)
+        assertEquals(64, settledSlice().exoTargetBufferMb)
+        // Explicit writes clamp into 5..512 — including small non-zero values
+        // that would otherwise sit inside the AUTO ambiguity.
+        store.setExoTargetBufferMb(2)
+        assertEquals(5, settledSlice().exoTargetBufferMb)
+        store.setExoTargetBufferMb(9_999)
+        assertEquals(512, settledSlice().exoTargetBufferMb)
+        // ...and the AUTO sentinel stays reachable after a clamped write.
+        store.setExoTargetBufferMb(0)
+        assertEquals(0, settledSlice().exoTargetBufferMb)
+    }
+
+    @Test
+    fun `setExoRetainBackBuffer round-trips`() = runTest {
+        store.setExoRetainBackBuffer(true)
+        assertTrue(settledSlice().exoRetainBackBuffer)
+        store.setExoRetainBackBuffer(false)
+        assertFalse(settledSlice().exoRetainBackBuffer)
     }
 
     @Test
@@ -290,6 +346,10 @@ class PlaybackStoreTest {
             audioPassthroughCodecs = setOf(AudioPassthroughCodec.AC3, AudioPassthroughCodec.DTS),
             maxAudioChannels = MaxAudioChannelsEnum.SEVEN_POINT_ONE,
             downmixBoostDb = 7.5f,
+            exoInitialBufferMs = 750,
+            exoRebufferMs = 4_000,
+            exoTargetBufferMb = 96,
+            exoRetainBackBuffer = true,
             frameRateMatching = true,
             refreshRateMode = RefreshRateMode.FRAME_RATE_AND_RESOLUTION,
             keepScreenOnDuringVideo = false,

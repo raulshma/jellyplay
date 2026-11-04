@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Server
@@ -49,6 +50,8 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_playback_options_delivery_section
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_playback_options_desc
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_playback_options_engine_section
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_playback_options_level_caption
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_playback_options_level_line
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_playback_options_performance_section
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_playback_options_quality_section
 
@@ -82,6 +85,15 @@ fun PlaybackModeSheet(
     detectedPerformanceTier: DevicePerformanceTier? = null,
     performanceAvailable: Boolean = false,
     onPerformanceSelect: (VideoPerformanceProfile) -> Unit = {},
+    /**
+     * The master UI-performance LEVEL (the appearance domain's dial —
+     * Settings → Performance): the section's read-only "Level: …" line
+     * beneath the Profile chips. Read-only ON PURPOSE — the granular tuning
+     * stays in Settings; `null` hides the line. A DIFFERENT system from
+     * [currentPerformanceProfile] (issue #186's device-tier Profile) — the
+     * two labels never blur.
+     */
+    performanceLevel: com.raulshma.jellyplay.core.model.PerformanceLevel? = null,
 ) {
     PickerSheetScaffold(
         title = stringResource(Res.string.player_video_playback_options),
@@ -303,6 +315,26 @@ fun PlaybackModeSheet(
                         }
                     }
                 }
+                // The master LEVEL line — read-only (no in-player edit
+                // controls; the full tuning lives in Settings →
+                // Performance). "Level" is deliberately DISTINCT from the
+                // "Profile" chips above (issue #186's device-tier system).
+                performanceLevel?.let { level ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(Res.string.player_video_playback_options_level_line, performanceLevelName(level)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                    Text(
+                        text = stringResource(Res.string.player_video_playback_options_level_caption),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
             }
         }
     }
@@ -350,3 +382,13 @@ private fun performanceDescription(
     VideoPerformanceProfile.MEDIUM -> stringResource(Res.string.player_video_performance_medium_desc)
     VideoPerformanceProfile.HIGH -> stringResource(Res.string.player_video_performance_high_desc)
 }
+
+/**
+ * The master LEVEL's display name (the Level line's `%1$s`). The LEVEL is
+ * the appearance domain's UI-performance dial — NOT the Profile system
+ * above; the shared strings keep the two vocabularies distinct.
+ */
+@Composable
+private fun performanceLevelName(
+    level: com.raulshma.jellyplay.core.model.PerformanceLevel,
+): String = level.localizedDisplayName()

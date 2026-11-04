@@ -97,8 +97,8 @@
     <string name="ss_show_share_media_subtitle">Muestra el botón de opciones para compartir en las páginas de detalles</string>
     <string name="ss_show_external_ratings_title">Mostrar puntuaciones externas</string>
     <string name="ss_show_external_ratings_subtitle">Muestra puntuaciones de críticos (IMDb/TMDB) en las páginas de detalles</string>
-    <string name="ss_performance_mode_title">Modo de rendimiento</string>
-    <string name="ss_performance_mode_subtitle">Reduce las animaciones pesadas y los cálculos de diseño para dispositivos de gama baja</string>
+    <string name="ss_performance_mode_title">Nivel de rendimiento</string>
+    <string name="ss_performance_mode_subtitle">El control principal: Estándar, Optimizado o Esencial — las anulaciones granulares están en el centro de Rendimiento</string>
     <string name="ss_reduce_motion_title">Reducir movimiento</string>
     <string name="ss_reduce_motion_subtitle">Desactiva las transiciones de paralaje y los efectos extremos de escala de listas</string>
     <string name="ss_blue_light_filter_title">Filtro de luz azul</string>

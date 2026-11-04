@@ -379,11 +379,13 @@ fun HeroHeader(
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
-    // Performance mode collapses the four simultaneous hero infinite
-    // animations (breath, play pulse scale/alpha, rating pulse) to their
-    // static else-branch values — the hero otherwise drives a continuous
-    // redraw loop on top of the 1920×1080 backdrop decode.
-    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+    // The resolved posture's reduced-motion fold (animation suppression OR
+    // the accessibility flag — at all-AUTO exactly the legacy
+    // `performanceMode || reduceMotion` fold) collapses the four simultaneous
+    // hero infinite animations (breath, play pulse scale/alpha, rating pulse)
+    // to their static else-branch values — the hero otherwise drives a
+    // continuous redraw loop on top of the 1920×1080 backdrop decode.
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig.current.reducedMotion
 
     // The metadata leg's chrome + scrim fold through the theme-aware legibility
     // factories (HomeHeroLegibility.kt): the shipped hero assumed the dark
@@ -484,7 +486,7 @@ fun HeroHeader(
         prefEnabled = videoGates.prefEnabled,
         sessionPaused = videoPausedForSession,
         reducedMotion = reducedMotion,
-        performanceMode = videoGates.performanceMode,
+        ambientHeroVideo = videoGates.ambientHeroVideo,
         isVisible = isVisible,
         isProminent = isProminent,
         heroFocusHeld = heroFocusHeld,

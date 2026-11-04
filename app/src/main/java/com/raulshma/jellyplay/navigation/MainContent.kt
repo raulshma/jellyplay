@@ -205,7 +205,6 @@ internal fun MainContent(
     val peekPreview = rememberPeekPreviewState(
         peekEnabled = peekEnabled,
         isTv = isTv,
-        performanceMode = preferences.performanceMode,
     )
 
     // Single root collector for app-wide one-shot messages, behind the
@@ -300,8 +299,13 @@ internal fun MainContent(
 
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         androidx.compose.animation.SharedTransitionLayout {
+            // The resolved posture's shared-elements row gates the scope handoff
+            // (was: the raw performanceMode boolean): PERFORMANCE suppresses via
+            // AUTO — readers see a null scope and render statically; an explicit
+            // shared-elements OFF kills the transitions at any level.
+            val sharedElementsEnabled = com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig.current.sharedElements
             CompositionLocalProvider(
-                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
+                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (sharedElementsEnabled) this else null,
                 com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor provides environment.navBarColorState,
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) environment.bottomNav.floatingNavOffset else ({ 0f })),
                 // The floating bottom nav paints ONLY in the compact phone branch

@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
  *  - [trickplayTileAt] (the player's index math, hoisted: position → thumbnail
  *    index + sprite sheet)
  *  - [shouldLoadTrickplayPeek] (the suppression ladder: TV ∧ pref ∧
- *    ¬performance ∧ projected Trickplay ∧ resume position)
+ *    ¬suppressAnimations ∧ projected Trickplay ∧ resume position)
  *
  * No Compose/Koin needed — both are plain functions.
  */
@@ -87,13 +87,13 @@ class HomeTrickplayPeekTest {
     private fun gate(
         isTv: Boolean = true,
         prefEnabled: Boolean = true,
-        performanceMode: Boolean = false,
+        suppressAnimations: Boolean = false,
         trickplayInfo: TrickplayInfo? = info(),
         playbackPositionTicks: Long? = 60_000_000L, // 10 minutes
     ) = shouldLoadTrickplayPeek(
         isTv = isTv,
         prefEnabled = prefEnabled,
-        performanceMode = performanceMode,
+        suppressAnimations = suppressAnimations,
         trickplayInfo = trickplayInfo,
         playbackPositionTicks = playbackPositionTicks,
     )
@@ -114,8 +114,10 @@ class HomeTrickplayPeekTest {
     }
 
     @Test
-    fun `suppresses in performance mode`() {
-        assertFalse(gate(performanceMode = true))
+    fun `suppresses when animations are suppressed`() {
+        // The resolved posture's suppression (PERFORMANCE via AUTO, or the
+        // explicit animations override) kills the peek tiles.
+        assertFalse(gate(suppressAnimations = true))
     }
 
     @Test

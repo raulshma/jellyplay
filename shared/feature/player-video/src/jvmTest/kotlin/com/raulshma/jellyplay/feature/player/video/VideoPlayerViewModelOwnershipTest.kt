@@ -60,13 +60,19 @@ import kotlin.test.assertTrue
  * `getImageUrl` stays beside them). 26 (2026-11-03) — the issue-#186 §5.12
  * `performanceDetection` passthrough (the stats overlay's Detection-reasons
  * row reads the resolver's sticky cache; expose-only, no new state).
+ * 28 (2026-11-04) — the same diagnostics family's master performance-Level
+ * projection (the appearance store's dial, for the overlay's Level row and
+ * the playback sheet's read-only Level line) and the `exoBufferPosture`
+ * projection (the engine-config fold's four LoadControl numbers, for the
+ * overlay's Buffer rows) — both expose-only pref mirrors over existing
+ * stores, the `performanceDetection` shape.
  * Lower the ceiling when a slice moves out and deletes members; never raise
  * it to admit new ones without the same expose-only justification.
  */
 class VideoPlayerViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 26
+    private val maxPublicInternalMembers = 28
 
     /**
      * A class-body declaration line at the ViewModel's single level of

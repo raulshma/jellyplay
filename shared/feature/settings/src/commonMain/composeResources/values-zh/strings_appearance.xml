@@ -82,7 +82,7 @@
     <string name="settings_show_external_ratings">显示外部评分</string>
     <string name="settings_show_external_ratings_subtitle">在详情页显示评论家评分（IMDb/TMDB）</string>
     <string name="settings_performance">性能</string>
-    <string name="settings_performance_mode">性能模式</string>
+    <string name="settings_performance_mode">性能级别</string>
     <string name="settings_performance_mode_subtitle">为低端设备减少动画和效果以提升性能</string>
     <string name="settings_reduced_motion">减弱动态效果</string>
     <string name="settings_standard_experience">标准体验</string>

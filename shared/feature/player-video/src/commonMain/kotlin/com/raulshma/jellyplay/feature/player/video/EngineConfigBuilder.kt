@@ -16,7 +16,9 @@ import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
+import com.raulshma.jellyplay.feature.player.video.engine.exoBufferPosture
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.engine.exoTargetBufferBytesFromMb
 import com.raulshma.jellyplay.feature.player.video.engine.hdrContentFromStreams
 import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
 
@@ -240,6 +242,18 @@ internal object EngineConfigBuilder {
      *    AUTO/`null` equivalence the MIME table applies. The bitmap-subtitle
      *    scale mode rides along too (nullable: `null` = FIT) — the Exo side
      *    is FIT-only today (see the field's KDoc for the Media3 constraint).
+     *    The playback slice's four buffer rows (`exoInitialBufferMs` /
+     *    `exoRebufferMs` / `exoTargetBufferMb` / `exoRetainBackBuffer`) fold
+     *    as DIRECT engine inputs — unlike the ceiling family below, they
+     *    overwrite the blob verbatim (the MB row through
+     *    [exoTargetBufferBytesFromMb]'s AUTO-sentinel conversion). Their
+     *    defaults equal the engine defaults, so an untouched install folds
+     *    to the historical posture unchanged. They are deliberately NOT
+     *    reload triggers — the buffer numbers live on the construction-time
+     *    `DefaultLoadControl`, and a mid-session edit lands on the next
+     *    natural rebuild (next item load / mode-quality reload / engine
+     *    swap), where `LoadRebuildInputs`' `exoCfg` equality detects the
+     *    delta and takes the teardown/rebuild path.
      *
      * Any other engine-specific payload passes through untouched.
      *
@@ -249,7 +263,11 @@ internal object EngineConfigBuilder {
      * user's prefs — a CEILING, never a floor (§5.5): HIGH is a strict no-op,
      * and nothing here rewrites a persisted choice (the fold copies; the
      * stores stay untouched — switching the profile off restores the user's
-     * values on the next build).
+     * values on the next build). The buffer rows above are the ONE
+     * non-ceiling fold in this arm: the user's explicit value applies to the
+     * engine verbatim and no tuning row caps it (the §5.9 preload-buffer
+     * ceiling lives on the REQUEST's min/max window —
+     * `PlaybackRequestPlan` — not on the LoadControl start/target posture).
      *
      *  - **mpv LOW wins over the user's scaler / render quality / deband /
      *    interpolation** — the performance-sensitive knobs the profile
@@ -306,12 +324,27 @@ internal object EngineConfigBuilder {
             skipFrames = engineSpecific.skipFrames ||
                 tuning.tier == DevicePerformanceTier.LOW,
         )
-        is ExoPlayerEngineConfig -> engineSpecific.copy(
-            hdrFormatPreference = agg.playback.hdrFormatPreference.takeUnless {
-                it == com.raulshma.jellyplay.core.model.HdrFormatPreference.AUTO
-            },
-            bitmapSubtitleScaleMode = agg.videoPlayer.bitmapSubtitleScaleMode,
-        )
+        is ExoPlayerEngineConfig -> {
+            // The playback slice's four Exo buffer rows are DIRECT engine
+            // inputs (not ceilings — see the fold's class KDoc): they
+            // overwrite the blob's fields verbatim, through the ONE
+            // slice→posture extraction (the MB row's MiB→bytes conversion and
+            // its 0 → Media3 derive-from-tracks sentinel live there). The
+            // pref defaults equal the engine defaults (1_000 / 3_000 / AUTO /
+            // false), so an untouched install folds to the exact pre-existing
+            // posture — byte-identical config, no rebuild churn.
+            val posture = agg.playback.exoBufferPosture()
+            engineSpecific.copy(
+                hdrFormatPreference = agg.playback.hdrFormatPreference.takeUnless {
+                    it == com.raulshma.jellyplay.core.model.HdrFormatPreference.AUTO
+                },
+                bitmapSubtitleScaleMode = agg.videoPlayer.bitmapSubtitleScaleMode,
+                exoInitialBufferMs = posture.initialBufferMs,
+                exoRebufferBufferMs = posture.rebufferBufferMs,
+                exoTargetBufferBytes = posture.targetBufferBytes,
+                exoRetainBackBuffer = posture.retainBackBuffer,
+            )
+        }
         else -> engineSpecific
     }
 

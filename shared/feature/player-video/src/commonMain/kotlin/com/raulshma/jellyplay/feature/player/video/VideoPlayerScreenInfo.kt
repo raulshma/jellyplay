@@ -32,8 +32,10 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.feature.player.video.components.CapsBypassSource
 import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
@@ -109,6 +111,11 @@ internal fun BoxScope.PlayerStatusOverlayTier(
     inputs: StatusOverlayInputs,
 ) {
     if (uiState.uiPrefs.showVideoStats) {
+        // The master Level + the effective Exo buffer posture — collected at
+        // this leaf like the §5.12 profile mirrors (both are distinct-until-
+        // changed pref mirrors, so they do not tick with the stats cadence).
+        val performanceLevel by viewModel.performanceLevel.collectAsStateWithLifecycle()
+        val exoBufferPosture by viewModel.exoBufferPosture.collectAsStateWithLifecycle()
         VideoStatsOverlay(
             statsFlow = viewModel.videoStats,
             onClose = { viewModel.onEvent(VideoPlayerUiEvent.ToggleVideoStats) },
@@ -138,6 +145,14 @@ internal fun BoxScope.PlayerStatusOverlayTier(
             performanceProfile = uiState.uiPrefs.videoPerformanceProfile,
             detectedPerformanceTier = uiState.uiPrefs.detectedPerformanceTier,
             performanceTuning = uiState.uiPrefs.performanceTuning,
+            // The master LEVEL row + the Exo buffer posture (collected here
+            // like the profile mirrors — low-frequency pref state, so the
+            // tier only recomposes when one flips). The buffer rows gate on
+            // the active engine: numbers only when ExoPlayer is bound.
+            performanceLevel = performanceLevel,
+            exoBuffer = exoBufferPosture.takeIf {
+                uiState.preferredPlayerType == PlayerType.EXO_PLAYER
+            },
             capsBypassed = buildList {
                 if (uiState.uiPrefs.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY) {
                     add(CapsBypassSource.FORCE_DIRECT_PLAY)

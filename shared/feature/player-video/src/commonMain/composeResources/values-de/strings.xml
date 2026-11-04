@@ -451,4 +451,17 @@
     <string name="player_video_exit_confirm_message">Drücke noch einmal Zurück — oder bestätige — um den Player zu schließen.</string>
     <string name="player_video_exit_confirm_confirm">Schließen</string>
     <string name="player_video_exit_confirm_stay">Bleiben</string>
+    <string name="player_video_stats_level">Stufe</string>
+    <string name="player_video_stats_level_posture_standard">Alle Effekte</string>
+    <string name="player_video_stats_level_posture_balanced">Die meisten Effekte</string>
+    <string name="player_video_stats_level_posture_performance">Effekte aus</string>
+    <string name="player_video_stats_buffer_initial">Initialer Puffer</string>
+    <string name="player_video_stats_buffer_rebuffer">Rebuffer-Puffer</string>
+    <string name="player_video_stats_buffer_target">Zielpuffer</string>
+    <string name="player_video_stats_buffer_auto">Auto</string>
+    <string name="player_video_stats_buffer_back">Back-Buffer</string>
+    <string name="player_video_stats_buffer_back_retained">Beibehalten</string>
+    <string name="player_video_stats_buffer_back_keyframes">Keyframe-gebunden</string>
+    <string name="player_video_playback_options_level_line">Stufe: %1$s</string>
+    <string name="player_video_playback_options_level_caption">App-weite Effekt-Abstimmung — vollständige Einstellungen unter Einstellungen → Leistung.</string>
 </resources>

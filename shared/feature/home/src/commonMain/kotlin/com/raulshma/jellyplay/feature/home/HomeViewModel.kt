@@ -51,6 +51,8 @@ import com.raulshma.jellyplay.core.model.NewsletterBannerWindow
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.PerformanceConfigResolver
+import com.raulshma.jellyplay.core.model.performanceOverrides
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.descriptor
@@ -761,7 +763,17 @@ internal class HomeViewModel(
                         oledMode = prefs.appearance.oledMode,
                         colorStyle = prefs.appearance.colorStyle,
                         accentColorSwatch = prefs.appearance.accentColorSwatch,
-                        performanceMode = prefs.appearance.performanceMode,
+                        // The resolved posture's backdrop gate (was the raw
+                        // performanceMode boolean): the fold runs ONCE per
+                        // prefs emission here so the screen's backdrop branch
+                        // reads plain data (the pure shouldRenderBackdrop fold
+                        // stays unit-testable). PERFORMANCE still suppresses
+                        // via AUTO; BALANCED keeps the backdrop (intended).
+                        backdropBlur = PerformanceConfigResolver.resolve(
+                            level = prefs.appearance.performanceLevel,
+                            reduceMotionEnabled = prefs.appearance.reduceMotionEnabled,
+                            overrides = prefs.appearance.performanceOverrides(),
+                        ).backdropBlur,
                         pullToRefreshEnabled = prefs.appearance.pullToRefreshEnabled,
                     ),
                     // The resume-row overlay mirror (quick-action toggle

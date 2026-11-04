@@ -355,7 +355,7 @@
          beside Streaming Quality, its picker faces, and the Re-detect action
          row that rides the AUTO profile. -->
     <string name="settings_performance_profile">Performance profile</string>
-    <string name="settings_performance_profile_ceiling_note">Adds a cap on top of your saved quality — the lower value wins, your settings never change. Force Direct Play and downloaded files can bypass the resolution cap. Pairs with the Performance mode row in Appearance.</string>
+    <string name="settings_performance_profile_ceiling_note">Adds a cap on top of your saved quality — the lower value wins, your settings never change. Force Direct Play and downloaded files can bypass the resolution cap. Pairs with the Performance Level hub.</string>
     <string name="settings_performance_profile_auto_detected">Auto · Detected: %1$s</string>
     <string name="settings_performance_profile_auto_detecting">Auto · Detecting…</string>
     <string name="settings_performance_profile_low">Smooth playback · up to 1080p / 8 Mbps</string>

@@ -115,6 +115,10 @@ class PreferenceSpecDiffFieldRatchetTest {
                 PreferenceResetCategory.APPEARANCE to setOf(
                     "core_ui_accent_color_title",
                     "core_ui_color_style_title",
+                    // The Performance hub wave's eleven rows are NOT here
+                    // anymore: the hub wired their spec(...) reads (and the
+                    // master-level row's read switched to performanceLevel),
+                    // so the ledger shrunk back to its two core:ui aliases.
                 ),
                 PreferenceResetCategory.HOME_DISCOVERY to setOf(
                     "ss_configure_libraries_title",

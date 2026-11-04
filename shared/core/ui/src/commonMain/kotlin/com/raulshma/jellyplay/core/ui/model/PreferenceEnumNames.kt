@@ -5,12 +5,16 @@ import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.core_check_frequency_every_12_hours
 import com.raulshma.jellyplay.core.ui.generated.resources.core_check_frequency_every_24_hours
 import com.raulshma.jellyplay.core.ui.generated.resources.core_check_frequency_every_3_hours
 import com.raulshma.jellyplay.core.ui.generated.resources.core_check_frequency_every_6_hours
 import com.raulshma.jellyplay.core.ui.generated.resources.core_check_frequency_every_hour
+import com.raulshma.jellyplay.core.ui.generated.resources.core_performance_level_balanced
+import com.raulshma.jellyplay.core.ui.generated.resources.core_performance_level_performance
+import com.raulshma.jellyplay.core.ui.generated.resources.core_performance_level_standard
 import com.raulshma.jellyplay.core.ui.generated.resources.core_gesture_indicator_opposite
 import com.raulshma.jellyplay.core.ui.generated.resources.core_gesture_indicator_same
 import com.raulshma.jellyplay.core.ui.generated.resources.core_gesture_mode_all
@@ -106,6 +110,21 @@ fun CheckFrequency.localizedDisplayName(): String = stringResource(labelResource
 
 // endregion
 
+// region PerformanceLevel
+
+/** The localized label resource for this UI-performance level (diff/picker label handle). */
+fun PerformanceLevel.labelResource(): StringResource = when (this) {
+    PerformanceLevel.STANDARD -> Res.string.core_performance_level_standard
+    PerformanceLevel.BALANCED -> Res.string.core_performance_level_balanced
+    PerformanceLevel.PERFORMANCE -> Res.string.core_performance_level_performance
+}
+
+/** Localized display name for this UI-performance level. */
+@Composable
+fun PerformanceLevel.localizedDisplayName(): String = stringResource(labelResource())
+
+// endregion
+
 /**
  * Every enum-value label resource the seam can emit — the extra workload the
  * diff label table must pre-resolve beside its row labels (see
@@ -116,4 +135,5 @@ val preferenceEnumLabelResources: List<StringResource> =
     GestureMode.entries.map(GestureMode::labelResource) +
         OrientationMode.entries.map(OrientationMode::labelResource) +
         GestureIndicatorSide.entries.map(GestureIndicatorSide::labelResource) +
-        CheckFrequency.entries.map(CheckFrequency::labelResource)
+        CheckFrequency.entries.map(CheckFrequency::labelResource) +
+        PerformanceLevel.entries.map(PerformanceLevel::labelResource)

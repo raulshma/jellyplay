@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.UserInfo
 
 /**
- * The appearance/theme slice of [HomeUiState] — the five fields that always
+ * The appearance/theme slice of [HomeUiState] — the fields that always
  * change together (one [AppearanceSlice] emission) and are read together (the
  * ArtworkThemeWrapper + backdrop pair). Embedded as one value, following the
  * [SeerrRequestState] precedent: the prefs fold stays a one-line copy instead
@@ -31,7 +31,14 @@ data class AppearanceUiState(
     val oledMode: Boolean = false,
     val colorStyle: com.raulshma.jellyplay.core.model.ColorStyle = com.raulshma.jellyplay.core.model.ColorStyle.TONAL_SPOT,
     val accentColorSwatch: String = "dynamic",
-    val performanceMode: Boolean = false,
+    /**
+     * The resolved posture's backdrop-blur row (the
+     * `PerformanceConfigResolver` fold of level + overrides, resolved at the
+     * VM's prefs emission) — the ambient-home-backdrop's render gate.
+     * PERFORMANCE suppresses via AUTO; BALANCED keeps the backdrop. Default
+     * true = the shipped OFF posture.
+     */
+    val backdropBlur: Boolean = true,
     /** The pull-to-refresh gesture master toggle. Default on. */
     val pullToRefreshEnabled: Boolean = true,
 )

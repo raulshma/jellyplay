@@ -164,6 +164,27 @@ internal object SettingsScreenGroups {
     /** Derives from [AppearanceNewsletterRows]: three advanced residual rows. */
     val appearanceNewsletter = AppearanceNewsletterGroup
 
+    // ── PerformanceSettingsScreen (the Performance hub) ────────────────
+    // The hub's five groups derive from the fused rows in
+    // PerformanceSettingsRows.kt: the always-visible master level group and
+    // the four expert groups (motion, images, ambient, playback buffers —
+    // the last spanning the playback domain's spec declarations). The master
+    // row keeps the historical `performance_mode` search id and lives HERE
+    // (single group membership), not in the appearance screen's group — the
+    // appearance screen keeps a quick picker + a Customize deep-link beside
+    // its Reduce Motion row.
+
+    /** Derives from [PerformanceLevelRows]: the master dial ([RowAdmission.Always] — always visible). */
+    val performanceLevel = PerformanceLevelGroup
+    /** Derives from [PerformanceMotionRows]: the three motion/transition overrides, advanced-gated. */
+    val performanceMotion = PerformanceMotionGroup
+    /** Derives from [PerformanceImageRows]: the five image rows, advanced-gated. */
+    val performanceImages = PerformanceImageGroup
+    /** Derives from [PerformanceAmbientRows]: the three ambient rows, advanced-gated. */
+    val performanceAmbient = PerformanceAmbientGroup
+    /** Derives from [PlaybackBufferRows]: the ExoPlayer buffer quartet (playback-domain specs), advanced-gated. */
+    val playbackBuffers = PlaybackBufferGroup
+
     // ── PlaybackSettingsScreen ──────────────────────────────────────────
     val playbackPlayer = PlaybackPlayerGroup
     val playbackAdvancedVideo = PlaybackAdvancedVideoGroup
@@ -263,6 +284,11 @@ internal object SettingsScreenGroups {
         appearancePerformance,
         appearanceEyeCare,
         appearanceNewsletter,
+        performanceLevel,
+        performanceMotion,
+        performanceImages,
+        performanceAmbient,
+        playbackBuffers,
         playbackPlayer,
         playbackAdvancedVideo,
         playbackEngine,

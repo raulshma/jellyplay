@@ -310,6 +310,9 @@
     <string name="core_check_frequency_every_6_hours">每 6 小时</string>
     <string name="core_check_frequency_every_12_hours">每 12 小时</string>
     <string name="core_check_frequency_every_24_hours">每天</string>
+    <string name="core_performance_level_standard">标准</string>
+    <string name="core_performance_level_balanced">精简</string>
+    <string name="core_performance_level_performance">极简</string>
     <string name="core_input_action_toggle_play_pause">播放 / 暂停</string>
     <string name="core_input_action_play">播放</string>
     <string name="core_input_action_pause">暂停</string>

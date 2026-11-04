@@ -21,7 +21,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.applyOverride
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled
 import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -87,6 +86,14 @@ internal class ShellEnvironmentHost(
      * AFTER this environment (it needs [isTv]); the provider call site sits
      * below it, so the hand-off is a plain parameter.
      *
+     * The motion/performance flags are deliberately NOT re-provided here: the
+     * host activity's `JellyPlayPreferenceTheme` already provides the resolved
+     * posture (LocalPerformanceConfig + the compat boolean locals) above this
+     * whole subtree, and re-providing the raw `performanceMode` boolean would
+     * override the resolved `suppressAnimations` projection whenever a
+     * granular override diverges from the level (ONE channel — see
+     * designsystem's LocalMotionFlags.kt).
+     *
      * Stable values on purpose — `provides` compares by ==, so a fresh lambda
      * per recomposition would force downstream invalidation even when the
      * captured state hasn't changed. MainContent recomposes often (audio
@@ -102,7 +109,6 @@ internal class ShellEnvironmentHost(
             LocalAdaptiveInfo provides adaptiveInfo,
             LocalJellyPlayUi provides uiEnvironment,
             LocalTvTypography provides tvTypography,
-            LocalPerformanceMode provides preferences.performanceMode,
             com.raulshma.jellyplay.core.ui.feedback.LocalHapticsEnabled provides preferences.hapticsEnabled,
             LocalFloatingNavVisibility provides bottomNav.scrollVisibility.visibleState,
             LocalMediaPreviewController provides peekPreview.controller,

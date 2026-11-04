@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,10 +45,13 @@ import com.raulshma.jellyplay.core.designsystem.theme.extendedColors
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.formatFixed
+import com.raulshma.jellyplay.core.model.ExoBufferPosture
 import com.raulshma.jellyplay.core.model.DevicePerformanceTier
 import com.raulshma.jellyplay.core.model.PerformanceDetection
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
+import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.player.video.PlatformTranscodeReason
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_audio
@@ -64,7 +68,14 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_resolution
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_speed
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_health
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_auto
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_back
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_back_keyframes
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_back_retained
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_initial
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_rebuffer
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_size
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_target
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffered
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffered_ranges
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_clock
@@ -83,6 +94,10 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_for_nerds
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_hdr
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_hdr_output_active
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_level
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_level_posture_balanced
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_level_posture_performance
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_level_posture_standard
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_network
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_performance
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_playback
@@ -145,6 +160,21 @@ fun VideoStatsOverlay(
     /** The resolved tuning (the profile's ceiling); [VideoPerformanceTuning.NONE]
      *  = no resolution yet = the no-cap HIGH row. */
     performanceTuning: VideoPerformanceTuning = VideoPerformanceTuning.NONE,
+    /**
+     * The master UI-performance LEVEL (the appearance domain's dial —
+     * Settings → Performance): the Level row at the top of the Performance
+     * section. Deliberately DISTINCT from [performanceProfile] (issue #186's
+     * device-tier Profile system) — the two labels never blur.
+     */
+    performanceLevel: PerformanceLevel = PerformanceLevel.STANDARD,
+    /**
+     * The effective ExoPlayer buffer posture (the engine config's four
+     * `DefaultLoadControl` numbers, folded by the ViewModel from the same
+     * aggregate the config builds from — never polled off the engine).
+     * `null` = the active engine is not ExoPlayer: the Buffer rows hide
+     * rather than show mpv/VLC-irrelevant numbers.
+     */
+    exoBuffer: ExoBufferPosture? = null,
     /** Why the caps cannot be enforced this session (§5.13's bypass table),
      *  pre-folded by the caller from session state. */
     capsBypassed: List<CapsBypassSource> = emptyList(),
@@ -308,14 +338,51 @@ fun VideoStatsOverlay(
             }
 
             StatsSection(stringResource(Res.string.player_video_stats_performance)) {
-                // ── The performance-profile block (issue #186 §5.12): the
-                // profile, its effective ceiling, why the caps cannot enforce
-                // this session, the detector's reasons, and the "what to try"
-                // line. Profile caps only — the resolved per-request cap
-                // source (Profile / Quality / Data saver / …) is not exposed
-                // by the session yet, so the Effective-cap row states the
-                // profile's own ceiling and the source row stays out rather
-                // than guessing.
+                // ── The master LEVEL row first (the appearance domain's
+                // UI-performance dial), then the performance-PROFILE block
+                // (issue #186 §5.12): the profile, its effective ceiling, why
+                // the caps cannot enforce this session, the detector's
+                // reasons, and the "what to try" line. Two systems, two
+                // labels — "Level" vs "Profile", never blurred. Profile caps
+                // only — the resolved per-request cap source (Profile /
+                // Quality / Data saver / …) is not exposed by the session
+                // yet, so the Effective-cap row states the profile's own
+                // ceiling and the source row stays out rather than guessing.
+                StatsRow(
+                    stringResource(Res.string.player_video_stats_level),
+                    performanceLevelLabel(performanceLevel),
+                )
+                // The Exo buffer posture — the engine config's effective
+                // DefaultLoadControl numbers (initial / rebuffer thresholds,
+                // byte target, back-buffer retention). Rows hidden entirely
+                // when the active engine is not ExoPlayer rather than showing
+                // numbers mpv/VLC never read.
+                exoBuffer?.let { buffer ->
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_buffer_initial),
+                        "${buffer.initialBufferMs} ms",
+                    )
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_buffer_rebuffer),
+                        "${buffer.rebufferBufferMs} ms",
+                    )
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_buffer_target),
+                        if (buffer.targetBufferBytes < 0) {
+                            stringResource(Res.string.player_video_stats_buffer_auto)
+                        } else {
+                            formatBytes(buffer.targetBufferBytes.toLong())
+                        },
+                    )
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_buffer_back),
+                        if (buffer.retainBackBuffer) {
+                            stringResource(Res.string.player_video_stats_buffer_back_retained)
+                        } else {
+                            stringResource(Res.string.player_video_stats_buffer_back_keyframes)
+                        },
+                    )
+                }
                 StatsRow(
                     stringResource(Res.string.player_video_stats_profile),
                     performanceProfileLabel(performanceProfile, detectedPerformanceTier),
@@ -457,6 +524,34 @@ private fun StatsRow(
 private fun formatDurationMsLocal(ms: Long): String = com.raulshma.jellyplay.core.ui.components.formatDurationMs(ms)
 
 // ── Performance-profile block (issue #186 §5.12) ─────────────────────────────
+
+/**
+ * The effective ExoPlayer buffer posture the overlay's Buffer rows render:
+ * the engine config's four `DefaultLoadControl` numbers (the same fields
+ * [com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig] carries after the
+ * engine-config fold — initial / rebuffer start thresholds, the byte target
+ * (`-1` = Media3's derive-from-tracks sentinel, rendered "Auto"), and the
+ * back-buffer retention posture). Built by the ViewModel from the aggregate
+ * the config builds from — never polled off the running engine. Defaults
+ * mirror the engine-config defaults so the cold value is an untouched
+ * install's posture.
+ */
+/**
+ * The LEVEL row's value: the level's name plus a one-word posture hint
+ * ("Standard · Full effects"). A DIFFERENT system from
+ * [performanceProfileLabel] — this is the master UI-performance dial
+ * (Settings → Performance), that one the playback device-tier Profile.
+ */
+@Composable
+private fun performanceLevelLabel(level: PerformanceLevel): String {
+    val name = level.localizedDisplayName()
+    val posture = when (level) {
+        PerformanceLevel.STANDARD -> stringResource(Res.string.player_video_stats_level_posture_standard)
+        PerformanceLevel.BALANCED -> stringResource(Res.string.player_video_stats_level_posture_balanced)
+        PerformanceLevel.PERFORMANCE -> stringResource(Res.string.player_video_stats_level_posture_performance)
+    }
+    return "$name · $posture"
+}
 
 /**
  * Why the performance caps cannot be enforced for the current session

@@ -285,7 +285,7 @@
     <string name="settings_offline_playback_desc_streaming">在线时始终串流服务器副本</string>
     <string name="settings_offline_playback_streaming_caveat">服务器质量设置仅在串流时生效——下载的内容始终直接播放存储的文件</string>
     <string name="settings_performance_profile">性能配置</string>
-    <string name="settings_performance_profile_ceiling_note">在已保存的画质之上叠加一道上限 — 取较低值生效，您的设置不会被改动。强制直接播放和已下载文件可绕过分辨率上限。可与外观中的性能模式行配合使用。</string>
+    <string name="settings_performance_profile_ceiling_note">在已保存的画质之上叠加一道上限 — 取较低值生效，您的设置不会被改动。强制直接播放和已下载文件可绕过分辨率上限。可与性能级别中心配合使用。</string>
     <string name="settings_performance_profile_auto_detected">自动 · 检测到：%1$s</string>
     <string name="settings_performance_profile_auto_detecting">自动 · 正在检测…</string>
     <string name="settings_performance_profile_low">流畅播放 · 最高 1080p / 8 Mbps</string>

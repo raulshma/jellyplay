@@ -310,6 +310,9 @@
     <string name="core_check_frequency_every_6_hours">Ogni 6 ore</string>
     <string name="core_check_frequency_every_12_hours">Ogni 12 ore</string>
     <string name="core_check_frequency_every_24_hours">Ogni giorno</string>
+    <string name="core_performance_level_standard">Standard</string>
+    <string name="core_performance_level_balanced">Ottimizzato</string>
+    <string name="core_performance_level_performance">Essenziale</string>
 
     <!-- Player input mapping (issue #171 generalized): action / pattern / key labels -->
     <string name="core_input_action_toggle_play_pause">Riproduci / pausa</string>

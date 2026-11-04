@@ -55,6 +55,10 @@ class PlaybackSpecDerivationTest {
         "downmix_boost_db" to Float::class,
         "spatial_audio_enabled" to Boolean::class,
         "spatial_audio_only_headphones" to Boolean::class,
+        "exo_initial_buffer_ms" to Int::class,
+        "exo_rebuffer_ms" to Int::class,
+        "exo_target_buffer_mb" to Int::class,
+        "exo_retain_back_buffer" to Boolean::class,
         "frame_rate_matching" to Boolean::class,
         "refresh_rate_mode" to String::class,
         "live_stream_option" to String::class,
@@ -141,6 +145,10 @@ class PlaybackSpecDerivationTest {
                 "downmix_boost_db",
                 "spatial_audio_enabled",
                 "spatial_audio_only_headphones",
+                "exo_initial_buffer_ms",
+                "exo_rebuffer_ms",
+                "exo_target_buffer_mb",
+                "exo_retain_back_buffer",
                 "frame_rate_matching",
                 "refresh_rate_mode",
                 "keep_screen_on_during_video",
@@ -232,6 +240,10 @@ class PlaybackSpecDerivationTest {
         assertEquals(PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.default, slice.downmixBoostDb)
         assertEquals(PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.default, slice.spatialAudioEnabled)
         assertEquals(PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.default, slice.spatialAudioOnlyHeadphones)
+        assertEquals(PlaybackPreferenceSpecs.EXO_INITIAL_BUFFER_MS.default, slice.exoInitialBufferMs)
+        assertEquals(PlaybackPreferenceSpecs.EXO_REBUFFER_MS.default, slice.exoRebufferMs)
+        assertEquals(PlaybackPreferenceSpecs.EXO_TARGET_BUFFER_MB.default, slice.exoTargetBufferMb)
+        assertEquals(PlaybackPreferenceSpecs.EXO_RETAIN_BACK_BUFFER.default, slice.exoRetainBackBuffer)
         assertEquals(PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.default, slice.frameRateMatching)
         assertEquals(PlaybackPreferenceSpecs.REFRESH_RATE_MODE.default, slice.refreshRateMode)
         assertEquals(PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.default, slice.keepScreenOnDuringVideo)
@@ -247,14 +259,14 @@ class PlaybackSpecDerivationTest {
         assertEquals(PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.default, slice.pgsSubtitleDirectPlay)
         assertEquals(PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.default, slice.userDataSyncEnabled)
         assertEquals(PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.default, slice.androidTvWatchNextEnabled)
-        // Totality: the 34 pinned properties are ALL the slice's fields (35
+        // Totality: the 38 pinned properties are ALL the slice's fields (39
         // rows - the legacy-only force_direct_play with no slice property). A
         // field added without a spec-default pin above (and without bumping
         // this count) fails here. Statics (the @Serializable Companion,
         // Compose's $stable) don't count.
         val instanceFields = PlaybackSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(34, instanceFields)
+        assertEquals(38, instanceFields)
     }
 
     /** Writes [spec]'s default through its derived write (the default IS the row's T). */

@@ -285,7 +285,7 @@
     <string name="settings_offline_playback_desc_streaming">Online immer die Server-Kopie streamen</string>
     <string name="settings_offline_playback_streaming_caveat">Server-Qualitätseinstellungen gelten nur beim Streaming — ein Download wird immer als gespeicherte Datei direkt wiedergegeben</string>
     <string name="settings_performance_profile">Leistungsprofil</string>
-    <string name="settings_performance_profile_ceiling_note">Setzt eine Obergrenze über deine gespeicherte Qualität — der niedrigere Wert gewinnt, deine Einstellungen bleiben unverändert. Erzwungenes Direct Play und heruntergeladene Dateien können die Auflösungsgrenze umgehen. Passt zur Leistungsmodus-Zeile unter Darstellung.</string>
+    <string name="settings_performance_profile_ceiling_note">Setzt eine Obergrenze über deine gespeicherte Qualität — der niedrigere Wert gewinnt, deine Einstellungen bleiben unverändert. Erzwungenes Direct Play und heruntergeladene Dateien können die Auflösungsgrenze umgehen. Passt zum Leistungsbereich.</string>
     <string name="settings_performance_profile_auto_detected">Auto · Erkannt: %1$s</string>
     <string name="settings_performance_profile_auto_detecting">Auto · Wird erkannt…</string>
     <string name="settings_performance_profile_low">Flüssige Wiedergabe · bis 1080p / 8 Mbps</string>

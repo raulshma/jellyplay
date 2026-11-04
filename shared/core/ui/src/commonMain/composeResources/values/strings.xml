@@ -333,6 +333,13 @@
     <string name="core_check_frequency_every_6_hours">Every 6 hours</string>
     <string name="core_check_frequency_every_12_hours">Every 12 hours</string>
     <string name="core_check_frequency_every_24_hours">Every day</string>
+    <!-- The PerformanceLevel master dial's faces (the appearance domain's
+         UI-performance level). Resolve via the PreferenceEnumNames seam so the
+         settings pickers/summaries, the player sheet's Level line and the
+         factory-reset diff values all render the same localized words. -->
+    <string name="core_performance_level_standard">Standard</string>
+    <string name="core_performance_level_balanced">Streamlined</string>
+    <string name="core_performance_level_performance">Essential</string>
 
     <!-- SubtitleFreeFormColorPickerDialog -->
     <string name="core_ui_color_picker_title">Pick a color</string>

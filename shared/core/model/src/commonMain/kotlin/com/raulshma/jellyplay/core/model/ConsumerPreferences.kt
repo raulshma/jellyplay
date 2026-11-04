@@ -211,6 +211,21 @@ data class OnboardingPreferences(
     val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     val homeHeroEnabled: Boolean = true,
     val performanceMode: Boolean = false,
+    // The performance posture clump — names + set pinned by [PerformancePosture]
+    // (the one declaration; performanceMode stays the derived legacy boolean):
+    override val performanceLevel: PerformanceLevel = PerformanceLevel.STANDARD,
+    override val perfAnimations: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfSharedElements: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfNavTransitions: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfImageDecodeCap: ImageDecodeCap = ImageDecodeCap.AUTO,
+    override val perfImageCrossfade: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfBlurhash: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfQualityBadges: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfAmbientHeroVideo: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfBackdropBlur: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfScreensaverMotion: PerformanceOverride = PerformanceOverride.AUTO,
+    /** Image memory-cache percent of the heap: 0 = AUTO (RAM-tiered), else 5..35. */
+    val imageMemoryCachePercent: Int = 0,
     val homeMode: HomeMode = HomeMode.VIDEO,
     val navBarShowLabels: Boolean = true,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
@@ -229,7 +244,7 @@ data class OnboardingPreferences(
     val pinLockEnabled: Boolean = false,
     val biometricLockEnabled: Boolean = false,
     val autoLockTimerMs: Long = 30_000L,
-)
+) : PerformancePosture
 
 /** Fields read by the top-level `SettingsScreen` landing page. */
 @Immutable
@@ -241,6 +256,21 @@ data class SettingsScreenPreferences(
     val oledMode: Boolean = false,
     val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     val performanceMode: Boolean = false,
+    // The performance posture clump — names + set pinned by [PerformancePosture]
+    // (the one declaration; performanceMode stays the derived legacy boolean):
+    override val performanceLevel: PerformanceLevel = PerformanceLevel.STANDARD,
+    override val perfAnimations: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfSharedElements: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfNavTransitions: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfImageDecodeCap: ImageDecodeCap = ImageDecodeCap.AUTO,
+    override val perfImageCrossfade: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfBlurhash: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfQualityBadges: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfAmbientHeroVideo: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfBackdropBlur: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfScreensaverMotion: PerformanceOverride = PerformanceOverride.AUTO,
+    /** Image memory-cache percent of the heap: 0 = AUTO (RAM-tiered), else 5..35. */
+    val imageMemoryCachePercent: Int = 0,
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
     val audioDefaultSpeed: Float = 1.0f,
     val preferredAudioLanguage: String? = null,
@@ -274,7 +304,7 @@ data class SettingsScreenPreferences(
     val hooksIdleCmd: String = "",
     val hooksIdleEndedCmd: String = "",
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
-)
+) : PerformancePosture
 
 /**
  * Slice-derived portion of `MainViewModel`'s preferences. The two runtime-only
@@ -289,6 +319,21 @@ data class MainPreferences(
     val theme: AppearanceTheme = AppearanceTheme(),
     val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     val performanceMode: Boolean = false,
+    // The performance posture clump — names + set pinned by [PerformancePosture]
+    // (the one declaration; performanceMode stays the derived legacy boolean):
+    override val performanceLevel: PerformanceLevel = PerformanceLevel.STANDARD,
+    override val perfAnimations: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfSharedElements: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfNavTransitions: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfImageDecodeCap: ImageDecodeCap = ImageDecodeCap.AUTO,
+    override val perfImageCrossfade: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfBlurhash: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfQualityBadges: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfAmbientHeroVideo: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfBackdropBlur: PerformanceOverride = PerformanceOverride.AUTO,
+    override val perfScreensaverMotion: PerformanceOverride = PerformanceOverride.AUTO,
+    /** Image memory-cache percent of the heap: 0 = AUTO (RAM-tiered), else 5..35. */
+    val imageMemoryCachePercent: Int = 0,
     val reduceMotionEnabled: Boolean = false,
     val hapticsEnabled: Boolean = true,
     val themeVariant: String = "standard",
@@ -358,7 +403,7 @@ data class MainPreferences(
     val onboardingCompleted: Boolean = false,
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
     val appLanguage: String? = null,
-)
+) : PerformancePosture
 
 /** Convenience helper mirroring the legacy `UserPreferences.isExperimentalEnabled`. */
 fun MainPreferences.isExperimentalEnabled(feature: ExperimentalFeature): Boolean =

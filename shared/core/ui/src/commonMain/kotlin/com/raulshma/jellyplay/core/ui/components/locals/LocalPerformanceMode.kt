@@ -1,9 +1,11 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.runtime.ProvidableCompositionLocal
+import com.raulshma.jellyplay.core.designsystem.theme.LocalPerformanceConfig as DesignSystemPerformanceConfig
 import com.raulshma.jellyplay.core.designsystem.theme.LocalPerformanceMode as DesignSystemPerformanceMode
 import com.raulshma.jellyplay.core.designsystem.theme.LocalReducedMotion as DesignSystemReducedMotion
 import com.raulshma.jellyplay.core.designsystem.theme.LocalReduceMotionEnabled as DesignSystemReduceMotionEnabled
+import com.raulshma.jellyplay.core.model.ResolvedPerformanceConfig
 
 /**
  * Import-compatibility aliases for the motion/performance flags.
@@ -17,6 +19,13 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalReduceMotionEnabled a
  * `performanceAware*` helpers (animation package) at call sites; new code may
  * import the locals from `core.designsystem.theme` directly.
  */
+
+/**
+ * The resolved performance posture — the ONE channel behavior gates should
+ * read. See designsystem's `LocalMotionFlags.kt`.
+ */
+val LocalPerformanceConfig: ProvidableCompositionLocal<ResolvedPerformanceConfig>
+    get() = DesignSystemPerformanceConfig
 
 /** Whether the user enabled performance/battery-saver mode. See designsystem's `LocalMotionFlags.kt`. */
 val LocalPerformanceMode: ProvidableCompositionLocal<Boolean>

@@ -121,7 +121,9 @@ class SettingsCatalogGeneratorTest {
         // My-Media columns 0–6, new-badge window 1–30 days in
         // HomeDiscoveryStore, the sleep-timer confirm threshold 1–30
         // minutes in VideoPlayerStore, and the reviews-preview-lines and
-        // franchise box/member limits in LibraryStore). A new bound
+        // franchise box/member limits in LibraryStore — the exo buffer
+        // rows 250–5 000 ms and 500–10 000 ms in PlaybackStore's
+        // setters). A new bound
         // must
         // be evidence-backed: declare it on the spec row AND extend this set
         // in the same commit. (The dream_* rows carry no bounds — the sync
@@ -170,6 +172,8 @@ class SettingsCatalogGeneratorTest {
                 "detail_reviews_preview_lines",
                 "detail_franchise_box_limit",
                 "detail_franchise_member_limit",
+                "exo_initial_buffer_ms",
+                "exo_rebuffer_ms",
             ),
             entries.filter { it.min != null || it.max != null }.map { it.key }.toSet(),
             "the bounded-row set changed — audit the new clamp before advertising it",

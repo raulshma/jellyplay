@@ -451,4 +451,17 @@
     <string name="player_video_exit_confirm_message">Pressione voltar novamente — ou confirme — para fechar o player.</string>
     <string name="player_video_exit_confirm_confirm">Fechar</string>
     <string name="player_video_exit_confirm_stay">Ficar</string>
+    <string name="player_video_stats_level">Nível</string>
+    <string name="player_video_stats_level_posture_standard">Todos os efeitos</string>
+    <string name="player_video_stats_level_posture_balanced">A maioria dos efeitos</string>
+    <string name="player_video_stats_level_posture_performance">Efeitos desativados</string>
+    <string name="player_video_stats_buffer_initial">Buffer inicial</string>
+    <string name="player_video_stats_buffer_rebuffer">Buffer de rebuffering</string>
+    <string name="player_video_stats_buffer_target">Buffer alvo</string>
+    <string name="player_video_stats_buffer_auto">Automático</string>
+    <string name="player_video_stats_buffer_back">Back buffer</string>
+    <string name="player_video_stats_buffer_back_retained">Retido</string>
+    <string name="player_video_stats_buffer_back_keyframes">Limitado por fotogramas-chave</string>
+    <string name="player_video_playback_options_level_line">Nível: %1$s</string>
+    <string name="player_video_playback_options_level_caption">Ajuste de efeitos para toda a aplicação — todos os controlos em Definições → Desempenho.</string>
 </resources>

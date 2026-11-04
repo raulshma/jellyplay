@@ -97,8 +97,8 @@
     <string name="ss_show_share_media_subtitle">在详情页显示分享选项按钮</string>
     <string name="ss_show_external_ratings_title">显示外部评分</string>
     <string name="ss_show_external_ratings_subtitle">在详情页显示影评评分 (IMDb/TMDB)</string>
-    <string name="ss_performance_mode_title">性能模式</string>
-    <string name="ss_performance_mode_subtitle">为低端设备减少繁重的动画和布局计算</string>
+    <string name="ss_performance_mode_title">性能级别</string>
+    <string name="ss_performance_mode_subtitle">总开关：标准、精简或极简 — 细粒度覆盖见性能中心</string>
     <string name="ss_reduce_motion_title">减弱动态效果</string>
     <string name="ss_reduce_motion_subtitle">禁用视差过渡和极端的列表缩放效果</string>
     <string name="ss_blue_light_filter_title">蓝光过滤</string>

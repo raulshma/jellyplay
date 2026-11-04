@@ -56,6 +56,10 @@ data class AppearanceScreenPreferences(
     val homeHeroEnabled: Boolean = true,
     val homeBackdropEnabled: Boolean = true,
     val performanceMode: Boolean = false,
+    // The performance master level (the hub's dial; `performanceMode` stays
+    // the derived legacy boolean). Standard falls back to the level-less
+    // summary faces.
+    val performanceLevel: PerformanceLevel = PerformanceLevel.STANDARD,
     val themeVariant: String = "standard",
     val synthwaveAccent: String = "magenta",
     val soothingAccent: String = "ocean",

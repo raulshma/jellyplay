@@ -81,3 +81,30 @@
     public static *** d(...);
     public static *** v(...);
 }
+
+# Strip debug/info logging calls (arguments included) from minified release
+# builds. core:data's Log facade gates d/i at runtime (minimumLevel defaults
+# to WARN), so this is the second belt: R8 removes the call and its argument
+# construction entirely, leaving the runtime gate as defense-in-depth for the
+# non-minified debuggable release builds. w/e survive both.
+-assumenosideeffects class com.raulshma.jellyplay.core.data.log.Log {
+    public int d(...);
+    public int i(...);
+}
+
+# The sibling facades delegate to android.util.Log (whose d/v strip above only
+# removes the inner delegation, not the caller-side message construction) —
+# strip their debug calls too so argument construction dies with the call.
+-assumenosideeffects class com.raulshma.jellyplay.core.network.NetworkLog {
+    public void d(...);
+}
+
+-assumenosideeffects class com.raulshma.jellyplay.core.ui.components.UiLog_androidKt {
+    public static void logUiDebug(...);
+}
+
+# Info-level from direct android.util.Log call sites: same treatment as the
+# facades' i() above (their d/v are covered by the strip at the top).
+-assumenosideeffects class android.util.Log {
+    public static *** i(...);
+}

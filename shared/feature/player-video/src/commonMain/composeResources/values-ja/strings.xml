@@ -450,4 +450,17 @@
     <string name="player_video_exit_confirm_message">プレーヤーを閉じるには、戻るをもう一度押すか、確認してください。</string>
     <string name="player_video_exit_confirm_confirm">閉じる</string>
     <string name="player_video_exit_confirm_stay">このまま</string>
+    <string name="player_video_stats_level">レベル</string>
+    <string name="player_video_stats_level_posture_standard">全効果</string>
+    <string name="player_video_stats_level_posture_balanced">ほとんどの効果</string>
+    <string name="player_video_stats_level_posture_performance">効果オフ</string>
+    <string name="player_video_stats_buffer_initial">初期バッファ</string>
+    <string name="player_video_stats_buffer_rebuffer">リバッファ用バッファ</string>
+    <string name="player_video_stats_buffer_target">目標バッファ</string>
+    <string name="player_video_stats_buffer_auto">オート</string>
+    <string name="player_video_stats_buffer_back">バックバッファ</string>
+    <string name="player_video_stats_buffer_back_retained">保持</string>
+    <string name="player_video_stats_buffer_back_keyframes">キーフレーム単位</string>
+    <string name="player_video_playback_options_level_line">レベル: %1$s</string>
+    <string name="player_video_playback_options_level_caption">アプリ全体の効果の調整 — 完全なコントロールは 設定 → パフォーマンス にあります。</string>
 </resources>

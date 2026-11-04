@@ -450,4 +450,17 @@
     <string name="player_video_exit_confirm_message">再按一次返回 — 或确认 — 即可关闭播放器。</string>
     <string name="player_video_exit_confirm_confirm">关闭</string>
     <string name="player_video_exit_confirm_stay">留下</string>
+    <string name="player_video_stats_level">级别</string>
+    <string name="player_video_stats_level_posture_standard">全部效果</string>
+    <string name="player_video_stats_level_posture_balanced">大部分效果</string>
+    <string name="player_video_stats_level_posture_performance">效果关闭</string>
+    <string name="player_video_stats_buffer_initial">初始缓冲</string>
+    <string name="player_video_stats_buffer_rebuffer">重缓冲缓冲</string>
+    <string name="player_video_stats_buffer_target">目标缓冲</string>
+    <string name="player_video_stats_buffer_auto">自动</string>
+    <string name="player_video_stats_buffer_back">后缓冲</string>
+    <string name="player_video_stats_buffer_back_retained">已保留</string>
+    <string name="player_video_stats_buffer_back_keyframes">按关键帧截断</string>
+    <string name="player_video_playback_options_level_line">级别：%1$s</string>
+    <string name="player_video_playback_options_level_caption">应用全局效果调节 — 完整控制见 设置 → 性能。</string>
 </resources>

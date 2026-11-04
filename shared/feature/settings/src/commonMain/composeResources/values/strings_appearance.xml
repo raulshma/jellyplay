@@ -25,7 +25,6 @@
     <string name="settings_contrast_medium">Medium contrast</string>
     <string name="settings_contrast_high">High contrast</string>
     <string name="settings_oled_token">OLED</string>
-    <string name="settings_performance_token">Performance</string>
     <string name="settings_contrast_suffix">%1$s contrast</string>
     <string name="settings_library_view_mode">Library View Mode</string>
     <string name="settings_layout_mode">Layout</string>
@@ -120,8 +119,8 @@
     <string name="settings_show_external_ratings">Show External Ratings</string>
     <string name="settings_show_external_ratings_subtitle">Display critic rating scores (IMDb/TMDB) on details pages</string>
     <string name="settings_performance">Performance</string>
-    <string name="settings_performance_mode">Performance Mode</string>
-    <string name="settings_performance_mode_subtitle">Reduces animations and effects for better performance on lower-end devices</string>
+    <!-- The master level row's title (the appearance summary's Performance token too). -->
+    <string name="settings_performance_mode">Performance Level</string>
     <string name="settings_reduced_motion">Reduced motion</string>
     <string name="settings_standard_experience">Standard experience</string>
     <string name="settings_reduce_motion">Reduce Motion</string>

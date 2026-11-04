@@ -78,9 +78,19 @@ class SettingsSearchCatalogTest {
         assertEquals(20, SettingsScreenGroups.appearanceTheme.items.size)
         assertEquals(13, SettingsScreenGroups.appearanceNavigation.items.size)
         assertEquals(52, SettingsScreenGroups.appearanceLibrary.items.size)
-        assertEquals(2, SettingsScreenGroups.appearancePerformance.items.size)
+        // The master level row lives in the hub's level group now; the
+        // appearance screen's group keeps only the Reduce Motion toggle.
+        assertEquals(1, SettingsScreenGroups.appearancePerformance.items.size)
         assertEquals(2, SettingsScreenGroups.appearanceEyeCare.items.size)
         assertEquals(3, SettingsScreenGroups.appearanceNewsletter.items.size)
+        // The Performance hub's five groups: the always-visible master dial,
+        // then the four expert groups (3 motion + 5 images + 3 ambient + the
+        // playback-domain buffer quartet).
+        assertEquals(1, SettingsScreenGroups.performanceLevel.items.size)
+        assertEquals(3, SettingsScreenGroups.performanceMotion.items.size)
+        assertEquals(5, SettingsScreenGroups.performanceImages.items.size)
+        assertEquals(3, SettingsScreenGroups.performanceAmbient.items.size)
+        assertEquals(4, SettingsScreenGroups.playbackBuffers.items.size)
         assertEquals(83, SettingsScreenGroups.playbackPlayer.items.size)
         // 26 + the issue #186 pair: the spec-backed performance-profile row
         // beside Streaming Quality and the residual Re-detect action row

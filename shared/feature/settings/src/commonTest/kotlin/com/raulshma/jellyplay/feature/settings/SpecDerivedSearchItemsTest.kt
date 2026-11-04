@@ -280,11 +280,49 @@ class SpecDerivedSearchItemsTest {
 
     @Test
     fun `appearance performance and eye care lists derive wholly from specs`() {
-        assertEquals(2, AppearancePerformanceSearchItems.size)
+        // The master level row moved to the hub's level group; the appearance
+        // screen's group keeps only the Reduce Motion toggle.
+        assertEquals(1, AppearancePerformanceSearchItems.size)
         assertEquals(2, AppearanceEyeCareSearchItems.size)
         assertTrue(AppearancePerformanceSearchItems.all { it.isAdvanced })
         assertTrue(AppearanceEyeCareSearchItems.all { it.isAdvanced })
         assertEquals(Route.AppearanceSettings(), AppearanceEyeCareSearchItems.single { it.id == AppearanceRows.BlueLightStrength.id }.route)
+    }
+
+    @Test
+    fun `the performance hub lists derive wholly from specs and deep-link the hub route`() {
+        // Sizes, in group order: 1 master + 3 motion + 5 images + 3 ambient,
+        // then the playback-domain buffer quartet.
+        assertEquals(1, PerformanceLevelSearchItems.size)
+        assertEquals(3, PerformanceMotionSearchItems.size)
+        assertEquals(5, PerformanceImageSearchItems.size)
+        assertEquals(3, PerformanceAmbientSearchItems.size)
+        assertEquals(4, PlaybackBufferSearchItems.size)
+
+        // Every hub row deep-links Route.PerformanceSettings (the
+        // performance_settings route kind both domains' specs now carry) and
+        // keeps its spec advanced base — except the master row, whose fused
+        // Always gate is an ADMISSION override, not a search flag.
+        listOf(
+            PerformanceLevelSearchItems,
+            PerformanceMotionSearchItems,
+            PerformanceImageSearchItems,
+            PerformanceAmbientSearchItems,
+            PlaybackBufferSearchItems,
+        ).forEach { items ->
+            assertTrue(items.all { it.route == Route.PerformanceSettings() }, "a hub row lost the hub route")
+            assertTrue(items.all { it.isAdvanced }, "a hub row lost its advanced flag")
+        }
+        // The master row keeps the historical search id and its ss_* faces.
+        val master = PerformanceLevelSearchItems.single()
+        assertEquals("performance_mode", master.id)
+        assertEquals("ss_performance_mode_title", master.titleRes.key)
+        assertEquals("ss_performance_mode_subtitle", master.subtitleRes.key)
+        // Spot-check a tri-state binding and a buffer binding.
+        val animations = PerformanceMotionSearchItems.single { it.id == "perf_animations" }
+        assertEquals("ss_perf_animations_title", animations.titleRes.key)
+        val initialBuffer = PlaybackBufferSearchItems.single { it.id == "exo_initial_buffer_ms" }
+        assertEquals("ss_exo_initial_buffer_ms_title", initialBuffer.titleRes.key)
     }
 
     @Test

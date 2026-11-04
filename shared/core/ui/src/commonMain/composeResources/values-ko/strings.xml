@@ -310,6 +310,9 @@
     <string name="core_check_frequency_every_6_hours">6시간마다</string>
     <string name="core_check_frequency_every_12_hours">12시간마다</string>
     <string name="core_check_frequency_every_24_hours">매일</string>
+    <string name="core_performance_level_standard">표준</string>
+    <string name="core_performance_level_balanced">경량</string>
+    <string name="core_performance_level_performance">필수</string>
     <string name="core_input_action_toggle_play_pause">재생 / 일시정지</string>
     <string name="core_input_action_play">재생</string>
     <string name="core_input_action_pause">일시정지</string>

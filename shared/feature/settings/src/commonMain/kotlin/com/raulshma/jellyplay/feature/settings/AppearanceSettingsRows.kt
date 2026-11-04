@@ -90,8 +90,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nigh
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_persist_section_hides
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_persist_section_hides_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_people_grid_density
@@ -196,8 +194,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter_sections_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_oled_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_oled_mode_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_prefer_logos_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reduce_motion_title
@@ -1279,14 +1275,13 @@ internal object AppearanceRows {
 
     // ── Performance group (advanced-gated) ──────────────────────────────
 
-    val PerformanceMode = SettingsRow(
-        id = "performance_mode",
-        icon = Tabler.Outline.Gauge,
-        titleRes = Res.string.settings_performance_mode,
-        subtitleRes = Res.string.settings_performance_mode_subtitle,
-        searchTitleRes = Res.string.ss_performance_mode_title,
-        searchSubtitleRes = Res.string.ss_performance_mode_subtitle,
-    )
+    /**
+     * The master performance row ([PerformanceRows.PerformanceLevel], search
+     * id `performance_mode`) lives in the Performance hub's level group now —
+     * single group membership; the appearance screen's Performance group
+     * renders a quick level picker + a Customize deep-link beside the
+     * Reduce Motion row below, but the CATALOG row is the hub's.
+     */
 
     val ReduceMotion = SettingsRow(
         id = "reduce_motion",
@@ -1505,9 +1500,14 @@ internal val AppearanceLibraryRows: List<SettingsRow> = listOf(
     AppearanceRows.HideSearchHistory,
 )
 
-/** The advanced-gated "Performance" group's rows (both spec-backed). */
+/**
+ * The advanced-gated "Performance" group's rows — the Reduce Motion toggle
+ * (spec-backed). The master performance row lives in the Performance hub's
+ * level group ([PerformanceLevelRows]); the appearance screen's group body
+ * adds its quick level picker + Customize deep-link as screen-local rows
+ * beside this one.
+ */
 internal val AppearancePerformanceRows: List<SettingsRow> = listOf(
-    AppearanceRows.PerformanceMode,
     AppearanceRows.ReduceMotion,
 )
 

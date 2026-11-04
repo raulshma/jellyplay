@@ -285,7 +285,7 @@
     <string name="settings_offline_playback_desc_streaming">Sempre transmite a cópia do servidor quando online</string>
     <string name="settings_offline_playback_streaming_caveat">As configurações de qualidade do servidor só se aplicam ao transmitir — um download sempre reproduz diretamente o arquivo armazenado</string>
     <string name="settings_performance_profile">Perfil de desempenho</string>
-    <string name="settings_performance_profile_ceiling_note">Adiciona um limite acima da sua qualidade salva — o valor mais baixo vence, suas configurações nunca mudam. A reprodução direta forçada e os arquivos baixados podem ignorar o limite de resolução. Combina com a linha de modo de desempenho em Aparência.</string>
+    <string name="settings_performance_profile_ceiling_note">Adiciona um limite acima da sua qualidade salva — o valor mais baixo vence, suas configurações nunca mudam. A reprodução direta forçada e os arquivos baixados podem ignorar o limite de resolução. Combina com o hub do Nível de desempenho.</string>
     <string name="settings_performance_profile_auto_detected">Automático · Detectado: %1$s</string>
     <string name="settings_performance_profile_auto_detecting">Automático · Detectando…</string>
     <string name="settings_performance_profile_low">Reprodução fluida · até 1080p / 8 Mbps</string>

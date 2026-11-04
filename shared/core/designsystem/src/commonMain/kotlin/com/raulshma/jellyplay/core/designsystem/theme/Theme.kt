@@ -508,11 +508,17 @@ fun JellyPlayTheme(
     // scheme for no behavior change. (The Local reads stay in composition;
     // only motionSchemeFor's derivation is remembered.)
     val extendedColors = remember { ExtendedColors() }
-    val performanceMode = LocalPerformanceMode.current
+    // The scheme derives from the resolved posture (LocalPerformanceConfig,
+    // provided above JellyPlayTheme by JellyPlayPreferenceTheme): the config's
+    // suppressAnimations + the raw reduce-motion accessibility flag — the same
+    // pair motionSchemeFor folds. At all-AUTO this is byte-identical to the
+    // legacy performanceMode boolean; the granular animations override now
+    // also flips the scheme.
+    val suppressAnimations = LocalPerformanceConfig.current.suppressAnimations
     val reduceMotion = LocalReduceMotionEnabled.current
-    val motionScheme = remember(performanceMode, reduceMotion) {
+    val motionScheme = remember(suppressAnimations, reduceMotion) {
         motionSchemeFor(
-            performanceMode = performanceMode,
+            suppressAnimations = suppressAnimations,
             reduceMotion = reduceMotion,
         )
     }

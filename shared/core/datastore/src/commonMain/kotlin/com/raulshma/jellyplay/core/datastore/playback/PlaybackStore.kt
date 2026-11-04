@@ -110,6 +110,10 @@ class PlaybackStore constructor(
         val DOWNMIX_BOOST_DB = floatPreferencesKey(PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.keyName)
         val SPATIAL_AUDIO_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.keyName)
         val SPATIAL_AUDIO_ONLY_HEADPHONES = booleanPreferencesKey(PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.keyName)
+        val EXO_INITIAL_BUFFER_MS = intPreferencesKey(PlaybackPreferenceSpecs.EXO_INITIAL_BUFFER_MS.keyName)
+        val EXO_REBUFFER_MS = intPreferencesKey(PlaybackPreferenceSpecs.EXO_REBUFFER_MS.keyName)
+        val EXO_TARGET_BUFFER_MB = intPreferencesKey(PlaybackPreferenceSpecs.EXO_TARGET_BUFFER_MB.keyName)
+        val EXO_RETAIN_BACK_BUFFER = booleanPreferencesKey(PlaybackPreferenceSpecs.EXO_RETAIN_BACK_BUFFER.keyName)
         val FRAME_RATE_MATCHING = booleanPreferencesKey(PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.keyName)
         val REFRESH_RATE_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.REFRESH_RATE_MODE.keyName)
         val LIVE_STREAM_OPTION = stringPreferencesKey(PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.keyName)
@@ -164,6 +168,10 @@ class PlaybackStore constructor(
         downmixBoostDb = PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.readFrom(prefs),
         spatialAudioEnabled = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.readFrom(prefs),
         spatialAudioOnlyHeadphones = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.readFrom(prefs),
+        exoInitialBufferMs = PlaybackPreferenceSpecs.EXO_INITIAL_BUFFER_MS.readFrom(prefs),
+        exoRebufferMs = PlaybackPreferenceSpecs.EXO_REBUFFER_MS.readFrom(prefs),
+        exoTargetBufferMb = PlaybackPreferenceSpecs.EXO_TARGET_BUFFER_MB.readFrom(prefs),
+        exoRetainBackBuffer = PlaybackPreferenceSpecs.EXO_RETAIN_BACK_BUFFER.readFrom(prefs),
         frameRateMatching = PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.readFrom(prefs),
         refreshRateMode = PlaybackPreferenceSpecs.REFRESH_RATE_MODE.readFrom(prefs),
         keepScreenOnDuringVideo = PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.readFrom(prefs),
@@ -333,6 +341,58 @@ class PlaybackStore constructor(
     }
 
     /**
+     * ExoPlayer `bufferForPlaybackMs` — how much must be buffered before
+     * playback starts. Clamped to [MIN_EXO_INITIAL_BUFFER_MS]..
+     * [MAX_EXO_INITIAL_BUFFER_MS]; the user-explicit value applies to the
+     * engine verbatim otherwise (these exo-buffer rows are direct engine
+     * inputs, not ceilings).
+     */
+    suspend fun setExoInitialBufferMs(bufferMs: Int) {
+        dataStore.edit {
+            PlaybackPreferenceSpecs.EXO_INITIAL_BUFFER_MS.writeTo(
+                it,
+                bufferMs.coerceIn(MIN_EXO_INITIAL_BUFFER_MS, MAX_EXO_INITIAL_BUFFER_MS),
+            )
+        }
+    }
+
+    /**
+     * ExoPlayer `bufferForPlaybackAfterRebufferMs` — how much must be buffered
+     * to resume after a stall. Clamped to [MIN_EXO_REBUFFER_MS]..
+     * [MAX_EXO_REBUFFER_MS].
+     */
+    suspend fun setExoRebufferMs(bufferMs: Int) {
+        dataStore.edit {
+            PlaybackPreferenceSpecs.EXO_REBUFFER_MS.writeTo(
+                it,
+                bufferMs.coerceIn(MIN_EXO_REBUFFER_MS, MAX_EXO_REBUFFER_MS),
+            )
+        }
+    }
+
+    /**
+     * ExoPlayer's target buffer in MB. The `0` AUTO sentinel
+     * ([EXO_TARGET_BUFFER_AUTO_MB]) is preserved verbatim — the engine's `-1`
+     * (Media3's derived target) stands; any other value clamps to
+     * [MIN_EXO_TARGET_BUFFER_MB]..[MAX_EXO_TARGET_BUFFER_MB].
+     */
+    suspend fun setExoTargetBufferMb(mb: Int) {
+        dataStore.edit {
+            val clamped = if (mb == EXO_TARGET_BUFFER_AUTO_MB) {
+                EXO_TARGET_BUFFER_AUTO_MB
+            } else {
+                mb.coerceIn(MIN_EXO_TARGET_BUFFER_MB, MAX_EXO_TARGET_BUFFER_MB)
+            }
+            PlaybackPreferenceSpecs.EXO_TARGET_BUFFER_MB.writeTo(it, clamped)
+        }
+    }
+
+    /** Whether the Exo back buffer is retained regardless of keyframe boundaries. */
+    suspend fun setExoRetainBackBuffer(enabled: Boolean) {
+        dataStore.edit { PlaybackPreferenceSpecs.EXO_RETAIN_BACK_BUFFER.writeTo(it, enabled) }
+    }
+
+    /**
      * Enables/disables frame-rate matching, keeping the legacy boolean in sync
      * with the new [RefreshRateMode] enum in a single atomic edit. `true` maps
      * to the least-surprising frame-rate-only mode (the old single-resolution
@@ -447,6 +507,10 @@ class PlaybackStore constructor(
             PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.writeTo(prefs, slice.downmixBoostDb)
             PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.writeTo(prefs, slice.spatialAudioEnabled)
             PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.writeTo(prefs, slice.spatialAudioOnlyHeadphones)
+            PlaybackPreferenceSpecs.EXO_INITIAL_BUFFER_MS.writeTo(prefs, slice.exoInitialBufferMs)
+            PlaybackPreferenceSpecs.EXO_REBUFFER_MS.writeTo(prefs, slice.exoRebufferMs)
+            PlaybackPreferenceSpecs.EXO_TARGET_BUFFER_MB.writeTo(prefs, slice.exoTargetBufferMb)
+            PlaybackPreferenceSpecs.EXO_RETAIN_BACK_BUFFER.writeTo(prefs, slice.exoRetainBackBuffer)
             PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.writeTo(prefs, slice.frameRateMatching)
             PlaybackPreferenceSpecs.REFRESH_RATE_MODE.writeTo(prefs, slice.refreshRateMode)
             PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.writeTo(prefs, slice.keepScreenOnDuringVideo)
@@ -514,6 +578,17 @@ data class PlaybackSlice(
     val downmixBoostDb: Float = PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.default,
     val spatialAudioEnabled: Boolean = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.default,
     val spatialAudioOnlyHeadphones: Boolean = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.default,
+    /**
+     * The ExoPlayer `DefaultLoadControl` buffer numbers — direct engine
+     * inputs, not ceilings (see the `exoBuffers` group's rationale in
+     * [PlaybackPreferenceSpecs]). Defaults preserve the engine's historical
+     * hardcoded values; [exoTargetBufferMb]'s `0` is the AUTO sentinel that
+     * keeps Media3's derived target (`-1`).
+     */
+    val exoInitialBufferMs: Int = PlaybackPreferenceSpecs.EXO_INITIAL_BUFFER_MS.default,
+    val exoRebufferMs: Int = PlaybackPreferenceSpecs.EXO_REBUFFER_MS.default,
+    val exoTargetBufferMb: Int = PlaybackPreferenceSpecs.EXO_TARGET_BUFFER_MB.default,
+    val exoRetainBackBuffer: Boolean = PlaybackPreferenceSpecs.EXO_RETAIN_BACK_BUFFER.default,
     val frameRateMatching: Boolean = PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.default,
     val refreshRateMode: RefreshRateMode = PlaybackPreferenceSpecs.REFRESH_RATE_MODE.default,
     val keepScreenOnDuringVideo: Boolean = PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.default,

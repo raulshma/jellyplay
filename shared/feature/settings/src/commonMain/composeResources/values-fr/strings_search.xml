@@ -97,8 +97,8 @@
     <string name="ss_show_share_media_subtitle">Afficher le bouton des options de partage sur les pages de détails</string>
     <string name="ss_show_external_ratings_title">Afficher les notes externes</string>
     <string name="ss_show_external_ratings_subtitle">Afficher les scores de note des critiques (IMDb/TMDB) sur les pages de détails</string>
-    <string name="ss_performance_mode_title">Mode performance</string>
-    <string name="ss_performance_mode_subtitle">Réduire les animations lourdes et les calculs de mise en page pour les appareils modestes</string>
+    <string name="ss_performance_mode_title">Niveau de performances</string>
+    <string name="ss_performance_mode_subtitle">Le réglage principal : Standard, Optimisé ou Essentiel — les ajustements granulaires se trouvent dans le hub Performances</string>
     <string name="ss_reduce_motion_title">Réduire les animations</string>
     <string name="ss_reduce_motion_subtitle">Désactiver les transitions parallaxe et les effets de mise à l'échelle extrême des listes</string>
     <string name="ss_blue_light_filter_title">Filtre lumière bleue</string>

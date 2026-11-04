@@ -82,7 +82,7 @@
     <string name="settings_show_external_ratings">외부 평점 표시</string>
     <string name="settings_show_external_ratings_subtitle">상세 페이지에 평론가 평점(IMDb/TMDB) 표시</string>
     <string name="settings_performance">성능</string>
-    <string name="settings_performance_mode">성능 모드</string>
+    <string name="settings_performance_mode">성능 단계</string>
     <string name="settings_performance_mode_subtitle">저사양 기기에서 더 나은 성능을 위해 애니메이션과 효과 감소</string>
     <string name="settings_reduced_motion">모션 감소</string>
     <string name="settings_standard_experience">표준 경험</string>

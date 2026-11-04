@@ -451,4 +451,17 @@
     <string name="player_video_exit_confirm_message">Pulsa atrás otra vez — o confirma — para cerrar el reproductor.</string>
     <string name="player_video_exit_confirm_confirm">Cerrar</string>
     <string name="player_video_exit_confirm_stay">Quedarme</string>
+    <string name="player_video_stats_level">Nivel</string>
+    <string name="player_video_stats_level_posture_standard">Todos los efectos</string>
+    <string name="player_video_stats_level_posture_balanced">La mayoría de los efectos</string>
+    <string name="player_video_stats_level_posture_performance">Efectos desactivados</string>
+    <string name="player_video_stats_buffer_initial">Buffer inicial</string>
+    <string name="player_video_stats_buffer_rebuffer">Buffer de rebuffer</string>
+    <string name="player_video_stats_buffer_target">Buffer objetivo</string>
+    <string name="player_video_stats_buffer_auto">Auto</string>
+    <string name="player_video_stats_buffer_back">Back buffer</string>
+    <string name="player_video_stats_buffer_back_retained">Retenido</string>
+    <string name="player_video_stats_buffer_back_keyframes">Limitado por fotogramas clave</string>
+    <string name="player_video_playback_options_level_line">Nivel: %1$s</string>
+    <string name="player_video_playback_options_level_caption">Ajuste de efectos para toda la app: todos los controles en Ajustes → Rendimiento.</string>
 </resources>

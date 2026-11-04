@@ -386,7 +386,7 @@ internal fun HomePresenceChipRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = modifier.fillMaxWidth(),
         ) {
-            items(chips, key = { it.sessionId }) { chip -> entry(chip) }
+            items(chips, key = { it.sessionId }, contentType = { "presenceChip" }) { chip -> entry(chip) }
         }
     }
 }

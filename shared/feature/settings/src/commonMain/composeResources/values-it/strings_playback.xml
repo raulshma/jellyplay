@@ -285,7 +285,7 @@
     <string name="settings_offline_playback_desc_streaming">Streaming sempre della copia del server quando online</string>
     <string name="settings_offline_playback_streaming_caveat">Le impostazioni di qualità del server si applicano solo in streaming — un download viene sempre riprodotto direttamente dal file archiviato</string>
     <string name="settings_performance_profile">Profilo delle prestazioni</string>
-    <string name="settings_performance_profile_ceiling_note">Aggiunge un limite sopra la qualità salvata: vince il valore più basso, le tue impostazioni non cambiano mai. La riproduzione diretta forzata e i file scaricati possono aggirare il limite di risoluzione. Si abbina alla riga della modalità Prestazioni in Aspetto.</string>
+    <string name="settings_performance_profile_ceiling_note">Aggiunge un limite sopra la qualità salvata: vince il valore più basso, le tue impostazioni non cambiano mai. La riproduzione diretta forzata e i file scaricati possono aggirare il limite di risoluzione. Si abbina all’hub del Livello di prestazioni.</string>
     <string name="settings_performance_profile_auto_detected">Auto · Rilevato: %1$s</string>
     <string name="settings_performance_profile_auto_detecting">Auto · Rilevamento…</string>
     <string name="settings_performance_profile_low">Riproduzione fluida · fino a 1080p / 8 Mbps</string>

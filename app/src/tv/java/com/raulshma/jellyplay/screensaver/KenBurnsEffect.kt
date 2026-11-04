@@ -66,7 +66,14 @@ fun KenBurnsImage(
             .build()
     }
 
-    if (enabled && !com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current) {
+    // The resolved posture's screensaver-motion row gates the pan/zoom (the
+    // dream service provides LocalPerformanceConfig beside the motion locals —
+    // it composes OUTSIDE JellyPlayPreferenceTheme, so without that provision
+    // the locals would silently read their defaults). The reduced-motion leg
+    // stays as the accessibility arm.
+    val screensaverMotion = com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig.current.screensaverMotion
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+    if (enabled && screensaverMotion && !reducedMotion) {
         val infiniteTransition = rememberInfiniteTransition(label = "kenBurns")
         val progress by infiniteTransition.animateFloat(
             initialValue = 0f,

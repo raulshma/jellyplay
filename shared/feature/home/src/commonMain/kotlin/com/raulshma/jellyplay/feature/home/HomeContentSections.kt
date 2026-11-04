@@ -514,6 +514,21 @@ internal fun HomeContentList(
         // later during scroll just read the settled 1f and render instantly.
         val feedEntrance = rememberDetailEntrance()
 
+        // ONE derivedStateOf over the layout info builds the whole visible-key
+        // set in a single pass per layout change; each section below then reads
+        // its own visibility as an O(1) membership check. The former shape gave
+        // every section its own derivedStateOf scanning visibleItemsInfo —
+        // O(sections × viewport) work on every scroll frame. Structural
+        // equality on the set keeps the readers quiet while the same sections
+        // stay visible (item offsets churn per frame, membership doesn't), and
+        // the predicate is byte-identical to the per-section scan: a section is
+        // visible iff its id is some visible item's key.
+        val visibleSectionKeys by remember(listState) {
+            derivedStateOf {
+                listState.layoutInfo.visibleItemsInfo.mapTo(HashSet()) { it.key }
+            }
+        }
+
         CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalScrollIdle provides
                 remember(listState) { { !listState.isScrollInProgress } }
@@ -681,11 +696,10 @@ internal fun HomeContentList(
             items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                 val section = sections[index]
                 val isFirstAfterHero = index == 0 && firstSectionFollowsHero
-                val isCurrentlyVisible by remember(section.id) {
-                    derivedStateOf {
-                        listState.layoutInfo.visibleItemsInfo.any { it.key == section.id }
-                    }
-                }
+                // The shared layout-info pass above (visibleSectionKeys) — this
+                // item's one-shot latch reads its membership out of it instead
+                // of rescanning visibleItemsInfo per section.
+                val isCurrentlyVisible = section.id in visibleSectionKeys
 
                 var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
                 // Fold the one-shot visibility latch into a LaunchedEffect so the

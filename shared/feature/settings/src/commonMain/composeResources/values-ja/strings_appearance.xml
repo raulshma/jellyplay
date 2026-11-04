@@ -82,7 +82,7 @@
     <string name="settings_show_external_ratings">外部評価を表示</string>
     <string name="settings_show_external_ratings_subtitle">詳細ページに評論家の評価（IMDb/TMDB）を表示</string>
     <string name="settings_performance">パフォーマンス</string>
-    <string name="settings_performance_mode">パフォーマンスモード</string>
+    <string name="settings_performance_mode">パフォーマンスレベル</string>
     <string name="settings_performance_mode_subtitle">ローエンド端末でパフォーマンス向上のためアニメーションと効果を削減</string>
     <string name="settings_reduced_motion">モーション削減</string>
     <string name="settings_standard_experience">標準エクスペリエンス</string>

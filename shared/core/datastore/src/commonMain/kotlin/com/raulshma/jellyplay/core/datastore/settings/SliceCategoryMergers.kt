@@ -36,7 +36,24 @@ internal fun AppearanceSlice.mergeWith(
         themeMode = if (importAppearance) incoming.themeMode else themeMode,
         contrastLevel = if (importAppearance) incoming.contrastLevel else contrastLevel,
         oledMode = if (importAppearance) incoming.oledMode else oledMode,
+        // The performance master + its granular rows travel verbatim with the
+        // APPEARANCE import — the old-backup boolean/level reconciliation is
+        // restore's job (AppearanceStore.resolvedPerformanceLevel), not the
+        // merger's (a merger must adopt every field exactly, or the
+        // reflection coverage guard fails).
         performanceMode = if (importAppearance) incoming.performanceMode else performanceMode,
+        performanceLevel = if (importAppearance) incoming.performanceLevel else performanceLevel,
+        perfAnimations = if (importAppearance) incoming.perfAnimations else perfAnimations,
+        perfSharedElements = if (importAppearance) incoming.perfSharedElements else perfSharedElements,
+        perfNavTransitions = if (importAppearance) incoming.perfNavTransitions else perfNavTransitions,
+        perfImageDecodeCap = if (importAppearance) incoming.perfImageDecodeCap else perfImageDecodeCap,
+        perfImageCrossfade = if (importAppearance) incoming.perfImageCrossfade else perfImageCrossfade,
+        perfBlurhash = if (importAppearance) incoming.perfBlurhash else perfBlurhash,
+        perfQualityBadges = if (importAppearance) incoming.perfQualityBadges else perfQualityBadges,
+        perfAmbientHeroVideo = if (importAppearance) incoming.perfAmbientHeroVideo else perfAmbientHeroVideo,
+        perfBackdropBlur = if (importAppearance) incoming.perfBackdropBlur else perfBackdropBlur,
+        perfScreensaverMotion = if (importAppearance) incoming.perfScreensaverMotion else perfScreensaverMotion,
+        imageMemoryCachePercent = if (importAppearance) incoming.imageMemoryCachePercent else imageMemoryCachePercent,
         accentColorSwatch = if (importAppearance) incoming.accentColorSwatch else accentColorSwatch,
         colorStyle = if (importAppearance) incoming.colorStyle else colorStyle,
         themeVariant = if (importAppearance) incoming.themeVariant else themeVariant,
@@ -102,6 +119,10 @@ internal fun PlaybackSlice.mergeWith(
         downmixBoostDb = if (importPlayback) incoming.downmixBoostDb else downmixBoostDb,
         spatialAudioEnabled = if (importPlayback) incoming.spatialAudioEnabled else spatialAudioEnabled,
         spatialAudioOnlyHeadphones = if (importPlayback) incoming.spatialAudioOnlyHeadphones else spatialAudioOnlyHeadphones,
+        exoInitialBufferMs = if (importPlayback) incoming.exoInitialBufferMs else exoInitialBufferMs,
+        exoRebufferMs = if (importPlayback) incoming.exoRebufferMs else exoRebufferMs,
+        exoTargetBufferMb = if (importPlayback) incoming.exoTargetBufferMb else exoTargetBufferMb,
+        exoRetainBackBuffer = if (importPlayback) incoming.exoRetainBackBuffer else exoRetainBackBuffer,
         frameRateMatching = if (importPlayback) incoming.frameRateMatching else frameRateMatching,
         refreshRateMode = if (importPlayback) incoming.refreshRateMode else refreshRateMode,
         keepScreenOnDuringVideo = if (importPlayback) incoming.keepScreenOnDuringVideo else keepScreenOnDuringVideo,
