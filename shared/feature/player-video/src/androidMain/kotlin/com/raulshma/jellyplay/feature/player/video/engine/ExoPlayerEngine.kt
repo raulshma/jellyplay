@@ -1177,11 +1177,23 @@ class ExoPlayerEngine(
         val authority = serverUrl?.let { Uri.parse(it).authority }
         if (authority != null && token != null) {
             val authHeader = JellyfinAuthorizationHeader.tokenOnlyHeader(token)
+            // The auth pair is request-invariant, and the resolve lambda runs
+            // per HTTP media chunk — hoist the singleton header map out of it
+            // so each invocation doesn't rebuild the map (+ merge).
+            val authHeaderMap = mapOf(authHeader)
             factory = ResolvingDataSource.Factory(factory) { dataSpec ->
                 if (dataSpec.uri.authority.equals(authority, ignoreCase = true)) {
-                    dataSpec.withRequestHeaders(
-                        mapOf(authHeader) + dataSpec.httpRequestHeaders
-                    )
+                    // putIfAbsent keeps the `mapOf(authHeader) +
+                    // httpRequestHeaders` precedence: existing per-request
+                    // headers win on key conflicts.
+                    val headers = if (dataSpec.httpRequestHeaders.isEmpty()) {
+                        authHeaderMap
+                    } else {
+                        LinkedHashMap(dataSpec.httpRequestHeaders).apply {
+                            putIfAbsent(authHeader.first, authHeader.second)
+                        }
+                    }
+                    dataSpec.withRequestHeaders(headers)
                 } else {
                     dataSpec
                 }

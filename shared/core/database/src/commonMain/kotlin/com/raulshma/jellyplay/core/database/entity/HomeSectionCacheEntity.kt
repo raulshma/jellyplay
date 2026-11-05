@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.database.entity
 import com.raulshma.jellyplay.core.model.wallNowMillis
 import androidx.room3.ColumnInfo
 import androidx.room3.Entity
+import androidx.room3.Ignore
 import androidx.room3.Index
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 
@@ -26,8 +27,14 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 @Entity(
     tableName = "home_section_cache",
     primaryKeys = ["serverId", "userId", "cacheKey"],
+    // (serverId, userId, fetchedAt) serves HomeSectionCacheDao.getLatestForIdentity
+    // (filter identity, ORDER BY fetchedAt DESC LIMIT 1) as an ordered range
+    // read. The former (serverId, userId) index was a full left-prefix of the
+    // composite primary key — SQLite never picked it over the PK — and was
+    // dropped by MIGRATION_62_63. See also the pre-v62 shape in
+    // [MIGRATION_40_41].
     indices = [
-        Index(value = ["serverId", "userId"]),
+        Index(value = ["serverId", "userId", "fetchedAt"]),
     ],
 )
 data class HomeSectionCacheEntity(
@@ -39,6 +46,22 @@ data class HomeSectionCacheEntity(
     @ColumnInfo(name = "payloadJson") val payloadJson: String,
     @ColumnInfo(name = "fetchedAt") val fetchedAt: Long = wallNowMillis(),
 ) {
+    // Memoized decode of [payloadJson]: the blob spans hundreds of MediaItems
+    // (multi-kilobyte JSON) and [payload] is read on the cold-open critical
+    // path (HomeSectionsSnapshotStore.cached / offlineLayout), so the decode
+    // must run once per entity instance, not on every property access. The
+    // backing fields are @Ignore'd — Room persists every un-ignored property,
+    // and these are pure derived state.
+    @Ignore private var cachedPayload: HomeSectionsResult? = null
+    @Ignore private var payloadResolved: Boolean = false
+
     val payload: HomeSectionsResult?
-        get() = com.raulshma.jellyplay.core.database.Converters.decodeHomeSectionsResult(payloadJson)
+        get() {
+            if (!payloadResolved) {
+                cachedPayload =
+                    com.raulshma.jellyplay.core.database.Converters.decodeHomeSectionsResult(payloadJson)
+                payloadResolved = true
+            }
+            return cachedPayload
+        }
 }

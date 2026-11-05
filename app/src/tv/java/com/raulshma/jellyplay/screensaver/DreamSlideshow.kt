@@ -163,6 +163,11 @@ internal class DreamDimState(private val dimAfterMs: Long) {
 /** The dim scrim's crossfade duration — slow enough to read as a fade, not a cut. */
 private const val DIM_CROSSFADE_MS = 2_000
 
+// Constant inputs, so the title scrim isn't re-allocated on every slideshow advance.
+private val DreamTitleScrimBrush = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+)
+
 @Composable
 private fun DreamTitleOverlay(
     title: String,
@@ -178,11 +183,7 @@ private fun DreamTitleOverlay(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(160.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                    ),
-                ),
+                .background(DreamTitleScrimBrush),
         )
         Column(
             modifier = Modifier

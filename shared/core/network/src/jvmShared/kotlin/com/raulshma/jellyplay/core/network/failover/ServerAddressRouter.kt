@@ -236,9 +236,32 @@ class ServerAddressRouter(
      * in primary-first order. Empty when the URL is not a known endpoint.
      */
     fun failoverCandidates(url: HttpUrl): List<HttpUrl> {
-        if (endpoints.isEmpty()) return emptyList()
-        if (endpointFor(url) == null) return emptyList()
+        if (endpoints.isEmpty() || endpointFor(url) == null) return emptyList()
         val currentActiveUrl = activeUrl
+        val snapshot = endpoints
+        // Single-endpoint fast path — the one-server majority. For one endpoint
+        // the general path below builds [activeUrl?] + [the endpoint when it
+        // differs from activeUrl] and maps each candidate through
+        // sameTarget ⇒ url / retarget; this mirrors that shape exactly.
+        // activeUrl is the path-stripped addressString() form, so an endpoint
+        // whose stored address carries a base path (https://host/jellyfin)
+        // stays object-unequal to it and must keep the two-candidate ordering
+        // [activeUrl, endpoint], and the sameTarget mapping (instead of a bare
+        // `url`) covers a configure() swap landing between the endpointFor scan
+        // and this snapshot.
+        if (snapshot.size == 1) {
+            val single = snapshot[0].url
+            return if (currentActiveUrl == null || single == currentActiveUrl) {
+                listOf(
+                    if (sameTarget(single, url)) url else retarget(url, single),
+                )
+            } else {
+                listOf(
+                    if (sameTarget(currentActiveUrl, url)) url else retarget(url, currentActiveUrl),
+                    if (sameTarget(single, url)) url else retarget(url, single),
+                )
+            }
+        }
         val ordered = buildList {
             currentActiveUrl?.let { add(it) }
             endpoints.forEach { endpoint -> if (endpoint.url != currentActiveUrl) add(endpoint.url) }

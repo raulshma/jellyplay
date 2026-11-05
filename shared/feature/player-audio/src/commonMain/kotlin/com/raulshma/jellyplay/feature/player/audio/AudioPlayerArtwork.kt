@@ -78,6 +78,20 @@ import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_lyr
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_reset
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_search
 
+// Constant inputs, so the edge scrim isn't re-allocated on every lyrics tick
+// that recomposes the overlay.
+private val LyricsOverlayScrimBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color.Black.copy(alpha = 0.9f),
+        Color.Transparent,
+        Color.Transparent,
+        Color.Transparent,
+        Color.Black.copy(alpha = 0.9f),
+    ),
+    startY = 0f,
+    endY = Float.POSITIVE_INFINITY,
+)
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun LyricsOverlay(
@@ -175,7 +189,7 @@ internal fun LyricsOverlay(
                     contentPadding = PaddingValues(vertical = 200.dp),
                     userScrollEnabled = false,
                 ) {
-                    items(lyrics.size, key = { it }, contentType = { "lyricsLine" }) { index ->
+                    items(lyrics.size, key = { "${lyrics[it].timeMs}_$it" }, contentType = { "lyricsLine" }) { index ->
                         val isCurrent = index == currentIndex && hasSyncedLyrics
                         val distance = if (currentIndex >= 0) kotlin.math.abs(index - currentIndex) else 99
                         val targetAlpha = when {
@@ -186,18 +200,20 @@ internal fun LyricsOverlay(
                         }
                         val targetScale = if (isCurrent) 1.08f else 1f
                         val isNearActive = distance <= 3
-                        val animatedAlpha by animateFloatAsState(
+                        // Held without `by` delegation: the State objects are read
+                        // only inside the graphicsLayer lambda below (deferred,
+                        // draw-phase read), so animation ticks never recompose
+                        // these lines.
+                        val animatedAlphaState = animateFloatAsState(
                             targetValue = targetAlpha,
                             animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                             label = "lyricAlpha$index",
                         )
-                        val animatedScale by animateFloatAsState(
+                        val animatedScaleState = animateFloatAsState(
                             targetValue = targetScale,
                             animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                             label = "lyricScale$index",
                         )
-                        val finalAlpha = if (isNearActive) animatedAlpha else targetAlpha
-                        val finalScale = if (isNearActive) animatedScale else targetScale
                         Text(
                             text = lyrics[index].text.ifBlank { "\u266A" },
                             style = if (isCurrent) {
@@ -207,13 +223,17 @@ internal fun LyricsOverlay(
                             } else {
                                 MaterialTheme.typography.bodyMedium
                             },
-                            color = Color.White.copy(alpha = finalAlpha),
+                            color = Color.White,
                             modifier = Modifier
                                 .animateContentSize(animationSpec = defaultContentSizeSpec())
                                 .graphicsLayer {
-                                    scaleX = finalScale
-                                    scaleY = finalScale
-                                    this.alpha = finalAlpha
+                                    // Alpha applied exactly once, here — not also
+                                    // baked into the text color.
+                                    val alphaVal = if (isNearActive) animatedAlphaState.value else targetAlpha
+                                    val scaleVal = if (isNearActive) animatedScaleState.value else targetScale
+                                    scaleX = scaleVal
+                                    scaleY = scaleVal
+                                    alpha = alphaVal
                                 }
                                 .padding(vertical = 6.dp, horizontal = 20.dp),
                             textAlign = TextAlign.Center,
@@ -226,19 +246,7 @@ internal fun LyricsOverlay(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.9f),
-                                    Color.Transparent,
-                                    Color.Transparent,
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.9f),
-                                ),
-                                startY = 0f,
-                                endY = Float.POSITIVE_INFINITY,
-                            )
-                        ),
+                        .background(LyricsOverlayScrimBrush),
                 )
 
                 var showOffsetSlider by remember { mutableStateOf(false) }

@@ -512,9 +512,16 @@ internal fun baseOkHttpClient(
     return builder
         .addNetworkInterceptor(bandwidthInterceptor)
         .addNetworkInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            val path = chain.request().url.encodedPath
-            val query = chain.request().url.queryParameterNames
+            val request = chain.request()
+            val response = chain.proceed(request)
+            val url = request.url
+            val path = url.encodedPath
+            // Query access stays allocation-free: queryParameterNames built a
+            // LinkedHashSet on every response (most are image requests no
+            // branch below inspects queries for). queryParameter(name) is
+            // CASE-SENSITIVE — the same exact-name matching the Set.contains
+            // it replaces — and the "Ids" branch keeps its case-insensitive
+            // scan through the indexed querySize/queryParameterName APIs.
             val cacheMaxAge = when {
                 path.startsWith("/Items/") && path.contains("/Images/") -> 604800
                 path.startsWith("/Genres/") -> 300
@@ -528,7 +535,7 @@ internal fun baseOkHttpClient(
                 path == "/System/Info" -> 120
                 path.startsWith("/Sessions") -> 10
                 path.startsWith("/ScheduledTasks") -> 30
-                path == "/Shows/NextUp" || query.contains("resume") && path == "/Items" -> 120
+                path == "/Shows/NextUp" || url.queryParameter("resume") != null && path == "/Items" -> 120
                 path.contains("/Similar") -> 300
                 // /Items?Ids=… (detail-by-id) carries per-item UserData; the
                 // similar /Shows/.../Episodes and /Shows/.../Seasons reads (now
@@ -539,8 +546,9 @@ internal fun baseOkHttpClient(
                 // EpisodeCatalogue are the cache layers that DO get invalidated on
                 // every write. Library browse (/Items?ParentId=…) keeps the cache.
                 path == "/Items" &&
-                    !query.contains("Resume") &&
-                    !query.any { it.equals("Ids", ignoreCase = true) } -> 60
+                    url.queryParameter("Resume") == null &&
+                    (0 until url.querySize)
+                        .none { url.queryParameterName(it).equals("Ids", ignoreCase = true) } -> 60
                 else -> null
             }
             if (response.isSuccessful && cacheMaxAge != null) {

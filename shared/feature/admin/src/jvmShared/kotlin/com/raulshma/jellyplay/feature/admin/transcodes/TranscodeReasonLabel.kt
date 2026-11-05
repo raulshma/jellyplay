@@ -31,6 +31,9 @@ internal fun List<String>.transcodeReasonsLabel(): String {
     return labels.joinToString(separator = ", ")
 }
 
+/** Precompiled once — the camel-case boundary [humanizeTranscodeReason] splits on. */
+private val CAMEL_CASE_SPLIT_REGEX = Regex("(?<=[a-z0-9])(?=[A-Z])")
+
 /**
  * The unknown-token fallback of [transcodeReasonLabel]: known server tokens
  * resolve through the shared core:ui TranscodeReasonCatalog (localized);
@@ -39,5 +42,5 @@ internal fun List<String>.transcodeReasonsLabel(): String {
  * test-deterministic.
  */
 internal fun String.humanizeTranscodeReason(): String =
-    replace(Regex("(?<=[a-z0-9])(?=[A-Z])"), " ")
+    replace(CAMEL_CASE_SPLIT_REGEX, " ")
         .lowercase()

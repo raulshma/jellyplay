@@ -1072,7 +1072,7 @@ open class MpvDesktopEngine(
      * contract).
      */
     override fun executeUserCommand(command: String): Boolean {
-        val args = command.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val args = command.trim().split(WHITESPACE_REGEX).filter { it.isNotEmpty() }
         if (args.isEmpty()) return false
         return binding.command(*args.toTypedArray())
     }
@@ -1504,5 +1504,8 @@ open class MpvDesktopEngine(
 
         /** The one-line stats fallback notice when passthrough is on but the target stayed SDR. */
         private const val HDR_SDR_FALLBACK_NOTICE = "SDR display - tone mapping active"
+
+        /** Split pattern for [executeUserCommand]'s raw command line — compiled once, not per dispatch. */
+        private val WHITESPACE_REGEX = Regex("\\s+")
     }
 }

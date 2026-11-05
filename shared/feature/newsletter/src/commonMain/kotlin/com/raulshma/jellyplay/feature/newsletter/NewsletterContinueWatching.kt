@@ -43,6 +43,20 @@ import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_next_up
 import org.jetbrains.compose.resources.stringResource
 
+// Constant inputs, so a single shared instance serves every card in the carousel.
+private val ContinueWatchingScrimBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color.Transparent,
+        Color.Transparent,
+        Color.Black.copy(alpha = 0.4f),
+        Color.Black.copy(alpha = 0.85f),
+    ),
+)
+
+private val NextUpEpisodeScrimBrush = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewsletterContinueWatching(
@@ -108,16 +122,7 @@ private fun ContinueWatchingCard(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.4f),
-                                Color.Black.copy(alpha = 0.85f),
-                            ),
-                        )
-                    ),
+                    .background(ContinueWatchingScrimBrush),
             )
 
             Column(
@@ -313,11 +318,7 @@ private fun NextUpCard(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                            )
-                        )
+                        .background(NextUpEpisodeScrimBrush)
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                 ) {
                     Text(

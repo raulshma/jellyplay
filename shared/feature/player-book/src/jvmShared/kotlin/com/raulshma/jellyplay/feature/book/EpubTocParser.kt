@@ -26,6 +26,9 @@ import org.w3c.dom.Element
  */
 internal object EpubTocParser {
 
+    /** Precompiled once — splits an item's whitespace-separated manifest `properties`. */
+    private val WHITESPACE_REGEX = Regex("\\s+")
+
     /** Depth-first flatten of a parsed nesting into [BookTocEntry] rows. */
     internal data class TocTree(val label: String, val href: String, val children: List<TocTree>)
 
@@ -97,7 +100,7 @@ internal object EpubTocParser {
                 items[id] = ManifestItem(
                     href = item.getAttribute("href"),
                     mediaType = item.getAttribute("media-type"),
-                    properties = item.getAttribute("properties").split(Regex("\\s+")).filter { it.isNotBlank() }.toSet(),
+                    properties = item.getAttribute("properties").split(WHITESPACE_REGEX).filter { it.isNotBlank() }.toSet(),
                 )
             }
         }

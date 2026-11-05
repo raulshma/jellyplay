@@ -796,6 +796,11 @@ internal fun HomeLibraryTilesRow(
     }
 }
 
+// Constant inputs, so a single shared instance serves every tile in the row.
+private val LibraryTileScrimBrush = Brush.verticalGradient(
+    listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
+)
+
 /**
  * One library tile: the library's Primary image (the same id-based resolver
  * every server card uses) filling a 16:9 smooth-corner slot, a bottom scrim
@@ -829,11 +834,7 @@ private fun HomeLibraryTile(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
-                    ),
-                ),
+                .background(LibraryTileScrimBrush),
         )
         Text(
             text = item.name,

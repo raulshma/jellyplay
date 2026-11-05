@@ -26,6 +26,13 @@ import org.jetbrains.compose.resources.stringResource
 /** How many top-billed cast names the ribbon carries (only data already in state). */
 private const val PAUSE_DETAILS_CAST_LIMIT = 5
 
+// Constant inputs, so the scrim isn't re-allocated on every uiState recomposition.
+private val PauseDetailsScrimBrush = Brush.verticalGradient(
+    0f to Color.Transparent,
+    0.55f to Color.Transparent,
+    1f to Color.Black.copy(alpha = 0.62f),
+)
+
 /**
  * The pause-details overlay (#13): a quiet bottom-start panel over the paused
  * frame — the item's title, its metadata line (the same derivation the
@@ -57,13 +64,7 @@ internal fun PauseDetailsOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.55f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.62f),
-                    ),
-                ),
+                .background(PauseDetailsScrimBrush),
         )
         val castNames = cast.take(PAUSE_DETAILS_CAST_LIMIT).map { it.name }.filter { it.isNotBlank() }
         Column(

@@ -215,6 +215,9 @@ internal actual fun requestVideoFrameCapture(
     }
 }
 
+/** Precompiled once — the characters [saveCapture] scrubs out of the capture title. */
+private val FILENAME_INVALID_CHARS_REGEX = Regex("[\\\\/:*?\"<>|]")
+
 /**
  * Persists [image] under `~/Pictures/JellyPlay` (the desktop analogue of
  * Android's MediaStore folder), falling back to the temp dir when the
@@ -226,7 +229,7 @@ private fun saveCapture(image: java.awt.image.BufferedImage, titleHint: String):
     val dir = if (pictures.isDirectory || pictures.mkdirs()) pictures
     else File(System.getProperty("java.io.tmpdir"))
     val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH-mm-ss.SSS", Locale.ROOT).format(java.util.Date())
-    val safeTitle = titleHint.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().take(60)
+    val safeTitle = titleHint.replace(FILENAME_INVALID_CHARS_REGEX, " ").trim().take(60)
     val name = listOfNotNull("JellyPlay", safeTitle.takeIf { it.isNotBlank() }, stamp)
         .joinToString(" ") + ".png"
     val out = File(dir, name)

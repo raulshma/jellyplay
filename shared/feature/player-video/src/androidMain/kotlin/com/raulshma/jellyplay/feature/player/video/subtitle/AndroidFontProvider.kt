@@ -273,11 +273,14 @@ class AndroidFontProvider(
     }
 
     private fun sanitizeFileName(name: String): String =
-        name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifEmpty { "user" }
+        name.lowercase().replace(FILENAME_NON_ALPHANUM_REGEX, "-").trim('-').ifEmpty { "user" }
 
     companion object {
         /** Fonts installed are few (bundled + one per family); cap defensively. */
         private const val MAX_TYPEFACES = 16
+
+        /** Precompiled once — the runs [sanitizeFileName] collapses to dashes. */
+        private val FILENAME_NON_ALPHANUM_REGEX = Regex("[^a-z0-9]+")
 
         /**
          * Extracts the font family name from a .ttf/.otf file's name table via

@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * The slice of the activity-scoped MainViewModel the shell session gate
  * ([com.raulshma.jellyplay.navigation.JellyPlayApp]) reads: the merged
- * preference pipeline (the onboarding gate's completion flag rides it), the
+ * preference pipeline (collected as topic slices — ShellPreferenceSlices.kt —
+ * so unrelated preference writes don't invalidate the root), the
  * TV auto-complete command for that gate, the one-shot
  * surprise-on-launch signal + its consume ack, and the two shell-overlay
  * commands — logout (dispatched through the shared ShellSessionController
@@ -20,10 +21,14 @@ import kotlinx.coroutines.flow.StateFlow
 internal interface ShellGateModel : MainShellModel {
 
     /**
-     * The shell preferences (MainActivity + JellyPlayApp read): the merged
-     * projection pipeline with the runtime-only lockout and onboarding
-     * fields combined in. The gate branch reads `onboardingCompleted` off
-     * it; MainActivity's locale/theme/lock collectors read the rest.
+     * The merged preference pipeline (the single source of truth — the
+     * projection slices with the runtime-only lockout and onboarding fields
+     * combined in). Nothing in the shell collects it whole: the gate derives
+     * its topic slices off it (ShellPreferenceSlices.kt — the onboarding
+     * flag, the nav-chrome slice, the shell-environment slice), so an
+     * unrelated preference write emits no new slice value and stops
+     * invalidating the root shell; MainActivity's locale/theme/lock
+     * collectors keep reading the bundle directly.
      */
     val preferences: StateFlow<MainPreferences>
 

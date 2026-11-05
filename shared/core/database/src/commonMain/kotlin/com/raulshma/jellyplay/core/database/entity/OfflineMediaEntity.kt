@@ -30,9 +30,11 @@ import androidx.room3.PrimaryKey
     tableName = "offline_media",
     indices = [
         Index(value = ["parentId"]),
-        Index(value = ["seriesId"]),
-        Index(value = ["seasonId"]),
-        Index(value = ["mediaType"]),
+        // The standalone seriesId / seasonId / mediaType single-column indices
+        // were exact left-prefixes of the composites below — redundant on
+        // every read, leaving only their write cost on the app's highest-churn
+        // table. They were dropped by MIGRATION_62_63 (the MIGRATION_51_52
+        // precedent); the composites serve their queries.
         Index(value = ["seriesId", "mediaType"]),
         Index(value = ["seasonId", "mediaType"]),
         Index(value = ["mediaType", "createdAt"]),

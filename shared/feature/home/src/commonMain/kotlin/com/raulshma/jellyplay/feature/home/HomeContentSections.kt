@@ -523,7 +523,10 @@ internal fun HomeContentList(
         // stay visible (item offsets churn per frame, membership doesn't), and
         // the predicate is byte-identical to the per-section scan: a section is
         // visible iff its id is some visible item's key.
-        val visibleSectionKeys by remember(listState) {
+        // Held as a State (no `by` delegation) so the item bodies gate the read
+        // through their own derivedStateOf — a raw read here would invalidate
+        // every visible row on each viewport crossing.
+        val visibleSectionKeysState = remember(listState) {
             derivedStateOf {
                 listState.layoutInfo.visibleItemsInfo.mapTo(HashSet()) { it.key }
             }
@@ -696,18 +699,27 @@ internal fun HomeContentList(
             items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                 val section = sections[index]
                 val isFirstAfterHero = index == 0 && firstSectionFollowsHero
-                // The shared layout-info pass above (visibleSectionKeys) — this
-                // item's one-shot latch reads its membership out of it instead
-                // of rescanning visibleItemsInfo per section.
-                val isCurrentlyVisible = section.id in visibleSectionKeys
 
                 var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
-                // Fold the one-shot visibility latch into a LaunchedEffect so the
-                // state write happens as a side effect, not during composition —
-                // writing to MutableState during composition triggers a redundant
-                // recomposition of this item on the next frame.
-                LaunchedEffect(isCurrentlyVisible) {
-                    if (isCurrentlyVisible && !hasBeenVisible) hasBeenVisible = true
+                // The shared layout-info pass above (visibleSectionKeysState) —
+                // this item's one-shot latch reads its membership out of it
+                // instead of rescanning visibleItemsInfo per section. The read
+                // only exists while the latch is still open: the derivedStateOf
+                // invalidates this item only when THIS id's membership flips,
+                // and once hasBeenVisible latches, the block leaves composition
+                // and the row stops tracking the visible-key set entirely — a
+                // settled row never recomposes on scroll steps again.
+                if (!hasBeenVisible) {
+                    val isCurrentlyVisible by remember(section.id) {
+                        derivedStateOf { section.id in visibleSectionKeysState.value }
+                    }
+                    // Fold the one-shot visibility latch into a LaunchedEffect so the
+                    // state write happens as a side effect, not during composition —
+                    // writing to MutableState during composition triggers a redundant
+                    // recomposition of this item on the next frame.
+                    LaunchedEffect(isCurrentlyVisible) {
+                        if (isCurrentlyVisible) hasBeenVisible = true
+                    }
                 }
 
                 val sectionAnimation by androidx.compose.animation.core.animateFloatAsState(
