@@ -28,6 +28,8 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -65,6 +67,15 @@ class MpvPlayerEngine(
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
+        // The stall watchdog's pulse cadence — matches the position ticker's
+        // 1 Hz default the watchdog's confirm windows were tuned against.
+        private const val WATCHDOG_TICK_MS = 1_000L
+        // The load-verification window: a healthy loadfile produces its
+        // start-file well inside one second (the green runs: 0.5-1.2s);
+        // past this, the surface-attach race consumed the lib's one-shot
+        // loadfile with an empty path and the play must be bridged.
+        private const val LOAD_CONFIRM_MS = 3_000L
+        private const val LOAD_RETRIES_MAX = 2
         // Upper bound on how long the cheap-scalar guard in
         // updateVideoStatsOnly may skip the full property re-read.
         private const val FULL_STATS_REREAD_MS = 2_000L
@@ -502,6 +513,10 @@ class MpvPlayerEngine(
                 when (eventId) {
                     MPV.mpvEvent.MPV_EVENT_START_FILE -> {
                         Log.d(TAG, "MPV start file; adding ${core.pendingSubtitles.size} Jellyfin subtitle source(s)")
+                        // The loadfile landed — the verification record closes
+                        // and the retry budget resets for the next load.
+                        loadVerify = null
+                        loadRetryCount = 0
                         core.onStartFile()
                     }
                     MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
@@ -819,6 +834,7 @@ class MpvPlayerEngine(
 
     override fun load(request: PlaybackRequest) {
         pauseRequested = false
+        startWatchdogTicker()
         // Engine may have been release()d and is being reused — beginLoad
         // clears the teardown guard + per-item state (pending batch, fold
         // latches, side-load registry, server duration rung, cue flows) so
@@ -842,17 +858,42 @@ class MpvPlayerEngine(
         )
 
         mpvView?.let { view ->
-            try {
-                applyAndroidAudioEffects()
-                configureMpvForRequest(view, request)
-                view.playFile(request.uri)
-                core.setPlaybackSpeed(requestedPlaybackSpeed)
-                if (pauseRequested) core.pause()
-                pendingRequest = null
-            } catch (e: Exception) {
-                Log.e(TAG, "playFile failed", e)
-                _errorFlow.tryEmit(EngineError.Source(httpStatus = null, cause = e))
-            }
+            playDirect(view, request)
+            pendingRequest = null
+        }
+    }
+
+    /**
+     * The load-verification record: the request whose loadfile was handed to
+     * mpv and when it was issued. Cleared by the observer's START_FILE event
+     * (mpv accepted the file); the watchdog ticker re-issues the play when no
+     * start-file arrives within [LOAD_CONFIRM_MS] — a loadfile can land
+     * inside mpv's initialization tail and be silently dropped (JNI success,
+     * no playback, no error surfaced: the engine-side probes caught the
+     * v0.11.8 black-screen repro in exactly that state), so the engine
+     * verifies its own play commands instead of trusting the return code.
+     */
+    private var loadVerify: Pair<PlaybackRequest, Long>? = null
+    private var loadRetryCount = 0
+
+    /**
+     * The single direct-play path shared by [load]'s arm, the
+     * pendingRequest-consume arm and the ticker's load-verification re-issue:
+     * audio effects, the per-request option ladder, playFile, speed + pause.
+     * Arms the load-verification record on success.
+     */
+    private fun playDirect(view: PlayerMPVView, request: PlaybackRequest) {
+        try {
+            applyAndroidAudioEffects()
+            configureMpvForRequest(view, request)
+            view.playFile(request.uri)
+            loadVerify = request to android.os.SystemClock.elapsedRealtime()
+            core.setPlaybackSpeed(requestedPlaybackSpeed)
+            if (pauseRequested) core.pause()
+        } catch (e: Exception) {
+            Log.e(TAG, "playFile failed", e)
+            loadVerify = null
+            _errorFlow.tryEmit(EngineError.Source(httpStatus = null, cause = e))
         }
     }
 
@@ -863,6 +904,8 @@ class MpvPlayerEngine(
         // flip _isPlaying back true on a half-destroyed engine).
         core.released = true
         pendingRequest = null
+        loadVerify = null
+        loadRetryCount = 0
         core.clearPendingSubtitles()
         core.resetSideLoadedRegistry()
         core.resetFoldLatches()
@@ -880,6 +923,10 @@ class MpvPlayerEngine(
         // is single-threaded.
         core.cancelTrackRefresh()
         sessionTrio.release()
+        // Stop the watchdog pulse before the scope teardown — it reads the mpv
+        // handle, which the release thread is about to destroy.
+        watchdogTickerJob?.cancel()
+        watchdogTickerJob = null
         // Stop the display-event refreshes: the probe's listener is held
         // strongly by DisplayManager, so it must not outlive the engine.
         displayHdrProbe.release()
@@ -1287,14 +1334,7 @@ class MpvPlayerEngine(
 
         pendingRequest?.let { request ->
             pendingRequest = null
-            try {
-                configureMpvForRequest(view, request)
-                view.playFile(request.uri)
-                core.setPlaybackSpeed(requestedPlaybackSpeed)
-                if (pauseRequested) core.pause()
-            } catch (e: Exception) {
-                Log.e(TAG, "playFile failed", e)
-            }
+            playDirect(view, request)
         }
 
         return view
@@ -1382,18 +1422,106 @@ class MpvPlayerEngine(
         } else {
             _bufferedPositionMs.value = core.cachedBufferedPositionMs
         }
-        // The stall watchdog runs OUTSIDE the stats gate — it must fire with
-        // the stats sheet closed (the wedged session's only observable is the
-        // frozen position on these very ticks). The decision state + the
-        // recovery hand are the core's ([MpvCore.onStallWatchdogTick] reads
-        // the same fold state + cached playhead the former inline call
-        // passed); this host supplies its monotonic clock.
-        core.onStallWatchdogTick(nowMs = android.os.SystemClock.elapsedRealtime())
+        // The stall watchdog is NOT fed here: this lambda only runs while some
+        // UI subtree collects positionFlow, and the wedged states the watchdog
+        // exists for (buffering veil / black screen) never compose those
+        // collectors — the feed starved exactly when it was needed. Its
+        // guaranteed 1 Hz pulse lives in [startWatchdogTicker] on engine-owned
+        // scope instead.
         if (_videoStatsEnabled.value) {
             // Stats require ~12 property reads. Run them on the MAIN thread (the
             // ticker's onActive already runs on engineScope = Dispatchers.Main) to
             // serialise against mpv_terminate_destroy.
             updateVideoStatsOnly(posMs)
+        }
+    }
+
+    /** The stall watchdog's independent pulse — one job per [load]. */
+    private var watchdogTickerJob: Job? = null
+
+    /**
+     * The stall watchdog's guaranteed 1 Hz pulse on engine-owned scope. The
+     * historical feed rode the positionFlow ticker, whose collection is
+     * UI-owned: the wedged session's buffering/black state never composes the
+     * collecting subtree, and even a healthy session stops collecting when the
+     * controls fade — the watchdog starved exactly when it was needed (the
+     * v0.11.8 black-screen regression). The tick therefore runs on a job this
+     * engine owns: one per [load] (the watchdog resets per file with
+     * [MpvCore.beginLoad]), cancelled by [release]'s scope teardown. The
+     * decision state + recovery hand stay in the core; this host supplies its
+     * monotonic clock and the flag-gated `displayed-frame-count` read that
+     * feeds the video-only wedge detector (zero JNI on the healthy path — the
+     * perf bar; the read only runs once the log detector has implicated the
+     * zero-copy path for this file).
+     */
+    private fun startWatchdogTicker() {
+        watchdogTickerJob?.cancel()
+        watchdogTickerJob = engineScope.launch {
+            while (isActive) {
+                delay(WATCHDOG_TICK_MS)
+                // The load-verification arm runs before the stall watchdog:
+                // a loadfile whose start-file never arrived gets re-issued
+                // (bounded), because mpv can silently drop the command when
+                // it lands inside the initialization tail — playFile's JNI
+                // succeeds and nothing plays, nothing errors (the shipped
+                // v0.11.8 black screen).
+                loadVerify?.let { (request, issuedAt) ->
+                    val view = mpvView
+                    if (view == null) {
+                        loadVerify = null
+                    } else {
+                        val elapsed = android.os.SystemClock.elapsedRealtime() - issuedAt
+                        if (elapsed > LOAD_CONFIRM_MS) {
+                            if (loadRetryCount < LOAD_RETRIES_MAX) {
+                                loadRetryCount++
+                                Log.w(
+                                    TAG,
+                                    "Load verification: no start-file ${elapsed}ms after playFile — issuing loadfile directly " +
+                                        "(attempt $loadRetryCount/$LOAD_RETRIES_MAX)",
+                                )
+                                // playFile only RECORDS the path — the lib's
+                                // surfaceCreated callback is the sole loadfile
+                                // issuer, and a surface that attached before
+                                // playFile consumed that one-shot with an empty
+                                // path (bytecode-verified: playFile is just
+                                // `filePath = path`; surfaceCreated is the only
+                                // `loadfile` site). Bridge the lost race:
+                                // re-attach the current surface (benign if the
+                                // lib already attached it) and issue the load
+                                // against the handle directly. A late lib-side
+                                // surfaceCreated would re-loadfile the same
+                                // path — replace-playlist, same net effect.
+                                runCatching { view.holder.surface?.let { view.mpv.attachSurface(it) } }
+                                    .onFailure { Log.w(TAG, "Load verification: attachSurface in bridge failed", it) }
+                                runCatching { view.mpv.command("loadfile", request.uri) }
+                                    .onFailure {
+                                        Log.w(TAG, "Load verification: bridge loadfile failed", it)
+                                        _errorFlow.tryEmit(EngineError.Source(httpStatus = null, cause = it))
+                                    }
+                                loadVerify = request to android.os.SystemClock.elapsedRealtime()
+                            } else {
+                                Log.w(TAG, "Load verification: load never started after $LOAD_RETRIES_MAX retries — surfacing error")
+                                loadVerify = null
+                                _errorFlow.tryEmit(
+                                    EngineError.Source(
+                                        httpStatus = null,
+                                        cause = IllegalStateException("mpv never started the file (no start-file after retries)"),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+                val framesPresented = if (!core.hasObservedAimagereaderFailure) {
+                    true
+                } else {
+                    (runCatching { mpvView?.mpv?.getPropertyInt("displayed-frame-count") }.getOrNull() ?: 0) > 0
+                }
+                core.onStallWatchdogTick(
+                    nowMs = android.os.SystemClock.elapsedRealtime(),
+                    videoFramesPresented = framesPresented,
+                )
+            }
         }
     }
 

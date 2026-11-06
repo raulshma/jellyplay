@@ -438,6 +438,16 @@ public class MpvCore(
     private var aimagereaderFailureObserved: Boolean = false
 
     /**
+     * Whether the log detector has seen an aimagereader acquire failure for
+     * the current file. The Android host reads this to gate the per-tick
+     * `displayed-frame-count` read that feeds the video-only wedge detector
+     * (zero JNI on the healthy path — the read only runs once the zero-copy
+     * path has failed for this file).
+     */
+    public val hasObservedAimagereaderFailure: Boolean
+        get() = aimagereaderFailureObserved
+
+    /**
      * The session-sticky hwdec override the watchdog's switch writes: every
      * later load of this engine instance starts directly on the copy path
      * instead of re-wedging for another confirm window (it survives
@@ -702,13 +712,14 @@ public class MpvCore(
      * ticks). [nowMs] is the host's monotonic clock (Android
      * `SystemClock.elapsedRealtime`, desktop `System.nanoTime`/1e6).
      */
-    public fun onStallWatchdogTick(nowMs: Long) {
+    public fun onStallWatchdogTick(nowMs: Long, videoFramesPresented: Boolean = true) {
         stallWatchdog.onTick(
             nowMs = nowMs,
             playbackState = playbackStateFlow.value,
             isPlaying = isPlayingFlow.value,
             positionMs = cachedPositionMs,
             aimagereaderFailureObserved = aimagereaderFailureObserved,
+            videoFramesPresented = videoFramesPresented,
         )?.let(::executeStallRecovery)
     }
 
