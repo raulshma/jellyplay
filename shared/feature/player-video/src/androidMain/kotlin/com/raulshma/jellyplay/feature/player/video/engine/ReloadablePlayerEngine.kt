@@ -4,8 +4,32 @@ import android.content.Context
 import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.shareIn
+
+/**
+ * Capability contract: an engine that exposes ONE shared, replay-1 position
+ * flow for INTERNAL consumers (in-process session adapters and any future
+ * engine-module reader). The public [MediaEngine.positionFlow] stays a cold
+ * flow by contract — every collector spawns its own [EnginePositionTicker]
+ * there — so each additional internal collector riding the public flow would
+ * multiply ticker wake-ups (and the per-tick readback work the tick bodies
+ * do) by the collector count. Internal consumers take [internalPositionFlow]
+ * instead: one upstream ticker per engine instance, fanned out with replay 1.
+ * A capability interface (not a [ReloadablePlayerEngine] type test) so an
+ * engine can opt in without extending that base — consumers type-test the
+ * capability, never the concrete adapter.
+ */
+interface InternalPositionSource {
+    /**
+     * The shared internal position stream. Replay 1 so a late subscriber sees
+     * the last playhead immediately; the upstream runs only while subscribers
+     * exist (see the implementation's [SharingStarted] choice).
+     */
+    val internalPositionFlow: Flow<Long>
+}
 
 /**
  * Deep module for the three *reloadable* [MediaEngine] adapters (ExoPlayer / MPV / libVLC).
@@ -15,6 +39,7 @@ import kotlinx.coroutines.flow.conflate
  *  - remembered unmute level + `MediaStreamVolume` sync (the clamp / mute
  *    decisions themselves live in commonMain's [PlaybackVolumePolicy])
  *  - the `callbackFlow + EnginePositionTicker` shell for `positionFlow`
+ *  - the shared replay-1 internal position flow ([InternalPositionSource])
  *  - the `EngineVideoStats` change-guard
  *
  * [NoOpEngine] intentionally does NOT extend this class — it never reloads,
@@ -23,7 +48,7 @@ import kotlinx.coroutines.flow.conflate
  */
 abstract class ReloadablePlayerEngine(
     protected val appContext: Context,
-) : BasePlayerEngine() {
+) : BasePlayerEngine(), InternalPositionSource {
 
     // ── Reload-preserving playback ──────────────────────────────────────────
 
@@ -221,6 +246,41 @@ abstract class ReloadablePlayerEngine(
         ).launch()
         awaitClose { ticker.cancel() }
     }.conflate()
+
+    /**
+     * The ONE shared, replay-1 position stream internal consumers ride
+     * ([InternalPositionSource]) — `shareIn` over this engine's public
+     * [positionFlow], so the virtual dispatch picks up whatever the subclass
+     * published (the mpv/VLC `positionFlowWithTicker` shell, ExoPlayer's
+     * listener-driven `callbackFlow`): the shared upstream collector is the
+     * flow's only collection and therefore spawns the engine's only
+     * internally-owned ticker, no matter how many internal consumers subscribe.
+     *
+     * `WhileSubscribed(0, 0)` — both timeouts zero — keeps the sharing
+     * lifecycle exactly as tight as the cold flow's own per-collector
+     * `awaitClose`: the upstream ticker stops the moment the last subscriber
+     * leaves (a released session adapter must not leave a native-handle
+     * polling ticker behind it — `Lazily`/`Eagerly` would leak exactly that),
+     * and the replay cache expires with the sharing so a fresh subscription
+     * never replays a stale playhead (the cold flow's leading
+     * `trySend(currentPositionMs)` re-seeds it immediately anyway).
+     *
+     * Scope lifetime, stated plainly: the sharing job pins the `engineScope`
+     * generation read at first subscription. The public flow's own collectors
+     * carry the identical exposure — an internal release()-as-reset inside a
+     * `load()` cancels the generation the running ticker launched on, which
+     * closes that collection; the provider accessor only helps NEW collections.
+     * This flow is therefore never worse than the flow it shares, and the
+     * session controller's engine-identity check rebuilds the adapter (and
+     * with it this subscription) whenever the engine instance changes.
+     */
+    override val internalPositionFlow: Flow<Long> by lazy {
+        positionFlow.shareIn(
+            engineScope,
+            SharingStarted.WhileSubscribed(/* stopTimeoutMillis = */ 0L, /* replayExpirationMillis = */ 0L),
+            replay = 1,
+        )
+    }
 
     // ── videoStats change-guard ─────────────────────────────────────────────
 

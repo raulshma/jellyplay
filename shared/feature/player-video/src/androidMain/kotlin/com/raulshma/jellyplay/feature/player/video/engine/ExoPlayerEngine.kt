@@ -929,17 +929,32 @@ class ExoPlayerEngine(
     /**
      * Common tail of the rebuild ([load]) and reuse ([reusePlayerForRequest])
      * paths: record the item-scoped state, then start playback with the resume
-     * position folded into a single prepare. With a non-zero subtitle delay
-     * configured at boot (typically a persisted per-item correction), the
-     * onConfigChanged → refreshSubtitlesForOffsetChange reload never ran —
-     * updateConfig fires before load() creates the player, so the reload
-     * no-ops and the saved delay only took effect once re-adjusted
-     * mid-playback. Reload once at the requested start position so Media3
-     * re-parses cues through the OffsettingSubtitleParserFactory with the
-     * delay applied — the same proven path the live slider uses.
-     * setMediaItem(item, startPosMs) folds the seek into the reload so there
-     * is a single prepare (no double-buffer) and the resume position is
-     * preserved; the no-delay path seeks after prepare instead.
+     * position folded into the prepare — `setMediaItem(item, startPositionMs)`
+     * → `prepare()` → `play()`, one path for every load shape.
+     *
+     * Why the position is ALWAYS folded into `setMediaItem` and never applied
+     * as a post-prepare seek: preparation then starts AT the resume position
+     * instead of resolving position 0 first and immediately seeking away — on
+     * direct play that erases the initial HTTP range fetch at 0 (its bytes are
+     * thrown away the moment the correction seek lands), and on HLS/transcode
+     * it saves the extra playlist/segment fetch at 0 plus the position
+     * discontinuity that seek fires. One prepare, no double-buffer, and one
+     * fewer client-visible seek event. The subtitle-delay boot case keeps
+     * working unchanged through the same fold: a delay configured before
+     * load() (updateConfig fires before load() creates the player, so the
+     * refreshSubtitlesForOffsetChange reload no-ops) is applied by the initial
+     * parse through the OffsettingSubtitleParserFactory at the folded
+     * position — the same proven path the live slider uses.
+     *
+     * [PlaybackRequest.startPositionMs] passes through untouched, including
+     * 0: Media3's two-arg overload reads the value as an explicit absolute
+     * start (only `C.TIME_UNSET` would mean "default position"), and `0`
+     * resolves to the same position-0 start the former `setMediaItem(item)` +
+     * skip-the-seek path produced for these plain, unclipped items (no
+     * clippingConfiguration/liveConfiguration default-position offset).
+     * Keeping the value raw — never rewriting it to `C.TIME_UNSET` — means a
+     * future clipping-aware MediaItem cannot silently turn an explicit
+     * "start at 0" into "start at the clipped default".
      */
     private fun attachMediaItemAndPrepare(
         exo: ExoPlayer,
@@ -951,18 +966,9 @@ class ExoPlayerEngine(
         serverDurationMs = request.serverDurationMs
         currentSubtitleConfigs.clear()
         currentSubtitleConfigs.addAll(subtitleConfigs)
-        if (currentConfig.subtitleDelayMs != 0L) {
-            exo.setMediaItem(mediaItem, request.startPositionMs)
-            exo.prepare()
-            exo.play()
-        } else {
-            exo.setMediaItem(mediaItem)
-            exo.prepare()
-            if (request.startPositionMs > 0) {
-                exo.seekTo(request.startPositionMs)
-            }
-            exo.play()
-        }
+        exo.setMediaItem(mediaItem, request.startPositionMs)
+        exo.prepare()
+        exo.play()
     }
 
     /**

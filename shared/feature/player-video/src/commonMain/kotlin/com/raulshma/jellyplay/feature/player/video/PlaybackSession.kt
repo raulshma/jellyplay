@@ -1823,12 +1823,17 @@ internal class PlaybackSession(
      *
      * [itemId] is the item the media session is created for — the reload
      * family passes the session state's current item, the reclaim path its
-     * bound id. Position tracking ALWAYS restarts (the seek/buffer bars, the
-     * stats overlay and the segment auto-skip read it, and the previous
-     * engine — whose `positionFlow` the tracking job collected — has been
-     * released, so the job would otherwise go silent). [trackProgress]
-     * additionally gates the SERVER-side progress reporting: cinema pre-roll
-     * intros are not part of the user's library history, so
+     * bound id. The createForItem call itself is cheap for the same-item
+     * same-engine rebinds (the mini-player reclaim, the play-edge check): the
+     * Android controller keeps the held session when its reuse pin
+     * ([MediaSessionPin] — item id, labels, artwork, transport identity)
+     * matches, so only a genuine change pays for the teardown/rebuild. The
+     * position tracking below has no such shortcut and always restarts (the
+     * seek/buffer bars, the stats overlay and the segment auto-skip read it,
+     * and the previous engine — whose `positionFlow` the tracking job
+     * collected — has been released, so the job would otherwise go silent).
+     * [trackProgress] additionally gates the SERVER-side progress reporting:
+     * cinema pre-roll intros are not part of the user's library history, so
      * [loadCinemaIntro] passes `false` — the deliberate divergence from the
      * other adopt sites.
      */
