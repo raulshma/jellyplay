@@ -59,6 +59,18 @@ sealed interface MpvStallRecoveryAction {
  * drives this class and applies the returned action (property write +
  * `core.seekTo`); this class owns only WHEN and WHICH.
  *
+ * A second, VIDEO-ONLY wedge shape exists that the frozen-position observable
+ * cannot see: the AImageReader acquisition dies on the first frame while the
+ * AUDIO chain keeps clocking the playhead — `playbackState == READY`, the
+ * fold says playing, the position ADVANCES on every tick, the seekbar moves,
+ * and the screen stays black forever (observed on the v0.11.8 regression
+ * devices: POCO F1 / Adreno 630-class, 1080p HEVC direct path, the same
+ * `acquireLatestImage failed` signature). The log-detector flag implicates
+ * the zero-copy path and `displayed-frame-count == 0` proves nothing was
+ * ever presented; that combination arms the video-only window above — same
+ * confirm window, same budget, same recovery (switch then kick), because the
+ * moving playhead would otherwise read as health on every tick.
+ *
  * Timing: a window opens on the first tick that sees the same position as the
  * previous one and fires once it has stayed frozen [STALL_CONFIRM_MS] — for a
  * session wedged from birth (1s ticks) the first fire lands at t=10s (the
@@ -82,6 +94,15 @@ class MpvStallWatchdog {
     /** First tick the position was seen frozen while playing; 0 = no stall window. */
     private var stallSinceMs: Long = 0L
 
+    /**
+     * First tick the position was seen ADVANCING while playing with the
+     * zero-copy path implicated and no frame presented; 0 = no video-stall
+     * window. This is the video-only wedge's window (audio clocks the
+     * playhead, the VO presents nothing — the frozen-position detector above
+     * reads that shape as healthy by construction).
+     */
+    private var videoStallSinceMs: Long = 0L
+
     /** Recovery actions issued for the current stall streak. */
     private var attempts: Int = 0
 
@@ -89,6 +110,7 @@ class MpvStallWatchdog {
     fun reset() {
         lastPositionMs = -1L
         stallSinceMs = 0L
+        videoStallSinceMs = 0L
         attempts = 0
     }
 
@@ -99,6 +121,12 @@ class MpvStallWatchdog {
      * @param aimagereaderFailureObserved the host's log-detector flag: an
      *   `[vo/gpu-next/aimagereader]` acquire failure was seen for this file,
      *   implicating the direct zero-copy hwdec path.
+     * @param videoFramesPresented whether the VO has presented at least one
+     *   frame for this file (`displayed-frame-count > 0`). Only consulted
+     *   once [aimagereaderFailureObserved] is set (the host reads it
+     *   flag-gated, so the healthy path pays no extra property read). The
+     *   default keeps the detector disarmed for callers that don't track
+     *   presentation.
      */
     fun onTick(
         nowMs: Long,
@@ -106,24 +134,53 @@ class MpvStallWatchdog {
         isPlaying: Boolean,
         positionMs: Long,
         aimagereaderFailureObserved: Boolean,
+        videoFramesPresented: Boolean = true,
     ): MpvStallRecoveryAction? {
         if (playbackState != EnginePlaybackState.READY || !isPlaying) {
             // Paused / buffering / idle / ended — not the wedged-prone steady
-            // state. Reset the window; keep the attempt budget (a pause +
+            // state. Reset the windows; keep the attempt budget (a pause +
             // resume cycle around an unrescued wedge must not re-arm it
             // unboundedly).
             stallSinceMs = 0L
+            videoStallSinceMs = 0L
             lastPositionMs = positionMs
             return null
         }
         if (positionMs != lastPositionMs) {
-            // Real progress (or any seek/restart write-through) — fresh
-            // window, fresh budget.
             lastPositionMs = positionMs
-            stallSinceMs = 0L
-            attempts = 0
-            return null
+            if (videoFramesPresented || !aimagereaderFailureObserved) {
+                // Real progress with frames on screen (or nothing implicating
+                // the zero-copy path) — fresh window, fresh budget.
+                stallSinceMs = 0L
+                videoStallSinceMs = 0L
+                attempts = 0
+                return null
+            }
+            // VIDEO-ONLY WEDGE: the position advances (the audio clock drives
+            // the playhead) but the VO has never presented a frame and the
+            // aimagereader acquire already failed for this file — the
+            // zero-copy path is wedged while mpv claims a healthy, moving
+            // session. The frozen-position detector below cannot see this
+            // shape (it would read the moving playhead as health forever), so
+            // this window owns the decision: same confirm window, same
+            // budget, same recovery — the copy-path switch then kick.
+            if (videoStallSinceMs == 0L) videoStallSinceMs = nowMs
+            if (nowMs - videoStallSinceMs < STALL_CONFIRM_MS) return null
+            if (attempts >= MAX_ATTEMPTS) return null
+            attempts++
+            // Re-anchor at the fire: the NEXT attempt (if this one fails too)
+            // needs another full confirm window — two kicks can never fire
+            // back-to-back.
+            videoStallSinceMs = nowMs
+            return MpvStallRecoveryAction.SwitchHwdecThenKick(
+                hwdecValue = HWDEC_STALL_FALLBACK,
+                kickToMs = positionMs + KICK_FORWARD_MS,
+            )
         }
+        // Frozen position: the original wedge path. A video-only window open
+        // at the moment the playhead also freezes is folded into it — the
+        // frozen detector's ladder (flag-aware first attempt) covers both.
+        videoStallSinceMs = 0L
         if (stallSinceMs == 0L) stallSinceMs = nowMs
         if (nowMs - stallSinceMs < STALL_CONFIRM_MS) return null
         if (attempts >= MAX_ATTEMPTS) return null
