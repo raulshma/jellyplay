@@ -80,11 +80,11 @@ fun RequestsScreen(
 ) {
     val state by viewModel.state
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
-    // The hot enrichment maps collect beside (not inside) the ui state:
-    // an enrichment completion now recomposes only the rows reading it.
-    val mediaInfo by viewModel.mediaInfo.collectAsStateWithLifecycle()
-    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
-    val queueItems by viewModel.queueItems.collectAsStateWithLifecycle()
+    // The hot enrichment maps are NOT collected here: each row collects its
+    // own slice through the VM's per-request flows (the
+    // photoFolderChildUrlsFor pattern), so an enrichment merge — which
+    // produces a new Map reference — invalidates only the one row whose
+    // info changed, not the whole screen body.
 
     var selectedRequest by remember { mutableStateOf<SeerrRequestItem?>(null) }
 
@@ -163,30 +163,48 @@ fun RequestsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(state.requests, key = { it.id }) { request ->
-                                // Mechanical per-row remember: the media-info
-                                // map lookup is keyed per request id + map
-                                // identity so unrelated recompositions (selection
-                                // toggles, action-state churn) don't re-hash
-                                // every visible row.
-                                val requestMediaInfo = remember(request.id, mediaInfo) {
-                                    mediaInfo[request.media.tmdbId]
+                                // Per-row slice collection: the row subscribes
+                                // only to its own media-info slice (seeded from
+                                // the map's current value so first composition
+                                // renders synchronously, exactly as the old
+                                // root-map read did). An enrichment merge now
+                                // recomposes only the one row whose info changed.
+                                val requestMediaInfo by remember(request.media.tmdbId) {
+                                    viewModel.mediaInfoFor(request.media.tmdbId)
+                                }.collectAsStateWithLifecycle(
+                                    viewModel.mediaInfo.value[request.media.tmdbId],
+                                )
+                                // Action lambdas remembered so unchanged rows skip:
+                                // SeerrRequestItem is @Immutable and every other
+                                // parameter is a stable value, so fresh lambdas were
+                                // the only thing forcing each visible row to
+                                // recompose on screen-level state churn (selection
+                                // toggles, action-in-progress flips).
+                                val onApprove = remember(request) { { viewModel.approveRequest(request.id) } }
+                                val onDecline = remember(request) { { viewModel.declineRequest(request.id) } }
+                                val onRetry = remember(request) { { viewModel.retryRequest(request.id) } }
+                                val onDelete = remember(request) { { viewModel.deleteRequest(request.id) } }
+                                val selectionMode = state.selectionMode
+                                val onClick = remember(request, selectionMode) {
+                                    {
+                                        if (selectionMode) viewModel.toggleSelection(request)
+                                        else selectedRequest = request
+                                    }
                                 }
+                                val onLongClick = remember(request) { { viewModel.toggleSelection(request) } }
                                 RequestListItem(
                                     request = request,
                                     mediaInfo = requestMediaInfo,
                                     isAdmin = isAdmin,
                                     actionInProgress = state.actionInProgress,
-                                    selectionMode = state.selectionMode,
+                                    selectionMode = selectionMode,
                                     isSelected = request.id in state.selectedRequestIds,
-                                    onApprove = { viewModel.approveRequest(request.id) },
-                                    onDecline = { viewModel.declineRequest(request.id) },
-                                    onRetry = { viewModel.retryRequest(request.id) },
-                                    onDelete = { viewModel.deleteRequest(request.id) },
-                                    onClick = {
-                                        if (state.selectionMode) viewModel.toggleSelection(request)
-                                        else selectedRequest = request
-                                    },
-                                    onLongClick = { viewModel.toggleSelection(request) },
+                                    onApprove = onApprove,
+                                    onDecline = onDecline,
+                                    onRetry = onRetry,
+                                    onDelete = onDelete,
+                                    onClick = onClick,
+                                    onLongClick = onLongClick,
                                 )
                             }
                             item {
@@ -264,11 +282,24 @@ fun RequestsScreen(
             }
 
             selectedRequest?.let { request ->
+                // Same per-slice discipline as the rows: the open sheet
+                // subscribes only to the selected request's slices (seeded
+                // from the maps' current values, so opening is synchronous).
+                val sheetMediaInfo by remember(request.media.tmdbId) {
+                    viewModel.mediaInfoFor(request.media.tmdbId)
+                }.collectAsStateWithLifecycle(
+                    viewModel.mediaInfo.value[request.media.tmdbId],
+                )
+                val sheetDownloadProgress by remember(request.media.tmdbId) {
+                    viewModel.downloadProgressFor(request.media.tmdbId)
+                }.collectAsStateWithLifecycle(
+                    viewModel.downloadProgress.value[request.media.tmdbId],
+                )
                 RequestDetailBottomSheet(
                     request = request,
-                    mediaInfo = mediaInfo[request.media.tmdbId],
+                    mediaInfo = sheetMediaInfo,
                     isAdmin = isAdmin,
-                    downloadProgress = downloadProgress[request.media.tmdbId],
+                    downloadProgress = sheetDownloadProgress,
                     onRemoveFromQueue = { b, s ->
                         viewModel.removeQueueItem(request.media.tmdbId, b, s)
                     },

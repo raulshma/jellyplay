@@ -339,17 +339,22 @@ fun PhotoViewerScreen(
                         // status bar inset) out to the left/right edges, so the
                         // controls stay legible over bright photos. The controls
                         // themselves are padded with the system insets below.
+                        // Remembered on the theme scrim colour, not re-allocated
+                        // per recomposition (photo nav, slideshow advance,
+                        // adjustment ticks).
+                        val scrimColor = MaterialTheme.colorScheme.scrim
+                        val topScrimBrush = remember(scrimColor) {
+                            Brush.verticalGradient(
+                                0f to scrimColor.copy(alpha = 0.7f),
+                                1f to Color.Transparent,
+                            )
+                        }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(160.dp)
                                 .align(Alignment.TopCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        0f to MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),
-                                        1f to Color.Transparent,
-                                    )
-                                )
+                                .background(topScrimBrush)
                         )
                         Box(
                             modifier = Modifier

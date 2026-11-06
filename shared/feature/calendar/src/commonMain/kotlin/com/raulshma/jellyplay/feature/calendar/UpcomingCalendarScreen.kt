@@ -100,9 +100,11 @@ fun UpcomingCalendarScreen(
 ) {
     val state by viewModel.state
     val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
-    // The hot poster map collects beside (not inside) the ui state:
-    // an enrichment completion recomposes only the cards reading it.
-    val enrichedPosters by viewModel.enrichedPosters.collectAsStateWithLifecycle()
+    // The hot poster map is NOT collected here: each card collects its own
+    // slice through the VM's per-item flow (the photoFolderChildUrlsFor
+    // pattern), so a poster-enrichment merge — which produces a new Map
+    // reference — invalidates only the one card whose poster landed, not the
+    // whole month grid.
     // No-detail tap feedback (screen-forward seam): resolve the string here and
     // post it through the app-wide UserMessageBus (the drop-by-default local
     // simply discards the message when no host provides a bus).
@@ -234,11 +236,27 @@ fun UpcomingCalendarScreen(
                                         key = { viewModel.stableRowId(it) },
                                         contentType = { "calendarCard" },
                                     ) { item ->
-                                        CalendarCard(
-                                            item = item,
-                                            enrichedPosterUrl = item.tmdbId?.let { enrichedPosters[it] },
-                                            enabled = item.tmdbId != null,
-                                            onClick = {
+                                        // Per-card slice collection (the
+                                        // photoFolderChildUrlsFor pattern): the
+                                        // card subscribes only to its own poster
+                                        // slice, seeded from the map's current
+                                        // value so first composition renders
+                                        // synchronously, exactly as the old
+                                        // root-map read did. A poster merge now
+                                        // recomposes only the one card whose
+                                        // poster landed.
+                                        val enrichedPosterState = item.tmdbId?.let { tmdbId ->
+                                            remember(tmdbId) { viewModel.enrichedPosterFor(tmdbId) }
+                                                .collectAsStateWithLifecycle(viewModel.enrichedPosters.value[tmdbId])
+                                        }
+                                        // Click lambda remembered so unchanged
+                                        // cards skip: ArrCalendarItem is
+                                        // @Immutable and enrichedPosterUrl is a
+                                        // plain value, so a fresh lambda was the
+                                        // only thing forcing each visible card to
+                                        // recompose on screen-level state churn.
+                                        val cardOnClick = remember(item, noDetailText, bus, onItemClick) {
+                                            {
                                                 val tmdbId = item.tmdbId
                                                 if (tmdbId != null) {
                                                     val mediaType = if (item.mediaType == ArrMediaType.MOVIE) "movie" else "tv"
@@ -246,7 +264,13 @@ fun UpcomingCalendarScreen(
                                                 } else {
                                                     bus.info(noDetailText)
                                                 }
-                                            },
+                                            }
+                                        }
+                                        CalendarCard(
+                                            item = item,
+                                            enrichedPosterUrl = enrichedPosterState?.value,
+                                            enabled = item.tmdbId != null,
+                                            onClick = cardOnClick,
                                         )
                                     }
                                 }

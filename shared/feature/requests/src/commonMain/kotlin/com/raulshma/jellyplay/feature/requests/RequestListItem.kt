@@ -198,8 +198,13 @@ fun RequestListItem(
                 }
 
                 if (request.seasons.isNotEmpty()) {
+                    // Remembered join (the metadataText idiom below): a pure
+                    // function of the request, not re-built per recomposition.
+                    val seasonsText = remember(request) {
+                        request.seasons.joinToString(", ") { "S${it.seasonNumber}" }
+                    }
                     Text(
-                        text = request.seasons.joinToString(", ") { "S${it.seasonNumber}" },
+                        text = seasonsText,
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurfaceVariant,
                         maxLines = 1,

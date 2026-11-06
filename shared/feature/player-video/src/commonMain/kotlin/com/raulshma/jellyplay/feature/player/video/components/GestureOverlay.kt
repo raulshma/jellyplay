@@ -479,7 +479,10 @@ private fun SeekCircleOverlay(
 
     // Seek-scrub ripple. Only visible mid-gesture, but still spins a redraw
     // coroutine. Freeze at a single ring in performance/reduced-motion mode.
-    val rippleAnim = if (!reducedMotion) {
+    // The animated value is read INSIDE the draw phase below (a State read
+    // there invalidates only the draw, not composition), so the overlay stops
+    // recomposing at display frame rate for the whole gesture.
+    val rippleState = if (!reducedMotion) {
         rememberInfiniteTransition(label = "seek_ripple").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
@@ -488,9 +491,9 @@ private fun SeekCircleOverlay(
                 repeatMode = RepeatMode.Restart,
             ),
             label = "seek_ripple_progress",
-        ).value
+        )
     } else {
-        0.5f
+        null
     }
 
     AnimatedVisibility(
@@ -507,6 +510,7 @@ private fun SeekCircleOverlay(
                     .align(if (isLeft) Alignment.CenterStart else Alignment.CenterEnd)
                     .padding(horizontal = 48.dp)
                     .drawBehind {
+                        val rippleAnim = rippleState?.value ?: 0.5f
                         val center = Offset(size.width / 2f, size.height / 2f)
                         val maxRadius = size.minDimension * 0.9f
                         for (i in 0..2) {
@@ -586,7 +590,23 @@ private fun EdgeBarOverlay(
     }
 
     val primaryColor = MaterialTheme.colorScheme.primary
-    val glowColor = primaryColor.copy(alpha = boundGlowAlpha.value * 0.4f)
+    // The glow Animatable's value is read INSIDE the two drawBehind blocks
+    // below (a State read there invalidates only the draw, not composition),
+    // so the glow fade no longer recomposes the overlay per animation frame.
+    // The > 0.01f gate moved in with it — identical visuals, zero composition
+    // reads.
+
+    // Fill wash rebuilt only when the theme primary colour changes (the
+    // remembered-fadeBrush pattern); this overlay recomposes per pointer-move
+    // frame during an edge drag.
+    val fillBrush = remember(primaryColor) {
+        Brush.verticalGradient(
+            colors = listOf(
+                primaryColor,
+                primaryColor.copy(alpha = 0.7f),
+            )
+        )
+    }
 
     AnimatedVisibility(
         visible = true,
@@ -603,15 +623,16 @@ private fun EdgeBarOverlay(
                     .size(32.dp)
                     .clip(CircleShape)
                     .background(playerOnScrim().copy(alpha = 0.1f))
-                    .then(
-                        if (boundGlowAlpha.value > 0.01f) Modifier.drawBehind {
+                    .drawBehind {
+                        val glowAlpha = boundGlowAlpha.value
+                        if (glowAlpha > 0.01f) {
                             drawCircle(
-                                color = glowColor,
+                                color = primaryColor.copy(alpha = glowAlpha * 0.4f),
                                 radius = size.minDimension * 0.8f,
                                 center = Offset(size.width / 2f, size.height / 2f),
                             )
-                        } else Modifier
-                    ),
+                        }
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -627,28 +648,22 @@ private fun EdgeBarOverlay(
                     .height(160.dp)
                     .clip(ShapeCache.smoothPill)
                     .background(playerOnScrim().copy(alpha = 0.15f))
-                    .then(
-                        if (boundGlowAlpha.value > 0.01f) Modifier.drawBehind {
+                    .drawBehind {
+                        val glowAlpha = boundGlowAlpha.value
+                        if (glowAlpha > 0.01f) {
                             drawRoundRect(
-                                color = glowColor,
+                                color = primaryColor.copy(alpha = glowAlpha * 0.4f),
                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.minDimension / 2f),
                             )
-                        } else Modifier
-                    ),
+                        }
+                    },
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(value)
                         .clip(ShapeCache.smoothPill)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    primaryColor,
-                                    primaryColor.copy(alpha = 0.7f),
-                                )
-                            )
-                        )
+                        .background(fillBrush)
                         .align(Alignment.BottomCenter),
                 )
             }

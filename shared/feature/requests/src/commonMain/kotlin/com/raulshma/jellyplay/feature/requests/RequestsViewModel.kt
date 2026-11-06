@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.IdEnricher
 import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.debounce
@@ -106,6 +107,20 @@ class RequestsViewModel(
     /** Full queue items (for management actions), keyed by tmdbId. */
     private val _queueItems = MutableStateFlow<Map<Int, ArrQueueItem>>(emptyMap())
     val queueItems: StateFlow<Map<Int, ArrQueueItem>> = _queueItems.asStateFlow()
+
+    /**
+     * Per-request slice of [mediaInfo] — map lookup + `distinctUntilChanged`
+     * (the [PhotoFolderChildUrlsStore.childUrlsFor] fold): each row collects
+     * only its own slice, so an enrichment merge — which produces a new Map
+     * reference — invalidates only the one row whose info changed, not the
+     * whole screen body re-collecting the map at its root.
+     */
+    fun mediaInfoFor(tmdbId: Int): Flow<RequestMediaInfo?> =
+        mediaInfo.map { it[tmdbId] }.distinctUntilChanged()
+
+    /** Per-request slice of [downloadProgress] — same rationale as [mediaInfoFor]. */
+    fun downloadProgressFor(tmdbId: Int): Flow<ArrDownloadSummary?> =
+        downloadProgress.map { it[tmdbId] }.distinctUntilChanged()
 
     /** Shared permit bound for both enrichment fan-outs (the former enrichEach semaphore). */
     private val enrichSemaphore = Semaphore(4)

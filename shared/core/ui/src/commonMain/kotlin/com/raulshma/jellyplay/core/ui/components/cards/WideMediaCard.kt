@@ -72,10 +72,14 @@ fun WideMediaCard(
     // name when the mode is on.
     val cardPrefs = LocalCardDisplayPreferences.current
     val spoilerSafe = remember(cardPrefs) { spoilerSafeCardState(cardPrefs) }
-    val title = if (spoilerSafe.showEpisodeTitles || item.mediaType != MediaType.EPISODE) {
-        item.displayTitle()
-    } else {
-        item.seriesName.orEmpty()
+    // Remembered title fold (the PosterCard idiom): a pure function of the
+    // item + the anti-spoiler state, not worth re-running per recomposition.
+    val title = remember(item, spoilerSafe) {
+        if (spoilerSafe.showEpisodeTitles || item.mediaType != MediaType.EPISODE) {
+            item.displayTitle()
+        } else {
+            item.seriesName.orEmpty()
+        }
     }
     // Quality chips: gated on the card prefs AND the resolved posture's
     // qualityBadges row (shown when true; PERFORMANCE suppresses via AUTO).

@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,18 +65,21 @@ internal fun MusicHomeSpotlight(
     }
     val titleColor = MaterialTheme.colorScheme.onPrimaryContainer
 
+    // Spotlight wash rebuilt only when its two theme colours change, not on
+    // every recomposition (the remembered-fadeBrush pattern).
+    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+    val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
+    val spotlightBrush = remember(primaryContainer, tertiaryContainer) {
+        Brush.linearGradient(
+            colors = listOf(primaryContainer, tertiaryContainer),
+        )
+    }
+
     BoxWithConstraints(
         modifier = modifier
             .height(cardHeight)
             .clip(ShapeCache.smooth28)
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.tertiaryContainer,
-                    ),
-                ),
-            ),
+            .background(spotlightBrush),
     ) {
         val artworkSize = when {
             maxWidth < 380.dp -> 104.dp

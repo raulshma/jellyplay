@@ -130,6 +130,15 @@ import org.jetbrains.compose.resources.pluralStringResource
  * @param inventory the on-disk file inventory; null while it is being loaded.
  * @param isLoadingInventory true while [inventory] is being computed.
  */
+
+/** Hero scrim over the sheet backdrop — constant colours, one shared instance. */
+private val heroScrimBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color.Black.copy(alpha = 0.60f),
+        Color.Black.copy(alpha = 0.92f),
+    )
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DownloadDetailsSheet(
@@ -325,14 +334,7 @@ private fun HeroMediaCard(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.60f),
-                                Color.Black.copy(alpha = 0.92f),
-                            )
-                        )
-                    )
+                    .background(heroScrimBrush)
             )
         }
 
