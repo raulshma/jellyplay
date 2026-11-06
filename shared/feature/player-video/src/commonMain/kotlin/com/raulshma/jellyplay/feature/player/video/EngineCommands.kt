@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.model.PollCadence
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 
 /**
@@ -36,6 +37,8 @@ internal class EngineCommands(
     private val getEngine: () -> MediaEngine?,
     /** The pass-out interaction clock reset + still-watching counter feed. */
     private val onUserInteraction: () -> Unit,
+    /** The position-poll cadence family (the poll-cadence pref; read live per command). */
+    private val getPollCadence: () -> PollCadence = { PollCadence.DEFAULT },
 
     // ── The speed-mirror seams (the TransportRouter's narrow-lambda shape) ──
     private val currentSpeed: () -> Float,
@@ -94,20 +97,32 @@ internal class EngineCommands(
     /**
      * The controls-visibility cadence: a tighter polling interval while the
      * controls are visible (the seek bar/stats read up to 4 Hz), the relaxed
-     * heartbeat behind them. Direct engine command — the cadence is a decode
-     * concern, not a transport-routed one.
+     * heartbeat behind them — scaled by the poll-cadence pref's family
+     * ([getPollCadence]; DEFAULT keeps the 250/1000 constants). Direct engine
+     * command — the cadence is a decode concern, not a transport-routed one.
      */
     fun setControlsVisible(visible: Boolean) {
-        getEngine()?.setPollingIntervalMs(if (visible) CONTROLS_VISIBLE_POLLING_MS else CONTROLS_HIDDEN_POLLING_MS)
+        val cadence = getPollCadence()
+        getEngine()?.setPollingIntervalMs(pollingIntervalMs(cadence, visible))
     }
+}
 
-    private companion object {
-        /** The controls-visible polling cadence (the engine's position-tick rate). */
-        const val CONTROLS_VISIBLE_POLLING_MS = 250L
+/** The controls-visible polling cadence (the engine's position-tick rate). */
+private const val CONTROLS_VISIBLE_POLLING_MS = 250L
 
-        /** The background heartbeat once the controls hide. */
-        const val CONTROLS_HIDDEN_POLLING_MS = 1_000L
-    }
+/** The background heartbeat once the controls hide. */
+private const val CONTROLS_HIDDEN_POLLING_MS = 1_000L
+
+/**
+ * The [PollCadence] → poll-interval fold (the `video_poll_cadence` pref):
+ * [PollCadence.DEFAULT] keeps the long-standing 250ms-visible / 1000ms-hidden
+ * heartbeat, LOW_POWER halves the tick rate, RESPONSIVE doubles it. Pure so
+ * the cadence family is JVM-pinnable beside [EngineCommands].
+ */
+internal fun pollingIntervalMs(cadence: PollCadence, controlsVisible: Boolean): Long = when (cadence) {
+    PollCadence.LOW_POWER -> if (controlsVisible) 2 * CONTROLS_VISIBLE_POLLING_MS else 2 * CONTROLS_HIDDEN_POLLING_MS
+    PollCadence.DEFAULT -> if (controlsVisible) CONTROLS_VISIBLE_POLLING_MS else CONTROLS_HIDDEN_POLLING_MS
+    PollCadence.RESPONSIVE -> if (controlsVisible) CONTROLS_VISIBLE_POLLING_MS / 2 else CONTROLS_HIDDEN_POLLING_MS / 2
 }
 
 /**
@@ -125,6 +140,7 @@ internal fun PlaybackSession.engineCommands(handles: PlayerStateHandles): Engine
     return EngineCommands(
         getEngine = { playerSessionManager.engine },
         onUserInteraction = { engineEventCoordinator.onUserInteraction() },
+        getPollCadence = { uiState.value.uiPrefs.pollCadence },
         currentSpeed = { uiState.value.playbackSpeed },
         holdSpeedArmed = { uiState.value.gestures.isHoldSpeedActive },
         holdSpeedMultiplier = { uiState.value.gestures.holdSpeedMultiplier },

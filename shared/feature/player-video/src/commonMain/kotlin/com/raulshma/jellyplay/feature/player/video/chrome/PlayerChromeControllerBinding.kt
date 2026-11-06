@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.raulshma.jellyplay.core.model.TvTimeoutScale
 
 /**
  * The composition binding for the chrome module's [PlayerChromeController]
@@ -34,6 +35,8 @@ fun rememberPlayerChromeController(
     isOverflowMenuOpen: () -> Boolean = { false },
     controlsHasFocus: () -> Boolean = { false },
     hideOsdOnPause: () -> Boolean = { false },
+    /** The TV timeout multiplier (the tv-timeout-scale pref; touch ignores it). */
+    tvTimeoutScale: () -> TvTimeoutScale = { TvTimeoutScale.X2 },
     onVisibilityChange: (Boolean) -> Unit = {},
 ): PlayerChromeController {
     var visible by if (persistVisible) {
@@ -54,6 +57,7 @@ fun rememberPlayerChromeController(
             isOverflowMenuOpen = isOverflowMenuOpen,
             controlsHasFocus = controlsHasFocus,
             hideOsdOnPause = hideOsdOnPause,
+            tvTimeoutScale = tvTimeoutScale,
             onVisibilityChange = onVisibilityChange,
         )
     }

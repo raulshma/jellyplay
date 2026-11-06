@@ -32,7 +32,7 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig
 import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.image.mediaImageDecodeSize
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -45,10 +45,11 @@ import org.koin.compose.koinInject
 /**
  * The hero backdrop's decode size — MUST mirror the hero `MediaImage`'s
  * `size = CoilSize(1920, 1080)` in HomeHero.kt (performanceModeAware true, so
- * [mediaImageDecodeSize] tiers it to 768² under performance mode exactly as
- * the display request is clamped). The rotation prefetch loads at this size so
- * the display request hits the prefetched memory-cache entry instead of
- * re-fetching and re-decoding at a different key.
+ * [mediaImageDecodeSize] tiers it to 768² whenever the resolved posture
+ * suppresses animations, exactly as the display request is clamped). The
+ * rotation prefetch loads at this size so the display request hits the
+ * prefetched memory-cache entry instead of re-fetching and re-decoding at a
+ * different key.
  */
 private val HeroBackdropDecodeSize = CoilSize(1920, 1080)
 
@@ -180,14 +181,14 @@ internal fun rememberHeroHeight(): Dp {
  * (`home_hero_video_enabled` touch/default, `home_hero_video_tv_enabled` TV;
  * the additive koinInject mirror, the HomeTrickplayPeek repository precedent,
  * because the hero composable sits below the screen orchestrator that carries
- * the HomeUiState pref mirrors) and performance mode (the app-provided
- * [com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode]).
+ * the HomeUiState pref mirrors) and the resolved posture's ambient-hero-video
+ * row (the app-provided [com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig]).
  */
 internal class HeroVideoGates(
     /** The per-form-factor pref: the feature master gate. Default off. */
     val prefEnabled: Boolean,
-    /** Performance mode hard-gates the clip alongside the reduced-motion gate. */
-    val performanceMode: Boolean,
+    /** The resolved ambient-hero-video row (PERFORMANCE suppresses via AUTO). */
+    val ambientHeroVideo: Boolean,
 )
 
 @Composable
@@ -195,16 +196,16 @@ internal fun rememberHeroVideoGates(): HeroVideoGates {
     val isTv = LocalTvMode.current
     val homeDiscovery = koinInject<HomeDiscoveryStore>()
     val discoverySlice by homeDiscovery.homeDiscovery.collectAsStateWithLifecycle()
-    val performanceMode = LocalPerformanceMode.current
+    val ambientHeroVideo = LocalPerformanceConfig.current.ambientHeroVideo
     // Only the two hero-video flags are consumed — map them out and key
     // on them, not the whole slice, so an unrelated home-pref change (row
     // order, banners, stats) doesn't invalidate the gates and their readers.
     val videoEnabled = discoverySlice.homeHeroVideoEnabled
     val videoTvEnabled = discoverySlice.homeHeroVideoTvEnabled
-    return remember(isTv, videoEnabled, videoTvEnabled, performanceMode) {
+    return remember(isTv, videoEnabled, videoTvEnabled, ambientHeroVideo) {
         HeroVideoGates(
             prefEnabled = if (isTv) videoTvEnabled else videoEnabled,
-            performanceMode = performanceMode,
+            ambientHeroVideo = ambientHeroVideo,
         )
     }
 }
@@ -213,17 +214,17 @@ internal fun rememberHeroVideoGates(): HeroVideoGates {
  * The start gate, in its pure form (the [HeroController.rotationCadence]
  * family of Compose-free decisions): the ambient clip plays only when the
  * pref is on AND the platform can render it (desktop: static hero), the
- * user has not paused it for the session, neither reduced-motion nor
- * performance mode holds, the hero is visible AND prominent AND still holds
- * focus (TV), the lifecycle is at least RESUMED, and the list is not
- * scrolling. Any leg failing means the static image stays — the clip's
- * absence must never be observable work.
+ * user has not paused it for the session, neither reduced-motion holds NOR
+ * the resolved posture suppresses the ambient clip, the hero is visible AND
+ * prominent AND still holds focus (TV), the lifecycle is at least RESUMED,
+ * and the list is not scrolling. Any leg failing means the static image
+ * stays — the clip's absence must never be observable work.
  */
 internal fun heroVideoShouldPlay(
     prefEnabled: Boolean,
     sessionPaused: Boolean,
     reducedMotion: Boolean,
-    performanceMode: Boolean,
+    ambientHeroVideo: Boolean,
     isVisible: Boolean,
     isProminent: Boolean,
     heroFocusHeld: Boolean,
@@ -235,7 +236,7 @@ internal fun heroVideoShouldPlay(
         platformCapable &&
         !sessionPaused &&
         !reducedMotion &&
-        !performanceMode &&
+        ambientHeroVideo &&
         isVisible &&
         isProminent &&
         heroFocusHeld &&
@@ -299,6 +300,25 @@ internal fun rememberHeroController(
      * [homeHeroStyleDecision] fold); null keeps the shipped 8 s idle cadence.
      */
     timedAdvanceMs: Long? = null,
+    /**
+     * The carousel's idle auto-rotation dwell in ms (the
+     * `home_hero_idle_rotation_ms` pref, clamped 3000-30000 at the setter).
+     * Used only while no [timedAdvanceMs] applies.
+     */
+    idleRotationMs: Long = HeroController.IDLE_ROTATION_DELAY_MS,
+    /**
+     * The `hero_scroll_defer` pref: when false, rotation ticks on its dwell
+     * even while the home list is scrolling (the shipped defer window is
+     * skipped).
+     */
+    scrollDeferEnabled: Boolean = true,
+    /**
+     * The `home_hero_random_start` pref: the first non-empty candidate pool
+     * mounts at a random index instead of 0. Read once at controller
+     * construction (the controller is remembered per backdrop builder) — a
+     * mid-session flip applies on the next home mount.
+     */
+    randomStart: Boolean = false,
 ): HeroController {
     // Conveyor transform: Context.isTv() (UI_MODE check on
     // LocalContext) is Android-only; LocalTvMode is the shared core:ui
@@ -309,11 +329,12 @@ internal fun rememberHeroController(
     // controller resolving backdrops through a stale capture. The call site
     // remembers the lambda per view model, so this re-runs only on a real VM
     // change — never per recomposition.
-    val controller = remember(getBackdropUrl) {
+    val controller = remember(getBackdropUrl, randomStart) {
         HeroController(
             getBackdropUrl,
             initialAutoRotateEnabled = !isTvForRotation,
             focusGatesRotation = isTvForRotation,
+            randomStart = randomStart,
         )
     }
 
@@ -381,10 +402,12 @@ internal fun rememberHeroController(
     // drops a pending delay on each emission. [RotationGates] is the flow's
     // element only; the cadence still reads its own controller state so the
     // policy stays the single decision point.
-    LaunchedEffect(listState, candidatesEpoch, timedAdvanceMs) {
+    LaunchedEffect(listState, candidatesEpoch, timedAdvanceMs, idleRotationMs, scrollDeferEnabled) {
         snapshotFlow {
             RotationGates(
-                isScrolling = listState.isScrollInProgress,
+                // The `hero_scroll_defer` pref: off = the scroll signal is
+                // not consulted, so rotation keeps its dwell mid-scroll.
+                isScrolling = listState.isScrollInProgress && scrollDeferEnabled,
                 autoRotate = controller.autoRotateEnabled,
                 focusInHero = controller.focusInHero,
                 lifecycleResumed = lifecycleResumed.value,
@@ -395,7 +418,7 @@ internal fun rememberHeroController(
                     val cadence = controller.rotationCadence(
                         isScrolling = gates.isScrolling,
                         lifecycleResumed = gates.lifecycleResumed,
-                        advanceMs = timedAdvanceMs ?: HeroController.IDLE_ROTATION_DELAY_MS,
+                        advanceMs = timedAdvanceMs ?: idleRotationMs,
                     )
                 ) {
                     RotationCadence.None -> return@collectLatest
@@ -430,12 +453,16 @@ internal fun rememberHeroController(
     // disposes the previous request first) and leaving the composition cancels
     // it — a fast manual navigation never leaves stale transfers running.
     val prefetchContext = coil3.compose.LocalPlatformContext.current
-    val prefetchPerformanceMode = LocalPerformanceMode.current
+    // The SAME resolved posture the hero's display path clamps with — the
+    // prefetch must embed the display request's exact decode size or the
+    // memory-cache key misses (the ONE-definition contract on
+    // [mediaImageDecodeSize]).
+    val prefetchPerfConfig = LocalPerformanceConfig.current
     val backdropPrefetcher = remember { HeroBackdropPrefetcher() }
     DisposableEffect(backdropPrefetcher) {
         onDispose { backdropPrefetcher.cancel() }
     }
-    LaunchedEffect(controller, backdropPrefetcher, prefetchContext, prefetchPerformanceMode) {
+    LaunchedEffect(controller, backdropPrefetcher, prefetchContext, prefetchPerfConfig) {
         snapshotFlow {
             Triple(controller.featuredItem, controller.nextCandidate, controller.autoRotateEnabled)
         }.collect { (current, next, autoRotate) ->
@@ -450,7 +477,7 @@ internal fun rememberHeroController(
                 // The clamp must produce the display request's exact decode
                 // size (the hero keeps performanceModeAware true), or the
                 // display path would miss the prefetched memory-cache entry.
-                decodeSize = mediaImageDecodeSize(HeroBackdropDecodeSize, prefetchPerformanceMode),
+                decodeSize = mediaImageDecodeSize(HeroBackdropDecodeSize, prefetchPerfConfig),
             )
         }
     }
@@ -500,6 +527,13 @@ internal class HeroController(
      * starves rotation forever (Issue #9's "never ticks on phone").
      */
     private val focusGatesRotation: Boolean = true,
+    /**
+     * The `home_hero_random_start` pref: the FIRST non-empty
+     * [updateCandidates] mounts at a random index instead of 0 (a single-entry
+     * pool still mounts at 0). Every later update leaves the index alone — the
+     * randomization is a start position, not a per-refresh reshuffle.
+     */
+    private val randomStart: Boolean = false,
 ) {
     /**
      * The focus gate as one predicate, so [rotationCadence] and
@@ -514,6 +548,8 @@ internal class HeroController(
     var candidates: List<MediaItem> by mutableStateOf(emptyList())
         private set
     private var featuredIndex by mutableIntStateOf(0)
+    /** The random-start latch — flips on the first non-empty candidate pool. */
+    private var startResolved = false
     var showSurprise: Boolean by mutableStateOf(false)
         private set
     var autoRotateEnabled: Boolean by mutableStateOf(initialAutoRotateEnabled)
@@ -557,6 +593,16 @@ internal class HeroController(
 
     fun updateCandidates(items: List<MediaItem>) {
         candidates = items
+        // The random-start latch: the first non-empty pool picks its featured
+        // index once (single-entry pools stay at 0 — there is nothing to
+        // randomize). Later updates keep the current position, exactly like
+        // the shipped first-item start does.
+        if (!startResolved && items.isNotEmpty()) {
+            startResolved = true
+            if (randomStart && items.size > 1) {
+                featuredIndex = kotlin.random.Random.nextInt(items.size)
+            }
+        }
     }
 
     /**

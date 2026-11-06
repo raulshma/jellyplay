@@ -88,7 +88,14 @@ class VideoPlayerResetEquivalenceTest : VideoPlayerViewModelHarness() {
     // fail in this harness, and the session's failLoad writes the localized
     // error title AFTER the reset ritual (the KMP pipeline's failure
     // surfacing, #146) — a load-time write, not a reset leak.
-    private val loadRepopulated = setOf("isInitializing", "title", "media.playMethod", "autoplay.videoAutoplayNext")
+    // The §5.8 performance leaves (issue #186) are the same class of
+    // load-time write: the prefs-seed stage resolves the profile and writes
+    // the detected tier / effective tuning after the reset ritual — they are
+    // per-load resolver facts, never user session state.
+    private val loadRepopulated = setOf(
+        "isInitializing", "title", "media.playMethod", "autoplay.videoAutoplayNext",
+        "uiPrefs.detectedPerformanceTier", "uiPrefs.performanceTuning",
+    )
 
     /**
      * Leaves the reset re-sets to explicit (non-default) values: the per-item

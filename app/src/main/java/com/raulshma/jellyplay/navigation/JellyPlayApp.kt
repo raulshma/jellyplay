@@ -48,13 +48,22 @@ internal fun JellyPlayApp(
     val session = infra.sessionCoordinatorLazy.value
     val isRestoring by session.isRestoring.collectAsStateWithLifecycle()
     val isAuthenticated by session.isAuthenticated.collectAsStateWithLifecycle()
-    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    // Topic preference slices (ShellPreferenceSlices.kt): the gate's
+    // onboarding flag plus the nav-chrome and shell-environment slices the
+    // layout subtree consumes. Each maps the same merged
+    // `MainPreferences` pipeline and de-duplicates, so an unrelated write
+    // (theme, subtitles, security, ...) yields an equal slice and no longer
+    // invalidates this root — the former whole-flow collection here
+    // recomposed the shell on EVERY preference write.
+    val onboardingCompleted = rememberOnboardingCompleted(viewModel.preferences)
+    val navPrefs = rememberShellNavPrefs(viewModel.preferences)
+    val envPrefs = rememberShellEnvironmentPrefs(viewModel.preferences)
 
     val context = LocalContext.current
     val isTv = context.isTv()
 
     LaunchedEffect(Unit) {
-        if (isTv && isAuthenticated && !preferences.onboardingCompleted) {
+        if (isTv && isAuthenticated && !onboardingCompleted) {
             viewModel.markOnboardingCompleted()
         }
     }
@@ -82,7 +91,7 @@ internal fun JellyPlayApp(
             // this branch out.
             onboardingGateRoute(
                 authenticated = isAuthenticated,
-                onboardingCompleted = preferences.onboardingCompleted,
+                onboardingCompleted = onboardingCompleted,
                 isTv = isTv,
             ) != null -> {
                 OnboardingScreen(onComplete = {})
@@ -102,6 +111,7 @@ internal fun JellyPlayApp(
                     // registration) is never built for auth/onboarding
                     // sessions.
                     com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides infra.networkStatusLazy.value,
+                    com.raulshma.jellyplay.core.ui.components.LocalNetworkMetered provides infra.networkMeteredLazy.value,
                     com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides session.serverHealth,
                     com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
                 ) {
@@ -112,14 +122,18 @@ internal fun JellyPlayApp(
                     // against AuthRepository. Remembered on the ViewModel so
                     // MainContent receives a STABLE lambda: it is a key of
                     // the shellHost hooks remember (and a ShellNavParams
-                    // field), and a fresh lambda per recomposition here —
-                    // this root recomposes on every preference write — made
-                    // the section-graph memoization behind them always miss.
+                    // field), and a fresh lambda per recomposition here would
+                    // make the section-graph memoization behind them always
+                    // miss. The topic preference slices collected above keep
+                    // this root quiet for unrelated preference writes, so
+                    // recompositions that could regress the lambda's identity
+                    // no longer fire at all.
                     val onLogout: (Boolean) -> Unit = remember(viewModel) { viewModel::logout }
                     MainContent(
                         onLogout = onLogout,
                         model = viewModel,
-                        preferences = preferences,
+                        navPrefs = navPrefs,
+                        envPrefs = envPrefs,
                         infra = infra,
                         // Resolved here — the authenticated branch only — so the
                         // playback engine stays unbuilt for auth/onboarding

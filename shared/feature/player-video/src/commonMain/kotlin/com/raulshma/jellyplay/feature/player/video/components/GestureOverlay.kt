@@ -75,6 +75,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.core.model.PlayerSwipeSensitivity
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
 import kotlinx.coroutines.flow.StateFlow
@@ -100,11 +101,24 @@ private fun volumeIcon(value: Float) = when {
     else -> Tabler.Outline.Volume
 }
 
-private fun applySensitivityCurve(rawDelta: Float): Float {
+/**
+ * The brightness/volume swipe sensitivity curve: the drag's normalized travel
+ * mapped through a power curve whose exponent the [PlayerSwipeSensitivity]
+ * pref picks — RELAXED → 1.0 (linear, slower), DEFAULT → 0.8 (the long-standing
+ * value), SENSITIVE → 0.6 (faster). Pure so the mapping stays testable.
+ */
+internal fun applySensitivityCurve(rawDelta: Float, exponent: Float): Float {
     val sign = if (rawDelta >= 0) 1f else -1f
     val magnitude = abs(rawDelta)
-    val curved = (magnitude / 0.5f).pow(0.8f) * 0.5f
+    val curved = (magnitude / 0.5f).pow(exponent) * 0.5f
     return sign * curved.coerceIn(0f, 0.5f)
+}
+
+/** The [PlayerSwipeSensitivity] → curve-exponent fold (the pref's storage is the enum NAME). */
+internal fun swipeSensitivityExponent(sensitivity: PlayerSwipeSensitivity): Float = when (sensitivity) {
+    PlayerSwipeSensitivity.RELAXED -> 1.0f
+    PlayerSwipeSensitivity.DEFAULT -> 0.8f
+    PlayerSwipeSensitivity.SENSITIVE -> 0.6f
 }
 
 // a11y step magnitude for the brightness/volume custom actions. Brightness and
@@ -146,6 +160,8 @@ internal fun GestureOverlay(
      */
     gates: GestureSwipeGates,
     swipeSeekMaxMs: Long,
+    /** The brightness/volume swipe-curve sensitivity (the curve-exponent pref). */
+    swipeSensitivity: PlayerSwipeSensitivity = PlayerSwipeSensitivity.DEFAULT,
     showControls: Boolean,
     onSeekGesture: (Long) -> Unit,
     onBrightnessGesture: (Float) -> Unit,
@@ -187,6 +203,11 @@ internal fun GestureOverlay(
     // remembered state like the callbacks, same pattern.
     val currentVolumeValue by rememberUpdatedState(volumeValue)
     val currentBrightnessValue by rememberUpdatedState(brightnessValue)
+    // The swipe curve's exponent: the pref read resolves per recomposition,
+    // but the pointerInput block below freezes its captures — the live-read
+    // delegate (the callbacks' pattern) keeps a mid-session pref flip
+    // applying to the NEXT drag.
+    val currentSensitivityExponent by rememberUpdatedState(swipeSensitivityExponent(swipeSensitivity))
 
 
     // Resolved eagerly: the semantics {} block below is not a composable
@@ -340,7 +361,7 @@ internal fun GestureOverlay(
                                         val halfWidth = size.width / 2f
                                         val dy = change.position.y - change.previousPosition.y
                                         val rawDelta = -(dy / size.height) * 0.5f
-                                        val delta = applySensitivityCurve(rawDelta)
+                                        val delta = applySensitivityCurve(rawDelta, currentSensitivityExponent)
                                         // Monotonic clock — avoids the wall-clock syscall of
                                         // System.currentTimeMillis() per move event and is immune
                                         // to wall-clock jumps. Gesture timing is duration-based
@@ -458,7 +479,10 @@ private fun SeekCircleOverlay(
 
     // Seek-scrub ripple. Only visible mid-gesture, but still spins a redraw
     // coroutine. Freeze at a single ring in performance/reduced-motion mode.
-    val rippleAnim = if (!reducedMotion) {
+    // The animated value is read INSIDE the draw phase below (a State read
+    // there invalidates only the draw, not composition), so the overlay stops
+    // recomposing at display frame rate for the whole gesture.
+    val rippleState = if (!reducedMotion) {
         rememberInfiniteTransition(label = "seek_ripple").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
@@ -467,9 +491,9 @@ private fun SeekCircleOverlay(
                 repeatMode = RepeatMode.Restart,
             ),
             label = "seek_ripple_progress",
-        ).value
+        )
     } else {
-        0.5f
+        null
     }
 
     AnimatedVisibility(
@@ -486,6 +510,7 @@ private fun SeekCircleOverlay(
                     .align(if (isLeft) Alignment.CenterStart else Alignment.CenterEnd)
                     .padding(horizontal = 48.dp)
                     .drawBehind {
+                        val rippleAnim = rippleState?.value ?: 0.5f
                         val center = Offset(size.width / 2f, size.height / 2f)
                         val maxRadius = size.minDimension * 0.9f
                         for (i in 0..2) {
@@ -565,7 +590,23 @@ private fun EdgeBarOverlay(
     }
 
     val primaryColor = MaterialTheme.colorScheme.primary
-    val glowColor = primaryColor.copy(alpha = boundGlowAlpha.value * 0.4f)
+    // The glow Animatable's value is read INSIDE the two drawBehind blocks
+    // below (a State read there invalidates only the draw, not composition),
+    // so the glow fade no longer recomposes the overlay per animation frame.
+    // The > 0.01f gate moved in with it — identical visuals, zero composition
+    // reads.
+
+    // Fill wash rebuilt only when the theme primary colour changes (the
+    // remembered-fadeBrush pattern); this overlay recomposes per pointer-move
+    // frame during an edge drag.
+    val fillBrush = remember(primaryColor) {
+        Brush.verticalGradient(
+            colors = listOf(
+                primaryColor,
+                primaryColor.copy(alpha = 0.7f),
+            )
+        )
+    }
 
     AnimatedVisibility(
         visible = true,
@@ -582,15 +623,16 @@ private fun EdgeBarOverlay(
                     .size(32.dp)
                     .clip(CircleShape)
                     .background(playerOnScrim().copy(alpha = 0.1f))
-                    .then(
-                        if (boundGlowAlpha.value > 0.01f) Modifier.drawBehind {
+                    .drawBehind {
+                        val glowAlpha = boundGlowAlpha.value
+                        if (glowAlpha > 0.01f) {
                             drawCircle(
-                                color = glowColor,
+                                color = primaryColor.copy(alpha = glowAlpha * 0.4f),
                                 radius = size.minDimension * 0.8f,
                                 center = Offset(size.width / 2f, size.height / 2f),
                             )
-                        } else Modifier
-                    ),
+                        }
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -606,28 +648,22 @@ private fun EdgeBarOverlay(
                     .height(160.dp)
                     .clip(ShapeCache.smoothPill)
                     .background(playerOnScrim().copy(alpha = 0.15f))
-                    .then(
-                        if (boundGlowAlpha.value > 0.01f) Modifier.drawBehind {
+                    .drawBehind {
+                        val glowAlpha = boundGlowAlpha.value
+                        if (glowAlpha > 0.01f) {
                             drawRoundRect(
-                                color = glowColor,
+                                color = primaryColor.copy(alpha = glowAlpha * 0.4f),
                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.minDimension / 2f),
                             )
-                        } else Modifier
-                    ),
+                        }
+                    },
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(value)
                         .clip(ShapeCache.smoothPill)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    primaryColor,
-                                    primaryColor.copy(alpha = 0.7f),
-                                )
-                            )
-                        )
+                        .background(fillBrush)
                         .align(Alignment.BottomCenter),
                 )
             }

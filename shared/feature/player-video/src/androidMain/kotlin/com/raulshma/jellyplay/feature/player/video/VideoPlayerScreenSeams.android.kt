@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.WindowManager
@@ -170,25 +171,48 @@ private class AndroidPlayerWindowOps(private val activity: Activity?) : PlayerWi
         PlayerOrientationLock.UNSPECIFIED -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
+    override fun recordOrientationIntent(intent: PlayerOrientationLock) {
+        (activity as? PlayerOrientationHost)?.onPlayerOrientationIntentChanged(intent)
+    }
+
     override fun lockOrientation(mode: PlayerOrientationLock) {
+        // Record first — the semantic intent stays current even while docked
+        // (the host ignores docked records when a pre-PiP stash exists); only
+        // the window WRITE is suppressed below.
+        recordOrientationIntent(mode)
+        // Issue #11: never write a fixed orientation request while the
+        // activity is docked in PiP — a fixed request held while the task
+        // floats puts it in the fixed-rotation conflict the WM "resolves" by
+        // CLOSING the activity (the pref-flip teardown). The docked intent
+        // record is kept for the expand restore instead.
+        if (activity?.isInPictureInPictureMode == true) return
         ifAlive { it.requestedOrientation = lockConstant(mode) }
     }
 
     override fun toggleOrientation(preferLockedLandscape: Boolean) {
         activity?.let { act ->
-            val current = act.requestedOrientation
-            val isPortrait = current == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT ||
-                current == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            // Resolve the configured default landscape mode so the toggle is symmetric:
-            // portrait ↔ default-landscape, always returning to the user's preferred
-            // landscape rather than drifting between LANDSCAPE and SENSOR_LANDSCAPE.
-            val defaultLandscape = if (preferLockedLandscape) {
-                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            // The direction reads the PHYSICAL configuration, not
+            // requestedOrientation: after a failed PiP restore the request is
+            // UNSPECIFIED ("not portrait" under the old read) while the
+            // window is actually portrait — the "no option to switch back to
+            // landscape" symptom of issue #186. The next semantic intent is
+            // recorded BEFORE the write so a PiP entry in the same instant
+            // still stashes the target orientation.
+            val currentlyPortrait =
+                act.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+            val next = if (currentlyPortrait) {
+                // Resolve the configured default landscape mode so the toggle
+                // is symmetric: portrait ↔ the user's preferred landscape,
+                // rather than drifting between LANDSCAPE and SENSOR_LANDSCAPE.
+                if (preferLockedLandscape) PlayerOrientationLock.LOCKED_LANDSCAPE
+                else PlayerOrientationLock.SENSOR_LANDSCAPE
             } else {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                PlayerOrientationLock.LOCKED_PORTRAIT
             }
-            act.requestedOrientation = if (isPortrait) defaultLandscape
-            else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            recordOrientationIntent(next)
+            if (!act.isInPictureInPictureMode) {
+                act.requestedOrientation = lockConstant(next)
+            }
         }
     }
 
@@ -214,6 +238,11 @@ private class AndroidPlayerWindowOps(private val activity: Activity?) : PlayerWi
     }
 
     override fun restoreOnPlayerExit(orientation: PlayerOrientationLock) {
+        // Clear the semantic intent first — the player is leaving
+        // composition, so no PiP dock/restore may resurrect a stale intent
+        // into the next session. The window-request teardown below is
+        // unchanged.
+        recordOrientationIntent(PlayerOrientationLock.UNSPECIFIED)
         ifAlive {
             it.requestedOrientation = lockConstant(orientation)
             it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -280,6 +309,13 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean {
  * behavior is byte-identical to HEAD.
  */
 internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = false
+
+/**
+ * The performance-profile surface (issue #186 §5.11) is Android-only in v1 —
+ * the AUTO detector probes Android signals (the classifier's SoC/RAM/decoder
+ * inputs); every Android host (phone + TV) offers the sheet section.
+ */
+internal actual fun performanceProfileAvailable(): Boolean = true
 
 /**
  * Focus diagnostic: logcat under `JellyPlayFocus` while the harness gate is

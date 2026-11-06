@@ -203,6 +203,22 @@ private fun AlbumDetailContent(
 
     val deleteAlbumConfirm = rememberConfirmState()
 
+    // Header scrim rebuilt only when the theme surface colour changes, not on
+    // every recomposition (the remembered-fadeBrush pattern from the detail
+    // screens; this body recomposes per download-progress tick while a track
+    // of the album downloads).
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val headerScrimBrush = remember(surfaceColor) {
+        Brush.verticalGradient(
+            colors = listOf(
+                surfaceColor.copy(alpha = 0.3f),
+                Color.Transparent,
+                surfaceColor.copy(alpha = 0.7f),
+                surfaceColor,
+            )
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -222,16 +238,7 @@ private fun AlbumDetailContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(300.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                            MaterialTheme.colorScheme.surface,
-                        )
-                    )
-                )
+                .background(headerScrimBrush)
         )
 
         CircleBgBackButton(

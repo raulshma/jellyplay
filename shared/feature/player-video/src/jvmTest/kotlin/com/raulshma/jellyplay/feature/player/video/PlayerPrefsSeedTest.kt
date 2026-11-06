@@ -482,6 +482,48 @@ class PlayerPrefsSeedTest {
         assertFalse(seed(agg, adaptiveBitrateEnabled = false)(baseState()).uiPrefs.adaptiveBitrateEnabled)
     }
 
+    // ── The §5.8 performance-profile seed (issue #186) ───────────────────────
+
+    @Test
+    fun performanceParameter_seedsTheProfileRowAndTheResolverSourcedLeaves() {
+        val low = com.raulshma.jellyplay.core.model.ResolvedPerformanceProfile(
+            requested = com.raulshma.jellyplay.core.model.VideoPerformanceProfile.LOW,
+            tier = com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+            tuning = com.raulshma.jellyplay.core.model.VideoPerformanceMatrix.forTier(
+                com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+            ),
+            detection = null,
+        )
+        val agg = VideoPlayerAggregate(
+            playback = PlaybackSlice(
+                videoPerformanceProfile = com.raulshma.jellyplay.core.model.VideoPerformanceProfile.LOW,
+            ),
+        )
+
+        val seeded = PlayerPrefsSeed.seededProjection(
+            agg = agg,
+            adaptiveBitrateEnabled = true,
+            performance = low,
+        )(baseState())
+
+        // The pref leaf seeds through its aggregate-sourced table row; the
+        // tier/tuning leaves are the hand-written resolver-sourced writes.
+        assertEquals(com.raulshma.jellyplay.core.model.VideoPerformanceProfile.LOW, seeded.uiPrefs.videoPerformanceProfile)
+        assertEquals(com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW, seeded.uiPrefs.detectedPerformanceTier)
+        assertEquals(low.tuning, seeded.uiPrefs.performanceTuning)
+    }
+
+    @Test
+    fun nullPerformance_leavesTheRuntimeLeavesUntouched() {
+        val base = baseState()
+
+        val seeded = seed(VideoPlayerAggregate())(base)
+
+        assertEquals(base.uiPrefs.videoPerformanceProfile, seeded.uiPrefs.videoPerformanceProfile)
+        assertNull(seeded.uiPrefs.detectedPerformanceTier, "no resolution this load — keep the residual leaf")
+        assertEquals(com.raulshma.jellyplay.core.model.VideoPerformanceTuning.NONE, seeded.uiPrefs.performanceTuning)
+    }
+
     // ── Purity ───────────────────────────────────────────────────────────────
 
     @Test

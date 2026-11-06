@@ -562,8 +562,11 @@ class HomeHeroControllerTest {
     }
 
     @Test
-    fun heroVideoShouldPlay_performanceMode_neverPlays() {
-        assertFalse(holding(performanceMode = true))
+    fun heroVideoShouldPlay_ambientHeroVideoSuppressed_neverPlays() {
+        // The resolved posture's ambient row: PERFORMANCE suppresses via AUTO
+        // (the legacy performance-mode leg), the granular override kills the
+        // clip at any level.
+        assertFalse(holding(ambientHeroVideo = false))
     }
 
     @Test
@@ -601,7 +604,7 @@ class HomeHeroControllerTest {
         prefEnabled: Boolean = true,
         sessionPaused: Boolean = false,
         reducedMotion: Boolean = false,
-        performanceMode: Boolean = false,
+        ambientHeroVideo: Boolean = true,
         isVisible: Boolean = true,
         isProminent: Boolean = true,
         heroFocusHeld: Boolean = true,
@@ -612,7 +615,7 @@ class HomeHeroControllerTest {
         prefEnabled = prefEnabled,
         sessionPaused = sessionPaused,
         reducedMotion = reducedMotion,
-        performanceMode = performanceMode,
+        ambientHeroVideo = ambientHeroVideo,
         isVisible = isVisible,
         isProminent = isProminent,
         heroFocusHeld = heroFocusHeld,

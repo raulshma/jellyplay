@@ -2,13 +2,15 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_performance_level_performance
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast_suffix
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_token
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_token
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_token
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -54,11 +56,11 @@ class SettingsSummariesTest {
             dynamicTheming = true,
             oledMode = true,
             contrastLevel = ContrastLevel.HIGH,
-            performanceMode = true,
+            performanceLevel = PerformanceLevel.PERFORMANCE,
         )
         assertEquals(
             "Dark, settings_dynamic_token, settings_oled_token, " +
-                "settings_contrast_suffix(High), settings_performance_token",
+                "settings_contrast_suffix(High), core_performance_level_performance",
             renderAppearance(everythingOn),
         )
     }
@@ -70,7 +72,7 @@ class SettingsSummariesTest {
             dynamicTheming = true,
             oledMode = true,
             contrastLevel = ContrastLevel.HIGH,
-            performanceMode = true,
+            performanceLevel = PerformanceLevel.PERFORMANCE,
         )
         assertEquals(
             listOf(
@@ -78,10 +80,16 @@ class SettingsSummariesTest {
                 SettingsSummaryPart.Token(Res.string.settings_dynamic_token),
                 SettingsSummaryPart.Token(Res.string.settings_oled_token),
                 SettingsSummaryPart.Formatted(Res.string.settings_contrast_suffix, "High"),
-                SettingsSummaryPart.Token(Res.string.settings_performance_token),
+                SettingsSummaryPart.Token(CoreUiRes.string.core_performance_level_performance),
             ),
             appearanceSummaryParts(everythingOn),
         )
+    }
+
+    @Test
+    fun `balanced level surfaces its own face - the legacy boolean alone would not`() {
+        val balanced = SettingsScreenPreferences(performanceLevel = PerformanceLevel.BALANCED)
+        assertEquals("System, settings_dynamic_token, core_performance_level_balanced", renderAppearance(balanced))
     }
 
     @Test

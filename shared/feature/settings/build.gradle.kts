@@ -6,6 +6,15 @@ plugins {
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.settings"
+        // Robolectric Compose-UI lane for the search-reveal choreography
+        // (SettingsGroup expansion + row highlight/focus — behaviors the
+        // source-scan guards can only pin textually). Flags mirrored
+        // verbatim from shared/core/ui: real resource serving for
+        // compose-resources lookups and unstubbed-Context tolerance.
+        withHostTest {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 
     sourceSets {
@@ -58,6 +67,32 @@ kotlin {
         // the Android messenger actual bridges legacy LocalUserMessageBus so
         // the Hilt-owned bus singleton stays the single instance.
         getByName("androidMain").dependencies {
+        }
+    }
+}
+
+// The Robolectric lane (robolectric.properties pins sdk=35 — Robolectric 4.16
+// emulates at most 36 while the merged manifest targets 37). AGP 9.4's
+// withHostTest names the lane's source set androidHostTest
+// (src/androidHostTest/kotlin) and materializes it only in afterEvaluate, so
+// the dependency wiring rides a configureEach — an eager lookup would run
+// before the source set exists. Same shape as shared/core/ui's lane.
+kotlin.sourceSets.configureEach {
+    if (name == "androidHostTest") {
+        dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.junit)
+            implementation(libs.robolectric)
+            implementation(libs.androidx.test.core)
+            implementation(libs.coroutines.test)
+            // The PlaybackSettingsViewModel handle the real group bodies take
+            // (only their click lambdas touch it; relaxed at composition).
+            implementation(libs.mockk)
+            // Compose UI tests under Robolectric (the search-reveal
+            // focus/highlight regression suites).
+            implementation(project.dependencies.platform(libs.compose.bom))
+            implementation(libs.compose.ui.test)
+            implementation(libs.compose.ui.test.manifest)
         }
     }
 }

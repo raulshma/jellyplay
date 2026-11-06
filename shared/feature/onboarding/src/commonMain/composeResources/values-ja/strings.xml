@@ -119,10 +119,10 @@
     <!-- PerformanceStep -->
     <string name="onboarding_performance_title">パフォーマンス</string>
     <string name="onboarding_performance_subtitle">お使いの端末向けにアプリを最適化</string>
-    <string name="onboarding_performance_mode">パフォーマンスモード</string>
-    <string name="onboarding_performance_description">低スペック端末での動作を滑らかにするため、アニメーション、トランジション、画質を下げます。これは後で設定でいつでも変更できます。</string>
-    <string name="onboarding_performance_enable">パフォーマンスモードを有効化</string>
-    <string name="onboarding_performance_enable_subtitle">低スペック端末の最適化</string>
+    <string name="onboarding_performance_mode">パフォーマンス</string>
+    <string name="onboarding_performance_description">標準とパフォーマンスのレベルを切り替えます: パフォーマンスレベルはアニメーション、トランジション、画像処理を抑止し、低スペック端末でより滑らかな再生を実現します。効果ごとの調整やバランスへの変更はいつでも 設定 → パフォーマンス でできます。</string>
+    <string name="onboarding_performance_enable">パフォーマンスレベルを有効化</string>
+    <string name="onboarding_performance_enable_subtitle">低スペック端末の最適化（パフォーマンスレベル）</string>
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="onboarding_feature_syncplay">SyncPlay — 一緒に視聴</string>

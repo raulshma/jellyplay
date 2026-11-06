@@ -252,15 +252,18 @@ fun AudioPlayerScreen(
             }
         } else Modifier
 
+        // Root wash rebuilt only when the theme colours change, not on every
+        // screen recomposition (track change, play/pause, queue ops, pref writes).
+        val rootScrimBrush = remember(systemBgColorLight, systemBgColor) {
+            Brush.verticalGradient(
+                colors = listOf(systemBgColorLight, systemBgColor, systemBgColor),
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .then(sharedContainerModifier)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(systemBgColorLight, systemBgColor, systemBgColor),
-                    )
-                )
+                .background(rootScrimBrush)
                 .pointerInput(Unit) {
                     val scopeHeight = size.height.toFloat()
                     detectDragGestures(

@@ -65,15 +65,20 @@ fun performanceAwareStaggerDelay(defaultMs: Int): Int {
  * by name to `animateItem(placementSpec = ...)` — this is unambiguous and
  * version-portable (a @Composable default arg is not reliably supported).
  */
+// Immutable singletons: this is invoked inside Lazy item composables across
+// the app, so a shared instance avoids a fresh spring/snap allocation per call.
+private val SNAP_PLACEMENT_SPEC: FiniteAnimationSpec<IntOffset> = snap()
+private val SPRING_PLACEMENT_SPEC: FiniteAnimationSpec<IntOffset> = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMedium,
+)
+
 @Composable
 @ReadOnlyComposable
 fun lazyItemPlacementSpec(): FiniteAnimationSpec<IntOffset> =
     if (LocalReducedMotion.current) {
-        snap()
+        SNAP_PLACEMENT_SPEC
     } else {
-        spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        )
+        SPRING_PLACEMENT_SPEC
     }
 

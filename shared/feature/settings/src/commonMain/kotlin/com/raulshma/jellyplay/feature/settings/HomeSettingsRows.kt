@@ -122,6 +122,122 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_slideshow_interval_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_style_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_style_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_always_show_user_switcher
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_always_show_user_switcher_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_ask_continue_remember
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_ask_continue_remember_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_card_corner_radius
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_card_corner_radius_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_card_scale
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_card_scale_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_clock_show_date
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_clock_show_date_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_cw_progress_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_cw_progress_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail_limit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail_limit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_greeting
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_greeting_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hide_see_all
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hide_see_all_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_newsletter_banner
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_newsletter_banner_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_opaque_dock
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_opaque_dock_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_chips_limit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_chips_limit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_rows_animations
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_rows_animations_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_show_mode_switch
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_show_mode_switch_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_always_show_user_switcher_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_always_show_user_switcher_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_ask_continue_remember_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_ask_continue_remember_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_card_corner_radius_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_card_corner_radius_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_card_scale_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_card_scale_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_clock_show_date_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_clock_show_date_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_cw_progress_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_cw_progress_style_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_genre_rail_limit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_genre_rail_limit_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_greeting_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_greeting_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hide_see_all_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hide_see_all_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_newsletter_banner_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_newsletter_banner_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_opaque_dock_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_opaque_dock_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_presence_chips_limit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_presence_chips_limit_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_rows_animations_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_rows_animations_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_show_mode_switch_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_show_mode_switch_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_idle_rotation
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_idle_rotation_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_idle_rotation_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_idle_rotation_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hero_scroll_defer
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hero_scroll_defer_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hero_scroll_defer_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hero_scroll_defer_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_random_start
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_random_start_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_random_start_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_random_start_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_stats_metrics
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_stats_metrics_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_stats_metrics_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_stats_metrics_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_newsletter_window
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_newsletter_window_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_newsletter_window_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_newsletter_window_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_poll
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_poll_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_presence_poll_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_presence_poll_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_refresh_cadence
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_refresh_cadence_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_refresh_cadence_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_refresh_cadence_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_discover_pattern
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_discover_pattern_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_discover_pattern_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_discover_pattern_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_pre_section_order
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_pre_section_order_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_pre_section_order_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_pre_section_order_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_search_results_height
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_search_results_height_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_search_results_height_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_search_results_height_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_my_media_columns
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_my_media_columns_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_my_media_columns_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_my_media_columns_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_new_badge_sections
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_new_badge_sections_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_new_badge_sections_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_new_badge_sections_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_new_badge_days
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_new_badge_days_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_new_badge_days_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_new_badge_days_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_row_unwatched_counters
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_row_unwatched_counters_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_row_unwatched_counters_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_row_unwatched_counters_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_trickplay_peek
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_trickplay_peek_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_trickplay_peek_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_trickplay_peek_title
 
 /**
  * The home domain's fused row declarations — the feature-side single home of
@@ -277,6 +393,278 @@ internal object HomeRows {
         titleRes = Res.string.settings_hide_top_header_on_scroll,
         searchTitleRes = Res.string.ss_hide_top_header_title,
         searchSubtitleRes = Res.string.ss_hide_top_header_subtitle,
+    )
+
+    // -- The home display QoL rows: greeting, see-all, card chrome, clock date,
+    //    dock/banner/user-switcher toggles, and the three pickers. --
+
+    val HomeGreeting = SettingsRow(
+        id = "home_greeting",
+        icon = Tabler.Outline.Sun,
+        titleRes = Res.string.settings_home_greeting,
+        subtitleRes = Res.string.settings_home_greeting_subtitle,
+        searchTitleRes = Res.string.ss_home_greeting_title,
+        searchSubtitleRes = Res.string.ss_home_greeting_subtitle,
+    )
+
+    val HomeHideSeeAll = SettingsRow(
+        id = "home_hide_see_all",
+        icon = Tabler.Outline.EyeOff,
+        titleRes = Res.string.settings_home_hide_see_all,
+        subtitleRes = Res.string.settings_home_hide_see_all_subtitle,
+        searchTitleRes = Res.string.ss_home_hide_see_all_title,
+        searchSubtitleRes = Res.string.ss_home_hide_see_all_subtitle,
+    )
+
+    val HomeCardScale = SettingsRow(
+        id = "home_card_scale",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_home_card_scale,
+        subtitleRes = Res.string.settings_home_card_scale_subtitle,
+        searchTitleRes = Res.string.ss_home_card_scale_title,
+        searchSubtitleRes = Res.string.ss_home_card_scale_subtitle,
+    )
+
+    val HomeCardCornerRadius = SettingsRow(
+        id = "home_card_corner_radius",
+        icon = Tabler.Outline.SquareRounded,
+        titleRes = Res.string.settings_home_card_corner_radius,
+        subtitleRes = Res.string.settings_home_card_corner_radius_subtitle,
+        searchTitleRes = Res.string.ss_home_card_corner_radius_title,
+        searchSubtitleRes = Res.string.ss_home_card_corner_radius_subtitle,
+    )
+
+    val HomeShowModeSwitch = SettingsRow(
+        id = "home_show_mode_switch",
+        icon = Tabler.Outline.ToggleLeft,
+        titleRes = Res.string.settings_home_show_mode_switch,
+        subtitleRes = Res.string.settings_home_show_mode_switch_subtitle,
+        searchTitleRes = Res.string.ss_home_show_mode_switch_title,
+        searchSubtitleRes = Res.string.ss_home_show_mode_switch_subtitle,
+    )
+
+    val HomeClockShowDate = SettingsRow(
+        id = "home_clock_show_date",
+        icon = Tabler.Outline.Calendar,
+        titleRes = Res.string.settings_home_clock_show_date,
+        subtitleRes = Res.string.settings_home_clock_show_date_subtitle,
+        searchTitleRes = Res.string.ss_home_clock_show_date_title,
+        searchSubtitleRes = Res.string.ss_home_clock_show_date_subtitle,
+    )
+
+    val HomeNewsletterBanner = SettingsRow(
+        id = "home_newsletter_banner",
+        icon = Tabler.Outline.News,
+        titleRes = Res.string.settings_home_newsletter_banner,
+        subtitleRes = Res.string.settings_home_newsletter_banner_subtitle,
+        searchTitleRes = Res.string.ss_home_newsletter_banner_title,
+        searchSubtitleRes = Res.string.ss_home_newsletter_banner_subtitle,
+    )
+
+    val HomeAlwaysShowUserSwitcher = SettingsRow(
+        id = "home_always_show_user_switcher",
+        icon = Tabler.Outline.UserCircle,
+        titleRes = Res.string.settings_home_always_show_user_switcher,
+        subtitleRes = Res.string.settings_home_always_show_user_switcher_subtitle,
+        searchTitleRes = Res.string.ss_home_always_show_user_switcher_title,
+        searchSubtitleRes = Res.string.ss_home_always_show_user_switcher_subtitle,
+    )
+
+    val HomeCwProgressStyle = SettingsRow(
+        id = "home_cw_progress_style",
+        icon = Tabler.Outline.Gauge,
+        titleRes = Res.string.settings_home_cw_progress_style,
+        subtitleRes = Res.string.settings_home_cw_progress_style_subtitle,
+        searchTitleRes = Res.string.ss_home_cw_progress_style_title,
+        searchSubtitleRes = Res.string.ss_home_cw_progress_style_subtitle,
+    )
+
+    val HomePresenceChipsLimit = SettingsRow(
+        id = "home_presence_chips_limit",
+        icon = Tabler.Outline.Users,
+        titleRes = Res.string.settings_home_presence_chips_limit,
+        subtitleRes = Res.string.settings_home_presence_chips_limit_subtitle,
+        searchTitleRes = Res.string.ss_home_presence_chips_limit_title,
+        searchSubtitleRes = Res.string.ss_home_presence_chips_limit_subtitle,
+    )
+
+    val HomeGenreRailLimit = SettingsRow(
+        id = "home_genre_rail_limit",
+        icon = Tabler.Outline.Category,
+        titleRes = Res.string.settings_home_genre_rail_limit,
+        subtitleRes = Res.string.settings_home_genre_rail_limit_subtitle,
+        searchTitleRes = Res.string.ss_home_genre_rail_limit_title,
+        searchSubtitleRes = Res.string.ss_home_genre_rail_limit_subtitle,
+    )
+
+    val HomeAskContinueRemember = SettingsRow(
+        id = "home_ask_continue_remember",
+        icon = Tabler.Outline.Checks,
+        titleRes = Res.string.settings_home_ask_continue_remember,
+        subtitleRes = Res.string.settings_home_ask_continue_remember_subtitle,
+        searchTitleRes = Res.string.ss_home_ask_continue_remember_title,
+        searchSubtitleRes = Res.string.ss_home_ask_continue_remember_subtitle,
+    )
+
+    val HomeRowsAnimations = SettingsRow(
+        id = "home_rows_animations",
+        icon = Tabler.Outline.Wand,
+        titleRes = Res.string.settings_home_rows_animations,
+        subtitleRes = Res.string.settings_home_rows_animations_subtitle,
+        searchTitleRes = Res.string.ss_home_rows_animations_title,
+        searchSubtitleRes = Res.string.ss_home_rows_animations_subtitle,
+    )
+
+    val HomeOpaqueDock = SettingsRow(
+        id = "home_opaque_dock",
+        icon = Tabler.Outline.LayoutNavbar,
+        titleRes = Res.string.settings_home_opaque_dock,
+        subtitleRes = Res.string.settings_home_opaque_dock_subtitle,
+        searchTitleRes = Res.string.ss_home_opaque_dock_title,
+        searchSubtitleRes = Res.string.ss_home_opaque_dock_subtitle,
+    )
+
+    // -- Home QoL wave 3 rows. --
+
+    val HomeHeroIdleRotation = SettingsRow(
+        id = "home_hero_idle_rotation_ms",
+        icon = Tabler.Outline.Clock,
+        titleRes = Res.string.settings_home_hero_idle_rotation,
+        subtitleRes = Res.string.settings_home_hero_idle_rotation_subtitle,
+        searchTitleRes = Res.string.ss_home_hero_idle_rotation_title,
+        searchSubtitleRes = Res.string.ss_home_hero_idle_rotation_subtitle,
+    )
+
+    val HeroScrollDefer = SettingsRow(
+        id = "hero_scroll_defer",
+        icon = Tabler.Outline.ToggleLeft,
+        titleRes = Res.string.settings_hero_scroll_defer,
+        subtitleRes = Res.string.settings_hero_scroll_defer_subtitle,
+        searchTitleRes = Res.string.ss_hero_scroll_defer_title,
+        searchSubtitleRes = Res.string.ss_hero_scroll_defer_subtitle,
+    )
+
+    val HomeHeroRandomStart = SettingsRow(
+        id = "home_hero_random_start",
+        icon = Tabler.Outline.ArrowsShuffle,
+        titleRes = Res.string.settings_home_hero_random_start,
+        subtitleRes = Res.string.settings_home_hero_random_start_subtitle,
+        searchTitleRes = Res.string.ss_home_hero_random_start_title,
+        searchSubtitleRes = Res.string.ss_home_hero_random_start_subtitle,
+    )
+
+    val HomeStatsMetrics = SettingsRow(
+        id = "home_stats_metrics",
+        icon = Tabler.Outline.ChartBar,
+        titleRes = Res.string.settings_home_stats_metrics,
+        subtitleRes = Res.string.settings_home_stats_metrics_subtitle,
+        searchTitleRes = Res.string.ss_home_stats_metrics_title,
+        searchSubtitleRes = Res.string.ss_home_stats_metrics_subtitle,
+    )
+
+    val HomeNewsletterWindow = SettingsRow(
+        id = "home_newsletter_window",
+        icon = Tabler.Outline.News,
+        titleRes = Res.string.settings_home_newsletter_window,
+        subtitleRes = Res.string.settings_home_newsletter_window_subtitle,
+        searchTitleRes = Res.string.ss_home_newsletter_window_title,
+        searchSubtitleRes = Res.string.ss_home_newsletter_window_subtitle,
+    )
+
+    val HomePresencePollSeconds = SettingsRow(
+        id = "home_presence_poll_seconds",
+        icon = Tabler.Outline.Users,
+        titleRes = Res.string.settings_home_presence_poll,
+        subtitleRes = Res.string.settings_home_presence_poll_subtitle,
+        searchTitleRes = Res.string.ss_home_presence_poll_title,
+        searchSubtitleRes = Res.string.ss_home_presence_poll_subtitle,
+    )
+
+    val HomeRefreshCadence = SettingsRow(
+        id = "home_refresh_cadence",
+        icon = Tabler.Outline.Refresh,
+        titleRes = Res.string.settings_home_refresh_cadence,
+        subtitleRes = Res.string.settings_home_refresh_cadence_subtitle,
+        searchTitleRes = Res.string.ss_home_refresh_cadence_title,
+        searchSubtitleRes = Res.string.ss_home_refresh_cadence_subtitle,
+    )
+
+    val HomeDiscoverPattern = SettingsRow(
+        id = "home_discover_pattern",
+        icon = Tabler.Outline.Compass,
+        titleRes = Res.string.settings_home_discover_pattern,
+        subtitleRes = Res.string.settings_home_discover_pattern_subtitle,
+        searchTitleRes = Res.string.ss_home_discover_pattern_title,
+        searchSubtitleRes = Res.string.ss_home_discover_pattern_subtitle,
+    )
+
+    val HomePreSectionOrder = SettingsRow(
+        id = "home_pre_section_order",
+        icon = Tabler.Outline.ArrowsSort,
+        titleRes = Res.string.settings_home_pre_section_order,
+        subtitleRes = Res.string.settings_home_pre_section_order_subtitle,
+        searchTitleRes = Res.string.ss_home_pre_section_order_title,
+        searchSubtitleRes = Res.string.ss_home_pre_section_order_subtitle,
+    )
+
+    val HomeSearchResultsHeight = SettingsRow(
+        id = "home_search_results_height",
+        icon = Tabler.Outline.Search,
+        titleRes = Res.string.settings_home_search_results_height,
+        subtitleRes = Res.string.settings_home_search_results_height_subtitle,
+        searchTitleRes = Res.string.ss_home_search_results_height_title,
+        searchSubtitleRes = Res.string.ss_home_search_results_height_subtitle,
+    )
+
+    val HomeMyMediaColumns = SettingsRow(
+        id = "home_my_media_columns",
+        icon = Tabler.Outline.LayoutGrid,
+        titleRes = Res.string.settings_home_my_media_columns,
+        subtitleRes = Res.string.settings_home_my_media_columns_subtitle,
+        searchTitleRes = Res.string.ss_home_my_media_columns_title,
+        searchSubtitleRes = Res.string.ss_home_my_media_columns_subtitle,
+    )
+
+    val HomeNewBadgeSections = SettingsRow(
+        id = "home_new_badge_sections",
+        icon = Tabler.Outline.Sparkles,
+        titleRes = Res.string.settings_home_new_badge_sections,
+        subtitleRes = Res.string.settings_home_new_badge_sections_subtitle,
+        searchTitleRes = Res.string.ss_home_new_badge_sections_title,
+        searchSubtitleRes = Res.string.ss_home_new_badge_sections_subtitle,
+    )
+
+    val HomeNewBadgeDays = SettingsRow(
+        id = "home_new_badge_days",
+        icon = Tabler.Outline.Calendar,
+        titleRes = Res.string.settings_home_new_badge_days,
+        subtitleRes = Res.string.settings_home_new_badge_days_subtitle,
+        searchTitleRes = Res.string.ss_home_new_badge_days_title,
+        searchSubtitleRes = Res.string.ss_home_new_badge_days_subtitle,
+    )
+
+    val HomeRowUnwatchedCounters = SettingsRow(
+        id = "home_row_unwatched_counters",
+        icon = Tabler.Outline.Eye,
+        titleRes = Res.string.settings_home_row_unwatched_counters,
+        subtitleRes = Res.string.settings_home_row_unwatched_counters_subtitle,
+        searchTitleRes = Res.string.ss_home_row_unwatched_counters_title,
+        searchSubtitleRes = Res.string.ss_home_row_unwatched_counters_subtitle,
+    )
+
+    /**
+     * The trickplay peek's hold time — rides its TV-only toggle
+     * ([RowAdmission.Tv], the same gate [TrickplayPreview] carries; the
+     * spec's ANDROID_ONLY tag keeps the search hit off desktop too).
+     */
+    val HomeTrickplayPeekMs = SettingsRow(
+        id = "home_trickplay_peek_ms",
+        icon = Tabler.Outline.Movie,
+        titleRes = Res.string.settings_home_trickplay_peek,
+        subtitleRes = Res.string.settings_home_trickplay_peek_subtitle,
+        searchTitleRes = Res.string.ss_home_trickplay_peek_title,
+        searchSubtitleRes = Res.string.ss_home_trickplay_peek_subtitle,
+        gate = RowAdmission.Tv,
     )
 
     val SettingsInHomeSearch = SettingsRow(
@@ -535,17 +923,40 @@ internal val HomeDisplayRows: List<SettingsRow> = listOf(
     HomeRows.HeroSection,
     HomeRows.HomeHeroStyle,
     HomeRows.HomeHeroSlideshowInterval,
+    HomeRows.HomeHeroIdleRotation,
+    HomeRows.HeroScrollDefer,
+    HomeRows.HomeHeroRandomStart,
     HomeRows.HeroVideo,
     HomeRows.HeroVideoTv,
     HomeRows.HomeBackdrop,
     HomeRows.FocusBackdrop,
     HomeRows.ClockHome,
+    HomeRows.HomeClockShowDate,
+    HomeRows.HomeOpaqueDock,
     HomeRows.HideTopHeader,
+    HomeRows.HomeGreeting,
+    HomeRows.HomeShowModeSwitch,
+    HomeRows.HomeAlwaysShowUserSwitcher,
     HomeRows.SettingsInHomeSearch,
     HomeRows.StatsCard,
+    HomeRows.HomeStatsMetrics,
     HomeRows.GenreRail,
+    HomeRows.HomeGenreRailLimit,
     HomeRows.PresenceChips,
+    HomeRows.HomePresenceChipsLimit,
+    HomeRows.HomePresencePollSeconds,
     HomeRows.NewSectionAnnouncements,
+    HomeRows.HomeNewsletterBanner,
+    HomeRows.HomeNewsletterWindow,
+    HomeRows.HomeRefreshCadence,
+    HomeRows.HomeDiscoverPattern,
+    HomeRows.HomePreSectionOrder,
+    HomeRows.HomeSearchResultsHeight,
+    HomeRows.HomeMyMediaColumns,
+    HomeRows.HomeHideSeeAll,
+    HomeRows.HomeCardScale,
+    HomeRows.HomeCardCornerRadius,
+    HomeRows.HomeRowsAnimations,
     HomeRows.ContinueWatchingClick,
     HomeRows.ClassicRows,
     HomeRows.NextUpHidden,
@@ -557,6 +968,8 @@ internal val HomeNextUpRows: List<SettingsRow> = listOf(
     HomeRows.MergeContinueNextUp,
     HomeRows.NextUpMaxDays,
     HomeRows.NextUpRewatching,
+    HomeRows.HomeCwProgressStyle,
+    HomeRows.HomeAskContinueRemember,
     HomeRows.ExcludeActiveSessions,
 )
 
@@ -575,7 +988,11 @@ internal val HomeCardsRows: List<SettingsRow> = listOf(
     HomeRows.ShowExternalRatings,
     HomeRows.ShowQualityBadges,
     HomeRows.ShowNewBadges,
+    HomeRows.HomeNewBadgeSections,
+    HomeRows.HomeNewBadgeDays,
+    HomeRows.HomeRowUnwatchedCounters,
     HomeRows.TrickplayPreview,
+    HomeRows.HomeTrickplayPeekMs,
     HomeRows.AntiSpoilerHome,
 )
 

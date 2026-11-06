@@ -54,6 +54,8 @@ fun TrickplayOverlay(
     positionMs: Long,
     deltaMs: Long = 0L,
     durationMs: Long = 0L,
+    /** The target-timestamp readouts (placeholder + footer); the seek-preview-time pref gates it. */
+    showTimestamp: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val isSeeking = deltaMs != 0L
@@ -128,13 +130,15 @@ fun TrickplayOverlay(
                             .background(placeholderGradient),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = formatDurationMs(positionMs, paddedMinutes = true),
-                            color = playerOnScrim().copy(alpha = 0.7f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            letterSpacing = 2.sp,
-                        )
+                        if (showTimestamp) {
+                            Text(
+                                text = formatDurationMs(positionMs, paddedMinutes = true),
+                                color = playerOnScrim().copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = 2.sp,
+                            )
+                        }
                     }
                 }
             }
@@ -178,13 +182,15 @@ fun TrickplayOverlay(
                     }
                 }
 
-                Text(
-                    text = formatDurationMs(positionMs, paddedMinutes = true),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = playerOnScrim().copy(alpha = 0.85f),
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = FontFamily.Monospace,
-                )
+                if (showTimestamp) {
+                    Text(
+                        text = formatDurationMs(positionMs, paddedMinutes = true),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = playerOnScrim().copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
 
                 if (durationMs > 0) {
                     val progress = (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)

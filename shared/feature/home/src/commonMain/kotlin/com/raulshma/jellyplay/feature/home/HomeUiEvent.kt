@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.model.AutoDownloadMode
+import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -32,6 +33,13 @@ sealed interface HomeUiEvent {
     data class LoadSeerrServiceDetails(val mediaType: String) : HomeUiEvent
     data class LoadTvSeasons(val tmdbId: Int) : HomeUiEvent
     data object DismissNewsletterBanner : HomeUiEvent
+
+    /**
+     * Persists a Continue Watching tap behavior — the ask-continue dialog's
+     * "remember this choice" write (the `home_ask_continue_remember` pref)
+     * and any future in-screen behavior switch.
+     */
+    data class SetContinueWatchingClickBehavior(val behavior: ContinueWatchingClickBehavior) : HomeUiEvent
 
     /** Quick-user switch from the app-bar switcher — see [HomeViewModel.onEvent]. */
     data class SwitchUser(val userId: String) : HomeUiEvent

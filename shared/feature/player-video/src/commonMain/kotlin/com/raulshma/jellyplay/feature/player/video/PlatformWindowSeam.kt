@@ -107,6 +107,30 @@ interface PlayerWindowOps {
      * guarded on Android; no-op on desktop.
      */
     fun restoreOnPlayerExit(orientation: PlayerOrientationLock) {}
+
+    /**
+     * Record the screen's semantic orientation intent; no-op on desktop. The
+     * host's PiP dock/restore stash starts from this — NOT from the current
+     * window request, which can legitimately read UNSPECIFIED (cast, TV, or
+     * a PiP entry landing inside the screen's 400 ms settle). Recording never
+     * writes a window request; [lockOrientation] remains the only writer.
+     */
+    fun recordOrientationIntent(intent: PlayerOrientationLock) {}
+}
+
+/**
+ * Implemented by the activity that hosts the player window. The screen
+ * records its semantic orientation intent here immediately — before the
+ * 400 ms settle — so PiP entry never has to infer intent from the current
+ * window request (which can legitimately read UNSPECIFIED: cast, TV, early
+ * entry). The host stores the intent for its PiP dock/restore machine;
+ * [PlayerOrientationLock.UNSPECIFIED] clears it. Recording is not a window
+ * request: while the activity is docked in PiP the host keeps the pre-PiP
+ * intent for the expand and ignores further records (except the
+ * create-in-PiP case where no pre-PiP intent exists at all).
+ */
+interface PlayerOrientationHost {
+    fun onPlayerOrientationIntentChanged(intent: PlayerOrientationLock)
 }
 
 /**
@@ -194,6 +218,16 @@ internal expect fun rememberIsPortraitOrientation(): Boolean
  * behavior is byte-identical.
  */
 internal expect fun grabsKeyboardFocusWithControlsVisible(): Boolean
+
+/**
+ * Whether the playback performance-profile surface (issue #186 §5.11) exists
+ * on this platform. Android-only in v1: the AUTO detector's probe/classifier
+ * reads Android signals, so only Android can resolve a real tier; desktop
+ * resolves HIGH (no caps) and hides the sheet section entirely. Static
+ * platform fact — no remember needed (the
+ * [grabsKeyboardFocusWithControlsVisible] shape).
+ */
+internal expect fun performanceProfileAvailable(): Boolean
 
 /**
  * The desktop keyboard-focus grab: whenever [layerComposed] flips true (the

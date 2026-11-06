@@ -22,7 +22,6 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.MainPreferences
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
@@ -68,11 +67,17 @@ import com.raulshma.jellyplay.shell.ShellInfra
 internal fun MainContent(
     onLogout: (Boolean) -> Unit,
     model: MainShellModel,
-    preferences: MainPreferences,
+    // The navigation-chrome preference slice (ShellPreferenceSlices.kt) —
+    // this composable's ONLY preference input, collected by JellyPlayApp off
+    // the merged pipeline. An unrelated preference write no longer carries a
+    // new value through here, so the shell holders below keep their
+    // remembered identities instead of rebuilding per write.
+    navPrefs: ShellNavPrefs,
+    envPrefs: ShellEnvironmentPrefs,
     infra: ShellInfra,
     audioPlaybackManager: ShellAudioSurface,
 ) {
-    val homeMode = preferences.homeMode
+    val homeMode = navPrefs.homeMode
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
     val isMonochrome = com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme.current
 
@@ -86,7 +91,9 @@ internal fun MainContent(
     val stripPlayerRoutesOnRestore = remember { model.consumeStateLossRestore() }
 
     val navigationState = rememberNavigationState(
-        startRoute = Route.Home,
+        // The start-tab pref resolves through the destination registry; a
+        // blank/unknown key keeps the shipped Home start.
+        startRoute = com.raulshma.jellyplay.core.ui.navigation.startRouteFor(navPrefs.startTab) ?: Route.Home,
         topLevelRoutes = ALL_TOP_LEVEL_ROUTE_KEYS,
         stripPlayerRoutesOnRestore = stripPlayerRoutesOnRestore,
     )
@@ -122,7 +129,7 @@ internal fun MainContent(
         snackbarHostState = snackbarHostState,
         externalPlayerHost = externalPlayer.host,
         externalPlayerLauncher = externalPlayer.launcher,
-        preferredPlayer = preferences.preferredPlayer,
+        preferredPlayer = navPrefs.preferredPlayer,
     )
     val navigator = navRequests.navigator
     val currentTopLevel by navigationState.topLevelRoute
@@ -167,8 +174,8 @@ internal fun MainContent(
     // inside, so the derived lambda would only add a layer.
     val activeTopLevelRoutes: LinkedHashMap<Route, String> = remember(
         homeMode,
-        preferences.hiddenNavItems,
-        preferences.navItemOrder,
+        navPrefs.hiddenNavItems,
+        navPrefs.navItemOrder,
         isOffline,
     ) {
         // Pure fold (core/ui VisibleTopLevelRoutes): the homeMode base
@@ -179,8 +186,8 @@ internal fun MainContent(
                 HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
                 HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
             },
-            hiddenNavItems = preferences.hiddenNavItems,
-            navItemOrder = preferences.navItemOrder,
+            hiddenNavItems = navPrefs.hiddenNavItems,
+            navItemOrder = navPrefs.navItemOrder,
             isOffline = isOffline,
         )
     }
@@ -191,7 +198,7 @@ internal fun MainContent(
     // floating nav-bar scroll state. Constructed BEFORE the peek preview,
     // whose factory needs the holder's isTv; its [ShellEnvironmentHost.Provide]
     // publishes the app-wide locals below, after the peek holder exists.
-    val environment = rememberShellEnvironmentHost(preferences)
+    val environment = rememberShellEnvironmentHost(envPrefs)
     val isTv = environment.isTv
 
     // Press-and-hold "peek" preview (Instagram-style): the controller +
@@ -203,7 +210,6 @@ internal fun MainContent(
     val peekPreview = rememberPeekPreviewState(
         peekEnabled = peekEnabled,
         isTv = isTv,
-        performanceMode = preferences.performanceMode,
     )
 
     // Single root collector for app-wide one-shot messages, behind the
@@ -298,8 +304,13 @@ internal fun MainContent(
 
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         androidx.compose.animation.SharedTransitionLayout {
+            // The resolved posture's shared-elements row gates the scope handoff
+            // (was: the raw performanceMode boolean): PERFORMANCE suppresses via
+            // AUTO — readers see a null scope and render statically; an explicit
+            // shared-elements OFF kills the transitions at any level.
+            val sharedElementsEnabled = com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig.current.sharedElements
             CompositionLocalProvider(
-                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
+                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (sharedElementsEnabled) this else null,
                 com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor provides environment.navBarColorState,
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) environment.bottomNav.floatingNavOffset else ({ 0f })),
                 // The floating bottom nav paints ONLY in the compact phone branch
@@ -310,6 +321,10 @@ internal fun MainContent(
                 // plus the !isTv guard.
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavPresent
                     provides (!isTv && !isExpanded && !isFullScreenRoute),
+                // The 24-hour clock override (the `time_use_24h` pref): every
+                // wall-clock consumer reads it through rememberIs24HourFormat.
+                com.raulshma.jellyplay.core.ui.components.LocalTimeFormat24hOverride
+                    provides navPrefs.timeUse24h,
             ) {
             // Hoist the saveable-state holder above the isTv/isFullScreenRoute branches so that
             // navigation-entry saveable state (scroll position, form fields, etc.) survives
@@ -370,9 +385,9 @@ internal fun MainContent(
                     tvDrawerState = tvDrawerState,
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
-                    tvOverscan = preferences.tvOverscan,
-                    hiddenNavItems = preferences.hiddenNavItems,
-                    navItemOrder = preferences.navItemOrder,
+                    tvOverscan = navPrefs.tvOverscan,
+                    hiddenNavItems = navPrefs.hiddenNavItems,
+                    navItemOrder = navPrefs.navItemOrder,
                     nowPlayingEnabled = audioItemId != null,
                     showMiniPlayer = showMiniPlayer,
                     audioPlaybackManager = audioPlaybackManager,
@@ -402,14 +417,14 @@ internal fun MainContent(
                         isAudioPlayerScreen = isAudioPlayerScreen,
                         isExpanded = isExpanded,
                         bottomNavScrollVisibility = environment.bottomNav.scrollVisibility,
-                        hideBottomNavOnScroll = preferences.hideBottomNavOnScroll,
+                        hideBottomNavOnScroll = navPrefs.hideBottomNavOnScroll,
                         bottomNavOffsetHeightPx = environment.bottomNav.offsetHeightPx,
                         showMiniPlayer = showMiniPlayer,
                         audioPlaybackManager = audioPlaybackManager,
                         audioItemId = audioItemId,
                         onDismissMiniPlayer = { isMiniPlayerDismissed = true },
                         animatedNavBarColor = environment.animatedNavBarColor,
-                        showNavBarLabels = preferences.navBarShowLabels,
+                        showNavBarLabels = navPrefs.navBarShowLabels,
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
                         downloadCount = downloadCount,

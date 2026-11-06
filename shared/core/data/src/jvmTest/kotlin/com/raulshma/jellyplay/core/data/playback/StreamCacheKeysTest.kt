@@ -181,4 +181,83 @@ class StreamCacheKeysTest {
         assertEquals(first, second)
         assertEquals("bad url&keep=1", first)
     }
+
+    // ── stripVolatileQueryParams (fast path skips the URI rewrite) ──────
+
+    @Test
+    fun `query without volatile params returns the url untouched`() {
+        // Media chunk URLs rarely carry the token param (auth rides in
+        // headers): the fast path must produce exactly what the URI rewrite
+        // produced — here, the identity.
+        val url = "http://host:8096/videos/abc/1.ts?DeviceId=dev1&static=true"
+
+        assertEquals(url, stripVolatileQueryParams(url, STRIP_SAFE_QUERY_PARAMS))
+    }
+
+    @Test
+    fun `upper-cased param spelling takes the slow path and is kept`() {
+        // The fast-path trigger is case-insensitive but stripping stays
+        // case-sensitive: API_KEY must survive, exactly as before the fast path.
+        val url = "http://host/stream?API_KEY=secret&static=true"
+
+        assertEquals(url, stripVolatileQueryParams(url, STRIP_SAFE_QUERY_PARAMS))
+    }
+
+    @Test
+    fun `question mark in the fragment alone does not strip`() {
+        // rawQuery is null (the '?' lives in the fragment) — the fast path
+        // skips the rewrite and the URL passes through verbatim.
+        val url = "http://host/stream#next?api_key=secret"
+
+        assertEquals(url, stripVolatileQueryParams(url, STRIP_SAFE_QUERY_PARAMS))
+    }
+
+    @Test
+    fun `empty params set returns the url untouched`() {
+        val url = "http://host/stream?static=true"
+
+        assertEquals(url, stripVolatileQueryParams(url, emptySet()))
+    }
+
+    @Test
+    fun `percent-escaped urls keep taking the URI rewrite path`() {
+        // Pins the quirk the fast-path guards must preserve: the round trip
+        // re-escapes '%' in the query, so %2F becomes %252F. The fast path
+        // must never short-circuit a URL carrying an escape.
+        assertEquals(
+            "http://host/stream?Title=50%252F50",
+            stripVolatileQueryParams("http://host/stream?Title=50%2F50", STRIP_SAFE_QUERY_PARAMS),
+        )
+    }
+
+    @Test
+    fun `registry authority urls keep taking the URI rewrite path`() {
+        // Underscore hosts parse as registry-based authorities and the round
+        // trip re-anchors them ("http://foo_bar/…" → "http:/…"). The fast
+        // path must not swallow that normalization.
+        assertEquals(
+            "http:/videos/1.ts?static=true",
+            stripVolatileQueryParams("http://foo_bar/videos/1.ts?static=true", STRIP_SAFE_QUERY_PARAMS),
+        )
+    }
+
+    @Test
+    fun `empty query still drops the bare question mark`() {
+        // "…?" parses with an EMPTY (non-null) query, so the round trip
+        // reprints the URL without it — the fast path preserves that.
+        assertEquals(
+            "http://host/stream",
+            stripVolatileQueryParams("http://host/stream?", STRIP_SAFE_QUERY_PARAMS),
+        )
+    }
+
+    @Test
+    fun `malformed url without volatile params passes through unchanged`() {
+        // Fallback path: the strip regex cannot match and the "?&"/"&&"
+        // cleanup has nothing to clean — the URL comes back as-is, the same
+        // identity the fast path would have returned.
+        val url = "bad url?static=true"
+
+        assertEquals(url, stripVolatileQueryParams(url, STRIP_SAFE_QUERY_PARAMS))
+    }
 }

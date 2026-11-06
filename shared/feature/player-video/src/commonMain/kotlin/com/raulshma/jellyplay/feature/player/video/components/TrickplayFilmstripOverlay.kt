@@ -58,6 +58,8 @@ internal fun TrickplayFilmstripOverlay(
     tileAspect: Float,
     positionMs: Long,
     loadTile: suspend (positionMs: Long) -> PlatformBitmap?,
+    /** The target-timestamp chip; the seek-preview-time pref gates it. */
+    showTimestamp: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     // Resolve the window's tiles; the state key resets per window so a slid
@@ -117,18 +119,20 @@ internal fun TrickplayFilmstripOverlay(
                 }
             }
         }
-        Text(
-            text = formatDurationMs(positionMs, paddedMinutes = true),
-            style = MaterialTheme.typography.labelSmall,
-            color = playerOnScrim().copy(alpha = 0.85f),
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace,
-            modifier = Modifier
-                .padding(top = 4.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(playerScrimColor().copy(alpha = 0.4f))
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-        )
+        if (showTimestamp) {
+            Text(
+                text = formatDurationMs(positionMs, paddedMinutes = true),
+                style = MaterialTheme.typography.labelSmall,
+                color = playerOnScrim().copy(alpha = 0.85f),
+                fontWeight = FontWeight.Medium,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(playerScrimColor().copy(alpha = 0.4f))
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        }
     }
 }
 

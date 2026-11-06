@@ -104,6 +104,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import com.raulshma.jellyplay.feature.home.generated.resources.home_hero_pause_video
 import com.raulshma.jellyplay.feature.home.generated.resources.home_resume
@@ -378,11 +379,26 @@ fun HeroHeader(
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
-    // Performance mode collapses the four simultaneous hero infinite
-    // animations (breath, play pulse scale/alpha, rating pulse) to their
-    // static else-branch values — the hero otherwise drives a continuous
-    // redraw loop on top of the 1920×1080 backdrop decode.
-    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+    // The resolved posture's reduced-motion fold (animation suppression OR
+    // the accessibility flag — at all-AUTO exactly the legacy
+    // `performanceMode || reduceMotion` fold) collapses the four simultaneous
+    // hero infinite animations (breath, play pulse scale/alpha, rating pulse)
+    // to their static else-branch values — the hero otherwise drives a
+    // continuous redraw loop on top of the 1920×1080 backdrop decode.
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig.current.reducedMotion
+
+    // The metadata leg's chrome + scrim fold through the theme-aware legibility
+    // factories (HomeHeroLegibility.kt): the shipped hero assumed the dark
+    // ambient backdrop behind it, but light themes suppress that backdrop
+    // (`shouldRenderBackdrop`) and render near-black onSurface text/badges
+    // straight onto the artwork. The dark branch reproduces the shipped inline
+    // values exactly; light mode gets frosted-light containers + an early
+    // background wash under the text zone.
+    val isLightTheme = rememberIsLightTheme()
+    val colorScheme = MaterialTheme.colorScheme
+    val legibility = remember(colorScheme, isLightTheme) {
+        heroLegibilityColors(colorScheme = colorScheme, isLightTheme = isLightTheme)
+    }
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -470,7 +486,7 @@ fun HeroHeader(
         prefEnabled = videoGates.prefEnabled,
         sessionPaused = videoPausedForSession,
         reducedMotion = reducedMotion,
-        performanceMode = videoGates.performanceMode,
+        ambientHeroVideo = videoGates.ambientHeroVideo,
         isVisible = isVisible,
         isProminent = isProminent,
         heroFocusHeld = heroFocusHeld,
@@ -728,42 +744,32 @@ fun HeroHeader(
             }
         }
 
-        // Legibility scrim: darkens only the top third (title/overline sits at
-        // the bottom, which is protected by the dissolve into the backdrop, and
-        // the ambient backdrop itself is already dark). The bottom is left
-        // transparent so that the image, which erodes to transparent via the
-        // DstIn mask above, blends straight into the HomeBackdrop behind it —
-        // no flat fill seam. When the backdrop is off we still keep the top
-        // darkening; the bottom transparent strip just merges into the flat
-        // background fill that sits behind the whole screen.
+        // Legibility scrim: darkens only the top third in dark mode
+        // (title/overline sits at the bottom, which is protected by the
+        // dissolve into the backdrop, and the ambient backdrop itself is
+        // already dark). The dark-mode bottom is left transparent so that the
+        // image, which erodes to transparent via the DstIn mask above, blends
+        // straight into the HomeBackdrop behind it — no flat fill seam. When
+        // the backdrop is off we still keep the top darkening; the bottom
+        // transparent strip just merges into the flat background fill that
+        // sits behind the whole screen.
+        //
+        // Light themes suppress the ambient backdrop entirely
+        // (shouldRenderBackdrop), so the dissolve hands off to a near-white
+        // fill while the onSurface text/badges are near-black — the shipped
+        // top-only scrim leaves the metadata zone unreadable. There the
+        // gradient gains an early bottom wash toward the background colour so
+        // the text zone lands on a light surface; see heroScrimColorStops.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    remember(backgroundColor, homeBackdropEnabled) {
-                        if (homeBackdropEnabled) {
-                            // Top legibility only; bottom transparent so the dissolved
-                            // artwork hands off to the ambient backdrop seamlessly.
-                            Brush.verticalGradient(
-                                colorStops = arrayOf(
-                                    0.0f to Color.Black.copy(alpha = 0.45f),
-                                    0.3f to Color.Transparent,
-                                    0.6f to Color.Transparent,
-                                    1.0f to Color.Transparent,
-                                ),
-                            )
-                        } else {
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.45f),
-                                    Color.Transparent,
-                                    backgroundColor.copy(alpha = 0.3f),
-                                    backgroundColor,
-                                ),
-                                startY = 0f,
-                                endY = Float.POSITIVE_INFINITY,
-                            )
-                        }
+                    remember(backgroundColor, homeBackdropEnabled, isLightTheme) {
+                        heroScrimBrush(
+                            backgroundColor = backgroundColor,
+                            homeBackdropEnabled = homeBackdropEnabled,
+                            isLightTheme = isLightTheme,
+                        )
                     }
                 )
         )
@@ -782,7 +788,7 @@ fun HeroHeader(
                     .align(Alignment.TopEnd)
                     .padding(top = 12.dp, end = contentPadding)
                     .clip(ShapeCache.smoothPill)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
+                    .background(legibility.pauseContainer)
                     .clickable(
                         interactionSource = pauseChipInteractionSource,
                         indication = null,
@@ -793,14 +799,14 @@ fun HeroHeader(
                 androidx.compose.material3.Icon(
                     Tabler.Outline.PlayerPause,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = legibility.pauseContent,
                     modifier = Modifier.size(14.dp),
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
                     stringResource(Res.string.home_hero_pause_video),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = legibility.pauseContent,
                 )
             }
         }
@@ -832,7 +838,7 @@ fun HeroHeader(
                             blurRadius = 8f,
                         ),
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    color = legibility.kickerText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -861,14 +867,28 @@ fun HeroHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                yearText?.let { InfoChip(text = it) }
-                runtimeText?.let { InfoChip(text = it) }
+                yearText?.let {
+                    InfoChip(
+                        text = it,
+                        containerColor = legibility.badgeContainer,
+                        borderColor = legibility.badgeBorder,
+                        textColor = legibility.badgeText,
+                    )
+                }
+                runtimeText?.let {
+                    InfoChip(
+                        text = it,
+                        containerColor = legibility.badgeContainer,
+                        borderColor = legibility.badgeBorder,
+                        textColor = legibility.badgeText,
+                    )
+                }
                 item.officialRating?.let {
                     InfoChip(
                         text = it,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
-                        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                        textColor = MaterialTheme.colorScheme.primary,
+                        containerColor = legibility.accentContainer,
+                        borderColor = legibility.accentBorder,
+                        textColor = legibility.accentText,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp,
                     )
@@ -877,8 +897,8 @@ fun HeroHeader(
                     Box(
                         modifier = Modifier
                             .clip(ShapeCache.smooth8)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)), ShapeCache.smooth8)
+                            .background(legibility.badgeContainer)
+                            .border(BorderStroke(1.dp, legibility.badgeBorder), ShapeCache.smooth8)
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -897,7 +917,7 @@ fun HeroHeader(
                             Text(
                                 text = ratingText,
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                                color = legibility.badgeText,
                             )
                         }
                     }
@@ -914,9 +934,9 @@ fun HeroHeader(
                         Box(
                             modifier = Modifier
                                 .clip(ShapeCache.smooth12)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                .background(legibility.genreContainer)
                                 .border(
-                                    BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+                                    BorderStroke(1.dp, legibility.genreBorder),
                                     ShapeCache.smooth12
                                 )
                                 .padding(horizontal = 12.dp, vertical = 4.dp),
@@ -924,7 +944,7 @@ fun HeroHeader(
                             Text(
                                 text = genre,
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                color = legibility.genreText,
                             )
                         }
                     }
@@ -936,7 +956,7 @@ fun HeroHeader(
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = legibility.overviewText,
                     // The DETAILED spotlight's expanded synopsis; every other
                     // style keeps the shipped two-line cap.
                     maxLines = if (chromeVisibility == HomeHeroChromeVisibility.RICH) 5 else 2,
@@ -1035,9 +1055,9 @@ fun HeroHeader(
                         modifier = Modifier
                             .fillMaxHeight()
                             .clip(ShapeCache.smoothPill)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            .background(legibility.pillContainer)
                             .border(
-                                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+                                BorderStroke(1.dp, legibility.pillBorder),
                                 ShapeCache.smoothPill
                             )
                             .ifElse(isTv, detailsTvFocusState.focusModifier)
@@ -1058,7 +1078,7 @@ fun HeroHeader(
                         Text(
                             stringResource(Res.string.home_details),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = legibility.pillText,
                         )
                     }
                 }
@@ -1228,6 +1248,11 @@ internal fun HeroSliderHeader(
     }
 }
 
+/**
+ * The year/runtime/official-rating pill. Defaults are the dark-theme shipped
+ * chrome kept for signature stability — every hero call site passes its
+ * [HeroLegibilityColors] values so light mode gets the frosted-light chrome.
+ */
 @Composable
 private fun InfoChip(
     text: String,

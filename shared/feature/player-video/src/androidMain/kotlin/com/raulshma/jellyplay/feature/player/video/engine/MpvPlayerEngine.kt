@@ -74,6 +74,9 @@ class MpvPlayerEngine(
         // so a no-render bug can be traced end-to-end without logcat drowning.
         private val MPV_SUBTITLE_LOG_PATTERN =
             Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream|vo/|demux|cplayer|vd)")
+        // Split pattern for [executeUserCommand]'s raw command line — hoisted
+        // because the split compiles it on every mpv command dispatch.
+        private val WHITESPACE_REGEX = Regex("\\s+")
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
@@ -1329,7 +1332,7 @@ class MpvPlayerEngine(
      */
     override fun executeUserCommand(command: String): Boolean {
         val mpv = mpvView?.mpv ?: return false
-        val args = command.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val args = command.trim().split(WHITESPACE_REGEX).filter { it.isNotEmpty() }
         if (args.isEmpty()) return false
         return try {
             // The JNI transport throws on a rejected command and returns an

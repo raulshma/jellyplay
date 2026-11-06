@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import com.raulshma.jellyplay.core.data.catalogue.NextEpisode
 import com.raulshma.jellyplay.core.data.catalogue.NextUpKind
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.SmartPlayPriority
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 
@@ -49,9 +50,14 @@ internal object SmartPlayResolver {
      * unplayed episode, NEXT_UP when something before it was watched/started
      * else PLAY; 3. all played → REPLAY the first; virtual episodes never
      * candidates) — and maps the [NextUpKind] verdict onto [LabelKind].
+     * [priority] is the detail_smart_play_priority pref: DEFAULT keeps the
+     * shipped order, the other steps reorder the same candidates.
      */
-    fun resolveSeries(sortedEpisodes: List<MediaItem>): SmartPlayResult? {
-        val decision = NextEpisode.forSorted(sortedEpisodes)
+    fun resolveSeries(
+        sortedEpisodes: List<MediaItem>,
+        priority: SmartPlayPriority = SmartPlayPriority.DEFAULT,
+    ): SmartPlayResult? {
+        val decision = NextEpisode.forSorted(sortedEpisodes, priority)
         val episode = decision.episode ?: return null
         return SmartPlayResult(
             episode = episode,
@@ -76,12 +82,17 @@ internal object SmartPlayResolver {
      * resumes/continues WITHIN that season only — the same resolution order as
      * [resolveSeries] applied to just the entry season's episodes. [seasonId]
      * is the detail entry's own id; episodes carry their season in
-     * [MediaItem.seasonId]. Returns null when the season has no (non-virtual)
+     * [MediaItem.seasonId]. [priority] is the detail_smart_play_priority pref
+     * (see [resolveSeries]). Returns null when the season has no (non-virtual)
      * episodes in the current snapshot — the caller clears the smart target
      * and the Play button falls back to its non-smart path.
      */
-    fun resolveSeason(seasonId: String, sortedEpisodes: List<MediaItem>): SmartPlayResult? =
-        resolveSeries(sortedEpisodes.filter { it.seasonId == seasonId })
+    fun resolveSeason(
+        seasonId: String,
+        sortedEpisodes: List<MediaItem>,
+        priority: SmartPlayPriority = SmartPlayPriority.DEFAULT,
+    ): SmartPlayResult? =
+        resolveSeries(sortedEpisodes.filter { it.seasonId == seasonId }, priority)
 
     /** The catalogue verdict → the UI label (the two enums' one-for-one mirror, in one table). */
     private fun NextUpKind.toLabelKind(): LabelKind = when (this) {

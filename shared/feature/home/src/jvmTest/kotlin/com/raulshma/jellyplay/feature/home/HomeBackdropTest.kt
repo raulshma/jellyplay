@@ -18,13 +18,13 @@ class HomeBackdropTest {
 
     private fun state(
         enabled: Boolean = true,
-        performanceMode: Boolean = false,
+        backdropBlur: Boolean = true,
         isLightTheme: Boolean = false,
         blurHash: String? = null,
         backdropUrl: String? = null,
     ) = HomeBackdropState(
         enabled = enabled,
-        performanceMode = performanceMode,
+        backdropBlur = backdropBlur,
         oledMode = false,
         isLightTheme = isLightTheme,
         blurHash = blurHash,
@@ -35,8 +35,8 @@ class HomeBackdropTest {
     // -- shouldRenderBackdrop -------------------------------------------------
 
     @Test
-    fun `renders when enabled and not in performance mode`() {
-        assertTrue(shouldRenderBackdrop(state(enabled = true, performanceMode = false)))
+    fun `renders when enabled and the backdrop row is on`() {
+        assertTrue(shouldRenderBackdrop(state(enabled = true, backdropBlur = true)))
     }
 
     @Test
@@ -45,8 +45,10 @@ class HomeBackdropTest {
     }
 
     @Test
-    fun `does not render in performance mode even when enabled`() {
-        assertFalse(shouldRenderBackdrop(state(enabled = true, performanceMode = true)))
+    fun `does not render when the backdrop row is off even when enabled`() {
+        // The resolved posture's backdrop gate: PERFORMANCE suppresses via
+        // AUTO, an explicit backdrop OFF kills the layer at any level.
+        assertFalse(shouldRenderBackdrop(state(enabled = true, backdropBlur = false)))
     }
 
     @Test
@@ -142,8 +144,8 @@ class HomeBackdropTest {
     @Test
     fun `focus overlay does not bypass the render gates`() {
         // The focus inputs ride the same state shape, so a disabled backdrop,
-        // performance mode or a light theme still suppress the whole layer —
-        // the pref ∧ TV gate upstream never reaches here.
+        // a suppressed backdrop row or a light theme still suppress the whole
+        // layer — the pref ∧ TV gate upstream never reaches here.
         val focused = state(
             enabled = false,
             blurHash = "HERO",

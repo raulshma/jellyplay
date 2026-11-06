@@ -28,11 +28,12 @@ class SpecDerivedSearchItemsTest {
     // ── Playback ────────────────────────────────────────────────────────
 
     @Test
-    fun `playback player list keeps its 53-row order and projects the spec faces`() {
+    fun `playback player list keeps its 83-row order and projects the spec faces`() {
         val items = PlaybackSettingsSearchItems
-        assertEquals(53, items.size)
+        assertEquals(83, items.size)
         assertEquals(PlaybackRows.PlayerEngine.id, items.first().id)
-        assertEquals(PlaybackRows.RememberVolumePerContentType.id, items.last().id)
+        // The pass-2 chrome-QoL fourteen append; confirm-exit is the catalog tail.
+        assertEquals(PlaybackRows.ConfirmExit.id, items.last().id)
 
         val engine = items.first()
         assertEquals("ss_player_engine_title", engine.titleRes.key)
@@ -52,24 +53,38 @@ class SpecDerivedSearchItemsTest {
                 val item = items.single { it.id == id }
                 assertEquals(setOf(PlatformKind.ANDROID), item.platforms, "$id must stay Android-tagged")
             }
-        // The capability-derived rows keep the runtime seam's tag (desktop
-        // JVM: no orientation / touch gestures → Android-only).
+        // The capability-derived rows keep the runtime seam's tag: a
+        // capability the running actual supports tags the row for every
+        // platform (`platformsForCapability(true)`), a missing one collapses
+        // to Android-only. The expectation derives from the same
+        // `settingsCapabilities` actual the derivation reads — the desktop
+        // JVM actual has no orientation/touch (Android-only tag), the Android
+        // actual does (all-platform tag) — so the test is platform-portable
+        // across the jvmTest and androidHostTest lanes.
         listOf(
-            PlaybackRows.Orientation.id,
-            PlaybackRows.Gestures.id,
-            PlaybackRows.GestureIndicatorSide.id,
-            PlaybackRows.DoubleTapHoldSeek.id,
-        ).forEach { id ->
-            assertEquals(setOf(PlatformKind.ANDROID), items.single { it.id == id }.platforms, "$id must follow the capability seam")
+            PlaybackRows.Orientation.id to settingsCapabilities.supportsScreenOrientation,
+            PlaybackRows.Gestures.id to settingsCapabilities.supportsTouchGestures,
+            PlaybackRows.GestureIndicatorSide.id to settingsCapabilities.supportsTouchGestures,
+            PlaybackRows.DoubleTapHoldSeek.id to settingsCapabilities.supportsTouchGestures,
+        ).forEach { (id, supported) ->
+            assertEquals(
+                platformsForCapability(supported),
+                items.single { it.id == id }.platforms,
+                "$id must follow the capability seam",
+            )
         }
-        // The residual volume-memory row keeps its hand desktop tag.
-        assertEquals(setOf(PlatformKind.DESKTOP), items.last().platforms)
+        // The residual volume-memory row keeps its hand desktop tag (it no
+        // longer closes the list — the player QoL wave appended after it).
+        assertEquals(
+            setOf(PlatformKind.DESKTOP),
+            items.single { it.id == PlaybackRows.RememberVolumePerContentType.id }.platforms,
+        )
     }
 
     @Test
-    fun `advanced video list keeps its 26-row order with the residuals in place`() {
+    fun `advanced video list keeps its 28-row order with the residuals in place`() {
         val items = PlaybackAdvancedVideoSearchItems
-        assertEquals(26, items.size)
+        assertEquals(28, items.size)
         assertEquals(
             listOf(
                 PlaybackRows.DialogueBoost.id,
@@ -89,6 +104,11 @@ class SpecDerivedSearchItemsTest {
                 PlaybackRows.OfflinePlayback.id,
                 PlaybackRows.PlaybackMode.id,
                 PlaybackRows.StreamingQuality.id,
+                // The issue #186 pair: the spec-backed performance-profile
+                // ceiling beside Streaming Quality, then its residual
+                // Re-detect action row.
+                PlaybackRows.VideoPerformanceProfile.id,
+                PlaybackRows.RedetectPerformance.id,
                 PlaybackRows.HdrFormatPreference.id,
                 PlaybackRows.ForceTranscodeAboveHeight.id,
                 PlaybackRows.PreferredTranscodeVideoCodec.id,
@@ -107,6 +127,15 @@ class SpecDerivedSearchItemsTest {
         // The per-codec rows restate their screen titles (the fold).
         assertEquals("settings_passthrough_codec_ac3", items.single { it.id == PlaybackRows.PassthroughCodecAc3.id }.titleRes.key)
         assertEquals("ss_passthrough_codec_subtitle", items.single { it.id == PlaybackRows.PassthroughCodecAc3.id }.subtitleRes.key)
+        // The issue #186 binding: the profile row carries the spec-declared
+        // ss_* faces; the residual Re-detect row carries its hand faces.
+        val profile = items.single { it.id == PlaybackRows.VideoPerformanceProfile.id }
+        assertEquals("ss_performance_profile_title", profile.titleRes.key)
+        assertEquals("ss_performance_profile_subtitle", profile.subtitleRes.key)
+        assertEquals(listOf("performance", "low end", "medium", "high end", "smooth", "stutter", "profile", "auto", "1080p", "bitrate", "device"), profile.keywords)
+        val redetect = items.single { it.id == PlaybackRows.RedetectPerformance.id }
+        assertEquals("settings_redetect_performance", redetect.titleRes.key)
+        assertEquals("settings_redetect_performance_subtitle", redetect.subtitleRes.key)
     }
 
     @Test
@@ -185,7 +214,7 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `appearance library list keeps its 24-row order with the detail-display toggles in place`() {
+    fun `appearance library list keeps its 52-row order with the detail-display toggles in place`() {
         // The home-discovery watch-state quartet lives in
         // HomeCardsSearchItems; the appearance side keeps the library
         // residuals, the
@@ -195,7 +224,7 @@ class SpecDerivedSearchItemsTest {
         // reviews, awards badges, trailers, promoted actions, download
         // progress).
         val items = AppearanceLibrarySearchItems
-        assertEquals(24, items.size)
+        assertEquals(52, items.size)
         assertEquals(
             listOf(
                 AppearanceRows.HideEpisodeThumbnails.id,
@@ -221,6 +250,38 @@ class SpecDerivedSearchItemsTest {
                 AppearanceRows.ShowMoreInCollection.id,
                 AppearanceRows.ShowFilmographyRoles.id,
                 AppearanceRows.ShowFrequentCostars.id,
+                // The detail-screen QoL knobs (16 residual rows), declared
+                // between the costars toggle and the search-history toggle.
+                AppearanceRows.CastItemSize.id,
+                AppearanceRows.CastSeeAllLimit.id,
+                AppearanceRows.BackdropParallax.id,
+                AppearanceRows.OverviewCollapseLines.id,
+                AppearanceRows.HideWatchedEpisodes.id,
+                AppearanceRows.ConfirmMarkPlayed.id,
+                AppearanceRows.ShowStudioChips.id,
+                AppearanceRows.ShowGenreChips.id,
+                AppearanceRows.ShowTagChips.id,
+                AppearanceRows.ShowSkipChips.id,
+                AppearanceRows.SeasonTabsArtwork.id,
+                AppearanceRows.PeopleGridDensity.id,
+                AppearanceRows.ShowTrailerBadges.id,
+                AppearanceRows.PersistSectionHides.id,
+                AppearanceRows.SimilarLimit.id,
+                AppearanceRows.UpcomingLimit.id,
+                // The pass-2 detail-QoL wave-two twelve, declared between
+                // the upcoming-limit toggle and the search-history toggle.
+                AppearanceRows.SectionOrder.id,
+                AppearanceRows.StaggerStyle.id,
+                AppearanceRows.BackdropResolution.id,
+                AppearanceRows.ChapterCardSize.id,
+                AppearanceRows.ReviewsPreviewLines.id,
+                AppearanceRows.FilmographySort.id,
+                AppearanceRows.FranchiseBoxLimit.id,
+                AppearanceRows.FranchiseMemberLimit.id,
+                AppearanceRows.SmartPlayPriority.id,
+                AppearanceRows.StreamFallbackLanguage.id,
+                AppearanceRows.PromotedRailSource.id,
+                AppearanceRows.EpisodeOverviewPreview.id,
                 AppearanceRows.HideSearchHistory.id,
             ),
             items.map { it.id },
@@ -229,7 +290,9 @@ class SpecDerivedSearchItemsTest {
 
     @Test
     fun `appearance performance and eye care lists derive wholly from specs`() {
-        assertEquals(2, AppearancePerformanceSearchItems.size)
+        // The master level row moved to the hub's level group; the appearance
+        // screen's group keeps only the Reduce Motion toggle.
+        assertEquals(1, AppearancePerformanceSearchItems.size)
         assertEquals(2, AppearanceEyeCareSearchItems.size)
         assertTrue(AppearancePerformanceSearchItems.all { it.isAdvanced })
         assertTrue(AppearanceEyeCareSearchItems.all { it.isAdvanced })
@@ -237,10 +300,50 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `appearance navigation and newsletter lists stay residual-row projections`() {
-        // The spec-less residual groups: the fused rows still project their
-        // hand search faces directly.
-        assertEquals(2, AppearanceNavigationSearchItems.size)
+    fun `the performance hub lists derive wholly from specs and deep-link the hub route`() {
+        // Sizes, in group order: 1 master + 3 motion + 5 images + 3 ambient,
+        // then the playback-domain buffer quartet.
+        assertEquals(1, PerformanceLevelSearchItems.size)
+        assertEquals(3, PerformanceMotionSearchItems.size)
+        assertEquals(5, PerformanceImageSearchItems.size)
+        assertEquals(3, PerformanceAmbientSearchItems.size)
+        assertEquals(4, PlaybackBufferSearchItems.size)
+
+        // Every hub row deep-links Route.PerformanceSettings (the
+        // performance_settings route kind both domains' specs now carry) and
+        // keeps its spec advanced base — except the master row, whose fused
+        // Always gate is an ADMISSION override, not a search flag.
+        listOf(
+            PerformanceLevelSearchItems,
+            PerformanceMotionSearchItems,
+            PerformanceImageSearchItems,
+            PerformanceAmbientSearchItems,
+            PlaybackBufferSearchItems,
+        ).forEach { items ->
+            assertTrue(items.all { it.route == Route.PerformanceSettings() }, "a hub row lost the hub route")
+            assertTrue(items.all { it.isAdvanced }, "a hub row lost its advanced flag")
+        }
+        // The master row keeps the historical search id and its ss_* faces.
+        val master = PerformanceLevelSearchItems.single()
+        assertEquals("performance_mode", master.id)
+        assertEquals("ss_performance_mode_title", master.titleRes.key)
+        assertEquals("ss_performance_mode_subtitle", master.subtitleRes.key)
+        // Spot-check a tri-state binding and a buffer binding.
+        val animations = PerformanceMotionSearchItems.single { it.id == "perf_animations" }
+        assertEquals("ss_perf_animations_title", animations.titleRes.key)
+        val initialBuffer = PlaybackBufferSearchItems.single { it.id == "exo_initial_buffer_ms" }
+        assertEquals("ss_exo_initial_buffer_ms_title", initialBuffer.titleRes.key)
+    }
+
+    @Test
+    fun `appearance navigation is a mixed projection and the newsletter list stays residual`() {
+        // The newsletter group is all-residual: the fused rows still project
+        // their hand search faces directly. The navigation group is mixed:
+        // its six residuals keep hand faces, and the pass-2 global-chrome
+        // seven (backdrop dim, haptics intensity, image quality, list
+        // density, press effect, flat cards, overscroll) project their
+        // spec faces.
+        assertEquals(13, AppearanceNavigationSearchItems.size)
         assertEquals(3, AppearanceNewsletterSearchItems.size)
     }
 
@@ -252,17 +355,27 @@ class SpecDerivedSearchItemsTest {
         // new-section/continue-watching knobs, the stats card, the
         // genre rail and the presence chips (17 rows), plus the
         // hidden-libraries restore row (18), plus the hero style and
-        // slideshow-interval rows (20).
-        assertEquals(20, HomeDisplaySearchItems.size)
+        // slideshow-interval rows (20), plus the display-QoL wave (12: clock
+        // date, opaque dock, greeting, mode switch, user switcher, newsletter
+        // banner, see-all, card scale/radius, rows animations, the genre and
+        // presence limits) → 32, plus the pass-2 display additions (11:
+        // hero idle rotation / scroll-defer / random start, stats metrics,
+        // presence poll, newsletter window, refresh cadence, discover
+        // pattern, pre-section order, search results height, My-Media
+        // columns) → 43.
+        assertEquals(43, HomeDisplaySearchItems.size)
         assertEquals(HomeRows.HomeMode.id, HomeDisplaySearchItems.first().id)
         assertEquals(HomeRows.UnhideCw.id, HomeDisplaySearchItems.last().id)
-        // The exclude-active-sessions toggle joined the Next Up quartet.
-        assertEquals(4, HomeNextUpSearchItems.size)
+        // The exclude-active-sessions toggle, the progress-style picker and
+        // the ask-continue remember toggle joined the Next Up quartet.
+        assertEquals(6, HomeNextUpSearchItems.size)
         // The layout auto-push row joined the layout drill-ins.
         assertEquals(5, HomeLayoutSearchItems.size)
         // The cards group: the card-display quartet plus the
-        // badge/spoiler toggles and the TV-gated trickplay fork (8 rows).
-        assertEquals(8, HomeCardsSearchItems.size)
+        // badge/spoiler toggles and the TV-gated trickplay fork, plus the
+        // pass-2 additions (new-badge sections/days, unwatched counters,
+        // trickplay peek) — 12 rows.
+        assertEquals(12, HomeCardsSearchItems.size)
 
         // The drill-in rows resolve their routes through the spec route kinds.
         assertIs<Route.PinnedHomeSections>(HomeLayoutSearchItems.single { it.id == HomeRows.PinnedHomeSections.id }.route)

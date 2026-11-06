@@ -170,6 +170,7 @@ class MainActivity : FragmentActivity() {
         // KDoc).
         val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
             networkStatusLazy = lazy { networkMonitor.networkStatus },
+            networkMeteredLazy = lazy { networkMonitor.isMetered },
             audioPlaybackManagerLazy = audioPlaybackManagerLazy,
             remoteNavigationBridgeLazy = remoteNavigationBridgeLazy,
             remoteControlReceiverLazy = remoteControlReceiverLazy,

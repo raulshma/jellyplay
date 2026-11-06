@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.PlayerSeekBarStyle
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_scrub_slow
 import com.raulshma.jellyplay.feature.player.video.PlatformBitmap
@@ -95,6 +96,25 @@ internal fun TvControllableSeekBar(
     // `setEnabled(false)` wipes points, so a disabled window never renders.
     abRepeatStartMs: Long? = null,
     abRepeatEndMs: Long? = null,
+    // -- The seek-bar presentation cluster (prefs mirrors; all defaulted so
+    //    previews/tests render the stock bar). --
+    /** The bar's thickness: TALL is ~1.75x the DEFAULT track/thumb geometry. */
+    style: PlayerSeekBarStyle = PlayerSeekBarStyle.DEFAULT,
+    /** The multi-range buffered bands; off hides the buffered layers. */
+    showBufferedRange: Boolean = true,
+    /** The chapter markers; off hides them. */
+    showChapterMarkers: Boolean = true,
+    /** The elapsed/total labels under the bar; off renders the minimal bar. */
+    showTimestamps: Boolean = true,
+    /**
+     * The buffered-percentage readout in the time row — derived from the
+     * engine's REAL buffered ranges (furthest buffered position ÷ duration);
+     * rendered only while that is knowable (ranges published and duration
+     * known), never faked.
+     */
+    showBufferPercent: Boolean = false,
+    /** The scrub preview's target timestamp (drag label + the TV trickplay preview). */
+    seekPreviewTime: Boolean = true,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit = {},
@@ -137,13 +157,16 @@ internal fun TvControllableSeekBar(
     val activeColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
     val isActive = isPressed || isDragging || (isTv && isSeekBarFocused)
+    // The style knob scales the stock geometry — TALL ≈ 1.75x the track
+    // thickness (and the thumb with it, so the head stays proportional).
+    val styleScale = if (style == PlayerSeekBarStyle.TALL) 1.75f else 1f
     val trackHeight by animateDpAsState(
-        targetValue = if (isActive) 5.dp else 3.dp,
+        targetValue = (if (isActive) 5.dp else 3.dp) * styleScale,
         animationSpec = playerSeekbarDpSpec(),
         label = "trackH",
     )
     val thumbRadiusDp by animateDpAsState(
-        targetValue = if (isActive) 7.dp else 5.dp,
+        targetValue = (if (isActive) 7.dp else 5.dp) * styleScale,
         animationSpec = playerSeekbarDpSpec(),
         label = "thumbR",
     )
@@ -185,6 +208,20 @@ internal fun TvControllableSeekBar(
         } else null
     }
 
+    // The buffered-percentage readout: the FURTHEST buffered position over the
+    // duration, off the engine's real buffered ranges (the same source the
+    // bands above draw — mpv demuxer cache / ExoPlayer / LibVLC range
+    // publications). Null when unknowable (no ranges published, or no
+    // duration): the pref never renders a guessed number.
+    val bufferedPercent = remember(bufferedRanges, duration) {
+        if (duration <= 0 || bufferedRanges.isEmpty()) {
+            null
+        } else {
+            val furthestBufferedMs = bufferedRanges.maxOf { it.last }
+            ((furthestBufferedMs.toFloat() / duration) * 100f).toInt().coerceIn(0, 100)
+        }
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         if (isTv && isSeekBarFocused && trickplayBitmap != null) {
             val displayMs = (tvSeekPosition * duration).toLong()
@@ -198,6 +235,7 @@ internal fun TvControllableSeekBar(
                     bitmap = trickplayBitmap,
                     positionMs = displayMs,
                     durationMs = duration,
+                    showTimestamp = seekPreviewTime,
                 )
             }
         }
@@ -355,7 +393,7 @@ internal fun TvControllableSeekBar(
                 // gaps between ranges stay unshaded (a forward seek drops the
                 // old window while the back-buffer survives behind the
                 // playhead).
-                if (bufferedBands.isNotEmpty()) {
+                if (showBufferedRange && bufferedBands.isNotEmpty()) {
                     val bufferColor = activeColor.copy(alpha = 0.25f)
                     bufferedBands.forEach { band ->
                         drawRoundRect(
@@ -425,7 +463,7 @@ internal fun TvControllableSeekBar(
                     }
                 }
 
-                if (chapters.isNotEmpty() && duration > 0) {
+                if (showChapterMarkers && chapters.isNotEmpty() && duration > 0) {
                     chapters.forEach { chapter ->
                         val chapterFraction = ticksToFraction(chapter.startPositionTicks, duration)
                         if (chapterFraction in 0.01f..0.99f) {
@@ -474,14 +512,18 @@ internal fun TvControllableSeekBar(
                     .padding(start = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    formatDuration(displayMs),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Medium,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                // The scrub preview's target timestamp — the seekPreviewTime
+                // pref gates it; the precision-scrub hint stays either way.
+                if (seekPreviewTime) {
+                    Text(
+                        formatDuration(displayMs),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
                 if (isPrecisionDrag) {
                     Text(
                         "  ·  " + stringResource(Res.string.player_video_scrub_slow),
@@ -490,7 +532,7 @@ internal fun TvControllableSeekBar(
                     )
                 }
             }
-        } else {
+        } else if (showTimestamps) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -504,6 +546,20 @@ internal fun TvControllableSeekBar(
                     ),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
+                // The buffered-percentage readout sits BETWEEN the pair —
+                // rendered only while knowable (the derivation above returns
+                // null otherwise), never faked.
+                val bufferPercentText = if (showBufferPercent) bufferedPercent?.let { "$it%" } else null
+                if (bufferPercentText != null) {
+                    Text(
+                        bufferPercentText,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                    )
+                }
                 val endLabel = if (duration > 0) {
                     remainingText ?: durationText
                 } else {

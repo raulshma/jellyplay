@@ -87,13 +87,14 @@ internal fun YouTubeVideoCard(
  * The local-trailer variant of [TrailerVideoCard] — same geometry, but
  * the thumbnail is the library item's primary image (no YouTube key) and the
  * card wears the "Local" badge so the two sources read apart in one row.
+ * [badgeLabel] null renders badge-less (the badges-off pref).
  */
 @Composable
 internal fun LocalTrailerVideoCard(
     mediaItem: MediaItem,
     fallbackLabel: String,
     imageUrl: String?,
-    badgeLabel: String,
+    badgeLabel: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     border: BorderStroke? = null,

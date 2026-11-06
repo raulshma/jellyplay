@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.data.playback.STRIP_SAFE_QUERY_PARAMS
 import com.raulshma.jellyplay.core.data.playback.isSessionKeyedUrl
 import com.raulshma.jellyplay.core.data.playback.stripVolatileQueryParams
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -72,6 +73,16 @@ class VideoStreamCache(
      * client through [com.raulshma.jellyplay.feature.player.video.engine.AndroidPlayerEngineFactory].
      */
     private val streamingOkHttpClient: OkHttpClient,
+    /**
+     * The performance-profile cache ceiling (issue #186 §5.9), as a
+     * NON-SUSPENDING provider — [ensureCacheLocked] runs under the init lock
+     * on the player thread. The Koin wiring reads the resolver's WARMED
+     * `resolved.value.tuning` (whose AUTO seed is already MEDIUM — 1024 MB —
+     * never unbounded); a tier with no cache cap ([VideoPerformanceTuning.NONE])
+     * leaves the user's size alone. SimpleCache's bound is fixed for its
+     * lifetime, so the value read at cache-open time is the process's.
+     */
+    private val performanceCapProvider: () -> VideoPerformanceTuning = { VideoPerformanceTuning.NONE },
 ) {
     private val cacheDir = File(context.cacheDir, VIDEO_CACHE_DIR_NAME)
 
@@ -103,13 +114,19 @@ class VideoStreamCache(
         cache?.let { return it }
         if (cacheUnavailable) return null
         // User-configured cap (playback settings' video cache size, mirroring
-        // audioCacheSizeMb). Read at cache-open time from the store's eagerly
-        // started StateFlow — SimpleCache's bound is fixed for its lifetime,
-        // so a mid-session change lands on the next process launch; first
-        // playback is seconds after startup, long past the disk read that
-        // seeds the flow (the AudioCacheStore/ImageUrlProvider read pattern).
-        val sizeMb = videoPlayerStore.videoPlayer.value.videoCacheSizeMb
-        val sizeBytes = sizeMb.coerceAtLeast(1).toLong() * 1024L * 1024L
+        // audioCacheSizeMb) folded under the performance-profile ceiling
+        // (issue #186 §5.9 — the stricter of the two wins, never below 1 MB).
+        // Both read at cache-open time: the store's eagerly started StateFlow,
+        // and the resolver's warmed tuning (the provider's MEDIUM seed covers
+        // the pre-detection window — unbounded is never the fallback).
+        // SimpleCache's bound is fixed for its lifetime, so a mid-session
+        // change lands on the next process launch; first playback is seconds
+        // after startup, long past the disk read that seeds the flow (the
+        // AudioCacheStore/ImageUrlProvider read pattern).
+        val userMb = videoPlayerStore.videoPlayer.value.videoCacheSizeMb
+        val profileCapMb = performanceCapProvider().maxVideoCacheMb
+        val sizeMb = minOf(userMb, profileCapMb ?: Int.MAX_VALUE).coerceAtLeast(1)
+        val sizeBytes = sizeMb.toLong() * 1024L * 1024L
         val evictor = LeastRecentlyUsedCacheEvictor(sizeBytes)
         val dir = cacheDir.apply { mkdirs() }
         if (!dir.exists() || !dir.isDirectory) {

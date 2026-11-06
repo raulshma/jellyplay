@@ -45,6 +45,16 @@ import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_view_all
 import org.jetbrains.compose.resources.stringResource
 
+// Constant inputs, so a single shared instance serves every featured card.
+private val CuratedFeaturedScrimBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color.Transparent,
+        Color.Transparent,
+        Color.Black.copy(alpha = 0.5f),
+        Color.Black.copy(alpha = 0.85f),
+    ),
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewsletterCuratedPicks(
@@ -149,16 +159,7 @@ private fun CuratedFeaturedCard(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.5f),
-                                Color.Black.copy(alpha = 0.85f),
-                            ),
-                        )
-                    ),
+                    .background(CuratedFeaturedScrimBrush),
             )
 
             Column(

@@ -71,13 +71,22 @@ class I18nParityRatchetTest {
      * Accepted gaps recorded 2026-10-12 (multi-feature branch landed feature
      * strings ahead of their translation pass; the numbers must never rise):
      *  - `shared/feature/details` 13 keys × 8 locales — the home-detail
-     *    UI strings; translations
-     *    tracked as a details-module follow-up.
+     *    UI strings — translated in-full on 2026-11-04 (PENDING blocks
+     *    folded into their group comments); entries deleted per the
+     *    lower-a-baseline rule.
      *  - `shared/feature/home` 6 keys × 8 locales — home section/hero strings
      *    from the same branch; translations tracked as a home-module follow-up.
      *  - `shared/feature/settings` 98 keys × 8 locales — large settings
      *    surface landed untranslated; translations tracked as a
      *    settings-module follow-up.
+     *
+     * Accepted gaps recorded 2026-11-03 (the v0.11.x cycle landed home /
+     * player-video / settings strings ahead of their translation pass) were
+     * translated in-full on 2026-11-04 (422 keys x8 locales folded into
+     * their group comments, PENDING blocks deleted) — the would-be entries
+     * never landed; the numbers must never rise. The Performance Level
+     * feature's 824 pending keys (74 settings + 13 details + 16
+     * player-video, x8 locales) were translated the same day.
      */
     private val baselineMissingKeys: Map<String, Int> = mapOf(
         "shared/core/ui:de" to 0,
@@ -88,24 +97,8 @@ class I18nParityRatchetTest {
         "shared/core/ui:ko" to 0,
         "shared/core/ui:pt" to 0,
         "shared/core/ui:zh" to 0,
-        "shared/feature/details:de" to 13,
-        "shared/feature/details:es" to 13,
-        "shared/feature/details:fr" to 13,
-        "shared/feature/details:it" to 13,
-        "shared/feature/details:ja" to 13,
-        "shared/feature/details:ko" to 13,
-        "shared/feature/details:pt" to 13,
-        "shared/feature/details:zh" to 13,
-        "shared/feature/home:de" to 6,
-        "shared/feature/home:es" to 6,
-        "shared/feature/home:fr" to 6,
-        "shared/feature/home:it" to 6,
-        "shared/feature/home:ja" to 6,
-        "shared/feature/home:ko" to 6,
-        "shared/feature/home:pt" to 6,
-        "shared/feature/home:zh" to 6,
-        // 98-baseline gap translated 2026-10-26 (259 settings keys x8 locales
-        // landed with it) — entries deleted per the lower-a-baseline rule.
+            // 98-baseline gap translated 2026-10-26 (259 settings keys x8 locales
+            // landed with it) — entries deleted per the lower-a-baseline rule.
     )
 
     @Test

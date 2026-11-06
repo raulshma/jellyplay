@@ -16,14 +16,34 @@ import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_theme_music
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_parallax
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_parallax_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_resolution
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_resolution_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_strength
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_strength_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cast_item_size
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cast_item_size_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cast_see_all_limit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cast_see_all_limit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_chapter_card_size
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_chapter_card_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_color_blind_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_color_blind_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_compact_episode_list
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_compact_episode_list_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_confirm_mark_played
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_confirm_mark_played_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_episode_overview_preview
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_episode_overview_preview_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_filmography_sort
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_filmography_sort_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_franchise_box_limit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_franchise_box_limit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_franchise_member_limit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_franchise_member_limit_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_date_format
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_date_format_subtitle
@@ -40,6 +60,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hapt
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_episode_thumbnails
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_episode_thumbnails_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_episodes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode_subtitle
@@ -51,13 +73,27 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_config
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_delivery_day
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_promoted_rail_source
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_promoted_rail_source_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reviews_preview_lines
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reviews_preview_lines_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_section_order
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_section_order_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_smart_play_priority
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_smart_play_priority_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_stagger_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_stagger_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_stream_fallback_language
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_stream_fallback_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_delivery_day_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_persist_section_hides
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_persist_section_hides_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_people_grid_density
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_people_grid_density_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play_theme_music
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play_theme_music_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_local_trailers
@@ -73,6 +109,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_episode_stream_badges
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_episode_stream_badges_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_links
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_genre_chips
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_genre_chips_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_links_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_filmography_roles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_filmography_roles_subtitle
@@ -95,15 +133,31 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_tagline
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_tagline_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_trailer_badges
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_trailer_badges_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_upcoming_strip
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_upcoming_strip_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_similar_limit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_similar_limit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_season_tabs_artwork
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_season_tabs_artwork_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_skip_chips
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_skip_chips_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_studio_chips
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_studio_chips_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_tag_chips
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_tag_chips_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overview_collapse_lines
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overview_collapse_lines_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trailer_preview_on_focus
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trailer_preview_on_focus_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_upcoming_limit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_upcoming_limit_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_filter_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_filter_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_strength_subtitle
@@ -140,8 +194,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter_sections_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_oled_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_oled_mode_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_prefer_logos_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reduce_motion_title
@@ -167,6 +219,50 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_awar
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_awards_badges_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_awards_badges_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_awards_badges_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_card_press_animations
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_card_press_animations_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pull_to_refresh
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pull_to_refresh_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_start_tab
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_start_tab_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_time_use_24h
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_time_use_24h_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_dim
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_dim_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_haptics_intensity
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_haptics_intensity_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_image_quality
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_image_quality_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_list_density
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_list_density_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_press_effect
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_press_effect_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_flat_cards
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_flat_cards_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overscroll
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overscroll_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_card_press_animations_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_card_press_animations_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pull_to_refresh_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pull_to_refresh_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_start_tab_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_start_tab_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_time_use_24h_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_time_use_24h_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_backdrop_dim_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_backdrop_dim_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_haptics_intensity_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_haptics_intensity_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_image_quality_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_image_quality_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_list_density_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_list_density_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_press_effect_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_press_effect_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_flat_cards_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_flat_cards_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_overscroll_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_overscroll_subtitle
 
 /**
  * The appearance domain's fused row declarations — the feature-side single
@@ -446,6 +542,114 @@ internal object AppearanceRows {
         route = Route.AppearanceSettings(),
     )
 
+    // ── Global interface & interaction rows (residual grammar — see the
+    //    AppearanceNavigationRows doc). ──────────────────────────────────
+
+    val StartTab = SettingsRow(
+        id = "start_tab",
+        icon = Tabler.Outline.Compass,
+        titleRes = Res.string.settings_start_tab,
+        subtitleRes = Res.string.settings_start_tab_subtitle,
+        searchTitleRes = Res.string.ss_start_tab_title,
+        searchSubtitleRes = Res.string.ss_start_tab_subtitle,
+        keywords = listOf("start", "launch", "open", "tab", "destination", "home screen", "startup"),
+        route = Route.AppearanceSettings(),
+    )
+
+    val TimeUse24h = SettingsRow(
+        id = "time_use_24h",
+        icon = Tabler.Outline.Clock,
+        titleRes = Res.string.settings_time_use_24h,
+        subtitleRes = Res.string.settings_time_use_24h_subtitle,
+        searchTitleRes = Res.string.ss_time_use_24h_title,
+        searchSubtitleRes = Res.string.ss_time_use_24h_subtitle,
+    )
+
+    val CardPressAnimations = SettingsRow(
+        id = "card_press_animations",
+        icon = Tabler.Outline.Wand,
+        titleRes = Res.string.settings_card_press_animations,
+        subtitleRes = Res.string.settings_card_press_animations_subtitle,
+        searchTitleRes = Res.string.ss_card_press_animations_title,
+        searchSubtitleRes = Res.string.ss_card_press_animations_subtitle,
+    )
+
+    val PullToRefresh = SettingsRow(
+        id = "pull_to_refresh_enabled",
+        icon = Tabler.Outline.Refresh,
+        titleRes = Res.string.settings_pull_to_refresh,
+        subtitleRes = Res.string.settings_pull_to_refresh_subtitle,
+        searchTitleRes = Res.string.ss_pull_to_refresh_title,
+        searchSubtitleRes = Res.string.ss_pull_to_refresh_subtitle,
+    )
+
+    // The global-chrome rows (spec-backed in AppearancePreferenceSpecs — the
+    // settings faces below mirror the same ids the catalog rows derive from;
+    // converted-row grammar: semantics live on the spec, the row carries the
+    // presentation faces only).
+    val BackdropDim = SettingsRow(
+        id = "app_backdrop_dim",
+        icon = Tabler.Outline.Contrast,
+        titleRes = Res.string.settings_backdrop_dim,
+        subtitleRes = Res.string.settings_backdrop_dim_subtitle,
+        searchTitleRes = Res.string.ss_app_backdrop_dim_title,
+        searchSubtitleRes = Res.string.ss_app_backdrop_dim_subtitle,
+    )
+
+    val HapticsIntensity = SettingsRow(
+        id = "haptics_intensity",
+        icon = Tabler.Outline.Activity,
+        titleRes = Res.string.settings_haptics_intensity,
+        subtitleRes = Res.string.settings_haptics_intensity_subtitle,
+        searchTitleRes = Res.string.ss_haptics_intensity_title,
+        searchSubtitleRes = Res.string.ss_haptics_intensity_subtitle,
+    )
+
+    val ImageQuality = SettingsRow(
+        id = "image_quality_preset",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_image_quality,
+        subtitleRes = Res.string.settings_image_quality_subtitle,
+        searchTitleRes = Res.string.ss_image_quality_title,
+        searchSubtitleRes = Res.string.ss_image_quality_subtitle,
+    )
+
+    val ListDensity = SettingsRow(
+        id = "app_list_density",
+        icon = Tabler.Outline.ListNumbers,
+        titleRes = Res.string.settings_list_density,
+        subtitleRes = Res.string.settings_list_density_subtitle,
+        searchTitleRes = Res.string.ss_app_list_density_title,
+        searchSubtitleRes = Res.string.ss_app_list_density_subtitle,
+    )
+
+    val PressEffect = SettingsRow(
+        id = "app_press_effect",
+        icon = Tabler.Outline.HandClick,
+        titleRes = Res.string.settings_press_effect,
+        subtitleRes = Res.string.settings_press_effect_subtitle,
+        searchTitleRes = Res.string.ss_app_press_effect_title,
+        searchSubtitleRes = Res.string.ss_app_press_effect_subtitle,
+    )
+
+    val FlatCards = SettingsRow(
+        id = "app_flat_cards",
+        icon = Tabler.Outline.Square,
+        titleRes = Res.string.settings_flat_cards,
+        subtitleRes = Res.string.settings_flat_cards_subtitle,
+        searchTitleRes = Res.string.ss_app_flat_cards_title,
+        searchSubtitleRes = Res.string.ss_app_flat_cards_subtitle,
+    )
+
+    val Overscroll = SettingsRow(
+        id = "app_overscroll_style",
+        icon = Tabler.Outline.Bolt,
+        titleRes = Res.string.settings_overscroll,
+        subtitleRes = Res.string.settings_overscroll_subtitle,
+        searchTitleRes = Res.string.ss_app_overscroll_title,
+        searchSubtitleRes = Res.string.ss_app_overscroll_subtitle,
+    )
+
     // ── Library & Cards group ───────────────────────────────────────────
 
     // ── RESIDUAL row (LibraryStore — no spec machinery). ────────────────
@@ -715,6 +919,322 @@ internal object AppearanceRows {
         gate = RowAdmission.Always,
     )
 
+    // ── RESIDUAL rows (LibraryStore — no spec machinery): the detail-screen
+    // QoL knobs. Same fold as the detail toggles above: the search hit
+    // restates each row's screen title/subtitle (no ss_* twins). ──────────
+
+    val CastItemSize = SettingsRow(
+        id = "detail_cast_item_size",
+        icon = Tabler.Outline.Users,
+        titleRes = Res.string.settings_cast_item_size,
+        subtitleRes = Res.string.settings_cast_item_size_subtitle,
+        searchSubtitleRes = Res.string.settings_cast_item_size_subtitle,
+        keywords = listOf("cast", "rail", "item", "size", "people", "cards", "density", "details", "crew"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val CastSeeAllLimit = SettingsRow(
+        id = "detail_cast_see_all_limit",
+        icon = Tabler.Outline.List,
+        titleRes = Res.string.settings_cast_see_all_limit,
+        subtitleRes = Res.string.settings_cast_see_all_limit_subtitle,
+        searchSubtitleRes = Res.string.settings_cast_see_all_limit_subtitle,
+        keywords = listOf("cast", "see all", "limit", "threshold", "people", "crew", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val BackdropParallax = SettingsRow(
+        id = "detail_backdrop_parallax",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_backdrop_parallax,
+        subtitleRes = Res.string.settings_backdrop_parallax_subtitle,
+        searchSubtitleRes = Res.string.settings_backdrop_parallax_subtitle,
+        keywords = listOf("backdrop", "parallax", "scroll", "hero", "background", "motion", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val OverviewCollapseLines = SettingsRow(
+        id = "detail_overview_collapse_lines",
+        icon = Tabler.Outline.TextSize,
+        titleRes = Res.string.settings_overview_collapse_lines,
+        subtitleRes = Res.string.settings_overview_collapse_lines_subtitle,
+        searchSubtitleRes = Res.string.settings_overview_collapse_lines_subtitle,
+        keywords = listOf("overview", "synopsis", "collapse", "lines", "read more", "description", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val HideWatchedEpisodes = SettingsRow(
+        id = "detail_hide_watched_episodes",
+        icon = Tabler.Outline.EyeOff,
+        titleRes = Res.string.settings_hide_watched_episodes,
+        subtitleRes = Res.string.settings_hide_watched_episodes_subtitle,
+        searchSubtitleRes = Res.string.settings_hide_watched_episodes_subtitle,
+        keywords = listOf("hide", "watched", "played", "episodes", "season", "spoiler", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ConfirmMarkPlayed = SettingsRow(
+        id = "detail_confirm_mark_played",
+        icon = Tabler.Outline.Eye,
+        titleRes = Res.string.settings_confirm_mark_played,
+        subtitleRes = Res.string.settings_confirm_mark_played_subtitle,
+        searchSubtitleRes = Res.string.settings_confirm_mark_played_subtitle,
+        keywords = listOf("confirm", "mark", "played", "watched", "dialog", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowStudioChips = SettingsRow(
+        id = "detail_show_studio_chips",
+        icon = Tabler.Outline.Building,
+        titleRes = Res.string.settings_show_studio_chips,
+        subtitleRes = Res.string.settings_show_studio_chips_subtitle,
+        searchSubtitleRes = Res.string.settings_show_studio_chips_subtitle,
+        keywords = listOf("studio", "chips", "network", "company", "details", "header"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowGenreChips = SettingsRow(
+        id = "detail_show_genre_chips",
+        icon = Tabler.Outline.Tag,
+        titleRes = Res.string.settings_show_genre_chips,
+        subtitleRes = Res.string.settings_show_genre_chips_subtitle,
+        searchSubtitleRes = Res.string.settings_show_genre_chips_subtitle,
+        keywords = listOf("genre", "chips", "categories", "details", "header"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowTagChips = SettingsRow(
+        id = "detail_show_tag_chips",
+        icon = Tabler.Outline.Tag,
+        titleRes = Res.string.settings_show_tag_chips,
+        subtitleRes = Res.string.settings_show_tag_chips_subtitle,
+        searchSubtitleRes = Res.string.settings_show_tag_chips_subtitle,
+        keywords = listOf("tag", "chips", "labels", "details", "header"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowSkipChips = SettingsRow(
+        id = "detail_show_skip_chips",
+        icon = Tabler.Outline.PlayerSkipForward,
+        titleRes = Res.string.settings_show_skip_chips,
+        subtitleRes = Res.string.settings_show_skip_chips_subtitle,
+        searchSubtitleRes = Res.string.settings_show_skip_chips_subtitle,
+        keywords = listOf("skip", "intro", "credits", "chips", "segments", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val SeasonTabsArtwork = SettingsRow(
+        id = "detail_season_tabs_artwork",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_season_tabs_artwork,
+        subtitleRes = Res.string.settings_season_tabs_artwork_subtitle,
+        searchSubtitleRes = Res.string.settings_season_tabs_artwork_subtitle,
+        keywords = listOf("season", "tab", "artwork", "poster", "thumbnail", "series", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val PeopleGridDensity = SettingsRow(
+        id = "detail_people_grid_density",
+        icon = Tabler.Outline.LayoutGrid,
+        titleRes = Res.string.settings_people_grid_density,
+        subtitleRes = Res.string.settings_people_grid_density_subtitle,
+        searchSubtitleRes = Res.string.settings_people_grid_density_subtitle,
+        keywords = listOf("cast", "crew", "grid", "density", "person", "cards", "size", "columns"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowTrailerBadges = SettingsRow(
+        id = "detail_show_trailer_badges",
+        icon = Tabler.Outline.Movie,
+        titleRes = Res.string.settings_show_trailer_badges,
+        subtitleRes = Res.string.settings_show_trailer_badges_subtitle,
+        searchSubtitleRes = Res.string.settings_show_trailer_badges_subtitle,
+        keywords = listOf("trailer", "badge", "local", "remote", "source", "video", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val PersistSectionHides = SettingsRow(
+        id = "detail_persist_section_hides",
+        icon = Tabler.Outline.EyeOff,
+        titleRes = Res.string.settings_persist_section_hides,
+        subtitleRes = Res.string.settings_persist_section_hides_subtitle,
+        searchSubtitleRes = Res.string.settings_persist_section_hides_subtitle,
+        keywords = listOf("persist", "hidden", "sections", "eye", "hide", "franchise", "remember", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val SimilarLimit = SettingsRow(
+        id = "detail_similar_limit",
+        icon = Tabler.Outline.Stack2,
+        titleRes = Res.string.settings_similar_limit,
+        subtitleRes = Res.string.settings_similar_limit_subtitle,
+        searchSubtitleRes = Res.string.settings_similar_limit_subtitle,
+        keywords = listOf("similar", "more like this", "limit", "row", "recommendations", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val UpcomingLimit = SettingsRow(
+        id = "detail_upcoming_limit",
+        icon = Tabler.Outline.CalendarEvent,
+        titleRes = Res.string.settings_upcoming_limit,
+        subtitleRes = Res.string.settings_upcoming_limit_subtitle,
+        searchSubtitleRes = Res.string.settings_upcoming_limit_subtitle,
+        keywords = listOf("upcoming", "airing next", "limit", "strip", "episodes", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    // ── RESIDUAL rows (LibraryStore — no spec machinery): the detail-screen
+    // QoL knobs, wave 2. Same fold as the wave above: the search hit restates
+    // each row's screen title/subtitle (no ss_* twins). ───────────────────
+
+    val SectionOrder = SettingsRow(
+        id = "detail_section_order",
+        icon = Tabler.Outline.LayoutList,
+        titleRes = Res.string.settings_section_order,
+        subtitleRes = Res.string.settings_section_order_subtitle,
+        searchSubtitleRes = Res.string.settings_section_order_subtitle,
+        keywords = listOf("section", "order", "reorder", "layout", "details", "arrange", "move"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val StaggerStyle = SettingsRow(
+        id = "detail_stagger_style",
+        icon = Tabler.Outline.WaveSine,
+        titleRes = Res.string.settings_stagger_style,
+        subtitleRes = Res.string.settings_stagger_style_subtitle,
+        searchSubtitleRes = Res.string.settings_stagger_style_subtitle,
+        keywords = listOf("stagger", "animation", "entrance", "speed", "cascade", "motion", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val BackdropResolution = SettingsRow(
+        id = "detail_backdrop_resolution",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_backdrop_resolution,
+        subtitleRes = Res.string.settings_backdrop_resolution_subtitle,
+        searchSubtitleRes = Res.string.settings_backdrop_resolution_subtitle,
+        keywords = listOf("backdrop", "resolution", "decode", "720", "1080", "1440", "quality", "hero", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ChapterCardSize = SettingsRow(
+        id = "detail_chapter_card_size",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_chapter_card_size,
+        subtitleRes = Res.string.settings_chapter_card_size_subtitle,
+        searchSubtitleRes = Res.string.settings_chapter_card_size_subtitle,
+        keywords = listOf("chapter", "card", "size", "thumbnail", "row", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ReviewsPreviewLines = SettingsRow(
+        id = "detail_reviews_preview_lines",
+        icon = Tabler.Outline.TextSize,
+        titleRes = Res.string.settings_reviews_preview_lines,
+        subtitleRes = Res.string.settings_reviews_preview_lines_subtitle,
+        searchSubtitleRes = Res.string.settings_reviews_preview_lines_subtitle,
+        keywords = listOf("review", "preview", "lines", "text", "critic", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val FilmographySort = SettingsRow(
+        id = "detail_filmography_sort",
+        icon = Tabler.Outline.SortDescending2,
+        titleRes = Res.string.settings_filmography_sort,
+        subtitleRes = Res.string.settings_filmography_sort_subtitle,
+        searchSubtitleRes = Res.string.settings_filmography_sort_subtitle,
+        keywords = listOf("filmography", "sort", "order", "person", "actor", "year", "alphabetical"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val FranchiseBoxLimit = SettingsRow(
+        id = "detail_franchise_box_limit",
+        icon = Tabler.Outline.Stack2,
+        titleRes = Res.string.settings_franchise_box_limit,
+        subtitleRes = Res.string.settings_franchise_box_limit_subtitle,
+        searchSubtitleRes = Res.string.settings_franchise_box_limit_subtitle,
+        keywords = listOf("franchise", "collection", "box", "rows", "limit", "more in", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val FranchiseMemberLimit = SettingsRow(
+        id = "detail_franchise_member_limit",
+        icon = Tabler.Outline.Stack2,
+        titleRes = Res.string.settings_franchise_member_limit,
+        subtitleRes = Res.string.settings_franchise_member_limit_subtitle,
+        searchSubtitleRes = Res.string.settings_franchise_member_limit_subtitle,
+        keywords = listOf("franchise", "collection", "members", "limit", "items", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val SmartPlayPriority = SettingsRow(
+        id = "detail_smart_play_priority",
+        icon = Tabler.Outline.PlayerPlay,
+        titleRes = Res.string.settings_smart_play_priority,
+        subtitleRes = Res.string.settings_smart_play_priority_subtitle,
+        searchSubtitleRes = Res.string.settings_smart_play_priority_subtitle,
+        keywords = listOf("play", "smart", "resume", "next up", "replay", "priority", "dispatch"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val StreamFallbackLanguage = SettingsRow(
+        id = "detail_stream_fallback_language",
+        icon = Tabler.Outline.WaveSine,
+        titleRes = Res.string.settings_stream_fallback_language,
+        subtitleRes = Res.string.settings_stream_fallback_language_subtitle,
+        searchSubtitleRes = Res.string.settings_stream_fallback_language_subtitle,
+        keywords = listOf("stream", "fallback", "language", "audio", "subtitle", "track", "picker"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val PromotedRailSource = SettingsRow(
+        id = "detail_promoted_rail_source",
+        icon = Tabler.Outline.PlayerPlay,
+        titleRes = Res.string.settings_promoted_rail_source,
+        subtitleRes = Res.string.settings_promoted_rail_source_subtitle,
+        searchSubtitleRes = Res.string.settings_promoted_rail_source_subtitle,
+        keywords = listOf("promoted", "rail", "preset", "landscape", "tv", "menu", "actions", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val EpisodeOverviewPreview = SettingsRow(
+        id = "detail_episode_overview_preview",
+        icon = Tabler.Outline.TextSize,
+        titleRes = Res.string.settings_episode_overview_preview,
+        subtitleRes = Res.string.settings_episode_overview_preview_subtitle,
+        searchSubtitleRes = Res.string.settings_episode_overview_preview_subtitle,
+        keywords = listOf("episode", "overview", "preview", "snippet", "synopsis", "season", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
     /**
      * Spec-backed (appearance store), yet gated [RowAdmission.Always]: the
      * "Library & Cards" group predates and outlives the advanced toggle (the
@@ -755,14 +1275,13 @@ internal object AppearanceRows {
 
     // ── Performance group (advanced-gated) ──────────────────────────────
 
-    val PerformanceMode = SettingsRow(
-        id = "performance_mode",
-        icon = Tabler.Outline.Gauge,
-        titleRes = Res.string.settings_performance_mode,
-        subtitleRes = Res.string.settings_performance_mode_subtitle,
-        searchTitleRes = Res.string.ss_performance_mode_title,
-        searchSubtitleRes = Res.string.ss_performance_mode_subtitle,
-    )
+    /**
+     * The master performance row ([PerformanceRows.PerformanceLevel], search
+     * id `performance_mode`) lives in the Performance hub's level group now —
+     * single group membership; the appearance screen's Performance group
+     * renders a quick level picker + a Customize deep-link beside the
+     * Reduce Motion row below, but the CATALOG row is the hub's.
+     */
 
     val ReduceMotion = SettingsRow(
         id = "reduce_motion",
@@ -895,10 +1414,28 @@ internal val AppearanceThemeRows: List<SettingsRow> = listOf(
 /**
  * The navigation-customization group's rows — HAND-MAINTAINED residuals: the
  * navigation knobs live in the spec-less NavigationStore until it migrates.
+ * The four global interface/interaction rows (start tab, 24h clock, card
+ * press animation, pull-to-refresh) ride the same residual grammar — their
+ * specs exist in the appearance/navigation domains, but this group's residual
+ * rows carry hand search faces. The pass-2 global-chrome seven (backdrop
+ * dim, haptics intensity, image quality, list density, press effect, flat
+ * cards, overscroll) are spec-backed converted rows — semantics on
+ * [AppearancePreferenceSpecs], presentation on the rows.
  */
 internal val AppearanceNavigationRows: List<SettingsRow> = listOf(
     AppearanceRows.NavBarCustomization,
     AppearanceRows.NavHideOnScroll,
+    AppearanceRows.StartTab,
+    AppearanceRows.TimeUse24h,
+    AppearanceRows.CardPressAnimations,
+    AppearanceRows.PullToRefresh,
+    AppearanceRows.BackdropDim,
+    AppearanceRows.HapticsIntensity,
+    AppearanceRows.ImageQuality,
+    AppearanceRows.ListDensity,
+    AppearanceRows.PressEffect,
+    AppearanceRows.FlatCards,
+    AppearanceRows.Overscroll,
 )
 
 /**
@@ -931,12 +1468,46 @@ internal val AppearanceLibraryRows: List<SettingsRow> = listOf(
     AppearanceRows.ShowMoreInCollection,
     AppearanceRows.ShowFilmographyRoles,
     AppearanceRows.ShowFrequentCostars,
+    AppearanceRows.CastItemSize,
+    AppearanceRows.CastSeeAllLimit,
+    AppearanceRows.BackdropParallax,
+    AppearanceRows.OverviewCollapseLines,
+    AppearanceRows.HideWatchedEpisodes,
+    AppearanceRows.ConfirmMarkPlayed,
+    AppearanceRows.ShowStudioChips,
+    AppearanceRows.ShowGenreChips,
+    AppearanceRows.ShowTagChips,
+    AppearanceRows.ShowSkipChips,
+    AppearanceRows.SeasonTabsArtwork,
+    AppearanceRows.PeopleGridDensity,
+    AppearanceRows.ShowTrailerBadges,
+    AppearanceRows.PersistSectionHides,
+    AppearanceRows.SimilarLimit,
+    AppearanceRows.UpcomingLimit,
+    // The detail QoL knobs, wave 2.
+    AppearanceRows.SectionOrder,
+    AppearanceRows.StaggerStyle,
+    AppearanceRows.BackdropResolution,
+    AppearanceRows.ChapterCardSize,
+    AppearanceRows.ReviewsPreviewLines,
+    AppearanceRows.FilmographySort,
+    AppearanceRows.FranchiseBoxLimit,
+    AppearanceRows.FranchiseMemberLimit,
+    AppearanceRows.SmartPlayPriority,
+    AppearanceRows.StreamFallbackLanguage,
+    AppearanceRows.PromotedRailSource,
+    AppearanceRows.EpisodeOverviewPreview,
     AppearanceRows.HideSearchHistory,
 )
 
-/** The advanced-gated "Performance" group's rows (both spec-backed). */
+/**
+ * The advanced-gated "Performance" group's rows — the Reduce Motion toggle
+ * (spec-backed). The master performance row lives in the Performance hub's
+ * level group ([PerformanceLevelRows]); the appearance screen's group body
+ * adds its quick level picker + Customize deep-link as screen-local rows
+ * beside this one.
+ */
 internal val AppearancePerformanceRows: List<SettingsRow> = listOf(
-    AppearanceRows.PerformanceMode,
     AppearanceRows.ReduceMotion,
 )
 
@@ -964,7 +1535,7 @@ internal val AppearanceThemeGroup =
     AppearanceThemeRows.asRowGroup("appearance.theme", specEntriesFor(AppearanceThemeRows, appearanceSpecEntries), searchRoutes, appearanceCategory)
 
 internal val AppearanceNavigationGroup =
-    AppearanceNavigationRows.asRowGroup("appearance.navigation", emptyList(), searchRoutes, appearanceCategory)
+    AppearanceNavigationRows.asRowGroup("appearance.navigation", specEntriesFor(AppearanceNavigationRows, appearanceSpecEntries), searchRoutes, appearanceCategory)
 
 internal val AppearanceLibraryGroup =
     AppearanceLibraryRows.asRowGroup("appearance.library", specEntriesFor(AppearanceLibraryRows, appearanceSpecEntries), searchRoutes, appearanceCategory)

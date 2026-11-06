@@ -57,6 +57,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalPerformanceConfig
 import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
@@ -88,23 +89,28 @@ fun rememberDominantColor(
     itemId: String? = null
 ): Color {
     val context = LocalPlatformContext.current
-    val performanceMode = LocalPerformanceMode.current
+    // The lean-render gate reads the resolved posture's animation suppression
+    // (the closest resolved field to the legacy performance-mode boolean this
+    // gate used): swatch extraction is exactly the kind of background work the
+    // aggressive posture opts out of. At all-AUTO this is byte-identical to
+    // the old performanceMode read.
+    val suppressAnimations = LocalPerformanceConfig.current.suppressAnimations
     val isScrollIdle = LocalScrollIdle.current
     val cacheKey = itemId ?: imageUrl
     var color by remember(cacheKey) { mutableStateOf(cacheKey?.let { dominantColorCache.get(it) } ?: fallback) }
 
-    // Skip swatch extraction entirely in performance mode: every unseen poster
-    // otherwise launches a Coil request + classify pass on Dispatchers.Default,
-    // competing with the visible image decodes for CPU during scroll. Cached
-    // values (from a prior non-perf-mode session) are still returned.
+    // Skip swatch extraction entirely under the aggressive posture: every
+    // unseen poster otherwise launches a Coil request + classify pass on
+    // Dispatchers.Default, competing with the visible image decodes for CPU
+    // during scroll. Cached values (from a prior session) are still returned.
     //
     // Also defer until scroll settles (isScrollIdle): during fast scroll dozens
     // of newly-composed cards would each fire a 64px fetch + classify, starving
     // the visible-card decodes. Reading LocalScrollIdle as a LaunchedEffect key
     // re-triggers the effect when scroll stops, so colors populate ~150ms after
     // the user stops flinging.
-    LaunchedEffect(imageUrl, performanceMode, isScrollIdle()) {
-        if (performanceMode || imageUrl.isNullOrBlank()) return@LaunchedEffect
+    LaunchedEffect(imageUrl, suppressAnimations, isScrollIdle()) {
+        if (suppressAnimations || imageUrl.isNullOrBlank()) return@LaunchedEffect
         if (!isScrollIdle()) return@LaunchedEffect
         if (cacheKey != null) {
             dominantColorCache.get(cacheKey)?.let {
@@ -305,12 +311,17 @@ fun PosterCard(
     // Anti-spoiler: the one decision fold the overlays and the footer
     // both consume (see [spoilerSafeCardState]).
     val spoilerSafe = remember(cardPrefs) { spoilerSafeCardState(cardPrefs) }
-    // Quality chips: gated on the card prefs AND suppressed in
-    // performance mode — the same gate the dominant-color extraction uses
-    // (no per-card extra work while the user asked for a lean render). Null
-    // badges (an unprojected fetch) render nothing inside the row itself.
-    val performanceMode = LocalPerformanceMode.current
-    val qualityBadges = if (!performanceMode && cardPrefs.showQualityBadges) item.qualityBadges else null
+    // Quality chips: gated on the card prefs AND the resolved posture's
+    // qualityBadges row (shown when true; PERFORMANCE suppresses via AUTO).
+    // Null badges (an unprojected fetch) render nothing inside the row itself.
+    val qualityBadges = if (
+        LocalPerformanceConfig.current.qualityBadges &&
+        cardPrefs.showQualityBadges
+    ) {
+        item.qualityBadges
+    } else {
+        null
+    }
 
     // For episode cards in Latest Media rows, show the series name as the title
     // (the episode title alone doesn't identify the show); the season/episode

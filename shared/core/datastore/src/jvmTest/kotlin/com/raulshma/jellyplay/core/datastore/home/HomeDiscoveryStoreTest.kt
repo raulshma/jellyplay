@@ -13,9 +13,14 @@ import com.raulshma.jellyplay.core.datastore.createUserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.HomeCardScale
+import com.raulshma.jellyplay.core.model.HomeCwProgressStyle
+import com.raulshma.jellyplay.core.model.HomeDiscoverPattern
 import com.raulshma.jellyplay.core.model.HomeLayoutConfig
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeRefreshCadence
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.NewsletterBannerWindow
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -119,6 +124,25 @@ class HomeDiscoveryStoreTest {
         assertEquals(0, slice.homeAnnouncedVersion)
         assertTrue(slice.myMediaHiddenLibraryIds.isEmpty())
         assertTrue(slice.themeMusicMutedSeriesIds.isEmpty())
+        // The QoL wave-3 defaults (all opt-in — current behavior).
+        assertEquals(listOf("stats_card", "genre_rail", "newsletter_banner"), slice.homePreSectionOrder)
+        assertEquals(
+            setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED, HomeSectionType.UPCOMING),
+            slice.homeNewBadgeSections,
+        )
+        assertEquals(HomeRefreshCadence.DEFAULT, slice.homeRefreshCadence)
+        assertEquals(8000, slice.homeHeroIdleRotationMs)
+        assertEquals(true, slice.heroScrollDefer)
+        assertEquals(HomeDiscoverPattern.DEFAULT, slice.homeDiscoverPattern)
+        assertEquals(NewsletterBannerWindow.DEFAULT, slice.homeNewsletterWindow)
+        assertEquals(60, slice.homePresencePollSeconds)
+        assertEquals(2500, slice.homeTrickplayPeekMs)
+        assertEquals(400, slice.homeSearchResultsHeightDp)
+        assertEquals(0, slice.homeMyMediaColumns)
+        assertEquals(setOf("played", "unplayed", "minutes"), slice.homeStatsMetrics)
+        assertEquals(30, slice.homeNewBadgeDays)
+        assertEquals(false, slice.homeRowUnwatchedCounters)
+        assertEquals(false, slice.homeHeroRandomStart)
     }
 
     @Test
@@ -191,6 +215,152 @@ class HomeDiscoveryStoreTest {
         assertEquals(true, off.showNewBadges)
         assertEquals(true, off.homeTrickplayPreview)
         assertEquals(false, off.antiSpoilerHome)
+    }
+
+    @Test
+    fun `home display QoL toggles round-trip`() = runTest {
+        activate("userA")
+        // The display-QoL wave: opt-ins default off, defaults-on flip OFF.
+        store.setHomeGreetingEnabled(true)
+        store.setHomeHideSeeAll(true)
+        store.setHomeShowModeSwitch(false) // default-on knob: flip OFF
+        store.setHomeClockShowDate(true)
+        store.setHomeNewsletterBannerEnabled(false) // default-on knob: flip OFF
+        store.setHomeAlwaysShowUserSwitcher(true)
+        store.setHomeAskContinueRemember(true)
+        store.setHomeRowsAnimations(false) // default-on knob: flip OFF
+        store.setHomeOpaqueDock(true)
+        val on = slice()
+        assertEquals(true, on.homeGreetingEnabled)
+        assertEquals(true, on.homeHideSeeAll)
+        assertEquals(false, on.homeShowModeSwitch)
+        assertEquals(true, on.homeClockShowDate)
+        assertEquals(false, on.homeNewsletterBannerEnabled)
+        assertEquals(true, on.homeAlwaysShowUserSwitcher)
+        assertEquals(true, on.homeAskContinueRemember)
+        assertEquals(false, on.homeRowsAnimations)
+        assertEquals(true, on.homeOpaqueDock)
+
+        store.setHomeGreetingEnabled(false)
+        store.setHomeHideSeeAll(false)
+        store.setHomeShowModeSwitch(true)
+        store.setHomeClockShowDate(false)
+        store.setHomeNewsletterBannerEnabled(true)
+        store.setHomeAlwaysShowUserSwitcher(false)
+        store.setHomeAskContinueRemember(false)
+        store.setHomeRowsAnimations(true)
+        store.setHomeOpaqueDock(false)
+        val off = slice()
+        assertEquals(false, off.homeGreetingEnabled)
+        assertEquals(false, off.homeHideSeeAll)
+        assertEquals(true, off.homeShowModeSwitch)
+        assertEquals(false, off.homeClockShowDate)
+        assertEquals(true, off.homeNewsletterBannerEnabled)
+        assertEquals(false, off.homeAlwaysShowUserSwitcher)
+        assertEquals(false, off.homeAskContinueRemember)
+        assertEquals(true, off.homeRowsAnimations)
+        assertEquals(false, off.homeOpaqueDock)
+    }
+
+    @Test
+    fun `home QoL wave-3 rows round-trip and clamp`() = runTest {
+        activate("userA")
+        // The CSV normalizers: lowercase/dedupe/drop-unknown + append-missing
+        // (pre-section order), drop-unknown (badge sections), drop-unknown +
+        // empty→default (stats metrics).
+        store.setHomePreSectionOrder(listOf("Newsletter_Banner", "bogus", "stats_card", "newsletter_banner", "genre_rail"))
+        store.setHomeNewBadgeSections(setOf(HomeSectionType.RECENTLY_ADDED, HomeSectionType.LATEST_MEDIA))
+        store.setHomeRefreshCadence(HomeRefreshCadence.MANUAL)
+        store.setHomeHeroIdleRotationMs(100) // below the 3000..30000 clamp
+        store.setHeroScrollDefer(false)
+        store.setHomeDiscoverPattern(HomeDiscoverPattern.UNIFORM)
+        store.setHomeNewsletterWindow(NewsletterBannerWindow.WEEKENDS)
+        store.setHomePresencePollSeconds(1) // below the 15..300 clamp
+        store.setHomeTrickplayPeekMs(9000) // above the 1000..5000 clamp
+        store.setHomeSearchResultsHeightDp(700) // above the 280..640 clamp
+        store.setHomeMyMediaColumns(9) // above the 0..6 clamp
+        store.setHomeStatsMetrics(setOf("played", "bogus"))
+        store.setHomeNewBadgeDays(0) // below the 1..30 clamp
+        store.setHomeRowUnwatchedCounters(true)
+        store.setHomeHeroRandomStart(true)
+        val on = slice()
+        assertEquals(listOf("newsletter_banner", "stats_card", "genre_rail"), on.homePreSectionOrder)
+        assertEquals(setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED), on.homeNewBadgeSections)
+        assertEquals(HomeRefreshCadence.MANUAL, on.homeRefreshCadence)
+        assertEquals(3000, on.homeHeroIdleRotationMs)
+        assertEquals(false, on.heroScrollDefer)
+        assertEquals(HomeDiscoverPattern.UNIFORM, on.homeDiscoverPattern)
+        assertEquals(NewsletterBannerWindow.WEEKENDS, on.homeNewsletterWindow)
+        assertEquals(15, on.homePresencePollSeconds)
+        assertEquals(5000, on.homeTrickplayPeekMs)
+        assertEquals(640, on.homeSearchResultsHeightDp)
+        assertEquals(6, on.homeMyMediaColumns)
+        assertEquals(setOf("played"), on.homeStatsMetrics)
+        assertEquals(1, on.homeNewBadgeDays)
+        assertEquals(true, on.homeRowUnwatchedCounters)
+        assertEquals(true, on.homeHeroRandomStart)
+
+        // Back to the defaults (the badge trio round-trips through the
+        // canonical default; the CSV rows re-join normalized tokens).
+        store.setHomePreSectionOrder(emptyList())
+        store.setHomeNewBadgeSections(setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED, HomeSectionType.UPCOMING))
+        store.setHomeRefreshCadence(HomeRefreshCadence.DEFAULT)
+        store.setHomeHeroIdleRotationMs(8000)
+        store.setHeroScrollDefer(true)
+        store.setHomeDiscoverPattern(HomeDiscoverPattern.DEFAULT)
+        store.setHomeNewsletterWindow(NewsletterBannerWindow.DEFAULT)
+        store.setHomePresencePollSeconds(60)
+        store.setHomeTrickplayPeekMs(2500)
+        store.setHomeSearchResultsHeightDp(400)
+        store.setHomeMyMediaColumns(0)
+        store.setHomeStatsMetrics(setOf("played", "unplayed", "minutes"))
+        store.setHomeNewBadgeDays(30)
+        store.setHomeRowUnwatchedCounters(false)
+        store.setHomeHeroRandomStart(false)
+        val off = slice()
+        assertEquals(listOf("stats_card", "genre_rail", "newsletter_banner"), off.homePreSectionOrder)
+        assertEquals(setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED, HomeSectionType.UPCOMING), off.homeNewBadgeSections)
+        assertEquals(HomeRefreshCadence.DEFAULT, off.homeRefreshCadence)
+        assertEquals(8000, off.homeHeroIdleRotationMs)
+        assertEquals(true, off.heroScrollDefer)
+        assertEquals(HomeDiscoverPattern.DEFAULT, off.homeDiscoverPattern)
+        assertEquals(NewsletterBannerWindow.DEFAULT, off.homeNewsletterWindow)
+        assertEquals(60, off.homePresencePollSeconds)
+        assertEquals(2500, off.homeTrickplayPeekMs)
+        assertEquals(400, off.homeSearchResultsHeightDp)
+        assertEquals(0, off.homeMyMediaColumns)
+        assertEquals(setOf("played", "unplayed", "minutes"), off.homeStatsMetrics)
+        assertEquals(30, off.homeNewBadgeDays)
+        assertEquals(false, off.homeRowUnwatchedCounters)
+        assertEquals(false, off.homeHeroRandomStart)
+    }
+
+    @Test
+    fun `home display QoL enums and ints round-trip and clamp`() = runTest {
+        activate("userA")
+        store.setHomeCardScale(HomeCardScale.LARGE)
+        store.setHomeCwProgressStyle(HomeCwProgressStyle.PERCENT)
+        store.setHomeCardCornerRadius(30) // above the 0..28 clamp
+        store.setHomePresenceChipsLimit(1) // below the 2..8 clamp
+        store.setHomeGenreRailLimit(99) // above the 6..36 clamp
+        val clamped = slice()
+        assertEquals(HomeCardScale.LARGE, clamped.homeCardScale)
+        assertEquals(HomeCwProgressStyle.PERCENT, clamped.homeCwProgressStyle)
+        assertEquals(28, clamped.homeCardCornerRadius)
+        assertEquals(2, clamped.homePresenceChipsLimit)
+        assertEquals(36, clamped.homeGenreRailLimit)
+
+        store.setHomeCardScale(HomeCardScale.SMALL)
+        store.setHomeCwProgressStyle(HomeCwProgressStyle.THICK)
+        store.setHomeCardCornerRadius(8)
+        store.setHomePresenceChipsLimit(6)
+        store.setHomeGenreRailLimit(12)
+        val back = slice()
+        assertEquals(HomeCardScale.SMALL, back.homeCardScale)
+        assertEquals(HomeCwProgressStyle.THICK, back.homeCwProgressStyle)
+        assertEquals(8, back.homeCardCornerRadius)
+        assertEquals(6, back.homePresenceChipsLimit)
+        assertEquals(12, back.homeGenreRailLimit)
     }
 
     @Test

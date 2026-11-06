@@ -250,6 +250,7 @@ class HomeRefresherTest {
                 discoverEnabled = { false },
                 directArrEnabled = { directArrEnabled },
                 androidTvWatchNextEnabled = { androidTvWatchNextEnabled },
+                refreshCadence = { com.raulshma.jellyplay.core.model.HomeRefreshCadence.DEFAULT },
             ),
             bookTocCacheRepository = bookTocCacheRepository,
         ).also { refresher = it }

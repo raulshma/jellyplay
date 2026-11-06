@@ -35,6 +35,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PromotedRailSource
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isVideoType
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -104,6 +105,21 @@ internal val PromotedMediaOptionIds: List<String> = listOf(
     "trailer",
     "watch_party",
 )
+
+/**
+ * The detail_promoted_rail_source preset → the option-id set the rail
+ * promotes. DEFAULT is the shipped [PromotedMediaOptionIds]; COMPACT keeps
+ * the offline/watch-state anchors (download + mark watched) for the smallest
+ * rail; VIEWING drops the download entry for stream-only users (watched
+ * state, trailer, watch party). Per-item customization stays out of scope —
+ * these are whole-preset choices, and every preset still renders only the
+ * entries the menu actually carries for the current item. Pure.
+ */
+internal fun promotedIdsFor(source: PromotedRailSource): List<String> = when (source) {
+    PromotedRailSource.DEFAULT -> PromotedMediaOptionIds
+    PromotedRailSource.COMPACT -> listOf("download", "mark_watched")
+    PromotedRailSource.VIEWING -> listOf("mark_watched", "trailer", "watch_party")
+}
 
 /**
  * This list minus every option whose [MediaOption.id] is in [promotedIds] —

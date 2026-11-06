@@ -100,7 +100,12 @@ internal fun MainNavDisplay(
     // Read @Composable values ONCE in the composable body — the transition
     // spec lambdas below are NOT composable scopes and cannot call these.
     val motionScheme = MaterialTheme.motionScheme
-    val reducedMotion = isReducedMotion()
+    // The instant-transitions fold the policy consumes: reduced motion
+    // (resolved posture's animation suppression OR the accessibility flag —
+    // `isReducedMotion()` reads the provided fold) OR the resolved
+    // navTransitionsInstant override. PERFORMANCE arms both legs via AUTO.
+    val reducedMotion = isReducedMotion() ||
+        com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig.current.navTransitionsInstant
 
     // Remember the entry provider graph so the ~25 section builders aren't
     // re-invoked (allocating fresh lambdas + entry objects) on every

@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.state.AutoplayState
@@ -159,6 +160,35 @@ internal class PlayerUiCommands(
             mode = mode,
             quality = quality,
             persist = { networkOfflineStore.setAdaptiveBitrateEnabled(enabled) },
+        )
+    }
+
+    /**
+     * The performance-profile pick (issue #186 §5.11 step 3 — the
+     * Playback Options sheet's Performance section): same choreography as
+     * [setStreamingQuality] — guard same-value (a re-pick must not rebuffer),
+     * mirror-write [PlayerUiPrefsState.videoPerformanceProfile] immediately so
+     * the open sheet's chips move, then persist through the
+     * [applyPlaybackPrefChange] mutex with the mode/quality RE-RESOLVE at the
+     * current position (the v1 full-reload semantics: the reload's request
+     * build re-resolves the profile, so both the server caps and the engine
+     * tuning see the new profile). Selecting AUTO does NOT force a re-detect —
+     * the resolver's sticky cache answers; the settings screen owns the
+     * explicit Re-detect action (§5.11's AUTO note).
+     */
+    fun setPerformanceProfile(profile: VideoPerformanceProfile) {
+        val prefs = uiPrefs()
+        if (prefs.videoPerformanceProfile == profile) return
+        // The siblings the reload must still resolve against, from the SAME
+        // pre-write snapshot the guard read (this setter does not change them)
+        // — never read back after the mirror write.
+        val mode = prefs.playbackMode
+        val quality = prefs.streamingQuality
+        updateUiPrefs { it.copy(videoPerformanceProfile = profile) }
+        applyPlaybackPrefChange(
+            mode = mode,
+            quality = quality,
+            persist = { playbackStore.setVideoPerformanceProfile(profile) },
         )
     }
 

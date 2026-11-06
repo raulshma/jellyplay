@@ -118,12 +118,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play_trailer_before_movie
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_codecs
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_raw_mpv_options
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_performance
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_performance_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_match
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_render_quality
@@ -288,6 +291,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_m
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_metadata_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_mode_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_profile_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_profile_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_play_trailer_before_movie_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_play_trailer_before_movie_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_engine_subtitle
@@ -439,6 +444,110 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hdr_format
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hdr_format_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offer_delete_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offer_delete_episodes_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_overlay_animations
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_overlay_animations_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_overlay_animations_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_resume_chip_ms
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_resume_chip_ms_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_resume_chip_ms_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_prev_next_buttons
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_prev_next_buttons_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_show_prev_next_buttons_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_swipe_sensitivity
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_swipe_sensitivity_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_swipe_sensitivity_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_gesture_overlay_linger_ms
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_gesture_overlay_linger_ms_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_gesture_overlay_linger_ms_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_center_double_tap_action
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_center_double_tap_action_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_center_double_tap_action_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_double_tap_zone_bias
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_double_tap_zone_bias_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_double_tap_zone_bias_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_hold_speed_pill_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_hold_speed_pill_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_hold_speed_pill_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_seek_bar_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_seek_bar_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_seek_bar_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_buffered_range
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_buffered_range_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_show_buffered_range_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_chapter_markers
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_chapter_markers_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_show_chapter_markers_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_hide_seek_timestamps
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_hide_seek_timestamps_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_hide_seek_timestamps_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_buffer_percent
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_buffer_percent_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_show_buffer_percent_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_seek_preview_time
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_seek_preview_time_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_seek_preview_time_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_engine_badge
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_show_engine_badge_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_show_engine_badge_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_episode_browser_hide_watched
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_episode_browser_hide_watched_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_tv_timeout_scale
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_tv_timeout_scale_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_tv_timeout_scale_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_tv_timeout_scale_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_keyboard_seek_preset_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_hold_seek_cadence_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_speed_pill_clearance_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_pause_fade_style_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_control_layout_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_max_zoom_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_poll_cadence_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_sleep_confirm_minutes_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_ambient_under_fill_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_buffering_veil_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_speed_preset_set_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_autoplay_wifi_only_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_confirm_exit_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_keyboard_seek_preset
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_keyboard_seek_preset_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_keyboard_seek_preset_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_hold_seek_cadence
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_hold_seek_cadence_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_hold_seek_cadence_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_speed_pill_clearance
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_speed_pill_clearance_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_speed_pill_clearance_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_pause_fade_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_pause_fade_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_pause_fade_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_control_layout
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_control_layout_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_control_layout_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_max_zoom
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_max_zoom_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_max_zoom_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_poll_cadence
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_poll_cadence_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_poll_cadence_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_sleep_confirm_minutes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_sleep_confirm_minutes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_sleep_confirm_minutes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_ambient_under_fill
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_ambient_under_fill_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_ambient_under_fill_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_buffering_veil
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_buffering_veil_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_buffering_veil_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_speed_preset_set
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_speed_preset_set_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_speed_preset_set_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_autoplay_wifi_only
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_autoplay_wifi_only_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_autoplay_wifi_only_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_confirm_exit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_confirm_exit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_confirm_exit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_episode_browser_hide_watched_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offer_delete_movies_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offer_delete_movies_title
 
@@ -1124,6 +1233,40 @@ internal object PlaybackRows {
         titleRes = Res.string.settings_streaming_quality,
         searchTitleRes = Res.string.ss_streaming_quality_title,
         searchSubtitleRes = Res.string.ss_streaming_quality_subtitle,
+    )
+
+    // The performance-profile ceiling (issue #186 §5.10): a cap layered over
+    // the quality rows above, never a rewrite of them — AUTO resolves to the
+    // detected device tier, LOW/MEDIUM/HIGH pin it. The knob's semantics
+    // (keywords, advanced flag, route) live on the spec row declared beside
+    // PlaybackStore; the subtitle is a dynamic per-profile read (the group
+    // emission composes it from the preference + detection state).
+    val VideoPerformanceProfile = SettingsRow(
+        id = "video_performance_profile",
+        icon = Tabler.Outline.Cpu,
+        titleRes = Res.string.settings_performance_profile,
+        searchTitleRes = Res.string.ss_performance_profile_title,
+        searchSubtitleRes = Res.string.ss_performance_profile_subtitle,
+    )
+
+    // ── RESIDUAL action row (issue #186 §5.10): the explicit Re-detect
+    // escape hatch — the sticky AUTO cache's manual refresh. Admitted only
+    // while the profile row above is AUTO (an explicit profile pins the
+    // tier, so re-detecting changes nothing) — the WhenOn parent is the
+    // profile row's id, fed by playbackRowAdmissionFlags from the AUTO
+    // state. Searchable like every residual (the fused projection requires
+    // hand search faces); §5.10's "search-less unless product asks" lands
+    // as the minimal keyword face here.
+    val RedetectPerformance = SettingsRow(
+        id = "redetect_performance",
+        icon = Tabler.Outline.Refresh,
+        titleRes = Res.string.settings_redetect_performance,
+        subtitleRes = Res.string.settings_redetect_performance_subtitle,
+        searchSubtitleRes = Res.string.settings_redetect_performance_subtitle,
+        keywords = listOf("detect", "redetect", "performance", "device", "tier", "auto", "benchmark"),
+        route = Route.PlaybackSettings(),
+        isAdvanced = true,
+        gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackRows.VideoPerformanceProfile.id)),
     )
 
     // The streaming-quality/transcode cluster: the HDR format preference and
@@ -1906,6 +2049,268 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_next_up_preroll_subtitle,
     )
 
+    // -- The player-chrome customization cluster: the overlay/transport faces,
+    //    the gesture-curve knobs and the seek-bar presentation pair. All
+    //    spec-backed (the one-key family: no ss_*_title twin) and advanced. --
+
+    val OverlayAnimations = SettingsRow(
+        id = "video_overlay_animations",
+        icon = Tabler.Outline.Wand,
+        titleRes = Res.string.settings_video_overlay_animations,
+        subtitleRes = Res.string.settings_video_overlay_animations_subtitle,
+        searchSubtitleRes = Res.string.ss_video_overlay_animations_subtitle,
+    )
+
+    val ResumeChipMs = SettingsRow(
+        id = "video_resume_chip_ms",
+        icon = Tabler.Outline.History,
+        titleRes = Res.string.settings_video_resume_chip_ms,
+        subtitleRes = Res.string.settings_video_resume_chip_ms_subtitle,
+        searchSubtitleRes = Res.string.ss_video_resume_chip_ms_subtitle,
+    )
+
+    val ShowPrevNextButtons = SettingsRow(
+        id = "video_show_prev_next_buttons",
+        icon = Tabler.Outline.PlayerSkipForward,
+        titleRes = Res.string.settings_video_show_prev_next_buttons,
+        subtitleRes = Res.string.settings_video_show_prev_next_buttons_subtitle,
+        searchSubtitleRes = Res.string.ss_video_show_prev_next_buttons_subtitle,
+    )
+
+    val SwipeSensitivity = SettingsRow(
+        id = "video_swipe_sensitivity",
+        icon = Tabler.Outline.HandMove,
+        titleRes = Res.string.settings_video_swipe_sensitivity,
+        subtitleRes = Res.string.settings_video_swipe_sensitivity_subtitle,
+        searchSubtitleRes = Res.string.ss_video_swipe_sensitivity_subtitle,
+    )
+
+    val GestureOverlayLingerMs = SettingsRow(
+        id = "video_gesture_overlay_linger_ms",
+        icon = Tabler.Outline.Clock,
+        titleRes = Res.string.settings_video_gesture_overlay_linger_ms,
+        subtitleRes = Res.string.settings_video_gesture_overlay_linger_ms_subtitle,
+        searchSubtitleRes = Res.string.ss_video_gesture_overlay_linger_ms_subtitle,
+    )
+
+    val CenterDoubleTapAction = SettingsRow(
+        id = "video_center_double_tap_action",
+        icon = Tabler.Outline.HandClick,
+        titleRes = Res.string.settings_video_center_double_tap_action,
+        subtitleRes = Res.string.settings_video_center_double_tap_action_subtitle,
+        searchSubtitleRes = Res.string.ss_video_center_double_tap_action_subtitle,
+    )
+
+    val DoubleTapZoneBias = SettingsRow(
+        id = "video_double_tap_zone_bias",
+        icon = Tabler.Outline.ArrowsHorizontal,
+        titleRes = Res.string.settings_video_double_tap_zone_bias,
+        subtitleRes = Res.string.settings_video_double_tap_zone_bias_subtitle,
+        searchSubtitleRes = Res.string.ss_video_double_tap_zone_bias_subtitle,
+    )
+
+    val HoldSpeedPillStyle = SettingsRow(
+        id = "video_hold_speed_pill_style",
+        icon = Tabler.Outline.Gauge,
+        titleRes = Res.string.settings_video_hold_speed_pill_style,
+        subtitleRes = Res.string.settings_video_hold_speed_pill_style_subtitle,
+        searchSubtitleRes = Res.string.ss_video_hold_speed_pill_style_subtitle,
+    )
+
+    val SeekBarStyle = SettingsRow(
+        id = "video_seek_bar_style",
+        icon = Tabler.Outline.GripHorizontal,
+        titleRes = Res.string.settings_video_seek_bar_style,
+        subtitleRes = Res.string.settings_video_seek_bar_style_subtitle,
+        searchSubtitleRes = Res.string.ss_video_seek_bar_style_subtitle,
+    )
+
+    val ShowBufferedRange = SettingsRow(
+        id = "video_show_buffered_range",
+        icon = Tabler.Outline.CloudDownload,
+        titleRes = Res.string.settings_video_show_buffered_range,
+        subtitleRes = Res.string.settings_video_show_buffered_range_subtitle,
+        searchSubtitleRes = Res.string.ss_video_show_buffered_range_subtitle,
+    )
+
+    val ShowChapterMarkers = SettingsRow(
+        id = "video_show_chapter_markers",
+        icon = Tabler.Outline.Bookmark,
+        titleRes = Res.string.settings_video_show_chapter_markers,
+        subtitleRes = Res.string.settings_video_show_chapter_markers_subtitle,
+        searchSubtitleRes = Res.string.ss_video_show_chapter_markers_subtitle,
+    )
+
+    val HideSeekTimestamps = SettingsRow(
+        id = "video_hide_seek_timestamps",
+        icon = Tabler.Outline.EyeOff,
+        titleRes = Res.string.settings_video_hide_seek_timestamps,
+        subtitleRes = Res.string.settings_video_hide_seek_timestamps_subtitle,
+        searchSubtitleRes = Res.string.ss_video_hide_seek_timestamps_subtitle,
+    )
+
+    val ShowBufferPercent = SettingsRow(
+        id = "video_show_buffer_percent",
+        icon = Tabler.Outline.Percentage,
+        titleRes = Res.string.settings_video_show_buffer_percent,
+        subtitleRes = Res.string.settings_video_show_buffer_percent_subtitle,
+        searchSubtitleRes = Res.string.ss_video_show_buffer_percent_subtitle,
+    )
+
+    val SeekPreviewTime = SettingsRow(
+        id = "video_seek_preview_time",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_video_seek_preview_time,
+        subtitleRes = Res.string.settings_video_seek_preview_time_subtitle,
+        searchSubtitleRes = Res.string.ss_video_seek_preview_time_subtitle,
+    )
+
+    val ShowEngineBadge = SettingsRow(
+        id = "video_show_engine_badge",
+        icon = Tabler.Outline.BadgeHd,
+        titleRes = Res.string.settings_video_show_engine_badge,
+        subtitleRes = Res.string.settings_video_show_engine_badge_subtitle,
+        searchSubtitleRes = Res.string.ss_video_show_engine_badge_subtitle,
+    )
+
+    val EpisodeBrowserHideWatched = SettingsRow(
+        id = "video_episode_browser_hide_watched",
+        icon = Tabler.Outline.EyeOff,
+        titleRes = Res.string.settings_video_episode_browser_hide_watched,
+        subtitleRes = Res.string.settings_video_episode_browser_hide_watched_subtitle,
+        searchSubtitleRes = Res.string.ss_video_episode_browser_hide_watched_subtitle,
+    )
+
+    // -- The second QoL wave: transport/HUD cadence + preset families. All
+    //    spec-backed (one-key family: the ss_*_title twin lives in
+    //    strings_search) and advanced. --
+
+    val TvTimeoutScale = SettingsRow(
+        id = "video_tv_timeout_scale",
+        icon = Tabler.Outline.DeviceTv,
+        titleRes = Res.string.settings_video_tv_timeout_scale,
+        subtitleRes = Res.string.settings_video_tv_timeout_scale_subtitle,
+        searchTitleRes = Res.string.ss_video_tv_timeout_scale_title,
+        searchSubtitleRes = Res.string.ss_video_tv_timeout_scale_subtitle,
+    )
+
+    val KeyboardSeekPreset = SettingsRow(
+        id = "video_keyboard_seek_preset",
+        icon = Tabler.Outline.Keyboard,
+        titleRes = Res.string.settings_video_keyboard_seek_preset,
+        subtitleRes = Res.string.settings_video_keyboard_seek_preset_subtitle,
+        searchTitleRes = Res.string.ss_video_keyboard_seek_preset_title,
+        searchSubtitleRes = Res.string.ss_video_keyboard_seek_preset_subtitle,
+    )
+
+    val HoldSeekCadence = SettingsRow(
+        id = "video_hold_seek_cadence",
+        icon = Tabler.Outline.Radar2,
+        titleRes = Res.string.settings_video_hold_seek_cadence,
+        subtitleRes = Res.string.settings_video_hold_seek_cadence_subtitle,
+        searchTitleRes = Res.string.ss_video_hold_seek_cadence_title,
+        searchSubtitleRes = Res.string.ss_video_hold_seek_cadence_subtitle,
+    )
+
+    val SpeedPillClearance = SettingsRow(
+        id = "video_speed_pill_clearance",
+        icon = Tabler.Outline.ArrowUpSquare,
+        titleRes = Res.string.settings_video_speed_pill_clearance,
+        subtitleRes = Res.string.settings_video_speed_pill_clearance_subtitle,
+        searchTitleRes = Res.string.ss_video_speed_pill_clearance_title,
+        searchSubtitleRes = Res.string.ss_video_speed_pill_clearance_subtitle,
+    )
+
+    val PauseFadeStyle = SettingsRow(
+        id = "video_pause_fade_style",
+        icon = Tabler.Outline.Wand,
+        titleRes = Res.string.settings_video_pause_fade_style,
+        subtitleRes = Res.string.settings_video_pause_fade_style_subtitle,
+        searchTitleRes = Res.string.ss_video_pause_fade_style_title,
+        searchSubtitleRes = Res.string.ss_video_pause_fade_style_subtitle,
+    )
+
+    val ControlLayout = SettingsRow(
+        id = "video_control_layout",
+        icon = Tabler.Outline.LayoutRows,
+        titleRes = Res.string.settings_video_control_layout,
+        subtitleRes = Res.string.settings_video_control_layout_subtitle,
+        searchTitleRes = Res.string.ss_video_control_layout_title,
+        searchSubtitleRes = Res.string.ss_video_control_layout_subtitle,
+    )
+
+    val MaxZoom = SettingsRow(
+        id = "video_max_zoom",
+        icon = Tabler.Outline.ZoomIn,
+        titleRes = Res.string.settings_video_max_zoom,
+        subtitleRes = Res.string.settings_video_max_zoom_subtitle,
+        searchTitleRes = Res.string.ss_video_max_zoom_title,
+        searchSubtitleRes = Res.string.ss_video_max_zoom_subtitle,
+    )
+
+    val PollCadence = SettingsRow(
+        id = "video_poll_cadence",
+        icon = Tabler.Outline.Refresh,
+        titleRes = Res.string.settings_video_poll_cadence,
+        subtitleRes = Res.string.settings_video_poll_cadence_subtitle,
+        searchTitleRes = Res.string.ss_video_poll_cadence_title,
+        searchSubtitleRes = Res.string.ss_video_poll_cadence_subtitle,
+    )
+
+    val SleepConfirmMinutes = SettingsRow(
+        id = "video_sleep_confirm_minutes",
+        icon = Tabler.Outline.MoonStars,
+        titleRes = Res.string.settings_video_sleep_confirm_minutes,
+        subtitleRes = Res.string.settings_video_sleep_confirm_minutes_subtitle,
+        searchTitleRes = Res.string.ss_video_sleep_confirm_minutes_title,
+        searchSubtitleRes = Res.string.ss_video_sleep_confirm_minutes_subtitle,
+    )
+
+    val AmbientUnderFill = SettingsRow(
+        id = "video_ambient_under_fill",
+        icon = Tabler.Outline.Background,
+        titleRes = Res.string.settings_video_ambient_under_fill,
+        subtitleRes = Res.string.settings_video_ambient_under_fill_subtitle,
+        searchTitleRes = Res.string.ss_video_ambient_under_fill_title,
+        searchSubtitleRes = Res.string.ss_video_ambient_under_fill_subtitle,
+    )
+
+    val BufferingVeil = SettingsRow(
+        id = "video_buffering_veil",
+        icon = Tabler.Outline.Loader,
+        titleRes = Res.string.settings_video_buffering_veil,
+        subtitleRes = Res.string.settings_video_buffering_veil_subtitle,
+        searchTitleRes = Res.string.ss_video_buffering_veil_title,
+        searchSubtitleRes = Res.string.ss_video_buffering_veil_subtitle,
+    )
+
+    val SpeedPresetSet = SettingsRow(
+        id = "video_speed_preset_set",
+        icon = Tabler.Outline.Gauge,
+        titleRes = Res.string.settings_video_speed_preset_set,
+        subtitleRes = Res.string.settings_video_speed_preset_set_subtitle,
+        searchTitleRes = Res.string.ss_video_speed_preset_set_title,
+        searchSubtitleRes = Res.string.ss_video_speed_preset_set_subtitle,
+    )
+
+    val AutoplayWifiOnly = SettingsRow(
+        id = "video_autoplay_wifi_only",
+        icon = Tabler.Outline.WifiOff,
+        titleRes = Res.string.settings_video_autoplay_wifi_only,
+        subtitleRes = Res.string.settings_video_autoplay_wifi_only_subtitle,
+        searchTitleRes = Res.string.ss_video_autoplay_wifi_only_title,
+        searchSubtitleRes = Res.string.ss_video_autoplay_wifi_only_subtitle,
+    )
+
+    val ConfirmExit = SettingsRow(
+        id = "video_confirm_exit",
+        icon = Tabler.Outline.Logout,
+        titleRes = Res.string.settings_video_confirm_exit,
+        subtitleRes = Res.string.settings_video_confirm_exit_subtitle,
+        searchTitleRes = Res.string.ss_video_confirm_exit_title,
+        searchSubtitleRes = Res.string.ss_video_confirm_exit_subtitle,
+    )
+
     /**
      * Every fused playback row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
@@ -1985,6 +2390,40 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.ShowTimeRemaining,
     PlaybackRows.PauseOnFocusLoss,
     PlaybackRows.RememberVolumePerContentType,
+    // The player-chrome customization cluster: overlay/transport faces,
+    // gesture-curve knobs, seek-bar presentation, engine badge and the
+    // episode-browser watch filter.
+    PlaybackRows.OverlayAnimations,
+    PlaybackRows.ResumeChipMs,
+    PlaybackRows.ShowPrevNextButtons,
+    PlaybackRows.SwipeSensitivity,
+    PlaybackRows.GestureOverlayLingerMs,
+    PlaybackRows.CenterDoubleTapAction,
+    PlaybackRows.DoubleTapZoneBias,
+    PlaybackRows.HoldSpeedPillStyle,
+    PlaybackRows.SeekBarStyle,
+    PlaybackRows.ShowBufferedRange,
+    PlaybackRows.ShowChapterMarkers,
+    PlaybackRows.HideSeekTimestamps,
+    PlaybackRows.ShowBufferPercent,
+    PlaybackRows.SeekPreviewTime,
+    PlaybackRows.ShowEngineBadge,
+    PlaybackRows.EpisodeBrowserHideWatched,
+    // The second QoL wave: transport/HUD cadence + preset families.
+    PlaybackRows.TvTimeoutScale,
+    PlaybackRows.KeyboardSeekPreset,
+    PlaybackRows.HoldSeekCadence,
+    PlaybackRows.SpeedPillClearance,
+    PlaybackRows.PauseFadeStyle,
+    PlaybackRows.ControlLayout,
+    PlaybackRows.MaxZoom,
+    PlaybackRows.PollCadence,
+    PlaybackRows.SleepConfirmMinutes,
+    PlaybackRows.AmbientUnderFill,
+    PlaybackRows.BufferingVeil,
+    PlaybackRows.SpeedPresetSet,
+    PlaybackRows.AutoplayWifiOnly,
+    PlaybackRows.ConfirmExit,
 )
 
 internal val PlaybackAdvancedVideoRows: List<SettingsRow> = listOf(
@@ -2005,6 +2444,8 @@ internal val PlaybackAdvancedVideoRows: List<SettingsRow> = listOf(
     PlaybackRows.OfflinePlayback,
     PlaybackRows.PlaybackMode,
     PlaybackRows.StreamingQuality,
+    PlaybackRows.VideoPerformanceProfile,
+    PlaybackRows.RedetectPerformance,
     PlaybackRows.HdrFormatPreference,
     PlaybackRows.ForceTranscodeAboveHeight,
     PlaybackRows.PreferredTranscodeVideoCodec,

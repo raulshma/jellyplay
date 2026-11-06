@@ -138,6 +138,7 @@ fun MyMediaHiddenScreen(
                     items(
                         count = state.libraries.size,
                         key = { index -> state.libraries[index].id },
+                        contentType = { "myMediaHiddenRow" },
                     ) { index ->
                         MyMediaHiddenRow(
                             library = state.libraries[index],

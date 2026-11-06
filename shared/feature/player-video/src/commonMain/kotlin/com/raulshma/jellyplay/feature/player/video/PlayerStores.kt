@@ -5,11 +5,13 @@ import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
+import com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -45,9 +47,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * Construction-time bundle of the thirteen datastore stores the player feature
- * reads and writes — [VideoPlayerViewModel]'s constructor takes this one bundle
- * instead of thirteen store parameters (the same construction seam as
+ * Construction-time bundle of the player feature's datastore stores (plus the
+ * two playback-performance resolvers that ride it — see
+ * [performanceResolver]) — [VideoPlayerViewModel]'s constructor takes this one
+ * bundle instead of a store parameter per store (the same construction seam as
  * home's HomeStores/HomeRefresherFactory precedent: a new store dependency
  * widens this bundle and the DI definitions, not the VM's interface).
  *
@@ -78,6 +81,19 @@ class PlayerStores(
     val networkOffline: NetworkOfflineStore,
     /** per-content-type volume memory (desktop video apply/capture). */
     val volumeProfile: VolumeProfileStore,
+    /**
+     * The playback-performance resolver pair (issue #186 §5.5/§5.7) — NOT
+     * stores, but they ride THIS bundle because it is the one construction
+     * bundle the ViewModel forwards WHOLESALE to [PlaybackSession]
+     * ([PlayerSessionSources] is unpacked member-by-member at the same call
+     * site): the session hands them to [PlayerSessionManager] (the §5.7
+     * caps) and [SessionLoadPipeline] (the §5.8 seed). The same Koin singles
+     * behind [PlayerSessionSources.performanceResolver] /
+     * [PlayerSessionSources.playbackCapResolver].
+     */
+    val performanceResolver: VideoPerformanceResolver,
+    /** See [performanceResolver] — the profile-ceiling fold over the stream caps. */
+    val playbackCapResolver: PlaybackCapResolver,
 )
 
 /**
@@ -163,6 +179,17 @@ data class PlayerSessionSources(
     val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
     /** The bitrate cap the manager resolves the stream quality against. */
     val adaptiveBitrateManager: AdaptiveBitrateManager,
+    /**
+     * The AUTO-detection/effective-tier resolver (issue #186 §5.5): the
+     * session manager's bounded §5.7 resolve calls and the load pipeline's
+     * §5.8 prefs seed read it.
+     */
+    val performanceResolver: VideoPerformanceResolver,
+    /**
+     * The single profile-ceiling layer over the stream caps (§5.7) — the
+     * manager's persisted-quality / user-quality cap entry points.
+     */
+    val playbackCapResolver: PlaybackCapResolver,
     /** The metered-network feed the session mirrors into the uiState. */
     val networkMonitor: NetworkMonitor,
     /** The watched-flip mutator the reporter's watched-threshold arm drives. */

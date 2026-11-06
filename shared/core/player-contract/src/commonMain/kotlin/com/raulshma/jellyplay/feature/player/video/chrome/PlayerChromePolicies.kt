@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.chrome
 
+import com.raulshma.jellyplay.core.model.KeyboardSeekPreset
+import com.raulshma.jellyplay.core.model.TvTimeoutScale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -23,6 +25,20 @@ import kotlinx.coroutines.launch
  */
 fun controlsAutoHideTimeoutMs(baseTimeoutMs: Long, isTv: Boolean): Long =
     if (isTv) baseTimeoutMs * 2 else baseTimeoutMs
+
+/**
+ * The [TvTimeoutScale]-parameterized overload of the fold above (the
+ * `video_tv_timeout_scale` pref's arms): X2 is the long-standing doubling,
+ * X1/X3 scale the TV multiplier. Touch form factors ignore the scale.
+ */
+fun controlsAutoHideTimeoutMs(baseTimeoutMs: Long, isTv: Boolean, tvScale: TvTimeoutScale): Long {
+    val multiplier = when (tvScale) {
+        TvTimeoutScale.X1 -> 1
+        TvTimeoutScale.X2 -> 2
+        TvTimeoutScale.X3 -> 3
+    }
+    return if (isTv) baseTimeoutMs * multiplier else baseTimeoutMs
+}
 
 /**
  * Backward step-seek target (button / keyboard / D-pad commit path): floor at
@@ -92,6 +108,56 @@ const val KEY_SEEK_STEP_HOME_END_MS = 10_000L
 const val KEY_SEEK_STEP_PAGE_MS = 300_000L
 
 /**
+ * The per-preset seek-step table behind the `video_keyboard_seek_preset`
+ * pref: [KeyboardSeekPreset.DEFAULT] restates the constants above verbatim
+ * (VLC's ladder), CONSERVATIVE shrinks the whole set coherently, AGGRESSIVE
+ * grows it. Row order matches the constant declarations above (fine, ctrl,
+ * shift+ctrl, alt+ctrl, home/end, page).
+ */
+data class KeyboardSeekStepTable(
+    val fineMs: Long,
+    val ctrlMs: Long,
+    val shiftCtrlMs: Long,
+    val altCtrlMs: Long,
+    val homeEndMs: Long,
+    val pageMs: Long,
+)
+
+/**
+ * The [KeyboardSeekPreset] → step-table fold. Each preset is a coherent
+ * family — every row scales together so the modifier ladder keeps its
+ * relative shape:
+ *  - CONSERVATIVE ≈ the DEFAULT rows at roughly half/quarter magnitude;
+ *  - AGGRESSIVE ≈ the DEFAULT rows doubled.
+ */
+fun keyboardSeekStepTable(preset: KeyboardSeekPreset): KeyboardSeekStepTable = when (preset) {
+    KeyboardSeekPreset.CONSERVATIVE -> KeyboardSeekStepTable(
+        fineMs = 2_000L,
+        ctrlMs = 15_000L,
+        shiftCtrlMs = 10_000L,
+        altCtrlMs = 60_000L,
+        homeEndMs = 5_000L,
+        pageMs = 60_000L,
+    )
+    KeyboardSeekPreset.DEFAULT -> KeyboardSeekStepTable(
+        fineMs = KEY_SEEK_STEP_FINE_MS,
+        ctrlMs = KEY_SEEK_STEP_CTRL_MS,
+        shiftCtrlMs = KEY_SEEK_STEP_SHIFT_CTRL_MS,
+        altCtrlMs = KEY_SEEK_STEP_ALT_CTRL_MS,
+        homeEndMs = KEY_SEEK_STEP_HOME_END_MS,
+        pageMs = KEY_SEEK_STEP_PAGE_MS,
+    )
+    KeyboardSeekPreset.AGGRESSIVE -> KeyboardSeekStepTable(
+        fineMs = 10_000L,
+        ctrlMs = 120_000L,
+        shiftCtrlMs = 60_000L,
+        altCtrlMs = 600_000L,
+        homeEndMs = 30_000L,
+        pageMs = 600_000L,
+    )
+}
+
+/**
  * The modifier fold over the table above. Row precedence is VLC's: the
  * two-modifier rows are checked before the single-modifier ones (Shift+Ctrl
  * is 30s, never the 5s or 60s a naive first-match would yield), and a plain
@@ -103,13 +169,36 @@ fun keyboardSeekStepMs(
     isAltPressed: Boolean,
     configuredStepMs: Long,
 ): Long =
-    when {
-        isShiftPressed && isCtrlPressed -> KEY_SEEK_STEP_SHIFT_CTRL_MS
-        isAltPressed && isCtrlPressed -> KEY_SEEK_STEP_ALT_CTRL_MS
-        isShiftPressed -> KEY_SEEK_STEP_FINE_MS
-        isCtrlPressed -> KEY_SEEK_STEP_CTRL_MS
+    keyboardSeekStepMs(
+        isShiftPressed = isShiftPressed,
+        isCtrlPressed = isCtrlPressed,
+        isAltPressed = isAltPressed,
+        configuredStepMs = configuredStepMs,
+        preset = KeyboardSeekPreset.DEFAULT,
+    )
+
+/**
+ * The preset-parameterized fold (the `video_keyboard_seek_preset` pref):
+ * the modifier rows read the preset's table; a plain press still falls
+ * through to the caller's configured jump step. DEFAULT is the original
+ * constant table.
+ */
+fun keyboardSeekStepMs(
+    isShiftPressed: Boolean,
+    isCtrlPressed: Boolean,
+    isAltPressed: Boolean,
+    configuredStepMs: Long,
+    preset: KeyboardSeekPreset,
+): Long {
+    val table = keyboardSeekStepTable(preset)
+    return when {
+        isShiftPressed && isCtrlPressed -> table.shiftCtrlMs
+        isAltPressed && isCtrlPressed -> table.altCtrlMs
+        isShiftPressed -> table.fineMs
+        isCtrlPressed -> table.ctrlMs
         else -> configuredStepMs
     }
+}
 
 /**
  * The keyboard seek chip's commit debounce: the seek commits this long after

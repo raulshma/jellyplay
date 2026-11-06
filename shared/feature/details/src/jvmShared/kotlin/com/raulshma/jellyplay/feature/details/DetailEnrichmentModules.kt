@@ -31,7 +31,12 @@ import kotlinx.coroutines.delay
  *    single admission seam.
  */
 
-/** The stock similar row's limit (the plugin row mirrors it). */
+/**
+ * The stock similar row's limit (the plugin row mirrors it) — now the shipped
+ * default of the `detail_similar_limit` pref; the enrichment arms read the
+ * pref (the host's detailPreferences() snapshot convention) and the store's
+ * setter clamps around this value.
+ */
 internal const val SIMILAR_ITEMS_LIMIT = 12
 
 /**
@@ -141,7 +146,9 @@ internal object SimilarItemsEnrichmentModule {
         ) { inputs ->
             // Fetch similar/related items concurrently and non-blocking so the core
             // detail renders immediately. The result lands in relatedItems.
-            similar.similarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
+            // The row bound is the detail_similar_limit pref (SIMILAR_ITEMS_LIMIT
+            // is the shipped default the setter clamps around).
+            similar.similarItems(inputs.itemId, limit = host.detailPreferences().similarItemsLimit)
                 .onSuccess { items ->
                     if (!host.isCurrent(inputs.itemId)) return@onSuccess
                     host.updateState {
@@ -226,7 +233,7 @@ internal object LocalRelatedItemsEnrichmentModule {
                 currentId = inputs.itemId,
                 genres = inputs.detail.item.genres,
                 studios = inputs.detail.item.studios,
-                limit = SIMILAR_ITEMS_LIMIT,
+                limit = host.detailPreferences().similarItemsLimit,
             )
             if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
             host.updateState {
@@ -350,7 +357,7 @@ internal object PluginSimilarItemsEnrichmentModule {
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
             if (!pluginGate.pluginFeature(JellyPlayPluginFeatures.Recommendations, inputs.itemId)) return@DetailEnrichment
-            val scored = plugin.pluginSimilarIds(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
+            val scored = plugin.pluginSimilarIds(inputs.itemId, limit = host.detailPreferences().similarItemsLimit)
                 .filter { it != inputs.itemId }
                 .distinct()
             if (scored.isEmpty()) return@DetailEnrichment

@@ -241,6 +241,7 @@
     <string name="settings_media_segments_summary">%1$d auto-skip, %2$d show button</string>
         <string name="settings_skip_prompt_duration">Skip Button Duration</string>
     <string name="settings_skip_prompt_duration_subtitle">How long the skip intro/segment button stays on screen</string>
+    <string name="settings_skip_prompt_whole_segment">Whole segment</string>
 <string name="settings_skip_segments_on_seek">Skip Segments on Seek</string>
     <string name="settings_skip_segments_on_seek_on">Forward seeks past auto-skip segments</string>
     <string name="settings_segment_skip_delay">Auto-skip delay</string>
@@ -350,6 +351,30 @@
     <string name="settings_speed_test_running">Testing…</string>
     <string name="settings_speed_test_failed">Speed test failed</string>
     <string name="settings_speed_test_result">%1$s Mbps · suggests %2$s</string>
+    <!-- The playback performance profiles (issue #186 §5.10): the ceiling row
+         beside Streaming Quality, its picker faces, and the Re-detect action
+         row that rides the AUTO profile. -->
+    <string name="settings_performance_profile">Performance profile</string>
+    <string name="settings_performance_profile_ceiling_note">Adds a cap on top of your saved quality — the lower value wins, your settings never change. Force Direct Play and downloaded files can bypass the resolution cap. Pairs with the Performance Level hub.</string>
+    <string name="settings_performance_profile_auto_detected">Auto · Detected: %1$s</string>
+    <string name="settings_performance_profile_auto_detecting">Auto · Detecting…</string>
+    <string name="settings_performance_profile_low">Smooth playback · up to 1080p / 8 Mbps</string>
+    <string name="settings_performance_profile_medium">Balanced · up to 1440p / 20 Mbps</string>
+    <string name="settings_performance_profile_high">Maximum quality · no profile caps</string>
+    <string name="settings_performance_profile_short_auto">Auto</string>
+    <string name="settings_performance_profile_short_low">Low</string>
+    <string name="settings_performance_profile_short_medium">Medium</string>
+    <string name="settings_performance_profile_short_high">High</string>
+    <string name="settings_performance_profile_desc_auto">Follows the detected device tier; run Re-detect below to refresh it</string>
+    <string name="settings_performance_profile_desc_low">Caps streaming at 1080p / 8 Mbps and tunes the player for smooth playback</string>
+    <string name="settings_performance_profile_desc_medium">Caps streaming at 1440p / 20 Mbps; the balanced middle</string>
+    <string name="settings_performance_profile_desc_high">The app\'s normal maximum — your quality settings apply unchanged</string>
+    <string name="settings_redetect_performance">Re-detect device performance</string>
+    <string name="settings_redetect_performance_subtitle">Detection runs automatically</string>
+    <string name="settings_redetect_running">Detecting…</string>
+    <string name="settings_redetect_detected_summary">Detected: %1$s · %2$s · %3$s</string>
+    <string name="settings_redetect_done">Detected: %1$s</string>
+    <string name="settings_redetect_failed">Detection failed — kept the previous tier</string>
     <string name="settings_next_up_preroll">Next Up Button Preroll</string>
     <string name="settings_next_up_preroll_subtitle">Seconds before the end the Next Up button appears</string>
     <string name="settings_mpv_tone_mapping_curve">Tone Mapping Curve</string>
@@ -382,4 +407,73 @@
     <string name="settings_bitmap_subtitle_scale_fit">Fit</string>
     <string name="settings_bitmap_subtitle_scale_stretch">Stretch</string>
     <string name="settings_bitmap_subtitle_scale_cover">Cover</string>
+
+    <!-- The player-chrome customization cluster: overlay/transport faces, -->
+    <!-- gesture-curve knobs, seek-bar presentation, engine badge and the -->
+    <!-- episode-browser watch filter. The one-key family: the screen title -->
+    <!-- doubles as the search title, the ss_* twin lives in strings_search. -->
+    <string name="settings_video_overlay_animations">Overlay Animations</string>
+    <string name="settings_video_overlay_animations_subtitle">Animate the control overlay in and out</string>
+    <string name="settings_video_resume_chip_ms">Resume Chip Duration</string>
+    <string name="settings_video_resume_chip_ms_subtitle">How long the "tap to restart" chip stays up (0 = never)</string>
+    <string name="settings_video_show_prev_next_buttons">Previous / Next Buttons</string>
+    <string name="settings_video_show_prev_next_buttons_subtitle">Show the episode skip buttons beside play</string>
+    <string name="settings_video_swipe_sensitivity">Swipe Sensitivity</string>
+    <string name="settings_video_swipe_sensitivity_subtitle">How fast the brightness/volume swipe responds</string>
+    <string name="settings_video_gesture_overlay_linger_ms">Gesture Overlay Linger</string>
+    <string name="settings_video_gesture_overlay_linger_ms_subtitle">How long the gesture indicators stay on screen</string>
+    <string name="settings_video_center_double_tap_action">Center Double-Tap Action</string>
+    <string name="settings_video_center_double_tap_action_subtitle">What a double-tap in the middle of the video does</string>
+    <string name="settings_video_double_tap_zone_bias">Double-Tap Zone Width</string>
+    <string name="settings_video_double_tap_zone_bias_subtitle">How wide the left/right double-tap seek zones are</string>
+    <string name="settings_video_hold_speed_pill_style">Hold-Speed Pill Style</string>
+    <string name="settings_video_hold_speed_pill_style_subtitle">The hold-to-speed indicator\'s look</string>
+    <string name="settings_video_seek_bar_style">Seek Bar Style</string>
+    <string name="settings_video_seek_bar_style_subtitle">The seek bar\'s thickness</string>
+    <string name="settings_video_show_buffered_range">Show Buffered Range</string>
+    <string name="settings_video_show_buffered_range_subtitle">Shade the buffered bands on the seek bar</string>
+    <string name="settings_video_show_chapter_markers">Chapter Markers</string>
+    <string name="settings_video_show_chapter_markers_subtitle">Tick the chapter starts on the seek bar</string>
+    <string name="settings_video_hide_seek_timestamps">Hide Seek Timestamps</string>
+    <string name="settings_video_hide_seek_timestamps_subtitle">Drop the elapsed/total labels under the seek bar</string>
+    <string name="settings_video_show_buffer_percent">Show Buffered Percent</string>
+    <string name="settings_video_show_buffer_percent_subtitle">Show how far the video is buffered, next to the seek bar</string>
+    <string name="settings_video_seek_preview_time">Seek Preview Time</string>
+    <string name="settings_video_seek_preview_time_subtitle">Show the target timestamp while scrubbing</string>
+    <string name="settings_video_show_engine_badge">Show Engine Badge</string>
+    <string name="settings_video_show_engine_badge_subtitle">Name the active playback engine in the top bar</string>
+    <string name="settings_video_episode_browser_hide_watched">Hide Watched Episodes</string>
+    <string name="settings_video_episode_browser_hide_watched_subtitle">The in-player episode browser skips fully-watched episodes</string>
+
+    <!-- The second QoL wave: transport/HUD cadence + preset families. The -->
+    <!-- one-key family again: the screen title doubles as the search title, -->
+    <!-- the ss_* twins live in strings_search. -->
+    <string name="settings_video_tv_timeout_scale">TV Controls Timeout Scale</string>
+    <string name="settings_video_tv_timeout_scale_subtitle">How much longer controls stay up on TV</string>
+    <string name="settings_video_keyboard_seek_preset">Keyboard Seek Steps</string>
+    <string name="settings_video_keyboard_seek_preset_subtitle">The modifier seek-step sizes for arrow keys</string>
+    <string name="settings_video_hold_seek_cadence">Hold Seek Cadence</string>
+    <string name="settings_video_hold_seek_cadence_subtitle">How fast double-tap-and-hold repeats the seek</string>
+    <string name="settings_video_speed_pill_clearance">Speed Pill Position</string>
+    <string name="settings_video_speed_pill_clearance_subtitle">How far the hold-to-speed pill sits above the controls</string>
+    <string name="settings_video_pause_fade_style">Pause Details Fade</string>
+    <string name="settings_video_pause_fade_style_subtitle">How fast the pause details panel fades in and out</string>
+    <string name="settings_video_control_layout">Control Layout</string>
+    <string name="settings_video_control_layout_subtitle">Arrange the player button clusters</string>
+    <string name="settings_video_max_zoom">Maximum Zoom</string>
+    <string name="settings_video_max_zoom_subtitle">How far pinch-to-zoom can crop the video</string>
+    <string name="settings_video_poll_cadence">Position Poll Rate</string>
+    <string name="settings_video_poll_cadence_subtitle">How often the seek bar\'s position refreshes</string>
+    <string name="settings_video_sleep_confirm_minutes">Sleep Cancel Confirm</string>
+    <string name="settings_video_sleep_confirm_minutes_subtitle">Cancelling a sleep timer with more time left than this asks first</string>
+    <string name="settings_video_ambient_under_fill">Ambient on Fill</string>
+    <string name="settings_video_ambient_under_fill_subtitle">Allow the ambient glow behind stretched (Fill) video too</string>
+    <string name="settings_video_buffering_veil">Buffering Spinner</string>
+    <string name="settings_video_buffering_veil_subtitle">When the loading spinner shows during stalls</string>
+    <string name="settings_video_speed_preset_set">Speed Presets</string>
+    <string name="settings_video_speed_preset_set_subtitle">Which speeds the speed sheet offers as chips</string>
+    <string name="settings_video_autoplay_wifi_only">Autoplay on Wi-Fi Only</string>
+    <string name="settings_video_autoplay_wifi_only_subtitle">Skip auto-play next while on a metered connection</string>
+    <string name="settings_video_confirm_exit">Confirm Exit</string>
+    <string name="settings_video_confirm_exit_subtitle">Pressing back first asks before closing the player</string>
 </resources>

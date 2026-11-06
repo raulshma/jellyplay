@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import kotlin.test.Test
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlayerSheetTest {
@@ -27,10 +26,5 @@ class PlayerSheetTest {
     fun playerSheet_whenNone_noSheetVisible() {
         val sheet = PlayerSheet.None
         assertTrue(sheet is PlayerSheet.None)
-    }
-
-    @Test
-    fun playerSheet_speedIsNotNone() {
-        assertFalse(PlayerSheet.Speed is PlayerSheet.None)
     }
 }

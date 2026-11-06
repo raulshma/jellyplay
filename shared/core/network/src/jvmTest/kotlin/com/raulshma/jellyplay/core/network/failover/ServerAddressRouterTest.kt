@@ -229,6 +229,41 @@ class ServerAddressRouterTest {
     }
 
     @Test
+    fun `failoverCandidates single endpoint fast path returns the url itself`() {
+        router.configure(server.copy(alternateAddresses = emptyList()))
+
+        val url = "$primary/Items?api_key=x".toHttpUrl()
+        val candidates = router.failoverCandidates(url)
+
+        // The general path maps its lone candidate to the original instance,
+        // not a retarget clone — the fast path must hand back that instance too.
+        assertEquals(listOf(url), candidates)
+        assertTrue(candidates[0] === url)
+    }
+
+    @Test
+    fun `failoverCandidates single endpoint with base path keeps the two-candidate shape`() {
+        // addressString() strips the path, so the active address never
+        // object-equals a base-path endpoint: the general path builds
+        // [activeUrl, endpoint] and maps both onto the request url. The fast
+        // path must reproduce that exact [url, url] shape, not a shorter list.
+        val based = "https://home.example.com/jellyfin"
+        router.configure(server.copy(address = based, alternateAddresses = emptyList()))
+
+        val url = "$based/Items".toHttpUrl()
+        val candidates = router.failoverCandidates(url)
+
+        assertEquals(listOf(url, url), candidates)
+    }
+
+    @Test
+    fun `failoverCandidates single endpoint is empty for foreign hosts`() {
+        router.configure(server.copy(alternateAddresses = emptyList()))
+
+        assertTrue(router.failoverCandidates("https://api.github.com/x".toHttpUrl()).isEmpty())
+    }
+
+    @Test
     fun `addressString keeps explicit ports and drops default ports`() {
         assertEquals(
             "http://192.168.1.10:8096",

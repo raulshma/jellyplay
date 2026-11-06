@@ -78,6 +78,11 @@ fun DreamSlideshow(
 
     // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
     val motionScheme = MaterialTheme.motionScheme
+    // The resolved posture's screensaver-motion row + the reduced-motion fold
+    // (the dream service provides LocalPerformanceConfig beside the motion
+    // locals — it composes OUTSIDE JellyPlayPreferenceTheme): either arm
+    // collapses the slide/crossfade to a near-instant cut.
+    val screensaverMotion = com.raulshma.jellyplay.core.ui.components.LocalPerformanceConfig.current.screensaverMotion
     val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -87,8 +92,13 @@ fun DreamSlideshow(
             AnimatedContent(
                 targetState = currentIndex,
                 transitionSpec = {
-                    // Under reduce motion / performance mode, collapse to a near-instant cut.
-                    val effectiveStyle = if (reducedMotion) DreamTransitionStyle.NONE else transitionStyle
+                    // Under the reduced-motion fold or a suppressed
+                    // screensaver-motion row, collapse to a near-instant cut.
+                    val effectiveStyle = if (reducedMotion || !screensaverMotion) {
+                        DreamTransitionStyle.NONE
+                    } else {
+                        transitionStyle
+                    }
                     transitionSpecFor(effectiveStyle, motionScheme)
                 },
                 label = "dreamSlideshow",
@@ -153,6 +163,11 @@ internal class DreamDimState(private val dimAfterMs: Long) {
 /** The dim scrim's crossfade duration — slow enough to read as a fade, not a cut. */
 private const val DIM_CROSSFADE_MS = 2_000
 
+// Constant inputs, so the title scrim isn't re-allocated on every slideshow advance.
+private val DreamTitleScrimBrush = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+)
+
 @Composable
 private fun DreamTitleOverlay(
     title: String,
@@ -168,11 +183,7 @@ private fun DreamTitleOverlay(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(160.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                    ),
-                ),
+                .background(DreamTitleScrimBrush),
         )
         Column(
             modifier = Modifier

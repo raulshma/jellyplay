@@ -130,8 +130,8 @@
     <!-- PerformanceStep -->
     <string name="onboarding_performance_title">Performance</string>
     <string name="onboarding_performance_subtitle">Optimize the app for your device</string>
-    <string name="onboarding_performance_mode">Performance Mode</string>
-    <string name="onboarding_performance_description">Reduces animations, transitions, and image quality for smoother performance on lower-end devices. You can always change this later in Settings.</string>
-    <string name="onboarding_performance_enable">Enable Performance Mode</string>
-    <string name="onboarding_performance_enable_subtitle">Lower-end device optimization</string>
+    <string name="onboarding_performance_mode">Performance</string>
+    <string name="onboarding_performance_description">Switches between the Standard and Performance levels: the Performance level suppresses animations, transitions and image work for smoother playback on lower-end devices. Fine-tune per-effect and pick Balanced any time in Settings → Performance.</string>
+    <string name="onboarding_performance_enable">Enable performance mode</string>
+    <string name="onboarding_performance_enable_subtitle">Lower-end device optimization (the Performance level)</string>
 </resources>

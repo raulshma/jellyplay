@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.designsystem.theme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
+import com.raulshma.jellyplay.core.model.ResolvedPerformanceConfig
 
 /**
  * The ONE home of the motion/performance flags. These locals are the single
@@ -12,17 +13,33 @@ import androidx.compose.runtime.compositionLocalOf
  * carrying the flags. `JellyPlayPreferenceTheme` (core/ui) provides them once,
  * above [JellyPlayTheme]; everything below reads them.
  *
- * core/ui's `LocalPerformanceMode.kt` re-surfaces these same three vals as
+ * core/ui's `LocalPerformanceMode.kt` re-surfaces these same vals as
  * import-compatibility aliases — the underlying composition-local instances
  * are these, never copies.
  */
 
 /**
+ * The fully folded performance posture ([ResolvedPerformanceConfig] — level +
+ * overrides + reduce-motion, resolved once by `PerformanceConfigResolver` at
+ * the provision seam). This is the ONE channel every behavior gate should
+ * read: the historical boolean locals ([LocalPerformanceMode],
+ * [LocalReducedMotion]) are compat projections of it, so a gate reading a
+ * projection can never disagree with one reading the config. Default is
+ * [ResolvedPerformanceConfig.DEFAULT] — the fresh-install posture, so a shell
+ * that skips the provider keeps the shipped performance-mode-OFF behavior.
+ */
+val LocalPerformanceConfig: ProvidableCompositionLocal<ResolvedPerformanceConfig> =
+    compositionLocalOf { ResolvedPerformanceConfig.DEFAULT }
+
+/**
  * Whether the user enabled the performance/battery-saver mode.
  * When true, animations and decorative effects should be suppressed to save power.
  *
- * Prefer checking [LocalReducedMotion] at call sites instead — it is true when
- * *either* performance mode *or* reduce motion is on, so a single guard honors both.
+ * COMPAT projection: provided as the resolved config's `suppressAnimations`
+ * (the level's suppression choice with the granular override applied) — at
+ * all-AUTO that is exactly the legacy `level == PERFORMANCE` boolean. Prefer
+ * reading [LocalPerformanceConfig] at new call sites; this local stays for
+ * the unmigrated `LocalReducedMotion` guards.
  */
 val LocalPerformanceMode: ProvidableCompositionLocal<Boolean> =
     compositionLocalOf { false }
@@ -54,11 +71,15 @@ val LocalReducedMotion: ProvidableCompositionLocal<Boolean> =
 
 /**
  * The ONE scheme-selection fold, applied by [JellyPlayTheme]: the reduced
- * scheme wins whenever EITHER flag is on. Extracted as a pure function so the
- * selection (not just the scheme contents) is pinned by MotionSchemeSelectionTest.
+ * scheme wins whenever the resolved posture suppresses animations OR the
+ * reduce-motion accessibility flag is on (the same two inputs the resolved
+ * config's `reducedMotion` field folds — passed here as the raw pair so the
+ * selection cannot double-count the fold). Extracted as a pure function so
+ * the selection (not just the scheme contents) is pinned by
+ * MotionSchemeSelectionTest.
  */
 internal fun motionSchemeFor(
-    performanceMode: Boolean,
+    suppressAnimations: Boolean,
     reduceMotion: Boolean,
 ): MotionScheme =
-    if (performanceMode || reduceMotion) ReducedMotionScheme else ExpressiveMotionScheme
+    if (suppressAnimations || reduceMotion) ReducedMotionScheme else ExpressiveMotionScheme

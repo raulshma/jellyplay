@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
+import com.raulshma.jellyplay.core.model.BackdropDimLevel
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.ColorStyle
@@ -18,6 +19,9 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.ExternalPlayerApp
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.HapticsIntensity
+import com.raulshma.jellyplay.core.model.ImageQualityPreset
+import com.raulshma.jellyplay.core.model.ListDensity
 import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.LanguageRuleSet
 import com.raulshma.jellyplay.core.model.LayoutMode
@@ -26,10 +30,15 @@ import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
+import com.raulshma.jellyplay.core.model.ImageDecodeCap
+import com.raulshma.jellyplay.core.model.PerformanceLevel
+import com.raulshma.jellyplay.core.model.PerformanceOverride
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.PressEffectStyle
+import com.raulshma.jellyplay.core.model.OverscrollStyle
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -41,6 +50,7 @@ import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
 import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
 import com.raulshma.jellyplay.core.model.TvOverscan
 import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import java.lang.reflect.Modifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -99,6 +109,18 @@ class SliceCategoryMergersTest {
         contrastLevel = ContrastLevel.HIGH,
         oledMode = true,
         performanceMode = true,
+        performanceLevel = PerformanceLevel.PERFORMANCE,
+        perfAnimations = PerformanceOverride.ON,
+        perfSharedElements = PerformanceOverride.OFF,
+        perfNavTransitions = PerformanceOverride.ON,
+        perfImageDecodeCap = ImageDecodeCap.P720,
+        perfImageCrossfade = PerformanceOverride.OFF,
+        perfBlurhash = PerformanceOverride.ON,
+        perfQualityBadges = PerformanceOverride.OFF,
+        perfAmbientHeroVideo = PerformanceOverride.ON,
+        perfBackdropBlur = PerformanceOverride.OFF,
+        perfScreensaverMotion = PerformanceOverride.ON,
+        imageMemoryCachePercent = 20,
         accentColorSwatch = "violet",
         colorStyle = ColorStyle.VIBRANT,
         themeVariant = "sakura",
@@ -123,6 +145,16 @@ class SliceCategoryMergersTest {
         layoutMode = LayoutMode.PHONE,
         tvOverscan = TvOverscan.TEN,
         hapticsEnabled = false,
+        timeUse24h = true,
+        cardPressAnimations = false,
+        pullToRefreshEnabled = false,
+        appBackdropDim = BackdropDimLevel.HEAVIER,
+        hapticsIntensity = HapticsIntensity.STRONG,
+        imageQualityPreset = ImageQualityPreset.HIGH_90,
+        appListDensity = ListDensity.COMPACT,
+        appPressEffect = PressEffectStyle.SUBTLE,
+        appFlatCards = true,
+        appOverscrollStyle = OverscrollStyle.NONE,
     )
 
     @Test
@@ -136,14 +168,29 @@ class SliceCategoryMergersTest {
     fun `appearance slice with APPEARANCE only replaces appearance fields but keeps haptics`() {
         val current = AppearanceSlice()
         val merged = current.mergeWith(appearanceIncoming, setOf(PreferenceResetCategory.APPEARANCE))
-        assertEquals(appearanceIncoming.copy(hapticsEnabled = current.hapticsEnabled), merged)
+        assertEquals(
+            appearanceIncoming.copy(
+                hapticsEnabled = current.hapticsEnabled,
+                // MISC_APP-only rows keep their current values under a
+                // plain-APPEARANCE import.
+                pullToRefreshEnabled = current.pullToRefreshEnabled,
+            ),
+            merged,
+        )
     }
 
     @Test
     fun `appearance slice with MISC_APP only replaces haptics but keeps appearance fields`() {
         val current = AppearanceSlice()
         val merged = current.mergeWith(appearanceIncoming, setOf(PreferenceResetCategory.MISC_APP))
-        assertEquals(current.copy(hapticsEnabled = false), merged)
+        assertEquals(
+            current.copy(
+                hapticsEnabled = false,
+                // The MISC_APP rows travel with the misc import.
+                pullToRefreshEnabled = false,
+            ),
+            merged,
+        )
     }
 
     @Test
@@ -174,6 +221,7 @@ class SliceCategoryMergersTest {
         preferredPlayer = PlayerType.MPV,
         preferredExternalPlayer = ExternalPlayerApp.VLC,
         streamingQuality = StreamingQuality.FHD_1080P,
+        videoPerformanceProfile = VideoPerformanceProfile.LOW,
         cellularStreamingQuality = StreamingQuality.HD_720P,
         hdrFormatPreference = HdrFormatPreference.SDR_ONLY,
         forceTranscodeAboveHeight = 1080,
@@ -189,6 +237,10 @@ class SliceCategoryMergersTest {
         downmixBoostDb = 3f,
         spatialAudioEnabled = true,
         spatialAudioOnlyHeadphones = false,
+        exoInitialBufferMs = 750,
+        exoRebufferMs = 4_000,
+        exoTargetBufferMb = 96,
+        exoRetainBackBuffer = true,
         frameRateMatching = true,
         refreshRateMode = RefreshRateMode.FRAME_RATE_ONLY,
         keepScreenOnDuringVideo = false,

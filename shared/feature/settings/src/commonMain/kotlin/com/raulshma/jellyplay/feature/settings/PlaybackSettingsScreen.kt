@@ -2,18 +2,24 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import kotlinx.coroutines.CoroutineScope
 import org.koin.compose.viewmodel.koinViewModel
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_done
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_failed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_playback_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_playback_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_playback_message
@@ -174,6 +180,10 @@ internal fun playbackRowAdmissionFlags(
         // The pause-screensaver delay rides the mode row: any non-OFF
         // screensaver counts as the parent being on.
         PlaybackRows.PauseScreensaver.id to (preferences.pauseScreensaverMode != PauseScreensaverMode.OFF),
+        // The Re-detect action row rides the profile row's AUTO state: an
+        // explicit LOW/MEDIUM/HIGH pins the tier, so re-detecting changes
+        // nothing and the row hides (any non-AUTO counts as the parent off).
+        PlaybackRows.VideoPerformanceProfile.id to (preferences.videoPerformanceProfile == VideoPerformanceProfile.AUTO),
     ),
 )
 
@@ -193,6 +203,22 @@ fun PlaybackSettingsScreen(
     // Picker payloads built off suspend work (the desktop audio-device
     // enumeration) launch here.
     val scope = rememberCoroutineScope()
+
+    // One-shot Re-detect confirmations (issue #186 §5.10, the PrivacyData
+    // screen-forward pattern): resolve the resource text here — the tier
+    // label is the enum's displayName, the same face the row subtitles use —
+    // and post each emitted message through the app-wide UserMessageBus.
+    val bus = LocalUserMessageBus.current
+    LaunchedEffect(bus) {
+        viewModel.redetectMessages.collect { message ->
+            when (message) {
+                is PerformanceRedetectMessage.Detected ->
+                    bus.info(getString(Res.string.settings_redetect_done, message.tier.displayName))
+                PerformanceRedetectMessage.Failed ->
+                    bus.info(getString(Res.string.settings_redetect_failed))
+            }
+        }
+    }
 
     PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_playback_title),

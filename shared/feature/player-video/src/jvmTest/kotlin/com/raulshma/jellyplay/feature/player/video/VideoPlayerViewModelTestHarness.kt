@@ -66,6 +66,30 @@ open class VideoPlayerViewModelHarness {
     lateinit var syncPlayManager: SyncPlayManager
     lateinit var viewModel: VideoPlayerViewModel
 
+    /**
+     * The stub resolver (issue #186): retained so suites can read
+     * [VideoPerformanceResolver.detection] beside the VM's passthrough, and
+     * re-publish through [resolvedProfileFlow].
+     */
+    lateinit var performanceResolver: com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
+
+    /**
+     * The stub resolver's published-resolution flow (issue #186): a suite
+     * re-publishes into it to drive the §5.11 step-4 uiPrefs mirror — the
+     * same [testVideoPerformanceResolver] instance the stores and session
+     * sources carry, so every consumer sees the same resolution.
+     */
+    val resolvedProfileFlow = MutableStateFlow(
+        com.raulshma.jellyplay.core.model.ResolvedPerformanceProfile(
+            requested = com.raulshma.jellyplay.core.model.VideoPerformanceProfile.HIGH,
+            tier = com.raulshma.jellyplay.core.model.DevicePerformanceTier.HIGH,
+            tuning = com.raulshma.jellyplay.core.model.VideoPerformanceMatrix.forTier(
+                com.raulshma.jellyplay.core.model.DevicePerformanceTier.HIGH,
+            ),
+            detection = null,
+        ),
+    )
+
     @Before
     fun setUpHarness() {
         Dispatchers.setMain(testDispatcher)
@@ -161,6 +185,19 @@ open class VideoPlayerViewModelHarness {
 
         val imageUrlProviderMock = mockk<com.raulshma.jellyplay.core.data.util.ImageUrlProvider>(relaxed = true)
 
+        // Issue #186: the HIGH default is the no-caps no-op — the resolve
+        // requests and engine configs these suites pin keep their pre-profile
+        // values; the LOW/MEDIUM folds are pinned in the §5.14 suites. The
+        // suite-retained [resolvedProfileFlow] backs `resolved` so a test can
+        // re-publish and watch the §5.11 collector mirror it.
+        val performanceResolver = testVideoPerformanceResolver(resolvedFlow = resolvedProfileFlow)
+        this.performanceResolver = performanceResolver
+        val playbackCapResolver = com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver(
+            adaptiveBitrateManager = mockk(relaxed = true),
+            performanceResolver = performanceResolver,
+            playbackStore = playbackStore,
+        )
+
         viewModel = VideoPlayerViewModel(
             platform = FakePlatform(),
             stores = PlayerStores(
@@ -177,6 +214,8 @@ open class VideoPlayerViewModelHarness {
                 appearance = appearanceStore,
                 networkOffline = networkOfflineStore,
                 volumeProfile = volumeProfileStore,
+                performanceResolver = performanceResolver,
+                playbackCapResolver = playbackCapResolver,
             ),
             subtitleSources = PlayerSubtitleSources(
                 subtitleProviderRepository = mockk(relaxed = true),
@@ -214,6 +253,8 @@ open class VideoPlayerViewModelHarness {
                 itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
                 jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
                 adaptiveBitrateManager = mockk(relaxed = true),
+                performanceResolver = performanceResolver,
+                playbackCapResolver = playbackCapResolver,
                 networkMonitor = networkMonitor,
                 userDataMutator = userDataMutator,
                 nowPlayingReporter = mockk(relaxed = true),

@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.model.MaxZoom
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PauseFadeStyle
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 
@@ -36,11 +38,14 @@ internal fun resumeSkipTargetMs(currentPositionMs: Long, skipMs: Long): Long =
  * `delay(400)` race guard (the timing shell stays in the LaunchedEffect).
  */
 internal sealed interface OrientationLockDecision {
+    /** The lock both variants carry; only the settle timing differs. */
+    val lock: PlayerOrientationLock
+
     /** Lock now — no settle delay. */
-    data class Immediate(val lock: PlayerOrientationLock) : OrientationLockDecision
+    data class Immediate(override val lock: PlayerOrientationLock) : OrientationLockDecision
 
     /** Lock only after the screen's settle delay elapses. */
-    data class SettleFirst(val lock: PlayerOrientationLock) : OrientationLockDecision
+    data class SettleFirst(override val lock: PlayerOrientationLock) : OrientationLockDecision
 }
 
 /**
@@ -94,6 +99,28 @@ internal fun isSkipSegmentButtonVisible(
         !isInPipMode &&
         !isCinemaIntroVisible &&
         !(activeSegment.type == MediaSegmentType.OUTRO && shouldShowUpNext)
+
+/**
+ * Skip-prompt SHOWING precedence: the timed pipeline's verdict
+ * ([timedVisible]) normally rules, but the `skip_prompt_duration_ms`
+ * whole-segment sentinel bypasses it — the invitation stays up for the entire
+ * segment (the pre-timed-prompt behavior), with no countdown, no
+ * controls-visibility gate and no interaction requirement. Both modes share
+ * the hard suppression arms (sheet / lock / PiP via [canShow]); in
+ * whole-segment mode a cinema-intro pre-roll counts as "something to skip"
+ * on its own, since the segment button itself is suppressed while it plays.
+ */
+internal fun isSkipPromptShown(
+    wholeSegmentMode: Boolean,
+    cinemaIntroActive: Boolean,
+    segmentAvailable: Boolean,
+    canShow: Boolean,
+    timedVisible: Boolean,
+): Boolean = canShow && if (wholeSegmentMode) {
+    cinemaIntroActive || segmentAvailable
+} else {
+    timedVisible
+}
 
 // The player-chrome policies shared with the live player's screen moved to
 // the shared player-contract home
@@ -182,3 +209,29 @@ internal fun decideWatchedActions(
     watchedAdvancesToNext = hasNext || isInSyncPlay,
     unwatchedMarkApplied = !incognito,
 )
+// ── The second QoL wave's pref folds (pure; consumed by the screen root) ──
+
+/** The ambient-backdrop gate: the pref AND the aspect rule (CROP always excluded; FILL admits via the under-fill pref). */
+internal fun ambientBackdropGate(enabled: Boolean, effective: AspectRatio, allowUnderFill: Boolean): Boolean =
+    enabled && effective != AspectRatio.CROP && (allowUnderFill || effective != AspectRatio.FILL)
+
+/** The pinch-zoom ceiling (the max-zoom pref's arm; X3 keeps the long-standing 1..3 clamp). */
+internal fun maxZoomScale(maxZoom: MaxZoom): Float = when (maxZoom) {
+    MaxZoom.X2 -> 2f
+    MaxZoom.X3 -> 3f
+    MaxZoom.X4 -> 4f
+}
+
+/** The pause-details panel's fade-IN duration (the pause-fade-style pref's family). */
+internal fun pauseDetailsFadeInMs(style: PauseFadeStyle): Int = when (style) {
+    PauseFadeStyle.FAST -> 100
+    PauseFadeStyle.DEFAULT -> 200
+    PauseFadeStyle.SLOW -> 400
+}
+
+/** The pause-details panel's fade-OUT duration (the pause-fade-style pref's family). */
+internal fun pauseDetailsFadeOutMs(style: PauseFadeStyle): Int = when (style) {
+    PauseFadeStyle.FAST -> 150
+    PauseFadeStyle.DEFAULT -> 300
+    PauseFadeStyle.SLOW -> 500
+}

@@ -11,7 +11,7 @@ local.properties
 *-release.jks
 app/src/main/assets/aboutlibraries.json
 .kotlin/
-
+.agents/
 # Dev tooling under tools/: the scripts themselves are TRACKED (subsetting,
 # e2e pass scripts, perf baseline). Only the heavy/derived assets stay
 # ignored. The old blanket /tools/ also ignored the tracked scripts —

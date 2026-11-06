@@ -215,6 +215,17 @@ val NAV_DESTINATIONS: List<NavDestination> = listOf(
 val NAV_DESTINATION_BY_ROUTE: Map<Route, NavDestination> =
     NAV_DESTINATIONS.associateBy { it.route }
 
+/** Key → registry row — the persisted customization key's lookup (the start-tab pref's resolver). */
+val NAV_DESTINATION_BY_KEY: Map<String, NavDestination> =
+    NAV_DESTINATIONS.associateBy { it.key }
+
+/**
+ * The start-tab pref's resolver: the registered destination whose key matches
+ * [key], or null (blank/unknown → the caller keeps its shipped start route).
+ */
+fun startRouteFor(key: String): Route? =
+    key.takeIf { it.isNotBlank() }?.let { NAV_DESTINATION_BY_KEY[it]?.route }
+
 /** The destination's registry icon; non-registered (detail) routes fall back to Home. */
 val Route.navIcon: ImageVector
     get() = NAV_DESTINATION_BY_ROUTE[this]?.icon ?: Tabler.Outline.Home

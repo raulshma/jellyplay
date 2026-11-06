@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.playback.DesktopDevicePerformanceProbe
+import com.raulshma.jellyplay.core.data.playback.DevicePerformanceProbe
 import com.raulshma.jellyplay.core.data.util.DataBuildFlags
 import java.nio.file.Path
 import org.koin.core.module.Module
@@ -68,5 +70,12 @@ fun desktopDataModule(dataDir: Path): Module {
             desktopDownloadsSeamsModule(dataDir),
             desktopHomeConveyorModule,
         )
+
+        // Issue #186 §5.5: the desktop AUTO-detection seam — OS/cores/heap
+        // signals, no codec probe. The commonMain VideoPerformanceResolver
+        // single (dataSessionPlaybackModule) resolves this interface;
+        // Android binds its own actual in androidCoreDataModule. Desktop
+        // AUTO short-circuits to HIGH in the classifier (§5.13).
+        single<DevicePerformanceProbe> { DesktopDevicePerformanceProbe() }
     }
 }

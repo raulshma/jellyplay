@@ -53,6 +53,7 @@ class NavigationStore constructor(
         val HIDE_BOTTOM_NAV_ON_SCROLL = booleanPreferencesKey(NavigationPreferenceSpecs.HIDE_BOTTOM_NAV_ON_SCROLL.keyName)
         val HIDDEN_NAV_ITEMS = stringPreferencesKey(NavigationPreferenceSpecs.HIDDEN_NAV_ITEMS.keyName)
         val NAV_ITEM_ORDER = stringPreferencesKey(NavigationPreferenceSpecs.NAV_ITEM_ORDER.keyName)
+        val START_TAB = stringPreferencesKey(NavigationPreferenceSpecs.START_TAB.keyName)
     }
 
     val navigation: StateFlow<NavigationSlice> =
@@ -70,6 +71,7 @@ class NavigationStore constructor(
         hideBottomNavOnScroll = NavigationPreferenceSpecs.HIDE_BOTTOM_NAV_ON_SCROLL.readFrom(prefs),
         hiddenNavItems = NavigationPreferenceSpecs.HIDDEN_NAV_ITEMS.readFrom(prefs),
         navItemOrder = NavigationPreferenceSpecs.NAV_ITEM_ORDER.readFrom(prefs),
+        startTab = NavigationPreferenceSpecs.START_TAB.readFrom(prefs),
     )
 
     // ------------------------------------------------------------------
@@ -92,6 +94,11 @@ class NavigationStore constructor(
 
     suspend fun setNavItemOrder(order: List<String>) {
         dataStore.edit { NavigationPreferenceSpecs.NAV_ITEM_ORDER.writeTo(it, order) }
+    }
+
+    /** Persists the start tab (a top-level destination key; "" = the shipped Home default). */
+    suspend fun setStartTab(key: String) {
+        dataStore.edit { NavigationPreferenceSpecs.START_TAB.writeTo(it, key) }
     }
 
     /**
@@ -125,6 +132,7 @@ class NavigationStore constructor(
             NavigationPreferenceSpecs.HIDE_BOTTOM_NAV_ON_SCROLL.writeTo(prefs, slice.hideBottomNavOnScroll)
             NavigationPreferenceSpecs.HIDDEN_NAV_ITEMS.writeTo(prefs, slice.hiddenNavItems)
             NavigationPreferenceSpecs.NAV_ITEM_ORDER.writeTo(prefs, slice.navItemOrder)
+            NavigationPreferenceSpecs.START_TAB.writeTo(prefs, slice.startTab)
         }
     }
 }
@@ -145,4 +153,6 @@ data class NavigationSlice(
     val hideBottomNavOnScroll: Boolean = NavigationPreferenceSpecs.HIDE_BOTTOM_NAV_ON_SCROLL.default,
     val hiddenNavItems: Set<String> = NavigationPreferenceSpecs.HIDDEN_NAV_ITEMS.default,
     val navItemOrder: List<String> = NavigationPreferenceSpecs.NAV_ITEM_ORDER.default,
+    /** The start tab (a top-level destination key; "" = the shipped Home default). */
+    val startTab: String = NavigationPreferenceSpecs.START_TAB.default,
 )

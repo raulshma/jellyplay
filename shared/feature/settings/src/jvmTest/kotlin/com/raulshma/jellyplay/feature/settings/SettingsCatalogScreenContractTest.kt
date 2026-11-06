@@ -68,6 +68,7 @@ class SettingsCatalogScreenContractTest {
     /** Every fused row vocabulary — one entry per converted domain. */
     private val fusedRowVocabularies: List<List<SettingsRow>> = listOf(
         AppearanceRows.all,
+        PerformanceRows.all,
         HomeRows.all,
         PlaybackRows.all,
         AudioRows.all,
@@ -230,10 +231,20 @@ class SettingsCatalogScreenContractTest {
             "appearance.performance" to emptySet(),
             "appearance.eyeCare" to emptySet(),
             // newsletter_sections' declared row renders as the runtime-
-            // reorderable per-section rows (the enum-driven media-segment
-            // shape) — the screen's total replaces its admitted slot with the
-            // runtime count explicitly.
+            // reorderable rows (the enum-driven media-segment shape) — the
+            // screen's total replaces its admitted slot with the runtime
+            // count explicitly.
             "appearance.newsletter" to emptySet(),
+            // The Performance hub's five groups: the level group's master row
+            // declares Always (fully covered), the four expert groups declare
+            // their advanced base and only compose behind the advanced
+            // structural block. The screens' screen-local cross-reference
+            // rows are the explicit +1/+2 terms at their call sites.
+            "performance.level" to emptySet(),
+            "performance.motion" to emptySet(),
+            "performance.images" to emptySet(),
+            "performance.ambient" to emptySet(),
+            "performance.buffers" to emptySet(),
         )
         undeclaredExceptions.forEach { (groupId, exceptions) ->
             val group = requireNotNull(SettingsScreenGroups.all.firstOrNull { it.id == groupId })
@@ -1026,10 +1037,11 @@ class SettingsCatalogScreenContractTest {
         // toggle (its declared Advanced base — the flags carry that toggle);
         // the dialogue-boost strength row, the five per-codec passthrough
         // rows AND the spatial headphones sub-knob additionally ride their
-        // parent toggles (their declared All gates) — with no parents on,
-        // those seven drop.
+        // parent toggles (their declared All gates), and the issue #186
+        // Re-detect action row rides the profile row's AUTO state — with no
+        // parents on, those eight drop.
         assertEquals(
-            SettingsScreenGroups.playbackAdvancedVideo.items.size - 7,
+            SettingsScreenGroups.playbackAdvancedVideo.items.size - 8,
             rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, RowAdmissionFlags(showAdvanced = true)),
         )
         val boostOn = RowAdmissionFlags(
@@ -1038,6 +1050,8 @@ class SettingsCatalogScreenContractTest {
                 PlaybackRows.DialogueBoost.id to true,
                 PlaybackRows.AudioPassthrough.id to true,
                 PlaybackRows.SpatialAudio.id to true,
+                // The Re-detect row's parent: the profile being AUTO.
+                PlaybackRows.VideoPerformanceProfile.id to true,
             ),
         )
         assertEquals(
@@ -1286,41 +1300,45 @@ class SettingsCatalogScreenContractTest {
             rowTotalFor(SettingsScreenGroups.appearanceLibrary, RowAdmissionFlags()),
         )
         assertEquals(
-            SettingsScreenGroups.appearanceLibrary.items.size + 1,
+            SettingsScreenGroups.appearanceLibrary.items.size + 1 + DETAIL_SECTION_ORDER_EDITOR_ROWS,
             appearanceLibraryScreenRowTotal(),
         )
         // Declared rows (the library-content + detail-display residuals and
         // the spec-backed toggles) plus the screen-local
-        // confirm-library-reset action row.
+        // confirm-library-reset action row and the section-order editor's
+        // reorderable rows.
         assertEquals(
-            SettingsScreenGroups.appearanceLibrary.items.size + 1, // +1: the screen-local confirm-library-reset action row
+            SettingsScreenGroups.appearanceLibrary.items.size +
+                1 + // +1: the screen-local confirm-library-reset action row
+                DETAIL_SECTION_ORDER_EDITOR_ROWS,
             appearanceLibraryScreenRowTotal(),
         )
     }
 
     @Test
     fun `home cards row total is the card-display toggles with the TV-gated trickplay fork`() {
-        // The card-display quartet plus the badge/spoiler toggles: every row
-        // renders unconditionally on the home hub except the
-        // TV-only trickplay row (its declared RowAdmission.Tv), so the strict
-        // derivation counts all eight on TV and all but the trickplay row
-        // off it.
-        assertEquals(8, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
+        // The card-display quartet plus the badge/spoiler/trickplay toggles
+        // and the QoL wave-3 badge-window/counter rows: every row renders
+        // unconditionally on the home hub except the two TV-only trickplay
+        // rows (the preview toggle and the peek hold — both declared
+        // RowAdmission.Tv), so the strict derivation counts all twelve on TV
+        // and all but the trickplay pair off it.
+        assertEquals(12, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
         assertEquals(
             SettingsScreenGroups.homeCards.items.size,
             homeCardsScreenRowTotal(isTv = true),
         )
         assertEquals(
-            SettingsScreenGroups.homeCards.items.size - 1,
+            SettingsScreenGroups.homeCards.items.size - 2,
             homeCardsScreenRowTotal(isTv = false),
         )
         assertTrue(
             SettingsScreenGroups.homeCards.items.all { !it.isAdvanced },
             "the cards rows must stay always-on",
         )
-        // The trickplay row is the one TV fork.
+        // The trickplay pair is the TV fork.
         assertEquals(
-            listOf(HomeRows.TrickplayPreview.id),
+            listOf(HomeRows.TrickplayPreview.id, HomeRows.HomeTrickplayPeekMs.id),
             SettingsScreenGroups.homeCards.items
                 .filter { SettingsScreenGroups.homeCards.admissionOf(it.id) == RowAdmission.Tv }
                 .map { it.id },
@@ -1657,6 +1675,23 @@ class SettingsCatalogScreenContractTest {
             hiddenRowsFor(playbackSlots, desktop) != hiddenRowsFor(mpvSlots, desktop),
             "the derived playback hint must track the engine branch (the frozen 28 could not)",
         )
+
+        // The performance hub's slots: a plain list (no runtime-keyed hook),
+        // so the shell count equals the plain groups' delta exactly — and
+        // equals the 15-row expert set the FusedRowsRatchetTest pins.
+        val performanceSlots = PerformanceSettingsScreenSlots()
+        val performanceGroups = listOf(
+            SettingsScreenGroups.performanceLevel,
+            SettingsScreenGroups.performanceMotion,
+            SettingsScreenGroups.performanceImages,
+            SettingsScreenGroups.performanceAmbient,
+            SettingsScreenGroups.playbackBuffers,
+        )
+        assertEquals(
+            hiddenRowsFor(performanceGroups, desktop),
+            hiddenRowsFor(performanceSlots, desktop),
+        )
+        assertEquals(15, hiddenRowsFor(performanceSlots, desktop), "the hub hint drifted")
     }
 
     // ── 8. The search-result click action ───────────────────────────────
@@ -1712,6 +1747,50 @@ class SettingsCatalogScreenContractTest {
 
         val on = settingsResultClickAction(AudioRows.Equalizer.id, Route.AudioSettings(), isAdvanced = true, showAdvancedSettings = true)
         assertFalse(on.enableAdvanced)
+    }
+
+    // ── 9. The root screen's on-screen reveal contract ──────────────────
+
+    /**
+     * The catalog ids routed bare-`Route.Settings` resolve (minus the two
+     * destructive actions) to the NoOp reveal arm: the pending highlight is
+     * the row's ONLY reveal, which surfaces solely when the row's
+     * [SettingsScreenGroups.rootRevealGroups] group auto-expands from
+     * `lastClickedSettingId`. A reveal id parked in a group outside the
+     * declaration renders its highlight inside a collapsed card — the
+     * `jellyplay_feature_*` class of bug — so the coverage must be total.
+     */
+    @Test
+    fun `every on-screen reveal id belongs to a root-screen reveal group`() {
+        val revealIds = SettingsSearchCatalog.items
+            .filter { it.route == Route.Settings }
+            .map { it.id } - setOf(AccountRows.Logout.id, AccountRows.SignOutFromServer.id)
+        assertTrue(revealIds.isNotEmpty(), "no bare-Settings reveal ids found — the route scan is broken")
+        val covered = SettingsScreenGroups.rootRevealGroups.flatMap { it.itemIdSet }.toSet()
+        val uncovered = revealIds.filterNot { it in covered }
+        assertEquals(
+            emptyList(),
+            uncovered,
+            "reveal ids whose root-screen group does not auto-expand for them — wire the group's " +
+                "initiallyExpanded to lastClickedSettingId ∈ itemIdSet and declare it in rootRevealGroups",
+        )
+    }
+
+    /** The reverse pin: a group in the reveal declaration whose ids stopped routing bare-Settings is stale. */
+    @Test
+    fun `every reveal-group id is itself a bare-Settings reveal id`() {
+        val revealIds = SettingsSearchCatalog.items
+            .filter { it.route == Route.Settings }
+            .map { it.id }
+            .toSet()
+        val stray = SettingsScreenGroups.rootRevealGroups
+            .flatMap { it.itemIdSet }
+            .filterNot { it in revealIds }
+        assertEquals(
+            emptyList(),
+            stray,
+            "groups parked in rootRevealGroups that no longer target the root screen — drop them from the declaration",
+        )
     }
 }
 

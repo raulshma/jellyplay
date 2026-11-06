@@ -32,6 +32,7 @@ class SubtitleManagerLocalSubtitleTest {
             override fun info(message: String) {}
             override fun error(message: String) {}
             override fun info(message: PlayerVideoMessage) {}
+            override fun error(message: PlayerVideoMessage) {}
         },
         scope = CoroutineScope(Dispatchers.Unconfined),
         addExternalSubtitle = { captured.add(it) },

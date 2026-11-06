@@ -187,10 +187,15 @@ fun CompanionDashboard(
                 .blur(80.dp)
                 .graphicsLayer { alpha = 0.45f }
                 .background(
-                    Brush.radialGradient(
-                        colors = listOf(dominantColor, Color.Transparent),
-                        radius = 800f
-                    )
+                    // Rebuilt only when the artwork palette changes, not on
+                    // every dashboard recomposition (tab switches, play-state
+                    // flips, track-list loads).
+                    remember(dominantColor) {
+                        Brush.radialGradient(
+                            colors = listOf(dominantColor, Color.Transparent),
+                            radius = 800f
+                        )
+                    }
                 )
         )
 

@@ -57,6 +57,7 @@ fun CastAndCrewScreen(
     LaunchedEffect(itemId) { viewModel.load(itemId) }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.detail_section_cast_crew),
@@ -75,7 +76,9 @@ fun CastAndCrewScreen(
                 val adaptiveInfo = LocalAdaptiveInfo.current
                 val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
                 val contentPad = adaptiveInfo.contentPadding(isTv)
-                val gridMin = adaptiveInfo.gridMinSize(isTv)
+                // The detail_people_grid_density pref adjusts the adaptive
+                // environment's column minimum (see peopleGridMinSize).
+                val gridMin = preferences.peopleGridDensity.peopleGridMinSize(adaptiveInfo.gridMinSize(isTv))
                 val spacing = adaptiveInfo.itemSpacing(isTv)
 
                 var tab by remember { mutableStateOf(CastCrewTab.CAST) }

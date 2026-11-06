@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.StillWatchingMode
 
@@ -47,9 +48,38 @@ internal class AutoPlayController {
     @Volatile
     private var stillWatchingThreshold: Int = 0
 
+    /**
+     * The `video_autoplay_wifi_only` pref's arm: when on, natural autoplay is
+     * skipped while the connection is metered. Explicit skip-credits presses
+     * stay exempt (the user acted deliberately). Seeded per session load
+     * (`onSessionPrefsApplied`'s hydrated aggregate) — a settings flip made
+     * MID-session applies to the next session, unlike the sibling
+     * autoplay-next flip which has a change-time fanout path.
+     */
+    @Volatile
+    private var wifiOnly: Boolean = false
+
+    /**
+     * The connectivity mirror (the session's NetworkMonitor). Unavailable
+     * platforms never call [setConnectionMetered], leaving the default
+     * `false` — i.e. treated as unmetered (the desktop posture).
+     */
+    @Volatile
+    private var connectionMetered: Boolean = false
+
     /** Mirrors `UserPreferences.videoAutoplayNext` once it is loaded/synced. */
     fun setEnabled(value: Boolean) {
         enabled = value
+    }
+
+    /** Seeds the metered-connection gate (0-arg default keeps autoplay unconditionally). Idempotent. */
+    fun setWifiOnly(value: Boolean) {
+        wifiOnly = value
+    }
+
+    /** Mirrors the network monitor's metered flag. Idempotent. */
+    fun setConnectionMetered(metered: Boolean) {
+        connectionMetered = metered
     }
 
     /** Seeds the still-watching episode threshold (0 = off). Idempotent. */
@@ -108,10 +138,12 @@ internal class AutoPlayController {
     /**
      * Natural end-of-playback rule: advance only when a next episode exists
      * (a queued up-next item counts — queue-first semantics), autoplay is
-     * enabled, and the countdown was not cancelled.
+     * enabled, the countdown was not cancelled, and — when the wifi-only
+     * gate is on — the connection is not metered.
      */
     fun shouldAutoPlayNext(nextEpisode: MediaItem?, hasQueuedNext: Boolean = false): Boolean =
-        (nextEpisode != null || hasQueuedNext) && enabled && !cancelled
+        (nextEpisode != null || hasQueuedNext) && enabled && !cancelled &&
+            !(wifiOnly && connectionMetered)
 
     /**
      * Explicit skip-credits rule: advance when a next episode exists and
@@ -120,4 +152,17 @@ internal class AutoPlayController {
      */
     fun canSkipToNext(nextEpisode: MediaItem?): Boolean =
         nextEpisode != null && enabled
+}
+
+/**
+ * The session-load seed (the load pipeline's `onSessionPrefsApplied` arm):
+ * the autoplay toggle, the still-watching threshold and the wifi-only gate,
+ * from the load's HYDRATED aggregate. The wifi-only gate has no change-time
+ * counterpart — a settings flip made MID-session applies to the next
+ * session (the metered mirror below does track live flips).
+ */
+internal fun AutoPlayController.seedSessionPrefs(agg: VideoPlayerAggregate) {
+    setEnabled(agg.videoPlayer.videoAutoplayNext)
+    setStillWatchingThreshold(agg.videoPlayer.stillWatchingEpisodeThreshold)
+    setWifiOnly(agg.videoPlayer.videoAutoplayWifiOnly)
 }

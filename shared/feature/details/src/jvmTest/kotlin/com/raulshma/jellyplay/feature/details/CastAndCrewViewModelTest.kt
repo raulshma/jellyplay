@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.details
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -12,6 +14,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +52,9 @@ class CastAndCrewViewModelTest {
     fun setUp() {
         detailFeed = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
-        viewModel = CastAndCrewViewModel(detailFeed, imageUrlProvider, ArtworkUrls.EMPTY)
+        val projections = mockk<PreferenceProjections>(relaxed = true)
+        every { projections.detailPreferences } returns MutableStateFlow(DetailPreferences())
+        viewModel = CastAndCrewViewModel(detailFeed, imageUrlProvider, ArtworkUrls.EMPTY, projections)
     }
 
     @Test

@@ -17,6 +17,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
@@ -153,7 +154,9 @@ fun MediaCardScaffold(
     val chrome = rememberCardChrome(previewFactory = previewFactory)
     val focusScale = chrome.focus.scale
     val themeVariant = LocalThemeVariant.current
-    val cardShape = ShapeCache.smooth12
+    // The shape override (the home screen's card-radius pref) wins; the
+    // default null renders the shipped smooth-12.
+    val cardShape = LocalCardShape.current ?: ShapeCache.smooth12
 
     // Anti-spoiler: the scaffold owns the card's progress surfaces (the
     // bottom bar AND the play ring's arc), so it owns the suppression gate —
@@ -188,7 +191,13 @@ fun MediaCardScaffold(
         .aspectRatio(aspectRatio)
         .then(sharedImageModifier)
 
-    val resolvedBorder = border?.stroke ?: rememberThemeCardBorder(themeVariant)
+    // Flat-cards mode removes the themed outline stroke entirely — the media
+    // cards are already elevation-0, so the border IS their depth cue.
+    val resolvedBorder = if (com.raulshma.jellyplay.core.ui.components.LocalFlatCards.current) {
+        null
+    } else {
+        border?.stroke ?: rememberThemeCardBorder(themeVariant)
+    }
     val borderAlpha = border?.alpha
     val surfaceColor = MaterialTheme.colorScheme.surface
     val resolvedScrimBrush = scrim?.brush ?: remember(surfaceColor) {
@@ -258,12 +267,30 @@ fun MediaCardScaffold(
                 }
 
                 if (effectiveShowProgress && progressFraction > 0f) {
-                    MediaCardProgressOverlay(
-                        progressFraction = progressFraction,
+                    // The progress-style pref (home): THICK doubles the bar,
+                    // PERCENT adds a small percent label above the default bar.
+                    val progressStyle = LocalCardProgressStyle.current
+                    Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth(),
-                    )
+                    ) {
+                        if (progressStyle == com.raulshma.jellyplay.core.model.HomeCwProgressStyle.PERCENT) {
+                            Text(
+                                text = "${(progressFraction.coerceIn(0f, 1f) * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = titleColor,
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .padding(horizontal = 6.dp),
+                            )
+                        }
+                        MediaCardProgressOverlay(
+                            progressFraction = progressFraction,
+                            height = if (progressStyle == com.raulshma.jellyplay.core.model.HomeCwProgressStyle.THICK) 8.dp else 4.dp,
+                        )
+                    }
                 }
             }
         }

@@ -59,6 +59,7 @@ import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.HasDisplayName
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -431,7 +432,30 @@ private val appearanceDiffFields: List<DiffField<*>> = diffRows(
     spec("ss_contrast_title", { it.appearance.contrastLevel }, { v -> v.enumDisplay() })
     hand(DiffField(Res.string.ss_style_accent_title, { it.appearance.accentColorSwatch }, ::identity))
     spec("settings_theme_style", { it.appearance.colorStyle }, { v -> v.enumDisplay() })
-    spec("ss_performance_mode_title", { it.appearance.performanceMode }, Boolean::onOff)
+    // The master level (the row's search face kept the performance_mode key;
+    // the read is the level itself since the hub wave — the boolean is the
+    // derived projection). Its face resolves through the PreferenceEnumNames
+    // seam, the same localized words the settings pickers and the player
+    // sheet's Level line render.
+    spec(
+        "ss_performance_mode_title",
+        { it.appearance.performanceLevel },
+        enumLabel = PerformanceLevel::labelResource,
+    )
+    // The Performance hub's granular rows (the tri-state overrides + the
+    // image knobs) — the reads the hub's fused rows land beside.
+    spec("ss_perf_animations_title", { it.appearance.perfAnimations }, { v -> v.enumDisplay() })
+    spec("ss_perf_shared_elements_title", { it.appearance.perfSharedElements }, { v -> v.enumDisplay() })
+    spec("ss_perf_nav_transitions_title", { it.appearance.perfNavTransitions }, { v -> v.enumDisplay() })
+    spec("ss_perf_image_decode_cap_title", { it.appearance.perfImageDecodeCap }, { v -> v.enumDisplay() })
+    spec("ss_perf_image_crossfade_title", { it.appearance.perfImageCrossfade }, { v -> v.enumDisplay() })
+    spec("ss_perf_blurhash_title", { it.appearance.perfBlurhash }, { v -> v.enumDisplay() })
+    spec("ss_perf_quality_badges_title", { it.appearance.perfQualityBadges }, { v -> v.enumDisplay() })
+    spec("ss_perf_ambient_hero_video_title", { it.appearance.perfAmbientHeroVideo }, { v -> v.enumDisplay() })
+    spec("ss_perf_backdrop_blur_title", { it.appearance.perfBackdropBlur }, { v -> v.enumDisplay() })
+    spec("ss_perf_screensaver_motion_title", { it.appearance.perfScreensaverMotion }, { v -> v.enumDisplay() })
+    // The image memory-cache percent (0 = the RAM-tiered auto; else 5..35).
+    spec("ss_image_memory_cache_title", { it.appearance.imageMemoryCachePercent }, ::memoryCachePercent)
     spec("ss_reduce_motion_title", { it.appearance.reduceMotionEnabled }, Boolean::onOff)
     hand(DiffField(Res.string.diff_synthwave_mode, { it.appearance.themeVariant == "synthwave" }, Boolean::onOff))
     hand(DiffField(Res.string.diff_soothing_mode, { it.appearance.themeVariant == "soothing" }, Boolean::onOff))
@@ -452,6 +476,19 @@ private val appearanceDiffFields: List<DiffField<*>> = diffRows(
     // these are their diff rows.
     spec("settings_layout_mode", { it.appearance.layoutMode }, { v -> v.enumDisplay() })
     spec("settings_screen_fit", { it.appearance.tvOverscan }, { v -> v.enumDisplay() })
+    // The global interface rows (the appearance-store spec-backed pair; the
+    // pull-to-refresh row resets under MISC_APP and reads in that builder).
+    spec("ss_time_use_24h_title", { it.appearance.timeUse24h }, Boolean::onOff)
+    spec("ss_card_press_animations_title", { it.appearance.cardPressAnimations }, Boolean::onOff)
+    // The global-chrome rows (backdrop dim, haptic strength, image quality,
+    // list density, data saver, press effect, flat cards, overscroll).
+    spec("ss_app_backdrop_dim_title", { it.appearance.appBackdropDim }, { v -> v.enumDisplay() })
+    spec("ss_haptics_intensity_title", { it.appearance.hapticsIntensity }, { v -> v.enumDisplay() })
+    spec("ss_image_quality_title", { it.appearance.imageQualityPreset }, { v -> v.enumDisplay() })
+    spec("ss_app_list_density_title", { it.appearance.appListDensity }, { v -> v.enumDisplay() })
+    spec("ss_app_press_effect_title", { it.appearance.appPressEffect }, { v -> v.enumDisplay() })
+    spec("ss_app_flat_cards_title", { it.appearance.appFlatCards }, Boolean::onOff)
+    spec("ss_app_overscroll_title", { it.appearance.appOverscrollStyle }, { v -> v.enumDisplay() })
 }
 
 private val playbackDiffFields: List<DiffField<*>> = diffRows(
@@ -459,6 +496,10 @@ private val playbackDiffFields: List<DiffField<*>> = diffRows(
 ) {
     spec("ss_player_engine_title", { it.playback.preferredPlayer }, { v -> v.enumDisplay() })
     spec("ss_streaming_quality_title", { it.playback.streamingQuality }, { v -> v.enumDisplay() })
+    // The performance-profile ceiling (issue #186): the knob's spec row rides
+    // the PLAYBACK category — the diff shows the pinned profile (the detected
+    // tier is per-device runtime state with no row).
+    spec("ss_performance_profile_title", { it.playback.videoPerformanceProfile }, { v -> v.enumDisplay() })
     hand(DiffField(Res.string.ss_cellular_streaming_quality_title, { it.playback.cellularStreamingQuality }, { v -> v.enumDisplay() }))
     spec("ss_playback_mode_title", { it.playback.playbackMode }, { v -> v.enumDisplay() })
     spec("ss_decoder_title", { it.playback.decoderMode }, { v -> v.enumDisplay() })
@@ -552,6 +593,45 @@ private val playbackDiffFields: List<DiffField<*>> = diffRows(
     // pins — the remembered levels blob beside it has no search face (its
     // user face IS this toggle).
     spec("ss_remember_volume_title", { it.volumeProfile.rememberVolumePerContentType }, Boolean::onOff)
+    // The video-player display/interaction QoL wave (one-key-family faces).
+    spec("settings_video_overlay_animations", { it.videoPlayer.videoOverlayAnimations }, Boolean::onOff)
+    spec("settings_video_resume_chip_ms", { it.videoPlayer.videoResumeChipMs }, { v -> "${v}ms" })
+    spec("settings_video_show_prev_next_buttons", { it.videoPlayer.videoShowPrevNextButtons }, Boolean::onOff)
+    spec("settings_video_swipe_sensitivity", { it.videoPlayer.videoSwipeSensitivity }, { v -> v.enumDisplay() })
+    spec("settings_video_gesture_overlay_linger_ms", { it.videoPlayer.videoGestureOverlayLingerMs }, { v -> "${v}ms" })
+    spec("settings_video_center_double_tap_action", { it.videoPlayer.videoCenterDoubleTapAction }, { v -> v.enumDisplay() })
+    spec("settings_video_double_tap_zone_bias", { it.videoPlayer.videoDoubleTapZoneBias }, { v -> v.enumDisplay() })
+    spec("settings_video_hold_speed_pill_style", { it.videoPlayer.videoHoldSpeedPillStyle }, { v -> v.enumDisplay() })
+    spec("settings_video_seek_bar_style", { it.videoPlayer.videoSeekBarStyle }, { v -> v.enumDisplay() })
+    spec("settings_video_show_buffered_range", { it.videoPlayer.videoShowBufferedRange }, Boolean::onOff)
+    spec("settings_video_show_chapter_markers", { it.videoPlayer.videoShowChapterMarkers }, Boolean::onOff)
+    spec("settings_video_hide_seek_timestamps", { it.videoPlayer.videoHideSeekTimestamps }, Boolean::onOff)
+    spec("settings_video_show_buffer_percent", { it.videoPlayer.videoShowBufferPercent }, Boolean::onOff)
+    spec("settings_video_seek_preview_time", { it.videoPlayer.videoSeekPreviewTime }, Boolean::onOff)
+    spec("settings_video_show_engine_badge", { it.videoPlayer.videoShowEngineBadge }, Boolean::onOff)
+    spec("settings_video_episode_browser_hide_watched", { it.videoPlayer.videoEpisodeBrowserHideWatched }, Boolean::onOff)
+    // The second QoL wave (the ss_video_*_title family — the ss_* twins).
+    spec("ss_video_tv_timeout_scale_title", { it.videoPlayer.videoTvTimeoutScale }, { v -> v.enumDisplay() })
+    spec("ss_video_keyboard_seek_preset_title", { it.videoPlayer.videoKeyboardSeekPreset }, { v -> v.enumDisplay() })
+    spec("ss_video_hold_seek_cadence_title", { it.videoPlayer.videoHoldSeekCadence }, { v -> v.enumDisplay() })
+    spec("ss_video_speed_pill_clearance_title", { it.videoPlayer.videoSpeedPillClearance }, { v -> v.enumDisplay() })
+    spec("ss_video_pause_fade_style_title", { it.videoPlayer.videoPauseFadeStyle }, { v -> v.enumDisplay() })
+    spec("ss_video_control_layout_title", { it.videoPlayer.videoControlLayout }, { v -> v.enumDisplay() })
+    spec("ss_video_max_zoom_title", { it.videoPlayer.videoMaxZoom }, { v -> v.enumDisplay() })
+    spec("ss_video_poll_cadence_title", { it.videoPlayer.videoPollCadence }, { v -> v.enumDisplay() })
+    spec("ss_video_sleep_confirm_minutes_title", { it.videoPlayer.videoSleepConfirmMinutes }, Int::toString)
+    spec("ss_video_ambient_under_fill_title", { it.videoPlayer.videoAmbientUnderFill }, Boolean::onOff)
+    spec("ss_video_buffering_veil_title", { it.videoPlayer.videoBufferingVeil }, { v -> v.enumDisplay() })
+    spec("ss_video_speed_preset_set_title", { it.videoPlayer.videoSpeedPresetSet }, { v -> v.enumDisplay() })
+    spec("ss_video_autoplay_wifi_only_title", { it.videoPlayer.videoAutoplayWifiOnly }, Boolean::onOff)
+    spec("ss_video_confirm_exit_title", { it.videoPlayer.videoConfirmExit }, Boolean::onOff)
+    // The Performance hub's ExoPlayer load-control quartet (the
+    // performance_settings route kind — the rows render in the hub, the keys
+    // reset with PLAYBACK). The 0 sentinels render Auto.
+    spec("ss_exo_initial_buffer_ms_title", { it.playback.exoInitialBufferMs }, Int::milliseconds)
+    spec("ss_exo_rebuffer_ms_title", { it.playback.exoRebufferMs }, Int::milliseconds)
+    spec("ss_exo_target_buffer_mb_title", { it.playback.exoTargetBufferMb }, ::targetBufferMb)
+    spec("ss_exo_retain_back_buffer_title", { it.playback.exoRetainBackBuffer }, Boolean::onOff)
 }
 
 private val audioDiffFields: List<DiffField<*>> = diffRows(
@@ -710,6 +790,40 @@ private val homeDiscoveryDiffFields: List<DiffField<*>> = diffRows(
     spec("ss_discover_rows_title", { it.homeDiscovery.discoverRows.size }, Int::toString)
     spec("ss_classic_rows_title", { it.homeDiscovery.classicRows }, Boolean::onOff)
     spec("ss_hidden_libraries_title", { it.homeDiscovery.myMediaHiddenLibraryIds.size }, Int::toString)
+    // The home display-QoL wave (the title-key family these rows bind).
+    spec("ss_home_greeting_title", { it.homeDiscovery.homeGreetingEnabled }, Boolean::onOff)
+    spec("ss_home_hide_see_all_title", { it.homeDiscovery.homeHideSeeAll }, Boolean::onOff)
+    spec("ss_home_card_scale_title", { it.homeDiscovery.homeCardScale }, { v -> v.enumDisplay() })
+    spec("ss_home_card_corner_radius_title", { it.homeDiscovery.homeCardCornerRadius }, Int::toString)
+    spec("ss_home_show_mode_switch_title", { it.homeDiscovery.homeShowModeSwitch }, Boolean::onOff)
+    spec("ss_home_clock_show_date_title", { it.homeDiscovery.homeClockShowDate }, Boolean::onOff)
+    spec("ss_home_newsletter_banner_title", { it.homeDiscovery.homeNewsletterBannerEnabled }, Boolean::onOff)
+    spec("ss_home_always_show_user_switcher_title", { it.homeDiscovery.homeAlwaysShowUserSwitcher }, Boolean::onOff)
+    spec("ss_home_cw_progress_style_title", { it.homeDiscovery.homeCwProgressStyle }, { v -> v.enumDisplay() })
+    spec("ss_home_presence_chips_limit_title", { it.homeDiscovery.homePresenceChipsLimit }, Int::toString)
+    spec("ss_home_genre_rail_limit_title", { it.homeDiscovery.homeGenreRailLimit }, Int::toString)
+    spec("ss_home_ask_continue_remember_title", { it.homeDiscovery.homeAskContinueRemember }, Boolean::onOff)
+    spec("ss_home_rows_animations_title", { it.homeDiscovery.homeRowsAnimations }, Boolean::onOff)
+    spec("ss_home_opaque_dock_title", { it.homeDiscovery.homeOpaqueDock }, Boolean::onOff)
+    // The home QoL wave-3 rows (the title-key family these rows bind).
+    spec("ss_home_pre_section_order_title", { it.homeDiscovery.homePreSectionOrder.size }, Int::toString)
+    spec("ss_home_new_badge_sections_title", { it.homeDiscovery.homeNewBadgeSections.size }, Int::toString)
+    spec("ss_home_refresh_cadence_title", { it.homeDiscovery.homeRefreshCadence }, { v -> v.enumDisplay() })
+    spec("ss_home_hero_idle_rotation_title", { it.homeDiscovery.homeHeroIdleRotationMs }, Int::toString)
+    spec("ss_hero_scroll_defer_title", { it.homeDiscovery.heroScrollDefer }, Boolean::onOff)
+    spec("ss_home_discover_pattern_title", { it.homeDiscovery.homeDiscoverPattern }, { v -> v.enumDisplay() })
+    spec("ss_home_newsletter_window_title", { it.homeDiscovery.homeNewsletterWindow }, { v -> v.enumDisplay() })
+    spec("ss_home_presence_poll_title", { it.homeDiscovery.homePresencePollSeconds }, Int::toString)
+    spec("ss_home_trickplay_peek_title", { it.homeDiscovery.homeTrickplayPeekMs }, Int::toString)
+    spec("ss_home_search_results_height_title", { it.homeDiscovery.homeSearchResultsHeightDp }, Int::toString)
+    spec("ss_home_my_media_columns_title", { it.homeDiscovery.homeMyMediaColumns }, Int::toString)
+    spec("ss_home_stats_metrics_title", { it.homeDiscovery.homeStatsMetrics.size }, Int::toString)
+    spec("ss_home_new_badge_days_title", { it.homeDiscovery.homeNewBadgeDays }, Int::toString)
+    spec("ss_home_row_unwatched_counters_title", { it.homeDiscovery.homeRowUnwatchedCounters }, Boolean::onOff)
+    spec("ss_home_hero_random_start_title", { it.homeDiscovery.homeHeroRandomStart }, Boolean::onOff)
+    // The start tab (the navigation domain's HOME_DISCOVERY row; the diff
+    // shows the raw destination key, "" = the shipped Home default).
+    spec("ss_start_tab_title", { it.navigation.startTab.ifBlank { "home" } })
 }
 
 private val audioCacheDiffFields: List<DiffField<*>> = listOf(
@@ -855,6 +969,9 @@ private val miscAppDiffFields: List<DiffField<*>> = diffRows(
     spec("ss_hide_search_history_title", { it.experimental.hideSearchHistory }, Boolean::onOff)
     spec("ss_android_tv_watch_next_title", { it.playback.androidTvWatchNextEnabled }, Boolean::onOff)
     hand(DiffField(Res.string.ss_audio_description_title, { it.experimental.preferAudioDescription }, Boolean::onOff))
+    // The pull-to-refresh master toggle — the interaction knob that resets
+    // under MISC_APP (the haptics precedent).
+    spec("ss_pull_to_refresh_title", { it.appearance.pullToRefreshEnabled }, Boolean::onOff)
 }
 
 // ---------------------------------------------------------------------------
@@ -864,6 +981,15 @@ private val miscAppDiffFields: List<DiffField<*>> = diffRows(
 private fun <T> identity(value: T): String = value.toString()
 private fun hour(hour: Int): String = "$hour:00"
 private fun milliseconds(ms: Long): String = "$ms ms"
+
+/** The Int-valued milliseconds face (the exo buffer rows' diff values). */
+private fun Int.milliseconds(): String = "$this ms"
+
+/** The target-buffer MB face: `0` is the engine-derived AUTO sentinel. */
+private fun targetBufferMb(mb: Int): String = if (mb == 0) "Auto" else "$mb MB"
+
+/** The image memory-cache percent face: `0` is the RAM-tiered AUTO sentinel. */
+private fun memoryCachePercent(percent: Int): String = if (percent == 0) "Auto" else "$percent%"
 private fun minutesSuffix(minutes: Int): String = "$minutes min"
 private fun decibels(gain: Int): String = "$gain dB"
 private fun speedMultiplier(speed: Float): String = speed.fmt1() + "x"

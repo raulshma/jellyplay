@@ -128,9 +128,14 @@
     <!-- H17 personal stats card ("Your library week"). -->
     <string name="home_stats_card_title">Your library week</string>
     <string name="home_stats_card_counts">%1$d played · %2$d unplayed</string>
+    <string name="home_stats_card_played_only">%1$d played</string>
+    <string name="home_stats_card_unplayed_only">%1$d unplayed</string>
     <string name="home_stats_card_watch_approx">~%1$s h watched</string>
     <string name="home_stats_card_watch_exact">%1$s h watched</string>
     <string name="home_stats_card_streak">%1$d-day streak</string>
+
+    <!-- H27 row-header unwatched counter (the arrival rows\' loaded items). -->
+    <string name="home_row_unwatched_count">%1$d unwatched</string>
 
     <!-- H4 Upcoming row: the air-date chip on an unaired-episode card (the
          details screen's "Airs <date>" vocabulary, home's own resource). -->
@@ -146,4 +151,7 @@
          event; the screen resolves the text). -->
     <string name="home_new_sections_announcement">New on Home: %1$s</string>
     <string name="home_new_sections_customize">Customize</string>
+    <string name="home_greeting_morning">Good morning, %1$s</string>
+    <string name="home_greeting_afternoon">Good afternoon, %1$s</string>
+    <string name="home_greeting_evening">Good evening, %1$s</string>
 </resources>

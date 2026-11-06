@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.chrome
 
+import com.raulshma.jellyplay.core.model.TvTimeoutScale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -63,8 +64,14 @@ class PlayerChromeController(
     // ── policy inputs (reader lambdas, invoked at decision time) ──
     /** Platform fact — static for the session (same assumption the window-seam effects make). */
     private val isTv: () -> Boolean,
-    /** The pref-sourced BASE auto-hide timeout (the TV doubling is the fold's). */
+    /** The pref-sourced BASE auto-hide timeout (the TV multiplier is the fold's). */
     private val controlsTimeoutMs: () -> Long,
+    /**
+     * The TV form factor's timeout multiplier (the `video_tv_timeout_scale`
+     * pref's fold arm; X2 = the long-standing doubling). Touch form factors
+     * never read it — the fold ignores the scale off-TV.
+     */
+    private val tvTimeoutScale: () -> TvTimeoutScale = { TvTimeoutScale.X2 },
     private val isSheetOpen: () -> Boolean,
     private val isSeeking: () -> Boolean = { false },
     private val isOverflowMenuOpen: () -> Boolean = { false },
@@ -124,7 +131,7 @@ class PlayerChromeController(
         ) {
             return
         }
-        val timeoutMs = controlsAutoHideTimeoutMs(controlsTimeoutMs(), isTv())
+        val timeoutMs = controlsAutoHideTimeoutMs(controlsTimeoutMs(), isTv(), tvTimeoutScale())
         autoHideJob = scope.launch {
             delay(timeoutMs)
             hide()

@@ -16,10 +16,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -115,8 +117,10 @@ fun rememberCardChrome(
     // Animated press feedback through the motion scheme so reduced motion /
     // performance mode flatten the transition via the theme (the same contract
     // Modifier.pressScale documents); the override arm exists for the episode
-    // card's historical always-scale behavior.
+    // card's historical always-scale behavior. The card-press-animations pref
+    // (LocalCardDisplayPreferences) is a third flatten: off = no press scale.
     val targetPressScale = when {
+        !LocalCardDisplayPreferences.current.cardPressAnimations -> 1f
         !pressScaleOverridesReducedMotion && isReducedMotion() -> 1f
         isPressed -> pressScaleValue
         else -> 1f
@@ -196,4 +200,21 @@ fun MediaCardProgressOverlay(
                 .background(fillColor)
         )
     }
+}
+
+/**
+ * The media-card scaffold's shape override — null (the default everywhere)
+ * renders the shipped [com.raulshma.jellyplay.core.designsystem.theme.ShapeCache]
+ * smooth-12 card shape; a surface (the home screen's card-radius pref) swaps
+ * the shape for its subtree only.
+ */
+val LocalCardShape = staticCompositionLocalOf<Shape?> { null }
+
+/**
+ * How a card renders its watch progress (the home screen's continue-watching
+ * progress-style pref): DEFAULT keeps the shipped 4dp bar, THICK doubles the
+ * bar height, PERCENT adds a small percent label above the bar.
+ */
+val LocalCardProgressStyle = staticCompositionLocalOf {
+    com.raulshma.jellyplay.core.model.HomeCwProgressStyle.DEFAULT
 }

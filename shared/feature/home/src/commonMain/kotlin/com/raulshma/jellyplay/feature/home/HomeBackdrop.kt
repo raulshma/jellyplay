@@ -41,7 +41,8 @@ internal enum class BackdropLayer { NONE, BLUR_HASH, AMBIENT }
 @Stable
 internal data class HomeBackdropState(
     val enabled: Boolean,
-    val performanceMode: Boolean,
+    /** The resolved posture's backdrop-blur row (false suppresses the layer). */
+    val backdropBlur: Boolean,
     val oledMode: Boolean,
     val isLightTheme: Boolean,
     /** BlurHash of the current hero backdrop, if any. */
@@ -53,17 +54,18 @@ internal data class HomeBackdropState(
 )
 
 /**
- * Whether the backdrop should render at all. Suppressed when disabled, in
- * performance mode (matches `MediaImage`'s blurhash gating), and in light
- * themes. The colourful ambient/blurhash layers sit full-screen behind a
- * scrolling list, which destroys text contrast on a light background — so
- * light mode shows the plain [HomeBackdropState.backgroundColor] (the
- * resolved `colorScheme.background`) instead. This mirrors the detail screen,
- * which fades its hero into the plain theme background in light mode rather
- * than darkening it. Pure so it can be unit-tested without a composition.
+ * Whether the backdrop should render at all. Suppressed when disabled, when
+ * the resolved posture's backdrop row is off (PERFORMANCE suppresses via
+ * AUTO — matches `MediaImage`'s blurhash gating), and in light themes. The
+ * colourful ambient/blurhash layers sit full-screen behind a scrolling list,
+ * which destroys text contrast on a light background — so light mode shows
+ * the plain [HomeBackdropState.backgroundColor] (the resolved
+ * `colorScheme.background`) instead. This mirrors the detail screen, which
+ * fades its hero into the plain theme background in light mode rather than
+ * darkening it. Pure so it can be unit-tested without a composition.
  */
 internal fun shouldRenderBackdrop(state: HomeBackdropState): Boolean =
-    state.enabled && !state.performanceMode && !state.isLightTheme
+    state.enabled && state.backdropBlur && !state.isLightTheme
 
 /**
  * Picks the active [BackdropLayer] from the resolved state. Pure for testing.
@@ -188,8 +190,9 @@ internal fun rememberFocusBackdropState(
  *  3. **Nothing** — the flat [HomeBackdropState.backgroundColor] shows through.
  *
  * Performance & accessibility:
- *  - Suppressed entirely in `performanceMode` (matches `MediaImage`'s blurhash
- *    nulling) so low-end devices pay zero cost.
+ *  - Suppressed entirely when the resolved posture's backdrop row is off
+ *    (`ResolvedPerformanceConfig.backdropBlur` — PERFORMANCE via AUTO; matches
+ *    `MediaImage`'s blurhash nulling) so low-end devices pay zero cost.
  *  - Suppressed entirely in light themes (see [shouldRenderBackdrop]); the
  *    flat [HomeBackdropState.backgroundColor] shows through instead, keeping
  *    list content legible on a light surface.
@@ -238,19 +241,23 @@ internal fun HomeBackdrop(state: HomeBackdropState) {
         backgroundColor = state.backgroundColor,
         oledMode = state.oledMode,
         isLightTheme = state.isLightTheme,
+        dim = com.raulshma.jellyplay.core.ui.components.LocalBackdropDim.current.multiplier,
     )
 }
 
 /**
  * Transparent overlay whose only job is to paint the legibility scrim on top
  * of the backdrop. Kept separate so the backdrop layer and scrim compose and
- * invalidate independently.
+ * invalidate independently. [dim] is the appearance row's backdrop-dim
+ * multiplier (DEFAULT 1f = the shipped scrim; NONE lifts it; HEAVIER
+ * deepens it), applied to both gradient stops with a clamp.
  */
 @Composable
 private fun ScrimOverlay(
     backgroundColor: Color,
     oledMode: Boolean,
     isLightTheme: Boolean,
+    dim: Float,
 ) {
     androidx.compose.foundation.layout.Box(
         modifier = Modifier
@@ -260,6 +267,7 @@ private fun ScrimOverlay(
                     backgroundColor = backgroundColor,
                     oledMode = oledMode,
                     isLightTheme = isLightTheme,
+                    dim = dim,
                 )
                 // Built in the cache phase so the Brush isn't re-allocated on
                 // every draw pass.
@@ -275,6 +283,7 @@ private fun scrimColors(
     backgroundColor: Color,
     oledMode: Boolean,
     isLightTheme: Boolean,
+    dim: Float = 1f,
 ): List<Color> {
     // Blend the backdrop toward the screen's background colour so list content
     // is legible. OLED crushes everything toward black (the whole point of the
@@ -284,11 +293,11 @@ private fun scrimColors(
         isLightTheme -> lerp(backgroundColor, Color.White, 0.1f)
         else -> backgroundColor
     }
-    val topAlpha = if (oledMode) 0.45f else 0.2f
-    val bottomAlpha = if (oledMode) 0.85f else 0.6f
+    val topAlpha = (if (oledMode) 0.45f else 0.2f) * dim
+    val bottomAlpha = (if (oledMode) 0.85f else 0.6f) * dim
     return listOf(
-        target.copy(alpha = topAlpha),
-        target.copy(alpha = bottomAlpha),
+        target.copy(alpha = topAlpha.coerceIn(0f, 1f)),
+        target.copy(alpha = bottomAlpha.coerceIn(0f, 1f)),
     )
 }
 

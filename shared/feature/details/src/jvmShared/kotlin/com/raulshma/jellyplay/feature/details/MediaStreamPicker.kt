@@ -125,9 +125,12 @@ internal fun StaggeredDetailSection(
     // [LocalDetailEntrance] progress so the detail body reveals top-to-bottom
     // rather than all at once. The stagger is a pure arithmetic offset (no
     // per-section coroutine / animateFloatAsState), collapsing ~13 coroutines
-    // into the one driving the shared progress.
+    // into the one driving the shared progress. The per-index step is the
+    // preference-scaled [LocalDetailStaggerStep] (the same value the driver's
+    // target covers — see MediaDetailBody).
     val progress = LocalDetailEntrance.current
-    val sectionProgress = (progress - delayIndex * DETAIL_STAGGER_STEP).coerceIn(0f, 1f)
+    val staggerStep = LocalDetailStaggerStep.current
+    val sectionProgress = (progress - delayIndex * staggerStep).coerceIn(0f, 1f)
     Box(modifier = Modifier.graphicsLayer {
         alpha = sectionProgress
         translationY = (1f - sectionProgress) * 24f
@@ -179,7 +182,9 @@ internal fun MediaInfoSection(
         val selectedAudio = when (selectedAudioIndex) {
             -1 -> defaultAudio
             null -> {
-                val prefAudioLang = preferences.preferredAudioLanguage ?: "eng"
+                // The fallback when no preferred language matched is the
+                // detail_stream_fallback_language pref (the shipped "eng").
+                val prefAudioLang = preferences.preferredAudioLanguage ?: preferences.streamFallbackLanguage
                 audioStreams.firstOrNull { isLanguageMatch(it.language, prefAudioLang) } ?: defaultAudio
             }
             else -> audioStreams.firstOrNull { it.index == selectedAudioIndex } ?: defaultAudio
@@ -189,7 +194,7 @@ internal fun MediaInfoSection(
         val selectedSubtitle = when (selectedSubtitleIndex) {
             -1 -> null // Explicitly Off
             null -> {
-                val prefSubLang = preferences.preferredSubtitleLanguage ?: "eng"
+                val prefSubLang = preferences.preferredSubtitleLanguage ?: preferences.streamFallbackLanguage
                 subtitleStreams.firstOrNull { isLanguageMatch(it.language, prefSubLang) }
             }
             else -> subtitleStreams.firstOrNull { it.index == selectedSubtitleIndex } ?: defaultSubtitle

@@ -362,9 +362,12 @@ private fun splitOnUnescapedPipes(row: String): List<String> {
 private fun String.cleanCell(): String =
     trim().replace("**", "").replace("`", "").replace("\\|", "|").replace("\\\\", "\\").trim()
 
+/** A run of characters outside `a-z0-9`, collapsed to a dash by [String.toEntryId]. */
+private val slugNonAlphanumRegex = Regex("[^a-z0-9]+")
+
 /** Stable id derived from the title (`Steadier Home loading` → `steadier-home-loading`). */
 private fun String.toEntryId(): String =
-    lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+    lowercase().replace(slugNonAlphanumRegex, "-").trim('-')
 
 /**
  * The releases of [this] feed, newest version first, using the app's canonical

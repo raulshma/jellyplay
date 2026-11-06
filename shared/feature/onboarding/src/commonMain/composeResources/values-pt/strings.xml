@@ -119,10 +119,10 @@
     <!-- PerformanceStep -->
     <string name="onboarding_performance_title">Desempenho</string>
     <string name="onboarding_performance_subtitle">Otimize a aplicação para o seu dispositivo</string>
-    <string name="onboarding_performance_mode">Modo de desempenho</string>
-    <string name="onboarding_performance_description">Reduz animações, transições e qualidade de imagem para um desempenho mais fluido em dispositivos mais modestos. Pode sempre alterar isto mais tarde nas Definições.</string>
-    <string name="onboarding_performance_enable">Ativar modo de desempenho</string>
-    <string name="onboarding_performance_enable_subtitle">Otimização para dispositivos mais modestos</string>
+    <string name="onboarding_performance_mode">Desempenho</string>
+    <string name="onboarding_performance_description">Alterna entre os níveis Padrão e Desempenho: o nível de Desempenho suprime animações, transições e trabalho de imagens para uma reprodução mais fluida em dispositivos mais modestos. Ajuste cada efeito e escolha Equilibrado em qualquer momento em Definições → Desempenho.</string>
+    <string name="onboarding_performance_enable">Ativar o nível de Desempenho</string>
+    <string name="onboarding_performance_enable_subtitle">Otimização para dispositivos mais modestos (o nível de Desempenho)</string>
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="onboarding_feature_syncplay">SyncPlay — ver juntos</string>

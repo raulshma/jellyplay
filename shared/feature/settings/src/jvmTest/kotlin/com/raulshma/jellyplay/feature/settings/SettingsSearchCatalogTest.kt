@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
+import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_profile_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_profile_title
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -67,18 +71,31 @@ class SettingsSearchCatalogTest {
         assertEquals(6, SettingsScreenGroups.systemHooks.items.size)
         assertEquals(2, SettingsScreenGroups.jellyplaySync.items.size)
         assertEquals(14, SettingsScreenGroups.jellyplayFeatures.items.size)
-        assertEquals(20, SettingsScreenGroups.homeDisplay.items.size)
-        assertEquals(4, SettingsScreenGroups.homeNextUp.items.size)
+        assertEquals(43, SettingsScreenGroups.homeDisplay.items.size)
+        assertEquals(6, SettingsScreenGroups.homeNextUp.items.size)
         assertEquals(5, SettingsScreenGroups.homeLayout.items.size)
-        assertEquals(8, SettingsScreenGroups.homeCards.items.size)
+        assertEquals(12, SettingsScreenGroups.homeCards.items.size)
         assertEquals(20, SettingsScreenGroups.appearanceTheme.items.size)
-        assertEquals(2, SettingsScreenGroups.appearanceNavigation.items.size)
-        assertEquals(24, SettingsScreenGroups.appearanceLibrary.items.size)
-        assertEquals(2, SettingsScreenGroups.appearancePerformance.items.size)
+        assertEquals(13, SettingsScreenGroups.appearanceNavigation.items.size)
+        assertEquals(52, SettingsScreenGroups.appearanceLibrary.items.size)
+        // The master level row lives in the hub's level group now; the
+        // appearance screen's group keeps only the Reduce Motion toggle.
+        assertEquals(1, SettingsScreenGroups.appearancePerformance.items.size)
         assertEquals(2, SettingsScreenGroups.appearanceEyeCare.items.size)
         assertEquals(3, SettingsScreenGroups.appearanceNewsletter.items.size)
-        assertEquals(53, SettingsScreenGroups.playbackPlayer.items.size)
-        assertEquals(26, SettingsScreenGroups.playbackAdvancedVideo.items.size)
+        // The Performance hub's five groups: the always-visible master dial,
+        // then the four expert groups (3 motion + 5 images + 3 ambient + the
+        // playback-domain buffer quartet).
+        assertEquals(1, SettingsScreenGroups.performanceLevel.items.size)
+        assertEquals(3, SettingsScreenGroups.performanceMotion.items.size)
+        assertEquals(5, SettingsScreenGroups.performanceImages.items.size)
+        assertEquals(3, SettingsScreenGroups.performanceAmbient.items.size)
+        assertEquals(4, SettingsScreenGroups.playbackBuffers.items.size)
+        assertEquals(83, SettingsScreenGroups.playbackPlayer.items.size)
+        // 26 + the issue #186 pair: the spec-backed performance-profile row
+        // beside Streaming Quality and the residual Re-detect action row
+        // (admitted only while the profile is AUTO, but always declared).
+        assertEquals(28, SettingsScreenGroups.playbackAdvancedVideo.items.size)
         assertEquals(42, SettingsScreenGroups.playbackEngine.items.size)
         assertEquals(3, SettingsScreenGroups.playbackSyncPlay.items.size)
         assertEquals(3, SettingsScreenGroups.playbackCasting.items.size)
@@ -108,5 +125,30 @@ class SettingsSearchCatalogTest {
         // members.
         assertEquals(SettingsScreenGroups.all.sumOf { it.items.size }, items.size)
         assertEquals(ExperimentalSettingsSearchItems.last().id, items.last().id)
+    }
+
+    /**
+     * The video-performance-profile search entry (issue #186): the spec side
+     * declares the semantics + resource keys in core:datastore, and the fused
+     * UI row (`PlaybackRows.VideoPerformanceProfile`, a separate wave) binds
+     * them into the catalog — the binding's `verifyResourceKey` fails fast at
+     * catalog init unless the declared keys match these generated resources.
+     * Pinned here so the binding contract is stated and checked before the
+     * row lands; the catalog's per-group count pin above flips with the row.
+     */
+    @Test
+    fun `the video performance profile spec entry declares the search faces the fused row must bind`() {
+        val spec = PlaybackPreferenceSpecs.searchEntries.single { it.id == "video_performance_profile" }
+        assertEquals("ss_performance_profile_title", spec.titleKey)
+        assertEquals("ss_performance_profile_subtitle", spec.subtitleKey)
+        assertEquals("ss_cat_playback", spec.categoryKey)
+        assertEquals(PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS, spec.routeKind)
+        assertTrue(spec.isAdvanced, "the profile row hides behind the advanced-settings gate")
+        assertTrue(spec.keywords.isNotEmpty(), "the profile entry carries no keywords")
+        // The declared keys ARE the generated resources' keys — the resource
+        // exists, and the future binding cannot silently swap a different
+        // string in under the spec.
+        assertEquals("ss_performance_profile_title", Res.string.ss_performance_profile_title.key)
+        assertEquals("ss_performance_profile_subtitle", Res.string.ss_performance_profile_subtitle.key)
     }
 }

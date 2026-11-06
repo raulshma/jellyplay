@@ -56,6 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextOverflow
+import com.raulshma.jellyplay.core.model.FilmographySort
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
@@ -447,9 +448,19 @@ fun PersonDetailScreen(
 
             // Filter + sort are client-side over the already-loaded filmography,
             // so they don't add server round-trips. Defaults surface everything
-            // newest-first, matching how most cast pages read.
-            val filmography = remember(success.filmography) {
-                success.filmography.sortedByDescending { it.year ?: 0 }
+            // newest-first, matching how most cast pages read; the
+            // detail_filmography_sort pref picks the explicit order
+            // (DEFAULT/YEAR_DESC = the shipped newest-first, YEAR_ASC /
+            // ALPHABETICAL the alternatives).
+            val filmography = remember(success.filmography, preferences.filmographySort) {
+                when (preferences.filmographySort) {
+                    FilmographySort.DEFAULT, FilmographySort.YEAR_DESC ->
+                        success.filmography.sortedByDescending { it.year ?: 0 }
+                    FilmographySort.YEAR_ASC ->
+                        success.filmography.sortedBy { it.year ?: 0 }
+                    FilmographySort.ALPHABETICAL ->
+                        success.filmography.sortedBy { it.name.lowercase() }
+                }
             }
             // The filmography surfaces gate on the preferences here so a toggle
             // takes effect on the already-loaded screen (an off pref reads as

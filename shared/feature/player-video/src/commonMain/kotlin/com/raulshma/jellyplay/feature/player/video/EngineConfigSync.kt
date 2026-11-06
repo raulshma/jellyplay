@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
+import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +49,12 @@ internal data class EngineConfigSlices(
     val engineSpecific: EngineSpecificConfig?,
     /** The session-scoped deinterlace cycle value. */
     val deinterlace: DeinterlaceMode,
+    /**
+     * The uiPrefs-mirrored performance tuning (issue #186 §5.8/§5.11) — the
+     * resolver-sourced leaf the §5.11 step-4 collector keeps fresh. Default
+     * NONE keeps the pre-profile rigs compiling.
+     */
+    val performanceTuning: VideoPerformanceTuning = VideoPerformanceTuning.NONE,
 )
 
 /**
@@ -127,6 +134,7 @@ internal class EngineConfigSync(
             agg = s.agg,
             engineSpecific = s.engineSpecific,
             deinterlace = s.deinterlace,
+            performanceTuning = s.performanceTuning,
         )
         getEngine()?.updateConfig(config)
     }

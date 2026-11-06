@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.catalogue
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.SmartPlayPriority
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 
 /**
@@ -42,22 +43,55 @@ data class NextEpisode(
          * copy of it before delegating here). Returns [NONE] when [sorted] is
          * empty.
          *
-         * Resolution order:
+         * Resolution order ([priority] = [SmartPlayPriority.DEFAULT], the
+         * shipped behavior):
          *   1. First episode with resume progress (>0 ticks, not finished —
          *      [hasWatchProgress], the model-layer predicate).
          *   2. First unplayed episode — NEXT_UP when something before it was
          *      watched/started, else plain PLAY.
          *   3. All played → REPLAY the first from 0.
          *
-         * Virtual (missing/unaired) episodes are never candidates — they have
-         * no file behind them, so neither the initial queue item nor the
-         * replay fallback may land on one (findroid's
-         * PlaylistManager.getInitialItem filters `!it.missing` for the same
-         * reason). The list itself keeps them; only this scan skips them.
+         * The other [SmartPlayPriority] steps reorder the SAME three
+         * candidates: NEXT_UP_FIRST tries the first unplayed episode before
+         * the in-progress resume; REPLAY_FIRST restarts the first episode
+         * before either. Virtual (missing/unaired) episodes are never
+         * candidates under any priority — they have no file behind them, so
+         * neither the initial queue item nor the replay fallback may land on
+         * one (findroid's PlaylistManager.getInitialItem filters `!it.missing`
+         * for the same reason). The list itself keeps them; only this scan
+         * skips them.
          */
-        fun forSorted(sorted: List<MediaItem>): NextEpisode {
+        fun forSorted(
+            sorted: List<MediaItem>,
+            priority: SmartPlayPriority = SmartPlayPriority.DEFAULT,
+        ): NextEpisode {
             val playable = sorted.filterNot { it.isVirtual }
             if (playable.isEmpty()) return NONE
+
+            // REPLAY_FIRST: restart from the top before any candidate scan.
+            if (priority == SmartPlayPriority.REPLAY_FIRST) {
+                return NextEpisode(
+                    kind = NextUpKind.REPLAY,
+                    episode = playable.first(),
+                    startPositionTicks = 0L,
+                )
+            }
+
+            // NEXT_UP_FIRST: the first unplayed episode wins over the
+            // in-progress resume candidate.
+            if (priority == SmartPlayPriority.NEXT_UP_FIRST) {
+                val nextEpisode = playable.firstOrNull { !it.isPlayed }
+                if (nextEpisode != null) {
+                    val hasWatchedBefore = playable
+                        .takeWhile { it.id != nextEpisode.id }
+                        .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
+                    return NextEpisode(
+                        kind = if (hasWatchedBefore) NextUpKind.NEXT_UP else NextUpKind.PLAY,
+                        episode = nextEpisode,
+                        startPositionTicks = 0L,
+                    )
+                }
+            }
 
             val resumeEpisode = playable.firstOrNull { it.hasWatchProgress }
             if (resumeEpisode != null) {

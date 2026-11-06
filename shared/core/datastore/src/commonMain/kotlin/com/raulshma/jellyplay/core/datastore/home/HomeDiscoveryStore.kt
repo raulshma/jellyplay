@@ -18,6 +18,10 @@ import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
+import com.raulshma.jellyplay.core.model.HomeCardScale
+import com.raulshma.jellyplay.core.model.HomeCwProgressStyle
+import com.raulshma.jellyplay.core.model.HomeDiscoverPattern
+import com.raulshma.jellyplay.core.model.HomeRefreshCadence
 import com.raulshma.jellyplay.core.model.HomeLayoutConfig
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -30,6 +34,7 @@ import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeHeroStyle
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.NewsletterBannerWindow
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -217,6 +222,35 @@ class HomeDiscoveryStore constructor(
         val SHOW_CLOCK_ON_HOME = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.keyName)
         val SHOW_SETTINGS_IN_HOME_SEARCH = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH.keyName)
         val HIDE_TOP_HEADER_ON_SCROLL = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.keyName)
+        val HOME_GREETING_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_GREETING_ENABLED.keyName)
+        val HOME_HIDE_SEE_ALL = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HIDE_SEE_ALL.keyName)
+        val HOME_CARD_SCALE = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_CARD_SCALE.keyName)
+        val HOME_CARD_CORNER_RADIUS = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_CARD_CORNER_RADIUS.keyName)
+        val HOME_SHOW_MODE_SWITCH = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_SHOW_MODE_SWITCH.keyName)
+        val HOME_CLOCK_SHOW_DATE = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_CLOCK_SHOW_DATE.keyName)
+        val HOME_NEWSLETTER_BANNER_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_NEWSLETTER_BANNER_ENABLED.keyName)
+        val HOME_ALWAYS_SHOW_USER_SWITCHER = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_ALWAYS_SHOW_USER_SWITCHER.keyName)
+        val HOME_CW_PROGRESS_STYLE = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_CW_PROGRESS_STYLE.keyName)
+        val HOME_PRESENCE_CHIPS_LIMIT = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_CHIPS_LIMIT.keyName)
+        val HOME_GENRE_RAIL_LIMIT = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_GENRE_RAIL_LIMIT.keyName)
+        val HOME_ASK_CONTINUE_REMEMBER = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_ASK_CONTINUE_REMEMBER.keyName)
+        val HOME_ROWS_ANIMATIONS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_ROWS_ANIMATIONS.keyName)
+        val HOME_OPAQUE_DOCK = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_OPAQUE_DOCK.keyName)
+        val HOME_PRE_SECTION_ORDER = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_PRE_SECTION_ORDER.keyName)
+        val HOME_NEW_BADGE_SECTIONS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_NEW_BADGE_SECTIONS.keyName)
+        val HOME_REFRESH_CADENCE = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_REFRESH_CADENCE.keyName)
+        val HOME_HERO_IDLE_ROTATION_MS = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_IDLE_ROTATION_MS.keyName)
+        val HERO_SCROLL_DEFER = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HERO_SCROLL_DEFER.keyName)
+        val HOME_DISCOVER_PATTERN = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_PATTERN.keyName)
+        val HOME_NEWSLETTER_WINDOW = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_NEWSLETTER_WINDOW.keyName)
+        val HOME_PRESENCE_POLL_SECONDS = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_POLL_SECONDS.keyName)
+        val HOME_TRICKPLAY_PEEK_MS = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PEEK_MS.keyName)
+        val HOME_SEARCH_RESULTS_HEIGHT_DP = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_SEARCH_RESULTS_HEIGHT_DP.keyName)
+        val HOME_MY_MEDIA_COLUMNS = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_MY_MEDIA_COLUMNS.keyName)
+        val HOME_STATS_METRICS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_STATS_METRICS.keyName)
+        val HOME_NEW_BADGE_DAYS = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_NEW_BADGE_DAYS.keyName)
+        val HOME_ROW_UNWATCHED_COUNTERS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_ROW_UNWATCHED_COUNTERS.keyName)
+        val HOME_HERO_RANDOM_START = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_RANDOM_START.keyName)
         val HOME_NS_MIGRATED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_NS_MIGRATED.keyName)
         val HOME_V3_UPGRADE_BASELINE_DONE =
             booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_V3_UPGRADE_BASELINE_DONE.keyName)
@@ -1189,6 +1223,163 @@ class HomeDiscoveryStore constructor(
         prefs[HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.userKey(userId)] = enabled
     }
 
+    suspend fun setHomeGreetingEnabled(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_GREETING_ENABLED.userKey(userId)] = enabled
+    }
+
+    suspend fun setHomeHideSeeAll(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_HIDE_SEE_ALL.userKey(userId)] = enabled
+    }
+
+    suspend fun setHomeCardScale(scale: HomeCardScale) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_CARD_SCALE.rawUserKey(userId)] = scale.name
+    }
+
+    /** Clamps to the spec's 0..28 range — the setter is the clamp owner. */
+    suspend fun setHomeCardCornerRadius(radiusDp: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_CARD_CORNER_RADIUS.userKey(userId)] = radiusDp.coerceIn(0, 28)
+    }
+
+    suspend fun setHomeShowModeSwitch(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_SHOW_MODE_SWITCH.userKey(userId)] = enabled
+    }
+
+    suspend fun setHomeClockShowDate(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_CLOCK_SHOW_DATE.userKey(userId)] = enabled
+    }
+
+    suspend fun setHomeNewsletterBannerEnabled(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_NEWSLETTER_BANNER_ENABLED.userKey(userId)] = enabled
+    }
+
+    suspend fun setHomeAlwaysShowUserSwitcher(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_ALWAYS_SHOW_USER_SWITCHER.userKey(userId)] = enabled
+    }
+
+    suspend fun setHomeCwProgressStyle(style: HomeCwProgressStyle) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_CW_PROGRESS_STYLE.rawUserKey(userId)] = style.name
+    }
+
+    /** Clamps to the spec's 2..8 range — the setter is the clamp owner. */
+    suspend fun setHomePresenceChipsLimit(limit: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_CHIPS_LIMIT.userKey(userId)] = limit.coerceIn(2, 8)
+    }
+
+    /** Clamps to the spec's 6..36 range — the setter is the clamp owner. */
+    suspend fun setHomeGenreRailLimit(limit: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_GENRE_RAIL_LIMIT.userKey(userId)] = limit.coerceIn(6, 36)
+    }
+
+    suspend fun setHomeAskContinueRemember(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_ASK_CONTINUE_REMEMBER.userKey(userId)] = enabled
+    }
+
+    suspend fun setHomeRowsAnimations(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_ROWS_ANIMATIONS.userKey(userId)] = enabled
+    }
+
+    suspend fun setHomeOpaqueDock(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_OPAQUE_DOCK.userKey(userId)] = enabled
+    }
+
+    // ── Home QoL wave 3 ─────────────────────────────────────────────────
+
+    /**
+     * The pre-section block's user order. Normalized through the row's
+     * shared helper: lowercase, dedupe, drop unknown tokens, append the
+     * missing ones in canonical order.
+     */
+    suspend fun setHomePreSectionOrder(tokens: List<String>) = editForUser { prefs, userId ->
+        val normalized = HomeDiscoveryPreferenceSpecs.normalizePreSectionOrder(tokens.joinToString(","))
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_PRE_SECTION_ORDER.rawUserKey(userId)] = normalized.joinToString(",")
+    }
+
+    /**
+     * The sections whose cards render the NEW badge. Normalized through the
+     * row's shared helper: unknown names dropped, absent slot → canonical
+     * trio, an explicitly empty set badges nothing.
+     */
+    suspend fun setHomeNewBadgeSections(types: Set<HomeSectionType>) = editForUser { prefs, userId ->
+        val normalized = HomeDiscoveryPreferenceSpecs.normalizeNewBadgeSections(types.joinToString(",") { it.name })
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_NEW_BADGE_SECTIONS.rawUserKey(userId)] =
+            normalized.joinToString(",") { it.name }
+    }
+
+    /** The home feed's automatic refresh cadence. */
+    suspend fun setHomeRefreshCadence(cadence: HomeRefreshCadence) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_REFRESH_CADENCE.rawUserKey(userId)] = cadence.name
+    }
+
+    /** Clamps to the spec's 3000..30000 range — the setter is the clamp owner. */
+    suspend fun setHomeHeroIdleRotationMs(ms: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_IDLE_ROTATION_MS.userKey(userId)] =
+            ms.coerceIn(HomeDiscoveryPreferenceSpecs.HOME_HERO_IDLE_ROTATION_MS_BOUNDS)
+    }
+
+    /** Whether hero rotation defers while the home list is scrolling. */
+    suspend fun setHeroScrollDefer(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HERO_SCROLL_DEFER.userKey(userId)] = enabled
+    }
+
+    /** The discover rows' partition pattern. */
+    suspend fun setHomeDiscoverPattern(pattern: HomeDiscoverPattern) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_PATTERN.rawUserKey(userId)] = pattern.name
+    }
+
+    /** The newsletter banner's weekday window (stacks on the on/off toggle). */
+    suspend fun setHomeNewsletterWindow(window: NewsletterBannerWindow) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_NEWSLETTER_WINDOW.rawUserKey(userId)] = window.name
+    }
+
+    /** Clamps to the spec's 15..300 range — the setter is the clamp owner. */
+    suspend fun setHomePresencePollSeconds(seconds: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_POLL_SECONDS.userKey(userId)] =
+            seconds.coerceIn(HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_POLL_SECONDS_BOUNDS)
+    }
+
+    /** Clamps to the spec's 1000..5000 range — the setter is the clamp owner. */
+    suspend fun setHomeTrickplayPeekMs(ms: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PEEK_MS.userKey(userId)] =
+            ms.coerceIn(HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PEEK_MS_BOUNDS)
+    }
+
+    /** Clamps to the spec's 280..640 range — the setter is the clamp owner. */
+    suspend fun setHomeSearchResultsHeightDp(dp: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_SEARCH_RESULTS_HEIGHT_DP.userKey(userId)] =
+            dp.coerceIn(HomeDiscoveryPreferenceSpecs.HOME_SEARCH_RESULTS_HEIGHT_DP_BOUNDS)
+    }
+
+    /** Clamps to the spec's 0..6 range — the setter is the clamp owner. */
+    suspend fun setHomeMyMediaColumns(columns: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_MY_MEDIA_COLUMNS.userKey(userId)] =
+            columns.coerceIn(HomeDiscoveryPreferenceSpecs.HOME_MY_MEDIA_COLUMNS_BOUNDS)
+    }
+
+    /**
+     * The stats card's visible metrics. Normalized through the row's shared
+     * helper: unknown tokens dropped, empty → canonical all-three set.
+     */
+    suspend fun setHomeStatsMetrics(metrics: Set<String>) = editForUser { prefs, userId ->
+        val normalized = HomeDiscoveryPreferenceSpecs.normalizeStatsMetrics(metrics.joinToString(","))
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_STATS_METRICS.rawUserKey(userId)] = normalized.joinToString(",")
+    }
+
+    /** Clamps to the spec's 1..30 range — the setter is the clamp owner. */
+    suspend fun setHomeNewBadgeDays(days: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_NEW_BADGE_DAYS.userKey(userId)] =
+            days.coerceIn(HomeDiscoveryPreferenceSpecs.HOME_NEW_BADGE_DAYS_BOUNDS)
+    }
+
+    /** Unwatched counters in the section-row headers. */
+    suspend fun setHomeRowUnwatchedCounters(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_ROW_UNWATCHED_COUNTERS.userKey(userId)] = enabled
+    }
+
+    /** The hero starts at a random candidate instead of the first. */
+    suspend fun setHomeHeroRandomStart(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_RANDOM_START.userKey(userId)] = enabled
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. This is the
      * home/discovery subset of the legacy `HOME_DISCOVERY` reset category — the
@@ -1385,6 +1576,64 @@ data class HomeDiscoverySlice(
      * `hideBottomNavOnScroll` toggle.
      */
     val hideTopHeaderOnScroll: Boolean = false,
+    /** Time-aware greeting chip ("Good evening, ⟨name⟩") in the top dock. Default off. */
+    val homeGreetingEnabled: Boolean = false,
+    /** Hides the per-row "See All" pills for a minimal chrome look. Default off. */
+    val homeHideSeeAll: Boolean = false,
+    /** The poster rows' card width scale. Default DEFAULT. */
+    val homeCardScale: HomeCardScale = HomeCardScale.DEFAULT,
+    /** The home cards' corner radius in dp (0-28). Default 12. */
+    val homeCardCornerRadius: Int = 12,
+    /** Whether the Video/Music mode switch renders in the top dock. Default on. */
+    val homeShowModeSwitch: Boolean = true,
+    /** Renders the date under the home clock. Default off. */
+    val homeClockShowDate: Boolean = false,
+    /** Whether the weekly newsletter banner renders on home. Default on. */
+    val homeNewsletterBannerEnabled: Boolean = true,
+    /** Always render the user switcher chip (even with a single user). Default off. */
+    val homeAlwaysShowUserSwitcher: Boolean = false,
+    /** Continue-watching progress display style. Default DEFAULT. */
+    val homeCwProgressStyle: HomeCwProgressStyle = HomeCwProgressStyle.DEFAULT,
+    /** Max presence chips rendered in the row (2-8). Default 4. */
+    val homePresenceChipsLimit: Int = 4,
+    /** Max genre chips in the genre rail (6-36). Default 24. */
+    val homeGenreRailLimit: Int = 24,
+    /** Persists the ask-continue dialog choice as the new click behavior. Default off. */
+    val homeAskContinueRemember: Boolean = false,
+    /** The section rows' one-shot entrance fade/translate. Default on. */
+    val homeRowsAnimations: Boolean = true,
+    /** Renders the dock capsules opaque (fully readable on bright backdrops). Default off. */
+    val homeOpaqueDock: Boolean = false,
+    /** The pre-section block's user order (normalized tokens; default canonical). */
+    val homePreSectionOrder: List<String> = HomeDiscoveryPreferenceSpecs.HOME_PRE_SECTION_ORDER_CANONICAL,
+    /** The sections whose cards render the NEW badge (default the arrival trio). */
+    val homeNewBadgeSections: Set<HomeSectionType> = HomeDiscoveryPreferenceSpecs.HOME_NEW_BADGE_SECTIONS_CANONICAL.toSet(),
+    /** The home feed's automatic refresh cadence. Default DEFAULT (60 s). */
+    val homeRefreshCadence: HomeRefreshCadence = HomeRefreshCadence.DEFAULT,
+    /** The hero carousel's idle auto-rotation dwell in ms (3000-30000). Default 8000. */
+    val homeHeroIdleRotationMs: Int = 8000,
+    /** Whether hero rotation defers while the home list is scrolling. Default on. */
+    val heroScrollDefer: Boolean = true,
+    /** The discover rows' partition pattern. Default DEFAULT (the shipped rhythm). */
+    val homeDiscoverPattern: HomeDiscoverPattern = HomeDiscoverPattern.DEFAULT,
+    /** The newsletter banner's weekday window. Default DEFAULT (the plugin logic). */
+    val homeNewsletterWindow: NewsletterBannerWindow = NewsletterBannerWindow.DEFAULT,
+    /** The presence chips' foreground poll cadence in seconds (15-300). Default 60. */
+    val homePresencePollSeconds: Int = 60,
+    /** How long the TV trickplay peek holds before fading (1000-5000 ms). Default 2500. */
+    val homeTrickplayPeekMs: Int = 2500,
+    /** The home search results pane's height cap in dp (280-640). Default 400. */
+    val homeSearchResultsHeightDp: Int = 400,
+    /** The My Media tiles row's visible-column count (0 = the shipped chassis width). */
+    val homeMyMediaColumns: Int = 0,
+    /** The stats card's visible metrics (subset of played/unplayed/minutes; default all). */
+    val homeStatsMetrics: Set<String> = HomeDiscoveryPreferenceSpecs.HOME_STATS_METRICS_CANONICAL.toSet(),
+    /** The NEW-badge arrival window in days (1-30). Default 30. */
+    val homeNewBadgeDays: Int = 30,
+    /** Unwatched counters in the section-row headers. Default off. */
+    val homeRowUnwatchedCounters: Boolean = false,
+    /** The hero starts at a random candidate instead of the first. Default off. */
+    val homeHeroRandomStart: Boolean = false,
 ) {
     /** Whether [libraryId] is hidden from the My Media tiles row. */
     fun isLibraryHiddenFromMyMedia(libraryId: String): Boolean = libraryId in myMediaHiddenLibraryIds

@@ -207,6 +207,103 @@ internal fun SettingReorderableToggleItem(
     )
 }
 
+/**
+ * [SettingReorderableToggleItem]'s no-toggle twin: a reorderable list row with
+ * only the drag handle — for reorder lists whose items carry no on/off state
+ * (the detail section-order editor; the nav-customization group's rows are
+ * hide+order, hence the switch twin). Same chrome verbatim minus the Switch.
+ */
+@Composable
+internal fun SettingReorderableItem(
+    icon: ImageVector,
+    title: String,
+    index: Int = 0,
+    count: Int = 1,
+    isDragging: Boolean = false,
+    modifier: Modifier = Modifier,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+) {
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
+
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
+            )
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        trailingContent = {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .pointerInput(Unit) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                onDragStart()
+                            },
+                            onDragEnd = {
+                                onDragEnd()
+                            },
+                            onDragCancel = {
+                                onDragEnd()
+                            },
+                        ) { change, dragAmount ->
+                            change.consume()
+                            onDrag(dragAmount.y)
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Tabler.Outline.GripVertical,
+                    contentDescription = stringResource(Res.string.settings_reorder_section),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDragging) 0.9f else 0.6f),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = groupedItemContainerColor(),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(modifier)
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = 0.97f,
+                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                // While dragging the row dims to a flat 0.85f — press-dim must
+                // not compound with the drag dim, so the press alpha arm is
+                // neutralized (1f) and the drag layer below owns the dim.
+                pressedAlpha = if (isDragging) 1f else 0.7f,
+            )
+            .graphicsLayer {
+                alpha = if (isDragging) 0.85f else 1f
+            }
+            .clip(shape)
+            .lightModeHairlineBorder(shape)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape),
+    )
+}
+
 @Composable
 internal fun SettingInfoItem(
     icon: ImageVector,

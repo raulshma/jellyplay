@@ -23,6 +23,9 @@ interface PlayerVideoMessageBus {
 
     /** Informational feedback backed by a localizable resource message. */
     fun info(message: PlayerVideoMessage)
+
+    /** Recoverable error feedback backed by a localizable resource message. */
+    fun error(message: PlayerVideoMessage)
 }
 
 /**
@@ -46,4 +49,10 @@ sealed interface PlayerVideoMessage {
 
     /** The VLC engine was selected while a TLS client certificate is active (documented-unsupported there). */
     data object VlcClientCertUnsupported : PlayerVideoMessage
+
+    /** The next-episode sibling resolution failed (offline / server error). */
+    data object NextEpisodeLoadFailed : PlayerVideoMessage
+
+    /** A post-playback delete offer could not remove the titled item from the server. */
+    data class DeleteOfferFailed(val title: String) : PlayerVideoMessage
 }

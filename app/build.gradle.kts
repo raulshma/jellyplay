@@ -150,6 +150,15 @@ android {
         disable += "MissingTranslation"
     }
 
+    // Robolectric (unit) tests: expose the merged debug manifest + resources so
+    // the Compose test rule can resolve the ui-test-manifest ComponentActivity
+    // (OverflowMenuItemsAnimationRobolectricTest).
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     packaging {
         jniLibs {
             pickFirsts += listOf(
@@ -477,6 +486,11 @@ dependencies {
     // PlayerActivityArgs round-trip test exercises android.content.Intent
     // extras on the JVM (same setup as the nine modules already using it).
     testImplementation(libs.robolectric)
+    // OverflowMenuItemsAnimationRobolectricTest drives the nav overflow menu's
+    // dock transitions on the JVM (Robolectric + Compose UI test clock). The
+    // fake ResolvedShortcut references org.jetbrains.compose.resources types.
+    testImplementation(libs.compose.ui.test)
+    testImplementation(libs.jb.compose.components.resources)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 

@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,16 +17,21 @@ import kotlinx.coroutines.flow.asStateFlow
  * `getMediaDetail` path the detail screen warms (so opening Cast & Crew from a
  * loaded detail screen is usually a cache hit) and splits the flat `people`
  * list via [partitionCastAndCrew]. Mirrors [PersonDetailViewModel]. Injects
- * only [DetailFeed] — the detail read is this screen's whole repository need.
+ * only [DetailFeed] — the detail read is this screen's whole repository need
+ * (plus the projected preferences the grid-density row reads).
  */
 class CastAndCrewViewModel constructor(
     private val detailFeed: DetailFeed,
     private val imageUrlProvider: ImageUrlProvider,
     private val artworkUrls: ArtworkUrls,
+    projections: PreferenceProjections,
 ) : JellyPlayViewModel() {
 
     private val _uiState = MutableStateFlow<CastAndCrewUiState>(CastAndCrewUiState.Loading)
     val uiState: StateFlow<CastAndCrewUiState> = _uiState.asStateFlow()
+
+    /** The projected detail preferences (the Cast & Crew grid-density read). */
+    val preferences: StateFlow<DetailPreferences> = projections.detailPreferences
 
     fun load(itemId: String) {
         _uiState.value = CastAndCrewUiState.Loading

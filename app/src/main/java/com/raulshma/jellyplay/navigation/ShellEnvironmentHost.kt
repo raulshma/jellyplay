@@ -10,9 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import com.raulshma.jellyplay.core.model.ExperimentalFeature
-import com.raulshma.jellyplay.core.model.MainPreferences
-import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.JellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -21,7 +18,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.applyOverride
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled
 import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -46,14 +42,17 @@ import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
  * PeekPreviewState holder — passed INTO [Provide] for its two locals), and
  * the layout-branch dispatch itself (MainContent keeps the ordering role).
  *
- * Like its two holder precedents, the holder is returned FRESH per
- * recomposition: [animatedNavBarColor] must re-read the animation's current
- * value every recomposition, exactly as the former inline block did. Only the
- * internals (the color state, the environment, the scroll state) are
- * remembered.
+ * Like its two holder precedents, the holder preserves one instance across
+ * recompositions whose inputs are unchanged (remembered on all of them — see
+ * [rememberShellEnvironmentHost]): the internals (the color state, the
+ * environment, the scroll state) keep their identity, and
+ * [animatedNavBarColor] re-reads the animation's current value through a
+ * remember key, so an active nav-bar color animation still rebuilds the
+ * holder per frame exactly as the former inline block did, while unrelated
+ * recomposition churn reuses the instance.
  */
 internal class ShellEnvironmentHost(
-    private val preferences: MainPreferences,
+    private val preferences: ShellEnvironmentPrefs,
     /** Whether the device is a TV — drives the typography and [LocalTvMode]. */
     val isTv: Boolean,
     /** The shell's adaptive info — the layout override already applied. */
@@ -76,9 +75,9 @@ internal class ShellEnvironmentHost(
     val bottomNav: BottomNavScrollState,
 ) {
 
-    /** The peek feature's opt-in state — the same pure fold every peek site reads. */
+    /** The peek feature's opt-in state — `isExperimentalEnabled(MEDIA_CARD_PEEK)`, folded when the [ShellEnvironmentPrefs] slice is derived (ShellPreferenceSlices.kt). */
     val peekEnabled: Boolean
-        get() = preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK)
+        get() = preferences.mediaCardPeekEnabled
 
     /**
      * Publishes the shell's app-wide CompositionLocals above [content] (the
@@ -86,6 +85,14 @@ internal class ShellEnvironmentHost(
      * [peekPreview] as a parameter because the preview holder is constructed
      * AFTER this environment (it needs [isTv]); the provider call site sits
      * below it, so the hand-off is a plain parameter.
+     *
+     * The motion/performance flags are deliberately NOT re-provided here: the
+     * host activity's `JellyPlayPreferenceTheme` already provides the resolved
+     * posture (LocalPerformanceConfig + the compat boolean locals) above this
+     * whole subtree, and re-providing the raw `performanceMode` boolean would
+     * override the resolved `suppressAnimations` projection whenever a
+     * granular override diverges from the level (ONE channel — see
+     * designsystem's LocalMotionFlags.kt).
      *
      * Stable values on purpose — `provides` compares by ==, so a fresh lambda
      * per recomposition would force downstream invalidation even when the
@@ -102,7 +109,6 @@ internal class ShellEnvironmentHost(
             LocalAdaptiveInfo provides adaptiveInfo,
             LocalJellyPlayUi provides uiEnvironment,
             LocalTvTypography provides tvTypography,
-            LocalPerformanceMode provides preferences.performanceMode,
             com.raulshma.jellyplay.core.ui.feedback.LocalHapticsEnabled provides preferences.hapticsEnabled,
             LocalFloatingNavVisibility provides bottomNav.scrollVisibility.visibleState,
             LocalMediaPreviewController provides peekPreview.controller,
@@ -114,6 +120,7 @@ internal class ShellEnvironmentHost(
                 showQualityBadges = preferences.showQualityBadges,
                 showNewBadges = preferences.showNewBadges,
                 antiSpoilerHome = preferences.antiSpoilerHome,
+                cardPressAnimations = preferences.cardPressAnimations,
             ),
         ) {
             content()
@@ -124,11 +131,17 @@ internal class ShellEnvironmentHost(
 /**
  * Constructs the [ShellEnvironmentHost] — the former `MainContent` region
  * from the nav-bar color animation through the floating-nav scroll state,
- * verbatim. The holder itself is fresh per recomposition; only these
- * internals are remembered.
+ * verbatim. The holder itself is remembered on every value that feeds its
+ * constructor (each key's equality semantics are documented at the call
+ * site), so recompositions that change none of them reuse the instance.
+ * The preference input is the [ShellEnvironmentPrefs] slice
+ * (ShellPreferenceSlices.kt), not the whole `MainPreferences` bundle: an
+ * unrelated preference write produces an equal slice, so the remember hits
+ * and the holder — with every `provides` value downstream of it — keeps its
+ * identity instead of rebuilding per write.
  */
 @Composable
-internal fun rememberShellEnvironmentHost(preferences: MainPreferences): ShellEnvironmentHost {
+internal fun rememberShellEnvironmentHost(preferences: ShellEnvironmentPrefs): ShellEnvironmentHost {
     val navBarColorState = remember { mutableStateOf<Color?>(null) }
     val animatedNavBarColor by animateColorAsState(
         targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainer,
@@ -158,14 +171,39 @@ internal fun rememberShellEnvironmentHost(preferences: MainPreferences): ShellEn
     // in MainContent's inner provider / phone branch.
     val bottomNav = rememberBottomNavScrollState()
 
-    return ShellEnvironmentHost(
-        preferences = preferences,
-        isTv = isTv,
-        adaptiveInfo = adaptiveInfo,
-        uiEnvironment = uiEnvironment,
-        tvTypography = tvTypography,
-        navBarColorState = navBarColorState,
-        animatedNavBarColor = animatedNavBarColor,
-        bottomNav = bottomNav,
-    )
+    // The holder is remembered on EVERY value that feeds its constructor, so
+    // MainContent's frequent recompositions (playback position, audio
+    // metadata, download counts, tab switches) reuse ONE instance instead of
+    // allocating a fresh wrapper per pass — the identity downstream caches
+    // (the `provides` equality checks in Provide / MainContent's providers)
+    // relied on. Key semantics per member: the data classes (preferences,
+    // adaptiveInfo, uiEnvironment, tvTypography's Typography) compare
+    // structurally, so their fresh per-recomposition allocations still hit
+    // the remember while their values are unchanged and only rebuild on a
+    // real change; navBarColorState and bottomNav are remembered holders with
+    // stable identity; and animatedNavBarColor is the animation's current
+    // VALUE — while the nav-bar color animates it changes per frame and
+    // rebuilds the holder, preserving the fresh-per-animation-frame read the
+    // former inline block had.
+    return remember(
+        preferences,
+        isTv,
+        adaptiveInfo,
+        uiEnvironment,
+        tvTypography,
+        navBarColorState,
+        animatedNavBarColor,
+        bottomNav,
+    ) {
+        ShellEnvironmentHost(
+            preferences = preferences,
+            isTv = isTv,
+            adaptiveInfo = adaptiveInfo,
+            uiEnvironment = uiEnvironment,
+            tvTypography = tvTypography,
+            navBarColorState = navBarColorState,
+            animatedNavBarColor = animatedNavBarColor,
+            bottomNav = bottomNav,
+        )
+    }
 }

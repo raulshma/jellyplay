@@ -19,16 +19,29 @@ val LocalHapticsEnabled: ProvidableCompositionLocal<Boolean> =
  * Shared implementation for the haptic accessors: a lambda that fires [type]
  * via Compose's pure-Compose haptic API (rather than the platform `View` path
  * used in the player screens) so it resolves from `core:ui`, gated by
- * [LocalHapticsEnabled].
+ * [LocalHapticsEnabled]. The requested type passes through the
+ * [LocalHapticsIntensity] remap first: LIGHT downgrades the confirm buzz to
+ * the lighter selection tick, STRONG upgrades it to the heavier long-press
+ * buzz, MEDIUM keeps the shipped mapping.
  */
 @Composable
 private fun rememberHaptic(type: HapticFeedbackType): () -> Unit {
     val hapticFeedback = LocalHapticFeedback.current
     val enabled = LocalHapticsEnabled.current
-    return remember(hapticFeedback, enabled, type) {
+    val intensity = com.raulshma.jellyplay.core.ui.components.LocalHapticsIntensity.current
+    val effectiveType = remember(type, intensity) {
+        when {
+            intensity == com.raulshma.jellyplay.core.model.HapticsIntensity.LIGHT &&
+                type == HapticFeedbackType.Confirm -> HapticFeedbackType.SegmentTick
+            intensity == com.raulshma.jellyplay.core.model.HapticsIntensity.STRONG &&
+                type == HapticFeedbackType.Confirm -> HapticFeedbackType.LongPress
+            else -> type
+        }
+    }
+    return remember(hapticFeedback, enabled, effectiveType) {
         {
             if (enabled) {
-                hapticFeedback.performHapticFeedback(type)
+                hapticFeedback.performHapticFeedback(effectiveType)
             }
         }
     }

@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video.state
 
+import com.raulshma.jellyplay.core.model.HoldSeekCadence
+import com.raulshma.jellyplay.core.model.PlayerDoubleTapZoneBias
+
 /**
  * Pure decision logic for the double-tap-and-hold continuous
  * seek on the player surface's tap zones. Extracted from
@@ -47,11 +50,35 @@ internal object DoubleTapHoldSeekPolicy {
     /**
      * Zone of an x coordinate in `[0, width]`: −1 back, 0 center, +1 forward —
      * the exact split the inline double-tap handler used.
+     *
+     * The zone split is configurable ([PlayerDoubleTapZoneBias]): DEFAULT
+     * keeps the 35/65 constants, EVEN widens to 50/50, EXTREME to 25/75. The
+     * defaults preserve the pinned behavior exactly (the constants remain the
+     * legacy thresholds; the no-bias overload below delegates with them).
      */
-    fun seekZone(x: Float, widthPx: Int): Int = when {
-        x < widthPx * SEEK_ZONE_LEFT_FRACTION -> -1
-        x > widthPx * SEEK_ZONE_RIGHT_FRACTION -> +1
+    fun seekZone(x: Float, widthPx: Int): Int =
+        seekZone(x, widthPx, SEEK_ZONE_LEFT_FRACTION, SEEK_ZONE_RIGHT_FRACTION)
+
+    fun seekZone(
+        x: Float,
+        widthPx: Int,
+        leftFraction: Float,
+        rightFraction: Float,
+    ): Int = when {
+        x < widthPx * leftFraction -> -1
+        x > widthPx * rightFraction -> +1
         else -> 0
+    }
+
+    /**
+     * The [PlayerDoubleTapZoneBias] → zone-fractions fold: the left and right
+     * seek-zone fractions (the center zone takes the remainder). DEFAULT is
+     * the [SEEK_ZONE_LEFT_FRACTION] / [SEEK_ZONE_RIGHT_FRACTION] pair.
+     */
+    fun zoneFractions(bias: PlayerDoubleTapZoneBias): Pair<Float, Float> = when (bias) {
+        PlayerDoubleTapZoneBias.DEFAULT -> SEEK_ZONE_LEFT_FRACTION to SEEK_ZONE_RIGHT_FRACTION
+        PlayerDoubleTapZoneBias.EVEN -> 0.5f to 0.5f
+        PlayerDoubleTapZoneBias.EXTREME -> 0.25f to 0.75f
     }
 
     /**
@@ -61,5 +88,21 @@ internal object DoubleTapHoldSeekPolicy {
      * [completedRepeats] and always positive.
      */
     fun repeatIntervalMs(completedRepeats: Int): Long =
-        if (completedRepeats < ACCELERATION_AFTER_REPEATS) NORMAL_REPEAT_MS else FAST_REPEAT_MS
+        repeatIntervalMs(completedRepeats, HoldSeekCadence.DEFAULT)
+
+    /**
+     * The cadence-preset overload (the `video_hold_seek_cadence` pref's
+     * arms): each arm scales the whole acceleration curve coherently —
+     * RELAXED 600→250ms, DEFAULT the constants above (400→150ms), RAPID
+     * 300→100ms. The acceleration boundary ([ACCELERATION_AFTER_REPEATS])
+     * is shared across the arms.
+     */
+    fun repeatIntervalMs(completedRepeats: Int, cadence: HoldSeekCadence): Long {
+        val (normalMs, fastMs) = when (cadence) {
+            HoldSeekCadence.RELAXED -> 600L to 250L
+            HoldSeekCadence.DEFAULT -> NORMAL_REPEAT_MS to FAST_REPEAT_MS
+            HoldSeekCadence.RAPID -> 300L to 100L
+        }
+        return if (completedRepeats < ACCELERATION_AFTER_REPEATS) normalMs else fastMs
+    }
 }

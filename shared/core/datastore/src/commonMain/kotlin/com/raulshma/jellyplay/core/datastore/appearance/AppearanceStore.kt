@@ -10,13 +10,23 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.BackdropDimLevel
 import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.HapticsIntensity
+import com.raulshma.jellyplay.core.model.ImageDecodeCap
+import com.raulshma.jellyplay.core.model.ImageQualityPreset
 import com.raulshma.jellyplay.core.model.LayoutMode
+import com.raulshma.jellyplay.core.model.ListDensity
+import com.raulshma.jellyplay.core.model.OverscrollStyle
+import com.raulshma.jellyplay.core.model.PerformanceLevel
+import com.raulshma.jellyplay.core.model.PerformanceOverride
+import com.raulshma.jellyplay.core.model.PerformancePosture
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.PressEffectStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.TvOverscan
 import kotlinx.coroutines.CoroutineScope
@@ -33,8 +43,8 @@ import kotlinx.serialization.Serializable
  * (standard/synthwave/soothing/monochrome/vivid/aurora/sakura/vector_pop) with
  * its per-variant accents, reduce-motion, blue-light filter,
  * font scale, date format, colour-blind mode, hand mode, haptics, scheduled
- * theme hours, backdrop theme music, performance mode, and the advanced-settings
- * toggle.
+ * theme hours, backdrop theme music, the master performance level with its
+ * granular override rows, and the advanced-settings toggle.
  *
  * Extracted from the `UserPreferencesStore` god object so this concern owns its
  * keys, setters, read projection, and reset list end-to-end. Mirrors the
@@ -56,6 +66,10 @@ import kotlinx.serialization.Serializable
  *    writing the raw slot (the setter is the clamp owner).
  *  - [setVariantAccent] routes a variant name to the right accent row — a
  *    cross-row dispatch table, not a row encoding.
+ *  - [setPerformanceLevel] / `restore` mirror the legacy `performance_mode`
+ *    boolean (`level == PERFORMANCE`) beside the level, and `restore`
+ *    reconciles old backup JSON that carries only the boolean (see
+ *    [resolvedPerformanceLevel]).
  *
  * **Theme style invariant:** a single `theme_variant` key selects the active
  * variant — variants are inherently mutually exclusive. The legacy
@@ -95,6 +109,18 @@ class AppearanceStore constructor(
         val ACCENT_COLOR_SWATCH = stringPreferencesKey(AppearancePreferenceSpecs.ACCENT_COLOR_SWATCH.keyName)
         val COLOR_STYLE = stringPreferencesKey(AppearancePreferenceSpecs.COLOR_STYLE.keyName)
         val PERFORMANCE_MODE = booleanPreferencesKey(AppearancePreferenceSpecs.PERFORMANCE_MODE.keyName)
+        val PERFORMANCE_LEVEL = stringPreferencesKey(AppearancePreferenceSpecs.PERFORMANCE_LEVEL.keyName)
+        val PERF_ANIMATIONS = stringPreferencesKey(AppearancePreferenceSpecs.PERF_ANIMATIONS.keyName)
+        val PERF_SHARED_ELEMENTS = stringPreferencesKey(AppearancePreferenceSpecs.PERF_SHARED_ELEMENTS.keyName)
+        val PERF_NAV_TRANSITIONS = stringPreferencesKey(AppearancePreferenceSpecs.PERF_NAV_TRANSITIONS.keyName)
+        val PERF_IMAGE_DECODE_CAP = stringPreferencesKey(AppearancePreferenceSpecs.PERF_IMAGE_DECODE_CAP.keyName)
+        val PERF_IMAGE_CROSSFADE = stringPreferencesKey(AppearancePreferenceSpecs.PERF_IMAGE_CROSSFADE.keyName)
+        val PERF_BLURHASH = stringPreferencesKey(AppearancePreferenceSpecs.PERF_BLURHASH.keyName)
+        val PERF_QUALITY_BADGES = stringPreferencesKey(AppearancePreferenceSpecs.PERF_QUALITY_BADGES.keyName)
+        val PERF_AMBIENT_HERO_VIDEO = stringPreferencesKey(AppearancePreferenceSpecs.PERF_AMBIENT_HERO_VIDEO.keyName)
+        val PERF_BACKDROP_BLUR = stringPreferencesKey(AppearancePreferenceSpecs.PERF_BACKDROP_BLUR.keyName)
+        val PERF_SCREENSAVER_MOTION = stringPreferencesKey(AppearancePreferenceSpecs.PERF_SCREENSAVER_MOTION.keyName)
+        val IMAGE_MEMORY_CACHE_PERCENT = intPreferencesKey(AppearancePreferenceSpecs.IMAGE_MEMORY_CACHE_PERCENT.keyName)
         val REDUCE_MOTION_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.REDUCE_MOTION_ENABLED.keyName)
         val THEME_VARIANT = stringPreferencesKey(AppearancePreferenceSpecs.THEME_VARIANT.keyName)
         val SYNTHWAVE_MODE = booleanPreferencesKey(AppearancePreferenceSpecs.SYNTHWAVE_MODE.keyName)
@@ -118,6 +144,16 @@ class AppearanceStore constructor(
         val HAND_MODE = stringPreferencesKey(AppearancePreferenceSpecs.HAND_MODE.keyName)
         val LAYOUT_MODE = stringPreferencesKey(AppearancePreferenceSpecs.LAYOUT_MODE.keyName)
         val TV_OVERSCAN = stringPreferencesKey(AppearancePreferenceSpecs.TV_OVERSCAN.keyName)
+        val TIME_USE_24H = booleanPreferencesKey(AppearancePreferenceSpecs.TIME_USE_24H.keyName)
+        val CARD_PRESS_ANIMATIONS = booleanPreferencesKey(AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.keyName)
+        val PULL_TO_REFRESH_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.keyName)
+        val APP_BACKDROP_DIM = stringPreferencesKey(AppearancePreferenceSpecs.APP_BACKDROP_DIM.keyName)
+        val HAPTICS_INTENSITY = stringPreferencesKey(AppearancePreferenceSpecs.HAPTICS_INTENSITY.keyName)
+        val IMAGE_QUALITY_PRESET = stringPreferencesKey(AppearancePreferenceSpecs.IMAGE_QUALITY_PRESET.keyName)
+        val APP_LIST_DENSITY = stringPreferencesKey(AppearancePreferenceSpecs.APP_LIST_DENSITY.keyName)
+        val APP_PRESS_EFFECT = stringPreferencesKey(AppearancePreferenceSpecs.APP_PRESS_EFFECT.keyName)
+        val APP_FLAT_CARDS = booleanPreferencesKey(AppearancePreferenceSpecs.APP_FLAT_CARDS.keyName)
+        val APP_OVERSCROLL_STYLE = stringPreferencesKey(AppearancePreferenceSpecs.APP_OVERSCROLL_STYLE.keyName)
         val HAPTICS_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.HAPTICS_ENABLED.keyName)
         val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey(AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.keyName)
     }
@@ -148,41 +184,73 @@ class AppearanceStore constructor(
     /**
      * Pure read of the appearance fields from a raw [Preferences] snapshot,
      * each field delegated to its [AppearancePreferenceSpecs] row encoding
-     * (including the theme-variant legacy-boolean fallback — the row's derived
-     * read). Exposed so the facade can fold these into the whole
-     * preference projection without duplicating the read logic.
+     * (including the theme-variant legacy-boolean fallback and the
+     * performance-level legacy fallback — the rows' derived reads). The
+     * legacy `performanceMode` boolean is not read from a key of its own: it
+     * is derived off [PerformanceLevel] (`level == PERFORMANCE`) so every
+     * existing boolean consumer keeps its exact semantics. Exposed so the
+     * facade can fold these into the whole preference projection without
+     * duplicating the read logic.
      */
-    internal fun read(prefs: Preferences): AppearanceSlice = AppearanceSlice(
-        dynamicTheming = AppearancePreferenceSpecs.DYNAMIC_THEMING.readFrom(prefs),
-        themeMode = AppearancePreferenceSpecs.THEME_MODE.readFrom(prefs),
-        contrastLevel = AppearancePreferenceSpecs.CONTRAST_LEVEL.readFrom(prefs),
-        oledMode = AppearancePreferenceSpecs.OLED_MODE.readFrom(prefs),
-        performanceMode = AppearancePreferenceSpecs.PERFORMANCE_MODE.readFrom(prefs),
-        accentColorSwatch = AppearancePreferenceSpecs.ACCENT_COLOR_SWATCH.readFrom(prefs),
-        colorStyle = AppearancePreferenceSpecs.COLOR_STYLE.readFrom(prefs),
-        synthwaveAccent = AppearancePreferenceSpecs.SYNTHWAVE_ACCENT.readFrom(prefs),
-        soothingAccent = AppearancePreferenceSpecs.SOOTHING_ACCENT.readFrom(prefs),
-        themeVariant = AppearancePreferenceSpecs.THEME_VARIANT.readFrom(prefs),
-        vividAccent = AppearancePreferenceSpecs.VIVID_ACCENT.readFrom(prefs),
-        auroraAccent = AppearancePreferenceSpecs.AURORA_ACCENT.readFrom(prefs),
-        sakuraAccent = AppearancePreferenceSpecs.SAKURA_ACCENT.readFrom(prefs),
-        vectorPopAccent = AppearancePreferenceSpecs.VECTOR_POP_ACCENT.readFrom(prefs),
-        showAdvancedSettings = AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.readFrom(prefs),
-        reduceMotionEnabled = AppearancePreferenceSpecs.REDUCE_MOTION_ENABLED.readFrom(prefs),
-        blueLightFilterEnabled = AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.readFrom(prefs),
-        blueLightFilterStrength = AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_STRENGTH.readFrom(prefs),
-        backdropThemeMusicEnabled = AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.readFrom(prefs),
-        detailsAwardsBadgesEnabled = AppearancePreferenceSpecs.DETAILS_AWARDS_BADGES_ENABLED.readFrom(prefs),
-        hapticsEnabled = AppearancePreferenceSpecs.HAPTICS_ENABLED.readFrom(prefs),
-        dateFormatPreference = AppearancePreferenceSpecs.DATE_FORMAT_PREFERENCE.readFrom(prefs),
-        appFontScale = AppearancePreferenceSpecs.APP_FONT_SCALE.readFrom(prefs),
-        scheduledThemeStartHour = AppearancePreferenceSpecs.SCHEDULED_THEME_START_HOUR.readFrom(prefs),
-        scheduledThemeEndHour = AppearancePreferenceSpecs.SCHEDULED_THEME_END_HOUR.readFrom(prefs),
-        colorBlindMode = AppearancePreferenceSpecs.COLOR_BLIND_MODE.readFrom(prefs),
-        handMode = AppearancePreferenceSpecs.HAND_MODE.readFrom(prefs),
-        layoutMode = AppearancePreferenceSpecs.LAYOUT_MODE.readFrom(prefs),
-        tvOverscan = AppearancePreferenceSpecs.TV_OVERSCAN.readFrom(prefs),
-    )
+    internal fun read(prefs: Preferences): AppearanceSlice {
+        // The legacy performanceMode boolean is DERIVED off the level row's
+        // read (which carries the performance_mode legacy fallback itself) —
+        // every existing boolean consumer keeps its exact semantics.
+        val performanceLevel = AppearancePreferenceSpecs.PERFORMANCE_LEVEL.readFrom(prefs)
+        return AppearanceSlice(
+            dynamicTheming = AppearancePreferenceSpecs.DYNAMIC_THEMING.readFrom(prefs),
+            themeMode = AppearancePreferenceSpecs.THEME_MODE.readFrom(prefs),
+            contrastLevel = AppearancePreferenceSpecs.CONTRAST_LEVEL.readFrom(prefs),
+            oledMode = AppearancePreferenceSpecs.OLED_MODE.readFrom(prefs),
+            performanceLevel = performanceLevel,
+            performanceMode = performanceLevel == PerformanceLevel.PERFORMANCE,
+            perfAnimations = AppearancePreferenceSpecs.PERF_ANIMATIONS.readFrom(prefs),
+            perfSharedElements = AppearancePreferenceSpecs.PERF_SHARED_ELEMENTS.readFrom(prefs),
+            perfNavTransitions = AppearancePreferenceSpecs.PERF_NAV_TRANSITIONS.readFrom(prefs),
+            perfImageDecodeCap = AppearancePreferenceSpecs.PERF_IMAGE_DECODE_CAP.readFrom(prefs),
+            perfImageCrossfade = AppearancePreferenceSpecs.PERF_IMAGE_CROSSFADE.readFrom(prefs),
+            perfBlurhash = AppearancePreferenceSpecs.PERF_BLURHASH.readFrom(prefs),
+            perfQualityBadges = AppearancePreferenceSpecs.PERF_QUALITY_BADGES.readFrom(prefs),
+            perfAmbientHeroVideo = AppearancePreferenceSpecs.PERF_AMBIENT_HERO_VIDEO.readFrom(prefs),
+            perfBackdropBlur = AppearancePreferenceSpecs.PERF_BACKDROP_BLUR.readFrom(prefs),
+            perfScreensaverMotion = AppearancePreferenceSpecs.PERF_SCREENSAVER_MOTION.readFrom(prefs),
+            imageMemoryCachePercent = AppearancePreferenceSpecs.IMAGE_MEMORY_CACHE_PERCENT.readFrom(prefs),
+            accentColorSwatch = AppearancePreferenceSpecs.ACCENT_COLOR_SWATCH.readFrom(prefs),
+            colorStyle = AppearancePreferenceSpecs.COLOR_STYLE.readFrom(prefs),
+            synthwaveAccent = AppearancePreferenceSpecs.SYNTHWAVE_ACCENT.readFrom(prefs),
+            soothingAccent = AppearancePreferenceSpecs.SOOTHING_ACCENT.readFrom(prefs),
+            themeVariant = AppearancePreferenceSpecs.THEME_VARIANT.readFrom(prefs),
+            vividAccent = AppearancePreferenceSpecs.VIVID_ACCENT.readFrom(prefs),
+            auroraAccent = AppearancePreferenceSpecs.AURORA_ACCENT.readFrom(prefs),
+            sakuraAccent = AppearancePreferenceSpecs.SAKURA_ACCENT.readFrom(prefs),
+            vectorPopAccent = AppearancePreferenceSpecs.VECTOR_POP_ACCENT.readFrom(prefs),
+            showAdvancedSettings = AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.readFrom(prefs),
+            reduceMotionEnabled = AppearancePreferenceSpecs.REDUCE_MOTION_ENABLED.readFrom(prefs),
+            blueLightFilterEnabled = AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.readFrom(prefs),
+            blueLightFilterStrength = AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_STRENGTH.readFrom(prefs),
+            backdropThemeMusicEnabled = AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.readFrom(prefs),
+            detailsAwardsBadgesEnabled = AppearancePreferenceSpecs.DETAILS_AWARDS_BADGES_ENABLED.readFrom(prefs),
+            hapticsEnabled = AppearancePreferenceSpecs.HAPTICS_ENABLED.readFrom(prefs),
+            dateFormatPreference = AppearancePreferenceSpecs.DATE_FORMAT_PREFERENCE.readFrom(prefs),
+            appFontScale = AppearancePreferenceSpecs.APP_FONT_SCALE.readFrom(prefs),
+            scheduledThemeStartHour = AppearancePreferenceSpecs.SCHEDULED_THEME_START_HOUR.readFrom(prefs),
+            scheduledThemeEndHour = AppearancePreferenceSpecs.SCHEDULED_THEME_END_HOUR.readFrom(prefs),
+            colorBlindMode = AppearancePreferenceSpecs.COLOR_BLIND_MODE.readFrom(prefs),
+            handMode = AppearancePreferenceSpecs.HAND_MODE.readFrom(prefs),
+            layoutMode = AppearancePreferenceSpecs.LAYOUT_MODE.readFrom(prefs),
+            tvOverscan = AppearancePreferenceSpecs.TV_OVERSCAN.readFrom(prefs),
+            timeUse24h = AppearancePreferenceSpecs.TIME_USE_24H.readFrom(prefs),
+            cardPressAnimations = AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.readFrom(prefs),
+            pullToRefreshEnabled = AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.readFrom(prefs),
+            appBackdropDim = AppearancePreferenceSpecs.APP_BACKDROP_DIM.readFrom(prefs),
+            hapticsIntensity = AppearancePreferenceSpecs.HAPTICS_INTENSITY.readFrom(prefs),
+            imageQualityPreset = AppearancePreferenceSpecs.IMAGE_QUALITY_PRESET.readFrom(prefs),
+            appListDensity = AppearancePreferenceSpecs.APP_LIST_DENSITY.readFrom(prefs),
+            appPressEffect = AppearancePreferenceSpecs.APP_PRESS_EFFECT.readFrom(prefs),
+            appFlatCards = AppearancePreferenceSpecs.APP_FLAT_CARDS.readFrom(prefs),
+            appOverscrollStyle = AppearancePreferenceSpecs.APP_OVERSCROLL_STYLE.readFrom(prefs),
+        )
+    }
 
     // ------------------------------------------------------------------
     // Setters — single-key setters delegate to their row's derived write
@@ -215,8 +283,97 @@ class AppearanceStore constructor(
         dataStore.edit { AppearancePreferenceSpecs.COLOR_STYLE.writeTo(it, style) }
     }
 
+    /**
+     * The legacy single-boolean write surface, kept so every existing caller
+     * compiles and behaves identically: `true` = today's performance mode ON
+     * ([PerformanceLevel.PERFORMANCE]), `false` = today's OFF
+     * ([PerformanceLevel.STANDARD]). New call sites should prefer
+     * [setPerformanceLevel].
+     */
     suspend fun setPerformanceMode(enabled: Boolean) {
-        dataStore.edit { AppearancePreferenceSpecs.PERFORMANCE_MODE.writeTo(it, enabled) }
+        setPerformanceLevel(if (enabled) PerformanceLevel.PERFORMANCE else PerformanceLevel.STANDARD)
+    }
+
+    /**
+     * Writes the master performance level to `performance_level` AND mirrors
+     * the legacy `performance_mode` boolean (`level == PERFORMANCE`) in the
+     * same edit — the pairing write keeps raw legacy readers and old-app
+     * downgrades coherent with the level (the cross-key invariant this store
+     * owns; the granular override rows need no mirror — nothing legacy reads
+     * them).
+     */
+    suspend fun setPerformanceLevel(level: PerformanceLevel) {
+        dataStore.edit { prefs ->
+            AppearancePreferenceSpecs.PERFORMANCE_LEVEL.writeTo(prefs, level)
+            AppearancePreferenceSpecs.PERFORMANCE_MODE.writeTo(prefs, level == PerformanceLevel.PERFORMANCE)
+        }
+    }
+
+    /** The granular animation-suppression override (AUTO follows the level). */
+    suspend fun setPerfAnimations(override: PerformanceOverride) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_ANIMATIONS.writeTo(it, override) }
+    }
+
+    /** The granular shared-element transitions override (AUTO follows the level). */
+    suspend fun setPerfSharedElements(override: PerformanceOverride) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_SHARED_ELEMENTS.writeTo(it, override) }
+    }
+
+    /** The granular navigation-transitions override (AUTO follows the level). */
+    suspend fun setPerfNavTransitions(override: PerformanceOverride) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_NAV_TRANSITIONS.writeTo(it, override) }
+    }
+
+    /** The granular image decode-cap choice (AUTO follows the level's policy). */
+    suspend fun setPerfImageDecodeCap(cap: ImageDecodeCap) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_IMAGE_DECODE_CAP.writeTo(it, cap) }
+    }
+
+    /** The granular image-crossfade override (AUTO follows the level). */
+    suspend fun setPerfImageCrossfade(override: PerformanceOverride) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_IMAGE_CROSSFADE.writeTo(it, override) }
+    }
+
+    /** The granular BlurHash-placeholder override (AUTO follows the level). */
+    suspend fun setPerfBlurhash(override: PerformanceOverride) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_BLURHASH.writeTo(it, override) }
+    }
+
+    /** The granular quality-badges override (AUTO follows the level). */
+    suspend fun setPerfQualityBadges(override: PerformanceOverride) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_QUALITY_BADGES.writeTo(it, override) }
+    }
+
+    /** The granular ambient-hero-video override (AUTO follows the level). */
+    suspend fun setPerfAmbientHeroVideo(override: PerformanceOverride) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_AMBIENT_HERO_VIDEO.writeTo(it, override) }
+    }
+
+    /** The granular backdrop-blur override (AUTO follows the level). */
+    suspend fun setPerfBackdropBlur(override: PerformanceOverride) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_BACKDROP_BLUR.writeTo(it, override) }
+    }
+
+    /** The granular screensaver-motion override (AUTO follows the level). */
+    suspend fun setPerfScreensaverMotion(override: PerformanceOverride) {
+        dataStore.edit { AppearancePreferenceSpecs.PERF_SCREENSAVER_MOTION.writeTo(it, override) }
+    }
+
+    /**
+     * The image memory-cache size override, in percent of the heap. The
+     * setter is the clamp owner (the
+     * `PlaybackStore.setForceTranscodeAboveHeight` precedent): `0` passes
+     * through (the AUTO sentinel — RAM-tiered 12%/20%), anything else clamps
+     * into 5..35.
+     */
+    suspend fun setImageMemoryCachePercent(percent: Int) {
+        val clamped = when {
+            percent == 0 -> 0
+            percent < 5 -> 5
+            percent > 35 -> 35
+            else -> percent
+        }
+        dataStore.edit { AppearancePreferenceSpecs.IMAGE_MEMORY_CACHE_PERCENT.writeTo(it, clamped) }
     }
 
     suspend fun setReduceMotionEnabled(enabled: Boolean) {
@@ -314,6 +471,58 @@ class AppearanceStore constructor(
         dataStore.edit { AppearancePreferenceSpecs.TV_OVERSCAN.writeTo(it, overscan) }
     }
 
+    /** The app-wide 24-hour clock override. Default off (follow system). */
+    suspend fun setTimeUse24h(enabled: Boolean) {
+        dataStore.edit { AppearancePreferenceSpecs.TIME_USE_24H.writeTo(it, enabled) }
+    }
+
+    /** The media cards' animated press-scale. Default on. */
+    suspend fun setCardPressAnimations(enabled: Boolean) {
+        dataStore.edit { AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.writeTo(it, enabled) }
+    }
+
+    /** The pull-to-refresh gesture master toggle. Default on. */
+    suspend fun setPullToRefreshEnabled(enabled: Boolean) {
+        dataStore.edit { AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.writeTo(it, enabled) }
+    }
+
+    /** The app-wide backdrop dim level. Default = shipped look. */
+    suspend fun setAppBackdropDim(level: BackdropDimLevel) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_BACKDROP_DIM.writeTo(it, level) }
+    }
+
+    /** The confirmation-haptic strength remap. Default = shipped mapping. */
+    suspend fun setHapticsIntensity(intensity: HapticsIntensity) {
+        dataStore.edit { AppearancePreferenceSpecs.HAPTICS_INTENSITY.writeTo(it, intensity) }
+    }
+
+    /** The server image-request quality override. Default = original. */
+    suspend fun setImageQualityPreset(preset: ImageQualityPreset) {
+        dataStore.edit { AppearancePreferenceSpecs.IMAGE_QUALITY_PRESET.writeTo(it, preset) }
+    }
+
+    /** Settings/list row density. Default = shipped spacing. */
+    suspend fun setAppListDensity(density: ListDensity) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_LIST_DENSITY.writeTo(it, density) }
+    }
+
+    /** Data-saver imagery gating reads the NETWORK domain's data_saver_enabled — no appearance-side setter. */
+
+    /** The press-feedback style. Default = Material ripple. */
+    suspend fun setAppPressEffect(style: PressEffectStyle) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_PRESS_EFFECT.writeTo(it, style) }
+    }
+
+    /** Flat cards. Default off. */
+    suspend fun setAppFlatCards(enabled: Boolean) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_FLAT_CARDS.writeTo(it, enabled) }
+    }
+
+    /** The scrollable containers' overscroll effect. Default = platform. */
+    suspend fun setAppOverscrollStyle(style: OverscrollStyle) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_OVERSCROLL_STYLE.writeTo(it, style) }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. Derived as the
      * union of the [resetKeysFor] category lists (in enum declaration order) —
@@ -345,8 +554,19 @@ class AppearanceStore constructor(
      * misses (the theme-variant + accent keys, haptics,
      * date format, font scale, scheduled-theme hours, and color-blind/hand
      * mode).
+     *
+     * The performance master is the one reconciling write: a slice decoded
+     * from an OLD backup JSON carries only the `performanceMode` boolean
+     * (with `performanceLevel` at its STANDARD default), while a new backup
+     * carries both coherently (the export always writes `level ==
+     * PERFORMANCE`). `resolvedPerformanceLevel` maps the old shape up —
+     * STANDARD + `performanceMode = true` is only producible by an old
+     * backup, so it reads as PERFORMANCE — and passes coherent new slices
+     * through untouched. Both keys (level + legacy mirror) are written so a
+     * restored install reads the same posture through either surface.
      */
     suspend fun restore(slice: AppearanceSlice) {
+        val restoredLevel = slice.resolvedPerformanceLevel()
         dataStore.edit { prefs ->
             AppearancePreferenceSpecs.DYNAMIC_THEMING.writeTo(prefs, slice.dynamicTheming)
             AppearancePreferenceSpecs.THEME_MODE.writeTo(prefs, slice.themeMode)
@@ -354,7 +574,19 @@ class AppearanceStore constructor(
             AppearancePreferenceSpecs.OLED_MODE.writeTo(prefs, slice.oledMode)
             AppearancePreferenceSpecs.ACCENT_COLOR_SWATCH.writeTo(prefs, slice.accentColorSwatch)
             AppearancePreferenceSpecs.COLOR_STYLE.writeTo(prefs, slice.colorStyle)
-            AppearancePreferenceSpecs.PERFORMANCE_MODE.writeTo(prefs, slice.performanceMode)
+            AppearancePreferenceSpecs.PERFORMANCE_LEVEL.writeTo(prefs, restoredLevel)
+            AppearancePreferenceSpecs.PERFORMANCE_MODE.writeTo(prefs, restoredLevel == PerformanceLevel.PERFORMANCE)
+            AppearancePreferenceSpecs.PERF_ANIMATIONS.writeTo(prefs, slice.perfAnimations)
+            AppearancePreferenceSpecs.PERF_SHARED_ELEMENTS.writeTo(prefs, slice.perfSharedElements)
+            AppearancePreferenceSpecs.PERF_NAV_TRANSITIONS.writeTo(prefs, slice.perfNavTransitions)
+            AppearancePreferenceSpecs.PERF_IMAGE_DECODE_CAP.writeTo(prefs, slice.perfImageDecodeCap)
+            AppearancePreferenceSpecs.PERF_IMAGE_CROSSFADE.writeTo(prefs, slice.perfImageCrossfade)
+            AppearancePreferenceSpecs.PERF_BLURHASH.writeTo(prefs, slice.perfBlurhash)
+            AppearancePreferenceSpecs.PERF_QUALITY_BADGES.writeTo(prefs, slice.perfQualityBadges)
+            AppearancePreferenceSpecs.PERF_AMBIENT_HERO_VIDEO.writeTo(prefs, slice.perfAmbientHeroVideo)
+            AppearancePreferenceSpecs.PERF_BACKDROP_BLUR.writeTo(prefs, slice.perfBackdropBlur)
+            AppearancePreferenceSpecs.PERF_SCREENSAVER_MOTION.writeTo(prefs, slice.perfScreensaverMotion)
+            AppearancePreferenceSpecs.IMAGE_MEMORY_CACHE_PERCENT.writeTo(prefs, slice.imageMemoryCachePercent)
             AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.writeTo(prefs, slice.showAdvancedSettings)
             AppearancePreferenceSpecs.REDUCE_MOTION_ENABLED.writeTo(prefs, slice.reduceMotionEnabled)
             AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.writeTo(prefs, slice.blueLightFilterEnabled)
@@ -380,6 +612,16 @@ class AppearanceStore constructor(
             AppearancePreferenceSpecs.HAND_MODE.writeTo(prefs, slice.handMode)
             AppearancePreferenceSpecs.LAYOUT_MODE.writeTo(prefs, slice.layoutMode)
             AppearancePreferenceSpecs.TV_OVERSCAN.writeTo(prefs, slice.tvOverscan)
+            AppearancePreferenceSpecs.TIME_USE_24H.writeTo(prefs, slice.timeUse24h)
+            AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.writeTo(prefs, slice.cardPressAnimations)
+            AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.writeTo(prefs, slice.pullToRefreshEnabled)
+            AppearancePreferenceSpecs.APP_BACKDROP_DIM.writeTo(prefs, slice.appBackdropDim)
+            AppearancePreferenceSpecs.HAPTICS_INTENSITY.writeTo(prefs, slice.hapticsIntensity)
+            AppearancePreferenceSpecs.IMAGE_QUALITY_PRESET.writeTo(prefs, slice.imageQualityPreset)
+            AppearancePreferenceSpecs.APP_LIST_DENSITY.writeTo(prefs, slice.appListDensity)
+            AppearancePreferenceSpecs.APP_PRESS_EFFECT.writeTo(prefs, slice.appPressEffect)
+            AppearancePreferenceSpecs.APP_FLAT_CARDS.writeTo(prefs, slice.appFlatCards)
+            AppearancePreferenceSpecs.APP_OVERSCROLL_STYLE.writeTo(prefs, slice.appOverscrollStyle)
         }
     }
 }
@@ -388,6 +630,15 @@ class AppearanceStore constructor(
  * The appearance &amp; accessibility preference slice. Plain data class.
  * Defaults mirror the projection defaults in [AppearanceStore.read] (declared
  * on the [AppearancePreferenceSpecs] rows).
+ *
+ * The performance master rides as [performanceLevel] plus the derived
+ * [performanceMode] boolean; the granular rows are the `perf*` fields, whose
+ * names and set are pinned by the [PerformancePosture] seam this class
+ * implements (the clump's one declaration + the one
+ * `performanceOverrides()` fold). Every
+ * field keeps a default so the backup JSON of an OLD install (missing the
+ * new fields) still deserializes, and the import config ignores unknown keys
+ * so old apps tolerate new backups.
  */
 @Immutable
 @Serializable
@@ -396,7 +647,42 @@ data class AppearanceSlice(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     val oledMode: Boolean = false,
+    /** The master UI performance level (the one dial; see [PerformanceLevel]). */
+    override val performanceLevel: PerformanceLevel = PerformanceLevel.STANDARD,
+    /**
+     * The historical performance-mode boolean, DERIVED off
+     * [performanceLevel] (`level == PERFORMANCE`) — kept so every existing
+     * boolean consumer keeps compiling with identical runtime behavior. Do
+     * not set it by hand outside tests: [AppearanceStore.restore] reconciles
+     * it with the level (old backups carry only this field).
+     */
     val performanceMode: Boolean = false,
+    /** The granular animation-suppression override (AUTO follows the level). */
+    override val perfAnimations: PerformanceOverride = PerformanceOverride.AUTO,
+    /** The granular shared-element transitions override. */
+    override val perfSharedElements: PerformanceOverride = PerformanceOverride.AUTO,
+    /** The granular navigation-transitions override. */
+    override val perfNavTransitions: PerformanceOverride = PerformanceOverride.AUTO,
+    /** The granular image decode-size cap (AUTO follows the level's policy). */
+    override val perfImageDecodeCap: ImageDecodeCap = ImageDecodeCap.AUTO,
+    /** The granular image-crossfade override. */
+    override val perfImageCrossfade: PerformanceOverride = PerformanceOverride.AUTO,
+    /** The granular BlurHash-placeholder override. */
+    override val perfBlurhash: PerformanceOverride = PerformanceOverride.AUTO,
+    /** The granular quality-badges override. */
+    override val perfQualityBadges: PerformanceOverride = PerformanceOverride.AUTO,
+    /** The granular ambient-hero-video override. */
+    override val perfAmbientHeroVideo: PerformanceOverride = PerformanceOverride.AUTO,
+    /** The granular backdrop-blur override. */
+    override val perfBackdropBlur: PerformanceOverride = PerformanceOverride.AUTO,
+    /** The granular screensaver-motion override. */
+    override val perfScreensaverMotion: PerformanceOverride = PerformanceOverride.AUTO,
+    /**
+     * The image memory-cache size, in percent of the heap: `0` = AUTO (the
+     * RAM-tiered 12%/20% default), else an explicit 5..35 percent (the
+     * setter clamps).
+     */
+    val imageMemoryCachePercent: Int = 0,
     val accentColorSwatch: String = "dynamic",
     val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     val themeVariant: String = "standard",
@@ -422,4 +708,40 @@ data class AppearanceSlice(
     val handMode: HandMode = HandMode.RIGHT,
     val layoutMode: LayoutMode = LayoutMode.AUTO,
     val tvOverscan: TvOverscan = TvOverscan.FIVE,
-)
+    /** The app-wide 24-hour clock override. Default off (follow system). */
+    val timeUse24h: Boolean = false,
+    /** The media cards' animated press-scale. Default on. */
+    val cardPressAnimations: Boolean = true,
+    /** The pull-to-refresh gesture master toggle. Default on. */
+    val pullToRefreshEnabled: Boolean = true,
+    /** The app-wide backdrop dim level. Default = shipped look. */
+    val appBackdropDim: BackdropDimLevel = BackdropDimLevel.DEFAULT,
+    /** The confirmation-haptic strength remap. Default = shipped mapping. */
+    val hapticsIntensity: HapticsIntensity = HapticsIntensity.MEDIUM,
+    /** The server image-request quality override. Default = original. */
+    val imageQualityPreset: ImageQualityPreset = ImageQualityPreset.ORIGINAL,
+    /** Settings/list row density. Default = shipped spacing. */
+    val appListDensity: ListDensity = ListDensity.DEFAULT,
+    /** The press-feedback style for clickable surfaces. Default = Material ripple. */
+    val appPressEffect: PressEffectStyle = PressEffectStyle.DEFAULT,
+    /** Flat cards: remove the card shells' elevation/shadow. Default off. */
+    val appFlatCards: Boolean = false,
+    /** The scrollable containers' overscroll effect. Default = platform. */
+    val appOverscrollStyle: OverscrollStyle = OverscrollStyle.PLATFORM,
+) : PerformancePosture
+
+/**
+ * The backup-shape reconciliation for the performance master: a coherent
+ * slice (anything this app's [AppearanceStore.read] produced, or an old
+ * backup decoded on this app version) passes through unchanged, while the
+ * OLD backup shape — `performanceMode: true` with [performanceLevel] still
+ * at its STANDARD default, producible only by a backup JSON that predates
+ * the level field — maps up to [PerformanceLevel.PERFORMANCE]. Shared by
+ * [AppearanceStore.restore] and the settings package's category mergers so
+ * both entry points agree on the old-shape interpretation.
+ */
+internal fun AppearanceSlice.resolvedPerformanceLevel(): PerformanceLevel = when {
+    performanceLevel != PerformanceLevel.STANDARD -> performanceLevel
+    performanceMode -> PerformanceLevel.PERFORMANCE
+    else -> PerformanceLevel.STANDARD
+}

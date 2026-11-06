@@ -2,9 +2,11 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.download.ContainerSniffer
 import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
+import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -25,8 +27,10 @@ import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.preferredMediaSource
 import com.raulshma.jellyplay.core.model.toMediaDetail
 import com.raulshma.jellyplay.core.model.toMediaItem
+import com.raulshma.jellyplay.core.model.PlaybackCaps
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.ResolvedPerformanceProfile
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
@@ -50,6 +54,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Session state for the VOD player: resolved item metadata, stream info, and
@@ -119,6 +124,24 @@ internal class PlayerSessionManager(
     /** The shared core:data PiP port (process singleton impl on Android). */
     private val pipController: PipController,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
+    /**
+     * The performance-profile resolver (issue #186 §5.5/§5.7): every resolve
+     * path below re-resolves the effective tier through its sticky cache with
+     * a bounded wait (see [PROFILE_RESOLVE_TIMEOUT_MS]) so a pathological
+     * device probe cannot wedge playback — the timeout falls back to the
+     * resolver's warmed [VideoPerformanceResolver.resolved] value (the
+     * AUTO/MEDIUM seed).
+     */
+    private val videoPerformanceResolver: VideoPerformanceResolver,
+    /**
+     * The single profile-ceiling layer over the stream caps (§5.7): the
+     * manager feeds it the persisted-quality path
+     * ([PlaybackCapResolver.forPersistedQuality] — `buildResolveRequest`,
+     * `reloadForStreamChange`, `switchMediaSource`) and the user-quality
+     * path ([PlaybackCapResolver.forUserQuality] — `reloadPlayback`), always
+     * through the same bounded wrapper.
+     */
+    private val playbackCapResolver: PlaybackCapResolver,
     private val playerEngineFactory: PlayerEngineFactory,
     private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
     /**
@@ -646,32 +669,27 @@ internal class PlayerSessionManager(
      * One builder for the resolve request, called by both the warm slot and
      * the live path — the warm hit is an exact-equality guard, so the two
      * sites must never drift apart on how the request is shaped.
+     *
+     * The stream caps ride the §5.7 profile ceiling
+     * ([PlaybackCapResolver.forPersistedQuality]): the quality/bitrate ladder
+     * is unchanged (the cellular tier on metered connections, the wifi tier
+     * otherwise; the server host's #19 home-tier split), with the
+     * performance-profile tier min-folded on top — the stricter value wins,
+     * nothing is ever raised.
      */
-    private fun buildResolveRequest(
+    private suspend fun buildResolveRequest(
         itemId: String,
         source: MediaSource?,
         startTimeTicks: Long,
         agg: VideoPlayerAggregate,
     ): PlaybackResolveRequest {
-        // The resolution cap follows the network: the cellular tier on
-        // metered connections, the wifi tier otherwise (same split the
-        // effective bitrate uses).
-        val quality = adaptiveBitrateManager.effectiveQuality(
-            agg.playback.streamingQuality,
-            agg.playback.cellularStreamingQuality,
-        )
+        val caps = persistedQualityCaps(agg.playback.playbackMode, agg)
         return PlaybackResolveRequest(
             itemId = itemId,
             mediaSourceId = source?.id ?: "",
             startTimeTicks = startTimeTicks,
-            // The server host rides the bitrate resolution (#19): a LOCAL
-            // server honours the home-network quality tier; remote keeps the
-            // wifi/cellular ladder. The host is the pure string parse of the
-            // session's server URL (the identity seam's platform-neutral read).
-            maxStreamingBitrateBits = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
-                sessionServerHost(),
-            ),
-            maxVideoHeight = quality.maxHeight,
+            maxStreamingBitrateBits = caps.maxBitrate,
+            maxVideoHeight = caps.maxHeight,
             mode = agg.playback.playbackMode,
             playerType = agg.playback.preferredPlayer,
             staticFallbackLiveStreamId = source?.liveStreamId,
@@ -685,6 +703,67 @@ internal class PlayerSessionManager(
      */
     private fun sessionServerHost(): String? =
         com.raulshma.jellyplay.core.model.serverHostOf(playbackIdentity.serverUrl())
+
+    // ── The §5.7 profile-ceiling resolve helpers ─────────────────────────────
+    //
+    //    Every resolve path resolves the effective profile ONCE with a
+    //    bounded wait, then folds the caps through the pure
+    //    [PlaybackCapResolver.applyProfileCeiling]. On timeout the base
+    //    caps re-fold over the resolver's WARMED tuning (the AUTO/MEDIUM
+    //    seed) — playback proceeds, never wedged on a pathological probe.
+
+    /**
+     * The persisted-quality caps (the default path): the full
+     * [com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager]
+     * fold (home tier on a LOCAL host, data saver, metered ceiling, manual
+     * bandwidth) + the active wifi/cellular quality tier, with the profile
+     * ceiling min-folded on top.
+     */
+    private suspend fun persistedQualityCaps(mode: PlaybackMode, agg: VideoPlayerAggregate): PlaybackCaps =
+        withTimeoutOrNull(PROFILE_RESOLVE_TIMEOUT_MS) {
+            playbackCapResolver.forPersistedQuality(sessionServerHost(), mode)
+        } ?: playbackCapResolver.applyProfileCeiling(
+            // The timeout fallback: identical base inputs, warmed tuning.
+            baseBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(sessionServerHost()),
+            baseHeight = adaptiveBitrateManager.effectiveQuality(
+                agg.playback.streamingQuality,
+                agg.playback.cellularStreamingQuality,
+            ).maxHeight,
+            tuning = videoPerformanceResolver.resolved.value.tuning,
+            mode = mode,
+        )
+
+    /**
+     * The user-quality caps (the in-player quality reload): the quality's
+     * own ladder — deliberately NOT the home tier (§5.7's last paragraph:
+     * the user just picked an explicit quality; the home tier is a persisted
+     * preference for the default path) — with the profile ceiling on top.
+     */
+    private suspend fun userQualityCaps(
+        quality: com.raulshma.jellyplay.core.model.StreamingQuality,
+        mode: PlaybackMode,
+    ): PlaybackCaps = withTimeoutOrNull(PROFILE_RESOLVE_TIMEOUT_MS) {
+        playbackCapResolver.forUserQuality(quality, sessionServerHost(), mode)
+    } ?: playbackCapResolver.applyProfileCeiling(
+        baseBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality),
+        baseHeight = quality.maxHeight,
+        tuning = videoPerformanceResolver.resolved.value.tuning,
+        mode = mode,
+    )
+
+    /**
+     * The effective profile for the engine/request builds: bounded resolve,
+     * warmed fallback. The engine-config fold (§5.8) and the request plan's
+     * buffer ceiling + AUTO-mode bitrate (§5.7/§5.9) both read this. The
+     * profile is passed EXPLICITLY from the caller's aggregate snapshot (the
+     * same one the request builds from) — one consistent read per load, not
+     * the resolver's own store point-read.
+     */
+    private suspend fun resolvedProfileOrWarmed(agg: VideoPlayerAggregate): ResolvedPerformanceProfile =
+        withTimeoutOrNull(PROFILE_RESOLVE_TIMEOUT_MS) {
+            videoPerformanceResolver.resolve(agg.playback.videoPerformanceProfile)
+        }
+            ?: videoPerformanceResolver.resolved.value
 
     private suspend fun loadOnline(
         itemId: String,
@@ -807,12 +886,18 @@ internal class PlayerSessionManager(
         } else {
             createReplacementEngine(playerType)
         }
+        // §5.8: resolve the effective profile BEFORE the engine adopts its
+        // config and the request plan folds — the same bounded resolve every
+        // §5.7 path uses, so the config fold, the AUTO-mode bitrate cap and
+        // the §5.9 buffer ceiling all see ONE tier per load.
+        val performanceProfile = resolvedProfileOrWarmed(agg)
         adoptEngine(
             playerType = playerType,
             eng = eng,
             agg = agg,
             itemId = detail.item.id,
             playbackSpeed = agg.videoPlayer.videoDefaultSpeed,
+            performanceTuning = performanceProfile.tuning,
         )
 
         val externalSubtitles = sessionSubtitleSources.buildExternalSubtitles(detail, source, playMethod)
@@ -822,11 +907,11 @@ internal class PlayerSessionManager(
         // The 20-field request as one pure fold (the MpvLoadOptionsPlan
         // precedent, PlaybackRequestPlan.kt): header/token resolution, the
         // language-rule resolution with its subtitle-disabled fallback, the
-        // AUTO-mode bitrate cap, buffer sizing and the engineSpecific payload
-        // are the plan's; the impure projections (the identity reads, the
-        // side-loaded subtitle set, the bitrate-cap source) arrive as plain
-        // inputs, captured once per request exactly as the inline form read
-        // them.
+        // AUTO-mode profile-capped bitrate, the §5.9 buffer sizing and the
+        // engineSpecific payload are the plan's; the impure projections (the
+        // identity reads, the side-loaded subtitle set, the capped-bitrate
+        // source) arrive as plain inputs, captured once per request exactly
+        // as the inline form read them.
         val request = PlaybackRequestPlan.of(
             PlaybackRequestPlan.Inputs(
                 url = url,
@@ -842,7 +927,17 @@ internal class PlayerSessionManager(
                 token = playbackIdentity.accessToken(),
                 clientTls = playbackIdentity.clientTls(),
                 authorizationHeader = playbackIdentity::authorizationHeader,
-                resolveServerBitrate = { host -> adaptiveBitrateManager.resolveEffectiveMaxBitrate(host) },
+                // §5.7: the profile-capped effective bitrate — the same
+                // min-fold the resolve request carries (network/user cap ∨
+                // profile cap; the plan still gates it to AUTO mode, the
+                // forced-mode bypass is deliberate).
+                resolvedMaxBitrate = playbackCapResolver.applyProfileCeiling(
+                    baseBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(sessionServerHost()),
+                    baseHeight = null,
+                    tuning = performanceProfile.tuning,
+                    mode = agg.playback.playbackMode,
+                ).maxBitrate,
+                performanceTuning = performanceProfile.tuning,
             ),
         )
 
@@ -917,7 +1012,11 @@ internal class PlayerSessionManager(
      * [agg] is the caller's aggregate snapshot — the initial-load path awaits
      * the hydrated raw flow (a `.value` point read there would be the empty
      * cold-start default), while the reload path reads the live value — and
-     * [itemId] keys the per-item video effects.
+     * [itemId] keys the per-item video effects. [performanceTuning] is the
+     * §5.8 profile ceiling folded into the engine-specific config (the
+     * initial-load path resolves it per load; the reload path reads the
+     * resolver's just-refreshed warmed value — its own caps helper resolved
+     * moments before).
      */
     private fun adoptEngine(
         playerType: PlayerType,
@@ -925,6 +1024,7 @@ internal class PlayerSessionManager(
         agg: VideoPlayerAggregate,
         itemId: String?,
         playbackSpeed: Float,
+        performanceTuning: com.raulshma.jellyplay.core.model.VideoPerformanceTuning,
     ) {
         lastPlayerType = playerType
         activateEngine(eng)
@@ -934,6 +1034,7 @@ internal class PlayerSessionManager(
                 mediaStreams = _sessionState.value.mediaStreams,
                 itemId = itemId,
                 engineSpecific = resolveEngineConfig(playerType, agg),
+                performanceTuning = performanceTuning,
             )
         )
         eng.setPlaybackSpeed(playbackSpeed)
@@ -965,9 +1066,13 @@ internal class PlayerSessionManager(
         selection: MediaStreamSelection? = null,
     ): ResolvedPlayback? {
         if (_sessionState.value.currentItemId == null) return null
+        // §5.7: the in-player quality reload rides the USER-quality ladder
+        // (the quality's own bitrate, NOT the home tier — the user just
+        // picked it) with the profile ceiling min-folded on top.
+        val caps = userQualityCaps(quality, mode)
         return reresolveAndSwap(
             mode = mode,
-            maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality),
+            maxBitrate = caps.maxBitrate,
             quality = quality,
             selection = selection,
             startPositionMs = currentPositionMs,
@@ -996,11 +1101,13 @@ internal class PlayerSessionManager(
         currentPositionMs: Long,
     ): ResolvedPlayback? {
         if (_sessionState.value.currentItemId == null) return null
+        val agg = aggregateStore.aggregate.value
+        val persistedMode = agg.playback.playbackMode
         return reresolveAndSwap(
-            mode = aggregateStore.aggregate.value.playback.playbackMode,
-            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
-                sessionServerHost(),
-            ),
+            mode = persistedMode,
+            // §5.7: the stream-index re-POST keeps the persisted-quality
+            // caps (the full network fold + the profile ceiling).
+            maxBitrate = persistedQualityCaps(persistedMode, agg).maxBitrate,
             selection = selection,
             startPositionMs = currentPositionMs,
             // A stream-index re-POST is orthogonal to the forced-direct-play
@@ -1033,11 +1140,13 @@ internal class PlayerSessionManager(
         _sessionState.update {
             it.copy(currentMediaSource = target, mediaStreams = target.mediaStreams)
         }
+        val agg = aggregateStore.aggregate.value
+        val persistedMode = agg.playback.playbackMode
         return reresolveAndSwap(
-            mode = aggregateStore.aggregate.value.playback.playbackMode,
-            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
-                sessionServerHost(),
-            ),
+            mode = persistedMode,
+            // §5.7: same as reloadForStreamChange — the persisted-quality
+            // caps (the full network fold + the profile ceiling).
+            maxBitrate = persistedQualityCaps(persistedMode, agg).maxBitrate,
             selection = null,
             startPositionMs = currentPositionMs,
             markForced = false,
@@ -1157,7 +1266,10 @@ internal class PlayerSessionManager(
         val last = lastPlaybackRequest ?: return
 
         // A URL swap never reuses the live engine: always release+create (the
-        // re-resolve may have changed the player type), then re-adopt.
+        // re-resolve may have changed the player type), then re-adopt. The
+        // §5.8 tuning reads the resolver's warmed value: every reloadWithEngine
+        // caller resolves through a §5.7 caps helper first, so the flow's
+        // last resolution is this reload's own.
         val eng = createReplacementEngine(playerType)
         adoptEngine(
             playerType = playerType,
@@ -1165,6 +1277,7 @@ internal class PlayerSessionManager(
             agg = aggregateStore.aggregate.value,
             itemId = _sessionState.value.currentItemId,
             playbackSpeed = playbackSpeed,
+            performanceTuning = videoPerformanceResolver.resolved.value.tuning,
         )
 
         val request = last.copy(
@@ -1290,6 +1403,16 @@ internal class PlayerSessionManager(
 
     fun detachEngine() {
         _engine.value = null
+    }
+
+    private companion object {
+        /**
+         * The §5.7/§5.8 budget for every performance-profile resolve in this
+         * manager (~1 s): a pathological device probe must never wedge
+         * playback — on timeout the resolver's warmed `resolved.value`
+         * (the AUTO/MEDIUM seed) carries the request.
+         */
+        const val PROFILE_RESOLVE_TIMEOUT_MS = 1_000L
     }
 }
 

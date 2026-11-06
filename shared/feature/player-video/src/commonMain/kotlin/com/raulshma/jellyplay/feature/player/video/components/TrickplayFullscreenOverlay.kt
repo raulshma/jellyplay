@@ -41,6 +41,8 @@ internal fun TrickplayFullscreenOverlay(
     bitmap: PlatformBitmap?,
     positionMs: Long,
     durationMs: Long,
+    /** The target-timestamp readouts; the seek-preview-time pref gates them. */
+    showTimestamp: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -56,7 +58,7 @@ internal fun TrickplayFullscreenOverlay(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
-        } else {
+        } else if (showTimestamp) {
             Text(
                 text = formatDurationMs(positionMs, paddedMinutes = true),
                 color = playerOnScrim().copy(alpha = 0.7f),
@@ -75,21 +77,23 @@ internal fun TrickplayFullscreenOverlay(
                 .background(playerScrimColor().copy(alpha = 0.35f))
                 .padding(horizontal = 24.dp, vertical = 14.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = formatDurationMs(positionMs, paddedMinutes = true),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = playerOnScrim(),
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = FontFamily.Monospace,
-                )
-                if (durationMs > 0) {
+            if (showTimestamp) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = " / " + formatDurationMs(durationMs, paddedMinutes = true),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = playerOnScrim().copy(alpha = 0.65f),
+                        text = formatDurationMs(positionMs, paddedMinutes = true),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = playerOnScrim(),
+                        fontWeight = FontWeight.SemiBold,
                         fontFamily = FontFamily.Monospace,
                     )
+                    if (durationMs > 0) {
+                        Text(
+                            text = " / " + formatDurationMs(durationMs, paddedMinutes = true),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = playerOnScrim().copy(alpha = 0.65f),
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
                 }
             }
             if (durationMs > 0) {

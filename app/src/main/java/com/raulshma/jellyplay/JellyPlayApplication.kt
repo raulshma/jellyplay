@@ -3,6 +3,7 @@ package com.raulshma.jellyplay
 import android.app.ActivityManager
 import android.app.Application
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.os.SystemClock
 import android.os.Trace
 import android.util.Log
@@ -11,6 +12,9 @@ import coil3.SingletonImageLoader
 import coil3.memory.MemoryCache
 import com.raulshma.jellyplay.core.data.di.CoreDataWorkerFactory
 import com.raulshma.jellyplay.core.data.image.jellyPlayImageLoader
+// Aliased: this file already binds `Log` to android.util.Log for the perf
+// mark below; SharedLog is core:data's gated facade.
+import com.raulshma.jellyplay.core.data.log.Log as SharedLog
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ImageCache
@@ -59,6 +63,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // (maxCacheSizeMb); the cold-start prewarm of the same slice lives in
     // AppStartupPrewarms, which owns the t=0 ordering.
     private val networkOfflineStore: NetworkOfflineStore by lazyFromKoin()
+    // Read by the image loader's memory-cache sizing below
+    // (imageMemoryCachePercent); same prewarm/lazy-read story as the
+    // NetworkOfflineStore above.
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore by lazyFromKoin()
     // The cold-start prewarm choreography — critical DataStore/cache prewarms,
     // the 2 s-deferred audio/widget and background-scheduler groups, download
     // recovery + the self-update APK sweep — is composed in
@@ -92,6 +100,16 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     override fun onCreate() {
+        // Gate the shared Log facade before anything can log: debuggable
+        // builds (studio runs) keep verbose d/i output, release defaults to
+        // WARN so d/i stop at the facade. R8 additionally strips d/i call
+        // sites (arguments included) from minified builds, so this is the
+        // runtime seam for the non-minified debuggable release ones. This
+        // module has buildConfig = false — no BuildConfig class — so runtime
+        // debuggability is the source of truth.
+        SharedLog.setVerboseLoggingEnabled(
+            (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0,
+        )
         // Koin owns construction for every module.
         // MUST run before anything resolves a
         // dependency: the lazy fields and every Activity/Service/widget entry
@@ -152,7 +170,19 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // competing with MPV/ExoPlayer native buffers.
         val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         val isLowRamDevice = am?.let { it.isLowRamDevice || it.memoryClass <= 256 } ?: false
-        val memoryCachePercent = if (isLowRamDevice) 0.12 else 0.20
+        val ramTieredPercent = if (isLowRamDevice) 0.12 else 0.20
+        // The appearance row's explicit override (image_memory_cache_percent):
+        // 0 = the AUTO sentinel → keep the RAM-tiered fold above; 5..35 = the
+        // user's explicit percent of the heap (the setter clamps). The read is
+        // the same `.value` snapshot idiom as maxCacheSizeMb's NetworkOfflineStore
+        // read below: the loader builds lazily on the FIRST image load, and if
+        // the appearance prewarm hasn't landed by then the flow still holds its
+        // seed (0 = AUTO) — the RAM-tiered default applies for the session, the
+        // same benign lost-race JellyPlayImageLoader's KDoc documents (an
+        // explicit value read at construction can't track later writes either;
+        // the cache size is fixed for the process either way).
+        val configuredPercent = appearanceStore.appearance.value.imageMemoryCachePercent
+        val memoryCachePercent = if (configuredPercent == 0) ramTieredPercent else configuredPercent / 100.0
 
         // Shared JVM builder policy (OkHttp fetcher with ServiceLoader
         // structurally off, crossfade, and the lazily-sized ImageCache.DIR

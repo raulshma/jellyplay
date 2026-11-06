@@ -11,8 +11,12 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Gauge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,9 +48,14 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.DpadControl
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.HoldSeekCadence
 import com.raulshma.jellyplay.core.model.InputPattern
 import com.raulshma.jellyplay.core.model.PlayerAction
+import com.raulshma.jellyplay.core.model.PlayerDoubleTapZoneBias
+import com.raulshma.jellyplay.core.model.PlayerHoldSpeedPillStyle
 import com.raulshma.jellyplay.core.model.PlayerInputKey
+import com.raulshma.jellyplay.core.model.PlayerSwipeSensitivity
+import com.raulshma.jellyplay.core.model.SpeedPillClearance
 import com.raulshma.jellyplay.core.model.SwipeSide
 import com.raulshma.jellyplay.core.model.TouchZone
 import com.raulshma.jellyplay.core.model.TrickplayInfo
@@ -68,6 +77,7 @@ import com.raulshma.jellyplay.feature.player.video.state.WheelRowDisposition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -82,8 +92,19 @@ import kotlin.math.abs
 // `private` → `internal` where the root file calls the symbol. See the
 // section-host map on VideoPlayerScreen.kt.
 
-/** Hold-speed pill offset above the bottom controls. */
+/** Hold-speed pill offset above the bottom controls — the DEFAULT clearance (the pill-clearance pref's arm). */
 private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
+
+/**
+ * The [SpeedPillClearance] → clearance-dp fold (the `video_speed_pill_clearance`
+ * pref): DEFAULT keeps the long-standing 180dp placement, COMPACT sits closer,
+ * ROOMY sits well clear of the bottom controls.
+ */
+internal fun holdSpeedPillClearanceDp(clearance: SpeedPillClearance): Int = when (clearance) {
+    SpeedPillClearance.COMPACT -> 140
+    SpeedPillClearance.DEFAULT -> HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP
+    SpeedPillClearance.ROOMY -> 240
+}
 
 /**
  * The surface Box's TV D-pad / hardware-key focus + input tier (the inline if/else modifier chain verbatim).
@@ -459,6 +480,10 @@ internal fun Modifier.playerTapAndZoomGestures(
     gates: PlayerInputGates,
     isScreenLocked: Boolean,
     doubleTapHoldSeekEnabled: Boolean,
+    /** The left/right double-tap zone split (the zone-width pref; a value key like the gates). */
+    doubleTapZoneBias: PlayerDoubleTapZoneBias = PlayerDoubleTapZoneBias.DEFAULT,
+    /** The hold-seek repeat cadence family (the hold-seek-cadence pref; a value key like the gates). */
+    holdSeekCadence: HoldSeekCadence = HoldSeekCadence.DEFAULT,
     /** The input-dispatch module: resolution + the resolve-then-execute touch ladder, read live at event time. */
     dispatcher: () -> PlayerInputDispatcher,
     holdRepeatScope: CoroutineScope,
@@ -486,8 +511,11 @@ internal fun Modifier.playerTapAndZoomGestures(
     // data class rebuilt only when the mapping actually changes), so a
     // binding flip re-arms the detector instead of needing a live read (no
     // gesture can be mid-flight across a mapping change that matters here).
-    return pointerInput(gates, isScreenLocked, doubleTapHoldSeekEnabled) {
+    return pointerInput(gates, isScreenLocked, doubleTapHoldSeekEnabled, doubleTapZoneBias, holdSeekCadence) {
         if (isScreenLocked) return@pointerInput
+        // The zone fractions resolve per gesture from the pref-like value key
+        // above (a bias flip re-arms the detector, so no mid-flight staleness).
+        val (leftFraction, rightFraction) = DoubleTapHoldSeekPolicy.zoneFractions(doubleTapZoneBias)
         awaitEachGesture {
             val touchSlopPx = viewConfiguration.touchSlop
             val longPressTimeoutMs = viewConfiguration.longPressTimeoutMillis
@@ -540,10 +568,11 @@ internal fun Modifier.playerTapAndZoomGestures(
                     return@awaitEachGesture
                 }
                 // ── Phase C: the double tap. Zone from the second press's down
-                // position (the same 35%/65% split the inline handler used) —
-                // no same-spot gate: foundation's second-down wait has none, and
-                // a loose double tap is still a double tap.
-                val zone = DoubleTapHoldSeekPolicy.seekZone(second.position.x, size.width)
+                // position (the zone-bias pref's split; DEFAULT keeps the
+                // long-standing 35%/65%) — no same-spot gate: foundation's
+                // second-down wait has none, and a loose double tap is still a
+                // double tap.
+                val zone = DoubleTapHoldSeekPolicy.seekZone(second.position.x, size.width, leftFraction, rightFraction)
                 when (awaitPressOutcome(second, touchSlopPx, longPressTimeoutMs)) {
                     PressOutcome.Moved -> return@awaitEachGesture
                     PressOutcome.LongPressed -> {
@@ -582,7 +611,7 @@ internal fun Modifier.playerTapAndZoomGestures(
                                 val repeatJob = holdRepeatScope.launch {
                                     var repeats = 0
                                     while (isActive) {
-                                        delay(DoubleTapHoldSeekPolicy.repeatIntervalMs(repeats))
+                                        delay(DoubleTapHoldSeekPolicy.repeatIntervalMs(repeats, holdSeekCadence))
                                         repeats++
                                         stepSeek()
                                     }
@@ -742,6 +771,14 @@ internal fun PlayerGestureOverlayTier(
     gates: PlayerInputGates,
     isScreenLocked: Boolean,
     swipeSeekMaxMs: Long,
+    /** The brightness/volume swipe-curve sensitivity (the swipe-sensitivity pref). */
+    swipeSensitivity: PlayerSwipeSensitivity = PlayerSwipeSensitivity.DEFAULT,
+    /** The gesture overlays' dismiss delay (the overlay-linger pref). */
+    overlayLingerMs: Long = 800L,
+    /** The hold-speed pill's chrome (the pill-style pref). */
+    holdSpeedPillStyle: PlayerHoldSpeedPillStyle = PlayerHoldSpeedPillStyle.DEFAULT,
+    /** The hold-speed pill's clearance above the bottom controls (the pill-clearance pref). */
+    pillClearance: SpeedPillClearance = SpeedPillClearance.DEFAULT,
     chrome: PlayerChromeController,
     viewModel: VideoPlayerViewModel,
     windowOps: PlayerWindowOps,
@@ -778,6 +815,8 @@ internal fun PlayerGestureOverlayTier(
             edgeSwipeRight = gates.edgeRight && !isScreenLocked,
         ),
         swipeSeekMaxMs = swipeSeekMaxMs,
+        swipeSensitivity = swipeSensitivity,
+        overlayDismissDelayMs = overlayLingerMs,
         onSeekGesture = remember(gestureController) { { totalDeltaMs ->
             if (!swipeScrubActive) {
                 swipeScrubActive = true
@@ -849,24 +888,38 @@ internal fun PlayerGestureOverlayTier(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP.dp),
+                .padding(bottom = holdSpeedPillClearanceDp(pillClearance).dp),
             contentAlignment = Alignment.BottomCenter,
         ) {
+            // The pill's chrome: DEFAULT is the speed readout; MINIMAL is an
+            // icon-only compact pill (the same position and scrim).
             Box(
                 modifier = Modifier
                     .clip(ShapeCache.smoothPill)
                     .background(playerScrimColor().copy(alpha = 0.7f))
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(
+                        horizontal = if (holdSpeedPillStyle == PlayerHoldSpeedPillStyle.MINIMAL) 12.dp else 16.dp,
+                        vertical = if (holdSpeedPillStyle == PlayerHoldSpeedPillStyle.MINIMAL) 6.dp else 8.dp,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "${playbackSpeed}x",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                    ),
-                )
+                if (holdSpeedPillStyle == PlayerHoldSpeedPillStyle.MINIMAL) {
+                    Icon(
+                        imageVector = Tabler.Outline.Gauge,
+                        contentDescription = "${playbackSpeed}x",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                } else {
+                    Text(
+                        text = "${playbackSpeed}x",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -927,7 +980,9 @@ internal fun rememberTrickplayFeeds(
     LaunchedEffect(Unit) {
         // Seek-bar / D-pad scrub feed: the seek overlay bitmap plus the TV
         // mirror (TV renders no gesture overlay, so the seek-bar thumbnail
-        // IS its scrub preview).
+        // IS its scrub preview). The seek screen state is Compose snapshot
+        // state, so the collector's snapshotFlow tracks it directly — no
+        // change pulses needed.
         collectTrickplayThumbnails(
             positionMs = seekPositionMs,
             gate = { isSeeking() && trickplayEnabled() && trickplayInfo() != null },
@@ -949,11 +1004,18 @@ internal fun rememberTrickplayFeeds(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(gestureController) {
         // Gesture-swipe feed: unlike the seek feed, its gate does NOT include
         // trickplayInfo != null — a null info with the gesture active still
         // flips the overlay visible (with a null bitmap) so the swipe preview
         // placeholder shows; the onFetch body encodes that divergence.
+        //
+        // The drag streams are StateFlows, which snapshotFlow does NOT
+        // observe (a StateFlow.value read registers no snapshot dependency —
+        // the feed would run once and go dead), so they ride changePulses:
+        // every isSeeking/seekPositionMs flip re-runs the gate check.
+        // Keyed on the controller: a rebuild (engine swap, cast connect)
+        // mints new flows the frozen collector must follow.
         collectTrickplayThumbnails(
             positionMs = { gestureController.seekPositionMs.value },
             gate = { gestureController.isSeeking.value && trickplayOnSeekGesture() },
@@ -966,15 +1028,19 @@ internal fun rememberTrickplayFeeds(
                     null
                 }
             },
+            changePulses = combine(
+                gestureController.isSeeking,
+                gestureController.seekPositionMs,
+            ) { _, _ -> },
         )
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(gestureController) {
         // Flow-collected (not a composition key): keying the former
         // LaunchedEffect on isGestureSeeking subscribed this scope to every
         // drag's start/end flips. collectLatest keeps the former restart
         // semantics — a new gesture starting inside the 1 s grace cancels
-        // the pending clear.
+        // the pending clear. Keyed on the controller like the feed above.
         gestureController.isSeeking.collectLatest { seeking ->
             if (!seeking && feeds.gestureVisible) {
                 delay(1000)

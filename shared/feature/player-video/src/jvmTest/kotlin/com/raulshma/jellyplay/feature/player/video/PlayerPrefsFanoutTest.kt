@@ -147,6 +147,30 @@ class PlayerPrefsFanoutTest {
         assertEquals(1, fakes.log.count { it == "rebuildConfig" })
     }
 
+    // ─── Performance-profile rebuild trigger (issue #186 §5.8) ─────────────
+
+    @Test
+    fun `performance profile change rebuilds the engine config even when caps did not`() {
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        val new = old.copy(
+            playback = old.playback.copy(
+                videoPerformanceProfile = com.raulshma.jellyplay.core.model.VideoPerformanceProfile.LOW,
+            ),
+        )
+        fakes.fanout.onAggregateChanged(old, new)
+        assertEquals(1, fakes.log.count { it == "rebuildConfig" })
+    }
+
+    @Test
+    fun `unchanged performance profile fires no rebuild`() {
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        val new = old.copy(playback = old.playback.copy(pauseOnAudioFocusLoss = false))
+        fakes.fanout.onAggregateChanged(old, new)
+        assertFalse(fakes.log.contains("rebuildConfig"))
+    }
+
     @Test
     fun `unchanged hdr format preference fires no rebuild`() {
         val fakes = RecordingFanout(projectResult = false)

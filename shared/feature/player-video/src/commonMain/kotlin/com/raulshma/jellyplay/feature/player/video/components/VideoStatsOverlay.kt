@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +45,13 @@ import com.raulshma.jellyplay.core.designsystem.theme.extendedColors
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.formatFixed
+import com.raulshma.jellyplay.core.model.ExoBufferPosture
+import com.raulshma.jellyplay.core.model.DevicePerformanceTier
+import com.raulshma.jellyplay.core.model.PerformanceDetection
+import com.raulshma.jellyplay.core.model.PerformanceLevel
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
+import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
+import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.player.video.PlatformTranscodeReason
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_audio
@@ -60,7 +68,14 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_resolution
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_speed
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_health
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_auto
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_back
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_back_keyframes
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_back_retained
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_initial
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_rebuffer
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_size
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_target
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffered
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffered_ranges
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_clock
@@ -72,15 +87,31 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_dropped_frames
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_engine
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_est_bandwidth
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_bypass_download
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_bypass_force_direct
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_bypass_live_tv
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_performance_detected_tier
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_for_nerds
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_hdr
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_hdr_output_active
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_level
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_level_posture_balanced
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_level_posture_performance
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_level_posture_standard
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_network
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_performance
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_playback
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_player
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_playing
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_position
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_profile
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_effective_cap
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_no_profile_cap
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_caps_bypassed
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_detection_reasons
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_try_auto_low
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_try_low_switch_engine
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_try_lower_quality
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_progress
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_quality
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_sample_rate
@@ -122,11 +153,40 @@ fun VideoStatsOverlay(
     /** Server-reported transcode reasons, pre-formatted; empty when direct
      *  playing so the "why transcoding" block is hidden entirely. */
     transcodeReasons: List<PlatformTranscodeReason> = emptyList(),
+    /** The performance-profile block (issue #186 §5.12): the active profile
+     *  and the resolver-derived facts — see the Performance section below. */
+    performanceProfile: VideoPerformanceProfile = VideoPerformanceProfile.AUTO,
+    detectedPerformanceTier: DevicePerformanceTier? = null,
+    /** The resolved tuning (the profile's ceiling); [VideoPerformanceTuning.NONE]
+     *  = no resolution yet = the no-cap HIGH row. */
+    performanceTuning: VideoPerformanceTuning = VideoPerformanceTuning.NONE,
+    /**
+     * The master UI-performance LEVEL (the appearance domain's dial —
+     * Settings → Performance): the Level row at the top of the Performance
+     * section. Deliberately DISTINCT from [performanceProfile] (issue #186's
+     * device-tier Profile system) — the two labels never blur.
+     */
+    performanceLevel: PerformanceLevel = PerformanceLevel.STANDARD,
+    /**
+     * The effective ExoPlayer buffer posture (the engine config's four
+     * `DefaultLoadControl` numbers, folded by the ViewModel from the same
+     * aggregate the config builds from — never polled off the engine).
+     * `null` = the active engine is not ExoPlayer: the Buffer rows hide
+     * rather than show mpv/VLC-irrelevant numbers.
+     */
+    exoBuffer: ExoBufferPosture? = null,
+    /** Why the caps cannot be enforced this session (§5.13's bypass table),
+     *  pre-folded by the caller from session state. */
+    capsBypassed: List<CapsBypassSource> = emptyList(),
+    /** The AUTO detector's sticky run — the Detection-reasons row's source,
+     *  collected here so only the visible overlay ticks with it. */
+    detectionFlow: StateFlow<PerformanceDetection?> = MutableStateFlow(null),
     modifier: Modifier = Modifier,
 ) {
     val stats by statsFlow.collectAsStateWithLifecycle()
     val currentPositionMs by currentPositionFlow.collectAsStateWithLifecycle()
     val bufferedRanges by bufferedRangesFlow.collectAsStateWithLifecycle()
+    val detection by detectionFlow.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -278,6 +338,88 @@ fun VideoStatsOverlay(
             }
 
             StatsSection(stringResource(Res.string.player_video_stats_performance)) {
+                // ── The master LEVEL row first (the appearance domain's
+                // UI-performance dial), then the performance-PROFILE block
+                // (issue #186 §5.12): the profile, its effective ceiling, why
+                // the caps cannot enforce this session, the detector's
+                // reasons, and the "what to try" line. Two systems, two
+                // labels — "Level" vs "Profile", never blurred. Profile caps
+                // only — the resolved per-request cap source (Profile /
+                // Quality / Data saver / …) is not exposed by the session
+                // yet, so the Effective-cap row states the profile's own
+                // ceiling and the source row stays out rather than guessing.
+                StatsRow(
+                    stringResource(Res.string.player_video_stats_level),
+                    performanceLevelLabel(performanceLevel),
+                )
+                // The Exo buffer posture — the engine config's effective
+                // DefaultLoadControl numbers (initial / rebuffer thresholds,
+                // byte target, back-buffer retention). Rows hidden entirely
+                // when the active engine is not ExoPlayer rather than showing
+                // numbers mpv/VLC never read.
+                exoBuffer?.let { buffer ->
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_buffer_initial),
+                        "${buffer.initialBufferMs} ms",
+                    )
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_buffer_rebuffer),
+                        "${buffer.rebufferBufferMs} ms",
+                    )
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_buffer_target),
+                        if (buffer.targetBufferBytes < 0) {
+                            stringResource(Res.string.player_video_stats_buffer_auto)
+                        } else {
+                            formatBytes(buffer.targetBufferBytes.toLong())
+                        },
+                    )
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_buffer_back),
+                        if (buffer.retainBackBuffer) {
+                            stringResource(Res.string.player_video_stats_buffer_back_retained)
+                        } else {
+                            stringResource(Res.string.player_video_stats_buffer_back_keyframes)
+                        },
+                    )
+                }
+                StatsRow(
+                    stringResource(Res.string.player_video_stats_profile),
+                    performanceProfileLabel(performanceProfile, detectedPerformanceTier),
+                )
+                StatsRow(
+                    stringResource(Res.string.player_video_stats_effective_cap),
+                    performanceCapLabel(performanceTuning),
+                )
+                if (capsBypassed.isNotEmpty()) {
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_caps_bypassed),
+                        capsBypassed.map { bypassLabel(it) }.joinToString(", "),
+                    )
+                }
+                detection?.reasons?.takeIf { it.isNotEmpty() }?.let { reasons ->
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_detection_reasons),
+                        reasons.joinToString(", ") { it.name },
+                    )
+                }
+                // The §5.12 "what to try" line: the fold reads THIS section's
+                // own rows (drop rate, stream bitrate vs estimated bandwidth)
+                // and the play posture (empty transcode reasons = direct
+                // play) — one advice line, highest-priority cause first.
+                PerformanceStatsAdvice.adviceFor(
+                    droppedFrames = stats.droppedFrames,
+                    totalVideoFrames = stats.totalVideoFrames,
+                    isDirectPlay = transcodeReasons.isEmpty(),
+                    estimatedBandwidthBps = stats.estimatedBandwidthBps,
+                    streamBitrateBps = stats.videoBitrate ?: stats.audioBitrate ?: 0,
+                )?.let { advice ->
+                    Text(
+                        text = adviceLabel(advice),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = playerOnScrim().copy(alpha = 0.75f),
+                    )
+                }
                 StatsRow(stringResource(Res.string.player_video_stats_dropped_frames), "${stats.droppedFrames}")
                 // Only show total rendered frames when the engine actually
                 // reports them (ExoPlayer via DecoderCounters, MPV via
@@ -380,6 +522,142 @@ private fun StatsRow(
 }
 
 private fun formatDurationMsLocal(ms: Long): String = com.raulshma.jellyplay.core.ui.components.formatDurationMs(ms)
+
+// ── Performance-profile block (issue #186 §5.12) ─────────────────────────────
+
+/**
+ * The effective ExoPlayer buffer posture the overlay's Buffer rows render:
+ * the engine config's four `DefaultLoadControl` numbers (the same fields
+ * [com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig] carries after the
+ * engine-config fold — initial / rebuffer start thresholds, the byte target
+ * (`-1` = Media3's derive-from-tracks sentinel, rendered "Auto"), and the
+ * back-buffer retention posture). Built by the ViewModel from the aggregate
+ * the config builds from — never polled off the running engine. Defaults
+ * mirror the engine-config defaults so the cold value is an untouched
+ * install's posture.
+ */
+/**
+ * The LEVEL row's value: the level's name plus a one-word posture hint
+ * ("Standard · Full effects"). A DIFFERENT system from
+ * [performanceProfileLabel] — this is the master UI-performance dial
+ * (Settings → Performance), that one the playback device-tier Profile.
+ */
+@Composable
+private fun performanceLevelLabel(level: PerformanceLevel): String {
+    val name = level.localizedDisplayName()
+    val posture = when (level) {
+        PerformanceLevel.STANDARD -> stringResource(Res.string.player_video_stats_level_posture_standard)
+        PerformanceLevel.BALANCED -> stringResource(Res.string.player_video_stats_level_posture_balanced)
+        PerformanceLevel.PERFORMANCE -> stringResource(Res.string.player_video_stats_level_posture_performance)
+    }
+    return "$name · $posture"
+}
+
+/**
+ * Why the performance caps cannot be enforced for the current session
+ * (§5.13's bypass table) — pre-folded by the caller from session state
+ * (forced direct-play mode, the downloaded badge, the current source's live
+ * stream id). Labels resolve to resources in the overlay.
+ */
+enum class CapsBypassSource { FORCE_DIRECT_PLAY, DOWNLOAD, LIVE_TV }
+
+@Composable
+private fun performanceProfileLabel(
+    profile: VideoPerformanceProfile,
+    detectedTier: DevicePerformanceTier?,
+): String = when (profile) {
+    // §5.12's `Auto (Detected: Low)` shape; a still-running first detection
+    // shows the bare profile — the Effective-cap row already communicates the
+    // MEDIUM seed the resolver falls back to.
+    VideoPerformanceProfile.AUTO -> detectedTier
+        ?.let { "${profile.displayName} (${stringResource(Res.string.player_video_performance_detected_tier, it.displayName)})" }
+        ?: profile.displayName
+    else -> profile.displayName
+}
+
+/** `1080p / 8.0 Mbps` or `No profile cap` (HIGH / pre-resolution NONE). */
+@Composable
+private fun performanceCapLabel(tuning: VideoPerformanceTuning): String {
+    val height = tuning.maxVideoHeight
+    val bitrate = tuning.maxVideoBitrate
+    if (height == null && bitrate == null) {
+        return stringResource(Res.string.player_video_stats_no_profile_cap)
+    }
+    val heightPart = height?.let { "${it}p" }
+    val bitratePart = bitrate?.let { "${formatFixed(it / 1_000_000.0, 1)} Mbps" }
+    return listOfNotNull(heightPart, bitratePart).joinToString(" / ")
+}
+
+@Composable
+private fun bypassLabel(source: CapsBypassSource): String = when (source) {
+    CapsBypassSource.FORCE_DIRECT_PLAY -> stringResource(Res.string.player_video_bypass_force_direct)
+    CapsBypassSource.DOWNLOAD -> stringResource(Res.string.player_video_bypass_download)
+    CapsBypassSource.LIVE_TV -> stringResource(Res.string.player_video_bypass_live_tv)
+}
+
+@Composable
+private fun adviceLabel(advice: PerformanceStatsAdvice.Advice): String = when (advice) {
+    PerformanceStatsAdvice.Advice.TRY_AUTO_OR_LOW ->
+        stringResource(Res.string.player_video_stats_try_auto_low)
+    PerformanceStatsAdvice.Advice.TRY_LOW_OR_SWITCH_ENGINE ->
+        stringResource(Res.string.player_video_stats_try_low_switch_engine)
+    PerformanceStatsAdvice.Advice.LOWER_QUALITY_CHECK_WIFI ->
+        stringResource(Res.string.player_video_stats_try_lower_quality)
+}
+
+/**
+ * The §5.12 "what to try" fold — pure and JVM-tested (the diagnostics' only
+ * decision logic; the overlay renders its verdict):
+ *
+ *  1. high dropped frames + direct play → try AUTO or LOW (the profile cap
+ *     transcodes down to the tier's ceiling);
+ *  2. high dropped frames + transcode → try LOW; if it persists, switch the
+ *     player engine;
+ *  3. estimated bandwidth below the stream bitrate → lower quality / check
+ *     Wi-Fi.
+ *
+ * "High" drop posture: a ≥2% drop rate when the engine reports frame totals,
+ * otherwise a ≥[DROPPED_FRAMES_HIGH_ABSOLUTE] absolute count (an engine
+ * without totals cannot rate — the absolute fallback keeps the advice
+ * reachable there).
+ */
+internal object PerformanceStatsAdvice {
+
+    /** The advice verdicts, mapped to localized lines by the overlay. */
+    enum class Advice {
+        TRY_AUTO_OR_LOW,
+        TRY_LOW_OR_SWITCH_ENGINE,
+        LOWER_QUALITY_CHECK_WIFI,
+    }
+
+    /** Drop-rate threshold (percent) when frame totals are reported. */
+    const val DROP_RATE_HIGH_PERCENT = 2f
+
+    /** Absolute dropped-frame fallback when no frame totals are reported. */
+    const val DROPPED_FRAMES_HIGH_ABSOLUTE = 250
+
+    fun isDropRateHigh(droppedFrames: Long, totalVideoFrames: Long): Boolean =
+        if (totalVideoFrames > 0) {
+            val total = droppedFrames + totalVideoFrames
+            droppedFrames.toFloat() / total.toFloat() * 100f >= DROP_RATE_HIGH_PERCENT
+        } else {
+            droppedFrames >= DROPPED_FRAMES_HIGH_ABSOLUTE
+        }
+
+    fun adviceFor(
+        droppedFrames: Long,
+        totalVideoFrames: Long,
+        isDirectPlay: Boolean,
+        estimatedBandwidthBps: Long,
+        streamBitrateBps: Int,
+    ): Advice? = when {
+        isDropRateHigh(droppedFrames, totalVideoFrames) && isDirectPlay -> Advice.TRY_AUTO_OR_LOW
+        isDropRateHigh(droppedFrames, totalVideoFrames) -> Advice.TRY_LOW_OR_SWITCH_ENGINE
+        estimatedBandwidthBps > 0 && streamBitrateBps > 0 && estimatedBandwidthBps < streamBitrateBps ->
+            Advice.LOWER_QUALITY_CHECK_WIFI
+        else -> null
+    }
+}
 
 private fun formatBitrate(bps: Int): String = when {
     bps >= 1_000_000 -> "${formatFixed(bps / 1_000_000.0, 1)} Mbps"

@@ -65,6 +65,10 @@ val settingsCatalogStrings = listOf(
     "shared/feature/settings/src/commonMain/composeResources/values/strings_search.xml",
     "shared/feature/settings/src/commonMain/composeResources/values/strings_appearance.xml",
     "shared/feature/settings/src/commonMain/composeResources/values/strings_playback.xml",
+    "shared/feature/settings/src/commonMain/composeResources/values/strings_home.xml",
+    "shared/feature/settings/src/commonMain/composeResources/values/strings_audio.xml",
+    "shared/feature/settings/src/commonMain/composeResources/values/strings_language.xml",
+    "shared/feature/settings/src/commonMain/composeResources/values/strings_servers.xml",
     "shared/feature/settings/src/commonMain/composeResources/values/strings.xml",
     "shared/core/ui/src/commonMain/composeResources/values/strings.xml",
 ).map { rootProject.layout.projectDirectory.file(it).asFile.absolutePath }

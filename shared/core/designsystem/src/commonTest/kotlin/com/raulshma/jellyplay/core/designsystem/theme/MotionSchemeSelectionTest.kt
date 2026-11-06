@@ -43,30 +43,58 @@ spec is SnapSpec<*>,
 
     // ------------------------------------------------------------------
     // The selection fold (motionSchemeFor): the reduced scheme wins when
-    // EITHER flag is on. This is the same fold the theme applies via
-    // LocalPerformanceMode/LocalReduceMotionEnabled — pinned here as a pure
+    // EITHER input is on. The inputs are the RESOLVED posture's pair —
+    // LocalPerformanceConfig.suppressAnimations + the raw reduce-motion
+    // accessibility flag (LocalReduceMotionEnabled) — pinned here as a pure
     // function so the selection itself (not just the scheme contents) has a
     // regression guard.
     // ------------------------------------------------------------------
 
     @Test
     fun selection_default_isExpressive() {
-        assertTrue(motionSchemeFor(performanceMode = false, reduceMotion = false) === ExpressiveMotionScheme)
+        assertTrue(motionSchemeFor(suppressAnimations = false, reduceMotion = false) === ExpressiveMotionScheme)
     }
 
     @Test
-    fun selection_performanceModeAlone_selectsReduced() {
-        assertTrue(motionSchemeFor(performanceMode = true, reduceMotion = false) === ReducedMotionScheme)
+    fun selection_suppressAnimationsAlone_selectsReduced() {
+        assertTrue(motionSchemeFor(suppressAnimations = true, reduceMotion = false) === ReducedMotionScheme)
     }
 
     @Test
     fun selection_reduceMotionAlone_selectsReduced() {
-        assertTrue(motionSchemeFor(performanceMode = false, reduceMotion = true) === ReducedMotionScheme)
+        assertTrue(motionSchemeFor(suppressAnimations = false, reduceMotion = true) === ReducedMotionScheme)
     }
 
     @Test
     fun selection_bothFlags_selectsReduced() {
-        assertTrue(motionSchemeFor(performanceMode = true, reduceMotion = true) === ReducedMotionScheme)
+        assertTrue(motionSchemeFor(suppressAnimations = true, reduceMotion = true) === ReducedMotionScheme)
+    }
+
+    @Test
+    fun selection_resolvedDefaultConfig_selectsExpressive() {
+        // The fresh-install posture (STANDARD, all-AUTO, reduce-motion off)
+        // must keep the expressive scheme — the compatibility anchor for the
+        // whole config migration.
+        assertTrue(
+            com.raulshma.jellyplay.core.model.ResolvedPerformanceConfig.DEFAULT
+                .let { motionSchemeFor(suppressAnimations = it.suppressAnimations, reduceMotion = false) }
+                === ExpressiveMotionScheme,
+        )
+    }
+
+    @Test
+    fun selection_resolvedPerformanceLevel_selectsReduced() {
+        // The PERFORMANCE level's all-AUTO fold suppresses animations — the
+        // historical performance-mode-ON posture — so the scheme must collapse.
+        val performance = com.raulshma.jellyplay.core.model.PerformanceConfigResolver.resolve(
+            level = com.raulshma.jellyplay.core.model.PerformanceLevel.PERFORMANCE,
+            reduceMotionEnabled = false,
+            overrides = com.raulshma.jellyplay.core.model.PerformanceOverrides(),
+        )
+        assertTrue(
+            motionSchemeFor(suppressAnimations = performance.suppressAnimations, reduceMotion = false)
+                === ReducedMotionScheme,
+        )
     }
 
     @Test

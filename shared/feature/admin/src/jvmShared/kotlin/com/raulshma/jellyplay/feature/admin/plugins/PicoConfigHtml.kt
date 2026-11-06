@@ -105,6 +105,12 @@ internal fun buildPicoOverrides(isDark: Boolean, colors: ColorScheme): String {
     """.trimIndent()
 }
 
+/** Precompiled tag boundaries [buildWrappedHtml] rewrites — all matched case-insensitively. */
+private val HTML_OPEN_TAG_REGEX = Regex("(<html[^>]*?)>", RegexOption.IGNORE_CASE)
+private val HEAD_TAG_REGEX = Regex("(<head[^>]*?>)", RegexOption.IGNORE_CASE)
+private val HEAD_CLOSE_TAG_REGEX = Regex("(</head>)", RegexOption.IGNORE_CASE)
+private val BODY_TAG_REGEX = Regex("(<body[^>]*>)", RegexOption.IGNORE_CASE)
+
 /**
  * Wraps the plugin's HTML so that the bridge script and Pico CSS theme load
  * before the page's own scripts. The [bridgeScript] is injected at the very top
@@ -129,15 +135,15 @@ internal fun buildWrappedHtml(
     if (hasHtml) {
         return originalHtml
             .replace(
-                Regex("(<html[^>]*?)>", RegexOption.IGNORE_CASE),
+                HTML_OPEN_TAG_REGEX,
                 "$1 data-theme=\"$theme\">",
             )
             .replace(
-                Regex("(<head[^>]*?>)", RegexOption.IGNORE_CASE),
+                HEAD_TAG_REGEX,
                 "$1<script>$bridgeScript</script>",
             )
             .replace(
-                Regex("(</head>)", RegexOption.IGNORE_CASE),
+                HEAD_CLOSE_TAG_REGEX,
                 "$picoStylesheet\n</head>",
             )
     }
@@ -152,14 +158,14 @@ internal fun buildWrappedHtml(
 
     if (hasHead && hasBody) {
         return originalHtml.replace(
-            Regex("(<head[^>]*?>)", RegexOption.IGNORE_CASE),
+            HEAD_TAG_REGEX,
             "$1$picoHead\n",
         )
     }
 
     if (hasBody) {
         return originalHtml.replace(
-            Regex("(<body[^>]*>)", RegexOption.IGNORE_CASE),
+            BODY_TAG_REGEX,
             "$1\n$picoHead",
         )
     }

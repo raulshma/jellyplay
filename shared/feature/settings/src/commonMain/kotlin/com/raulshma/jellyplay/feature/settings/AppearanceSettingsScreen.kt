@@ -144,6 +144,7 @@ private fun appearanceScreenGroups(
     highlightSettingId: String?,
     viewModel: AppearanceSettingsViewModel,
     onCustomizeShortcuts: () -> Unit,
+    onOpenPerformanceHub: () -> Unit,
     showBlueLightStrengthSheet: () -> Unit,
 ): List<PreferenceScreenGroup> =
     AppearanceSettingsScreenSlots.withContent(
@@ -158,30 +159,35 @@ private fun appearanceScreenGroups(
             activePicker = activePicker,
         )
     },
-    { _ ->
+    { activePicker ->
         // Floating navigation bar customization (enable/disable items, reorder,
-        // hide-on-scroll).
+        // hide-on-scroll) + the global interface/interaction rows.
         val navPrefs by viewModel.navigationCustomizationPreferences.collectAsStateWithLifecycle()
         NavigationCustomizationGroup(
             preferences = navPrefs,
             viewModel = viewModel,
             onCustomizeShortcuts = onCustomizeShortcuts,
+            screen = preferences,
+            activePicker = activePicker,
         )
     },
-    { _ ->
+    { activePicker ->
         // Library & Cards: commonly-used display toggles, shown regardless of Advanced mode.
         AppearanceLibraryGroup(
             preferences = preferences,
             highlightSettingId = highlightSettingId,
             viewModel = viewModel,
+            activePicker = activePicker,
         )
     },
     // Remaining groups are expert-level; the shell keeps them behind the Advanced gate.
-    { _ ->
+    { activePicker ->
         AppearancePerformanceGroup(
             preferences = preferences,
             highlightSettingId = highlightSettingId,
             viewModel = viewModel,
+            onOpenPerformanceHub = onOpenPerformanceHub,
+            activePicker = activePicker,
         )
     },
     { _ ->
@@ -284,6 +290,8 @@ fun AppearanceSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
     onCustomizeShortcuts: () -> Unit = {},
+    /** The Performance group's "Customize…" row: deep-links into the Performance hub. */
+    onOpenPerformanceHub: () -> Unit = {},
     viewModel: AppearanceSettingsViewModel = koinViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -303,6 +311,7 @@ fun AppearanceSettingsScreen(
             highlightSettingId = highlightSettingId,
             viewModel = viewModel,
             onCustomizeShortcuts = onCustomizeShortcuts,
+            onOpenPerformanceHub = onOpenPerformanceHub,
             showBlueLightStrengthSheet = { showBlueLightStrengthSheet = true },
         ),
         advancedToggle = PreferenceAdvancedToggle(

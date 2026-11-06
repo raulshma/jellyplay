@@ -15,10 +15,12 @@ import com.raulshma.jellyplay.core.ui.viewmodel.IdEnricher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -61,6 +63,17 @@ class UpcomingCalendarViewModel(
     // carries only structure.
     private val _enrichedPosters = MutableStateFlow<Map<Int, String>>(emptyMap())
     val enrichedPosters: StateFlow<Map<Int, String>> = _enrichedPosters.asStateFlow()
+
+    /**
+     * Per-item slice of [enrichedPosters] — map lookup + `distinctUntilChanged`
+     * (the [PhotoFolderChildUrlsStore.childUrlsFor] fold): each calendar card
+     * collects only its own slice, so a poster-enrichment merge — which
+     * produces a new Map reference — invalidates only the one card whose
+     * poster landed, not the whole month grid re-collecting the map at the
+     * screen root.
+     */
+    fun enrichedPosterFor(tmdbId: Int): Flow<String?> =
+        enrichedPosters.map { it[tmdbId] }.distinctUntilChanged()
 
     /**
      * Whether the Direct *arr Integration experimental flag is enabled —

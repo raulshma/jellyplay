@@ -1309,6 +1309,59 @@ class MigrationTest {
     }
 
     /**
+     * Verifies the v62→v63 migration drops the redundant indices — the
+     * (serverId, userId) full left-prefix of home_section_cache's composite
+     * primary key, and offline_media's seriesId / seasonId / mediaType
+     * single-column left-prefixes of the surviving composites — and adds the
+     * (serverId, userId, fetchedAt) index under Room's generated name and
+     * with the exact column order HomeSectionCacheDao.getLatestForIdentity's
+     * ORDER BY needs, so Room's post-migration schema validation accepts the
+     * migrated database. The starting schema is created from the tracked
+     * `62.json` via room3's [MigrationTestHelper] (see [room3Helper]), and
+     * the migrated result is validated against the tracked `63.json` with the
+     * same TableInfo comparison Room 3 itself runs when opening a migrated
+     * database — that check includes indices, so a missing or misnamed index
+     * fails loudly here; the probes below then document the exact resulting
+     * index sets.
+     */
+    @Test
+    fun migrateV62_63_dropsRedundantIndicesAndAddsIdentityOrderingIndex() = runTest {
+        val helper = room3Helper("migrate-v62-63.db")
+        helper.createDatabase(62).close()
+
+        val db = helper.runMigrationsAndValidate(63, listOf(MIGRATION_62_63))
+
+        // The new index carries the exact column order the query's ORDER BY needs.
+        db.prepare(
+            "SELECT name FROM pragma_index_info('index_home_section_cache_serverId_userId_fetchedAt')"
+        ).use { c ->
+            val columns = mutableListOf<String>()
+            while (c.step()) columns.add(c.getText(0))
+            assertEquals(listOf("serverId", "userId", "fetchedAt"), columns)
+        }
+        // The dropped left-prefix indices are gone from both tables, and every
+        // surviving index Room validates against is present.
+        db.prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'index' " +
+                "AND tbl_name IN ('home_section_cache', 'offline_media') ORDER BY name"
+        ).use { c ->
+            val names = mutableListOf<String>()
+            while (c.step()) names.add(c.getText(0))
+            assertFalse(names.contains("index_home_section_cache_serverId_userId"))
+            assertFalse(names.contains("index_offline_media_seriesId"))
+            assertFalse(names.contains("index_offline_media_seasonId"))
+            assertFalse(names.contains("index_offline_media_mediaType"))
+            assertTrue(names.contains("index_home_section_cache_serverId_userId_fetchedAt"))
+            assertTrue(names.contains("index_offline_media_parentId"))
+            assertTrue(names.contains("index_offline_media_seriesId_mediaType"))
+            assertTrue(names.contains("index_offline_media_seasonId_mediaType"))
+            assertTrue(names.contains("index_offline_media_mediaType_createdAt"))
+            assertTrue(names.contains("index_offline_media_mediaType_seriesId_seasonNumber_episodeNumber"))
+        }
+        db.close()
+    }
+
+    /**
      * Verifies the v53→v54 backfill: every `downloads` row whose `container`
      * is NULL gets the container code resolved by the injected
      * [ContainerProbe] (file header magic bytes) persisted, while rows whose

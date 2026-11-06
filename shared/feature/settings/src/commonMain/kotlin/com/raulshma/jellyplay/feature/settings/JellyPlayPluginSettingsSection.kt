@@ -185,12 +185,18 @@ internal fun SettingsJellyPlayPluginSection(
                         text = stringResource(Res.string.jellyplay_msgs_unread_count, unreadCount),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                 }
             }
         } else null,
-        initiallyExpanded = false,
+        // The search-reveal arm: this group's toggle rows are catalog
+        // bare-Settings targets (the NoOp + pending-highlight arm of
+        // settingsResultClickAction), so a search hit must expand the card —
+        // the four system groups' idiom. The member of
+        // SettingsScreenGroups.rootRevealGroups this section renders; the
+        // contract test pins the coverage.
+        initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.jellyplayFeatures.itemIdSet,
     ) {
         SettingsItemList(total = rowCount) {
             if (syncVisible) {

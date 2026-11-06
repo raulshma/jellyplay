@@ -760,8 +760,14 @@ internal class HomeRefresher(
         isAppInForeground = true
         replaceRefreshJob {
             offlineModeManager.checkNetworkAndAutoDetect()
+            // The `home_refresh_cadence` verdict: MANUAL (null interval) skips
+            // the automatic stale fetch too — pull-to-refresh is the only
+            // refresh. Every other cadence keeps the shipped stale-on-start
+            // check (the 60 s staleness threshold is a "is the painted data
+            // cold" question, not a loop-pace question).
+            val cadenceInterval = HomeFreshness.intervalMsFor(fetchInputs.refreshCadence())
             val now = clock.nowEpochMillis()
-            if (now - lastRefreshTime >= HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS) {
+            if (cadenceInterval != null && now - lastRefreshTime >= HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS) {
                 fetchOnce()
             }
             periodicRefreshLoop()
@@ -1206,7 +1212,11 @@ internal class HomeRefresher(
      */
     private suspend fun periodicRefreshLoop() {
         while (true) {
-            val interval = HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS
+            // The `home_refresh_cadence` pref, re-read every iteration so a
+            // cadence change applies from the next tick: MANUAL (null) parks
+            // the loop for good — only a new forced fetch (pull-to-refresh,
+            // a trigger request) restarts it.
+            val interval = HomeFreshness.intervalMsFor(fetchInputs.refreshCadence()) ?: return
             // ±10% jitter avoids synchronized refresh storms when multiple
             // devices hit the server on the same fixed mark.
             val jitter = (interval * 0.1f * (kotlin.random.Random.nextFloat() * 2f - 1f)).toLong()

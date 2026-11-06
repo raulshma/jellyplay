@@ -228,7 +228,15 @@ internal fun playbackEngineScreenRowTotal(
  * — every one gated [RowAdmission.Always] on its fused row (the shipped
  * always-on rows; several carry an advanced tag the screen never honored) —
  * plus the confirm-library-reset action row (a screen-local row with no
- * search entry — the explicit +1 term).
+ * search entry — the explicit +1 term) and the detail section-order editor's
+ * reorderable rows (screen-local rows below the declared
+ * `detail_section_order` header — the [DETAIL_SECTION_ORDER_EDITOR_ROWS]
+ * explicit term).
  */
 internal fun appearanceLibraryScreenRowTotal(): Int =
-    rowTotalFor(SettingsScreenGroups.appearanceLibrary, RowAdmissionFlags()) + 1
+    rowTotalFor(SettingsScreenGroups.appearanceLibrary, RowAdmissionFlags()) +
+        1 +
+        DETAIL_SECTION_ORDER_EDITOR_ROWS
+
+/** The section-order editor's reorderable row count — ALWAYS rendered (the nav-customization precedent). */
+internal const val DETAIL_SECTION_ORDER_EDITOR_ROWS = 10

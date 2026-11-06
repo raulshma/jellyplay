@@ -348,6 +348,30 @@ internal fun SeasonsSection(
                                 shapes = SplitButtonDefaults.leadingButtonShapesFor(containerHeight),
                                 contentPadding = SplitButtonDefaults.leadingButtonContentPaddingFor(containerHeight),
                             ) {
+                                // The detail_season_tabs_artwork pref: a small
+                                // season poster beside the label — only when the
+                                // season actually carries its own Primary tag
+                                // (a tagless season would 404 an untagged URL).
+                                // The tag lookup keys the resolver; keyed on the
+                                // season so a tag change re-resolves.
+                                val seasonTabImageUrl = if (presentation.showSeasonTabArtwork) {
+                                    remember(season) {
+                                        season.imageTags.primary?.let { urls.poster(season) }.orEmpty()
+                                    }
+                                } else {
+                                    ""
+                                }
+                                if (seasonTabImageUrl.isNotEmpty()) {
+                                    MediaImage(
+                                        url = seasonTabImageUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .padding(end = 6.dp)
+                                            .size(24.dp)
+                                            .clip(RoundedCornerShape(6.dp)),
+                                        contentScale = ContentScale.Crop,
+                                    )
+                                }
                                 Text(
                                     text = seasonName,
                                     style = MaterialTheme.typography.labelMedium,
@@ -494,6 +518,7 @@ internal fun SeasonsSection(
                                     tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
                                     showStreamBadges = presentation.showStreamBadges,
                                     showDownloadProgress = presentation.showDownloadProgress,
+                                    episodeOverviewPreview = presentation.episodeOverviewPreview,
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -531,6 +556,7 @@ internal fun SeasonsSection(
                                     tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
                                     showStreamBadges = presentation.showStreamBadges,
                                     showDownloadProgress = presentation.showDownloadProgress,
+                                    episodeOverviewPreview = presentation.episodeOverviewPreview,
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -612,6 +638,12 @@ internal fun EpisodeCard(
     showStreamBadges: Boolean = false,
     /** Render the in-flight download bar + percent chip (fraction comes from [LocalEpisodeDownloadProgress]). */
     showDownloadProgress: Boolean = false,
+    /**
+     * The detail_episode_overview_preview pref: ON tightens this card's
+     * shipped 3-line overview to the 2-line snippet (the compact row's
+     * snippet gate rides the same pref); OFF renders exactly today.
+     */
+    episodeOverviewPreview: Boolean = false,
 ) {
     // Build the episode image URL once per episode instead of 3× per recomposition.
     // Prefer the on-disk local thumbnail (a downloaded episode's saved Primary
@@ -865,7 +897,9 @@ internal fun EpisodeCard(
                     text = overview,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
+                    // The detail_episode_overview_preview pref tightens the
+                    // shipped 3-line card overview to the 2-line snippet.
+                    maxLines = if (episodeOverviewPreview) 2 else 3,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp)
                 )
@@ -913,6 +947,12 @@ private fun CompactEpisodeRow(
     showStreamBadges: Boolean = false,
     /** Render the in-flight download bar + percent chip (fraction comes from [LocalEpisodeDownloadProgress]). */
     showDownloadProgress: Boolean = false,
+    /**
+     * The detail_episode_overview_preview pref: ON adds the 2-line overview
+     * snippet to this row (the card's shipped overview tightens to 2 lines
+     * under the same pref); OFF renders exactly today.
+     */
+    episodeOverviewPreview: Boolean = false,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -1079,6 +1119,20 @@ private fun CompactEpisodeRow(
                 tmdbScore = tmdbScore,
                 showStreamBadges = showStreamBadges,
             )
+            // The detail_episode_overview_preview pref's snippet: the compact
+            // row renders no overview without it (the shipped look).
+            if (episodeOverviewPreview) {
+                episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = overview,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
 
         // Per-episode delete (downloaded episodes only). Sits at the trailing

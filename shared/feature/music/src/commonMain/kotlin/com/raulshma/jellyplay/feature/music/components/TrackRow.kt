@@ -169,8 +169,13 @@ fun TrackRow(
                 fontWeight = if (isNowPlaying) FontWeight.SemiBold else FontWeight.Normal,
             )
             if (artist != null || album != null) {
+                // Remembered join (pure function of the two params): the row
+                // recomposes on press/now-playing flips without re-building it.
+                val subtitle = remember(artist, album) {
+                    listOfNotNull(artist, album).joinToString(" · ")
+                }
                 Text(
-                    text = listOfNotNull(artist, album).joinToString(" · "),
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

@@ -114,7 +114,16 @@ class SettingsCatalogGeneratorTest {
         // pitch, wpm, auto-scroll px/s; the library poster size clamps to
         // its scale in the setter; the auto-download bands clamp in
         // DownloadsStore — concurrency 1–6, lookahead 0–MAX_LOOKAHEAD,
-        // per-pass 0–MAX_PER_PASS_LIMIT, keep-days floor at 0). A new bound
+        // per-pass 0–MAX_PER_PASS_LIMIT, keep-days floor at 0; the pass-2
+        // rows clamp via their spec-declared *_BOUNDS constants in the
+        // owning stores — the home hero idle rotation 3–30s, presence poll
+        // 15–300s, trickplay peek 1–5s, search results height 280–640dp,
+        // My-Media columns 0–6, new-badge window 1–30 days in
+        // HomeDiscoveryStore, the sleep-timer confirm threshold 1–30
+        // minutes in VideoPlayerStore, and the reviews-preview-lines and
+        // franchise box/member limits in LibraryStore — the exo buffer
+        // rows 250–5 000 ms and 500–10 000 ms in PlaybackStore's
+        // setters). A new bound
         // must
         // be evidence-backed: declare it on the spec row AND extend this set
         // in the same commit. (The dream_* rows carry no bounds — the sync
@@ -131,6 +140,15 @@ class SettingsCatalogGeneratorTest {
                 "pause_screensaver_after_minutes",
                 "next_up_button_preroll_sec",
                 "home_hero_slideshow_interval_sec",
+                "home_card_corner_radius",
+                "home_presence_chips_limit",
+                "home_genre_rail_limit",
+                "video_resume_chip_ms",
+                "video_gesture_overlay_linger_ms",
+                "detail_cast_see_all_limit",
+                "detail_overview_collapse_lines",
+                "detail_similar_limit",
+                "detail_upcoming_limit",
                 "reader_font_size_px",
                 "reader_line_height_pct",
                 "reader_margin_pct",
@@ -144,6 +162,18 @@ class SettingsCatalogGeneratorTest {
                 "auto_download_lookahead",
                 "auto_download_max_per_pass",
                 "auto_download_keep_days",
+                "home_hero_idle_rotation_ms",
+                "home_presence_poll_seconds",
+                "home_trickplay_peek_ms",
+                "home_search_results_height_dp",
+                "home_my_media_columns",
+                "home_new_badge_days",
+                "video_sleep_confirm_minutes",
+                "detail_reviews_preview_lines",
+                "detail_franchise_box_limit",
+                "detail_franchise_member_limit",
+                "exo_initial_buffer_ms",
+                "exo_rebuffer_ms",
             ),
             entries.filter { it.min != null || it.max != null }.map { it.key }.toSet(),
             "the bounded-row set changed — audit the new clamp before advertising it",
@@ -158,6 +188,10 @@ class SettingsCatalogGeneratorTest {
             "shared/feature/settings/src/commonMain/composeResources/values/strings_search.xml",
             "shared/feature/settings/src/commonMain/composeResources/values/strings_appearance.xml",
             "shared/feature/settings/src/commonMain/composeResources/values/strings_playback.xml",
+            "shared/feature/settings/src/commonMain/composeResources/values/strings_home.xml",
+            "shared/feature/settings/src/commonMain/composeResources/values/strings_audio.xml",
+            "shared/feature/settings/src/commonMain/composeResources/values/strings_language.xml",
+            "shared/feature/settings/src/commonMain/composeResources/values/strings_servers.xml",
             "shared/feature/settings/src/commonMain/composeResources/values/strings.xml",
             "shared/core/ui/src/commonMain/composeResources/values/strings.xml",
         )

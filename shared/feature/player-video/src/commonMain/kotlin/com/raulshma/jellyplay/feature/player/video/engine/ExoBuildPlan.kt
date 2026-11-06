@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.ExoBufferPosture
 
 /**
  * The rebuild-path inputs the build decisions read. Every field is a plain
@@ -16,6 +17,14 @@ internal data class ExoBuildInputs(
     val minBufferMs: Int,
     val maxBufferMs: Int,
     val backBufferDurationMs: Int,
+    /**
+     * The four start/target/retain numbers as one [ExoBufferPosture] — the
+     * clump's one carrier (default = the engine's historical hardcoded
+     * posture, mirroring `ExoPlayerEngineConfig.exoBufferPosture`, so the
+     * construction site that omits the field keeps the historical behavior).
+     * The sentinel rides the fold verbatim; see [LoadControlNumbers].
+     */
+    val bufferPosture: ExoBufferPosture = ExoBufferPosture(),
 )
 
 /**
@@ -128,6 +137,7 @@ internal data class ExoBuildPlan(
                 minBufferMs = inputs.minBufferMs,
                 maxBufferMs = inputs.maxBufferMs,
                 backBufferDurationMs = inputs.backBufferDurationMs.coerceAtLeast(0),
+                bufferPosture = inputs.bufferPosture,
             ),
         )
     }
@@ -135,15 +145,28 @@ internal data class ExoBuildPlan(
 
 /**
  * The [DefaultLoadControl] numbers for one rebuild: the request's buffer
- * window plus the engine's back-buffer posture. The historical literals ride
- * as defaulted fields so the executor carries no numbers of its own.
+ * window plus the engine's back-buffer posture plus the start-threshold /
+ * target posture (the four user-facing numbers riding as one embedded
+ * [ExoBufferPosture]). No literal lives here — the historical numbers ride
+ * as the posture's defaults instead, so every number in a plan traces to an
+ * input and the executor carries no numbers of its own.
+ *
+ * Sentinel semantics: [ExoBufferPosture.targetBufferBytes] `-1` is Media3's
+ * `C.LENGTH_UNSET` sentinel — "derive the target from the selected
+ * tracks" — and the fold carries it verbatim. It must NOT be clamped the
+ * way the back-buffer duration is: a `coerceAtLeast(0)` would silently
+ * rewrite "auto" into "0 bytes", and no other coercion exists for it
+ * either — any non-negative value is an absolute byte target.
+ *
+ * The start thresholds ride verbatim too (unlike the back-buffer clamp):
+ * a `<= 0` threshold is judged by `DefaultLoadControl.Builder` at player
+ * build together with the cross-field relationships the fold cannot know
+ * (`min >= threshold`, `max >= min`), and clamping here would silently
+ * mask exactly that misconfiguration.
  */
 internal data class LoadControlNumbers(
     val minBufferMs: Int,
     val maxBufferMs: Int,
-    val bufferForPlaybackMs: Int = 1_000,
-    val bufferForPlaybackAfterRebufferMs: Int = 3_000,
-    val targetBufferBytes: Int = -1,
     val backBufferDurationMs: Int,
-    val retainBackBuffer: Boolean = false,
+    val bufferPosture: ExoBufferPosture,
 )

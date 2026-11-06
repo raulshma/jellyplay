@@ -127,16 +127,21 @@
     <string name="home_stats_card_watch_approx">~%1$s h vistos</string>
     <string name="home_stats_card_watch_exact">%1$s h vistos</string>
     <string name="home_stats_card_streak">racha de %1$d días</string>
+    <string name="home_stats_card_played_only">%1$d vistos</string>
+    <string name="home_stats_card_unplayed_only">%1$d sin ver</string>
 
     <!-- H21 new-section announcement snackbar (the VM emits the structural
          event; the screen resolves the text). -->
     <string name="home_new_sections_announcement">Novedades en Inicio: %1$s</string>
     <string name="home_new_sections_customize">Personalizar</string>
-    <!-- PENDING TRANSLATION: copied verbatim from the default locale by StringsPropagator — translate each entry and fold it into the groups above. -->
-    <string name="home_hero_pause_video">Pause video</string>
-    <string name="home_airs_date_format">Airs %1$s</string>
-    <string name="home_presence_chip_label">%1$s is watching %2$s</string>
-    <string name="home_presence_join">Join</string>
-    <string name="home_presence_dismiss_cd">Hide this session</string>
-    <string name="home_watch_party_join_failed">Couldn't join the watch party</string>
+    <string name="home_hero_pause_video">Pausar vídeo</string>
+    <string name="home_row_unwatched_count">%1$d sin ver</string>
+    <string name="home_airs_date_format">Se emite %1$s</string>
+    <string name="home_presence_chip_label">%1$s está viendo %2$s</string>
+    <string name="home_presence_join">Unirse</string>
+    <string name="home_presence_dismiss_cd">Ocultar esta sesión</string>
+    <string name="home_watch_party_join_failed">No se pudo unir a la fiesta de visualización</string>
+    <string name="home_greeting_morning">Buenos días, %1$s</string>
+    <string name="home_greeting_afternoon">Buenas tardes, %1$s</string>
+    <string name="home_greeting_evening">Buenas noches, %1$s</string>
 </resources>

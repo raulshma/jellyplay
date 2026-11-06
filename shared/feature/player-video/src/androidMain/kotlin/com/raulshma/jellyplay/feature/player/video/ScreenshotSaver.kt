@@ -36,6 +36,9 @@ object ScreenshotSaver {
     private const val TAG = "ScreenshotSaver"
     private const val FOLDER = "JellyPlay"
 
+    /** Precompiled once — the characters [sanitizeTitle] strips from the title. */
+    private val INVALID_TITLE_CHARS_REGEX = Regex("[^A-Za-z0-9 _-]")
+
     sealed interface Result {
         data class Saved(val uri: Uri, val width: Int, val height: Int) : Result
         data class Failed(val reason: String) : Result
@@ -178,5 +181,5 @@ object ScreenshotSaver {
     /** Sanitizes a user supplied title into a safe, filesystem friendly name. */
     internal fun sanitizeTitle(titleHint: String): String =
         titleHint.ifBlank { "frame" }
-            .replace(Regex("[^A-Za-z0-9 _-]"), "").trim().ifBlank { "frame" }
+            .replace(INVALID_TITLE_CHARS_REGEX, "").trim().ifBlank { "frame" }
 }

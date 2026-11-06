@@ -243,10 +243,31 @@ internal data class HomeContentState(
         val statsCard: HomeStatsCardData? = null,
         /** The `home_stats_card` pref mirror — the card's render gate. */
         val statsCardEnabled: Boolean = false,
+        /** The stats card's visible metrics (the `home_stats_metrics` pref, normalized subset). */
+        val statsMetrics: Set<String> = com.raulshma.jellyplay.core.model.HomeDiscoveryPreferenceSpecsDefaults.STATS_METRICS_CANONICAL,
         /** Genre quick-access rail chips (server-ordered, top ~24). */
         val genreChips: List<Genre> = emptyList(),
         /** The `home_genre_rail` pref mirror — the rail's render gate. */
         val genreRailEnabled: Boolean = false,
+        /** The pre-section block's user order (the `home_pre_section_order` pref, normalized tokens). */
+        val preSectionOrder: List<String> =
+            com.raulshma.jellyplay.core.model.HomeDiscoveryPreferenceSpecsDefaults.PRE_SECTION_ORDER_CANONICAL,
+        /** The sections whose cards render the NEW badge (the `home_new_badge_sections` pref). */
+        val newBadgeSections: Set<HomeSectionType> =
+            com.raulshma.jellyplay.core.model.HomeDiscoveryPreferenceSpecsDefaults.NEW_BADGE_SECTIONS_CANONICAL,
+        /**
+         * The NEW-badge arrival cutoff (the `home_new_badge_days` window,
+         * computed VM-side): arrivals older than this stop badgeing.
+         * [Long.MIN_VALUE] = no cutoff (the shipped predicate).
+         */
+        val newBadgeCutoffEpochMs: Long = Long.MIN_VALUE,
+        /** The discover rows' partition pattern (the `home_discover_pattern` pref). */
+        val discoverPattern: com.raulshma.jellyplay.core.model.HomeDiscoverPattern =
+            com.raulshma.jellyplay.core.model.HomeDiscoverPattern.DEFAULT,
+        /** The My Media tiles' visible-column count (0 = the shipped chassis width). */
+        val myMediaColumns: Int = 0,
+        /** Unwatched counters in the section-row headers (the `home_row_unwatched_counters` pref). */
+        val rowUnwatchedCounters: Boolean = false,
     )
 
     /** The online feed, null while the offline branch renders. */
@@ -269,6 +290,8 @@ internal data class HomeContentState(
 internal data class HomeContentCallbacks(
     val onRetrySectionLoad: () -> Unit,
     val onDismissNewsletterBanner: () -> Unit,
+    /** The ask-continue dialog's "remember this choice" write (null = never persists). */
+    val onRememberAskContinueChoice: ((com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior) -> Unit)?,
     val onNewsletterClick: () -> Unit,
     val onOfflineLibraryClick: () -> Unit,
     val onItemClick: (String) -> Unit,
@@ -378,7 +401,7 @@ internal fun HomeContentList(
     }
     val discoverRowWidth = discoverScreenWidth - state.contentPad * 2
     val discoverSpacing = adaptiveInfo.itemSpacing(isTv)
-    val discoverPattern = discoverPatternFor(adaptiveInfo.windowSizeClass)
+    val discoverPattern = discoverPatternFor(state.core.discoverPattern, adaptiveInfo.windowSizeClass)
     // The nine SeerrDiscoverRow arguments the discover and *arr rows share,
     // bundled once so both call sites pass only what differs (DiscoverRowSlot).
     val discoverSlotArgs = DiscoverRowSlotArgs(
@@ -491,6 +514,24 @@ internal fun HomeContentList(
         // later during scroll just read the settled 1f and render instantly.
         val feedEntrance = rememberDetailEntrance()
 
+        // ONE derivedStateOf over the layout info builds the whole visible-key
+        // set in a single pass per layout change; each section below then reads
+        // its own visibility as an O(1) membership check. The former shape gave
+        // every section its own derivedStateOf scanning visibleItemsInfo —
+        // O(sections × viewport) work on every scroll frame. Structural
+        // equality on the set keeps the readers quiet while the same sections
+        // stay visible (item offsets churn per frame, membership doesn't), and
+        // the predicate is byte-identical to the per-section scan: a section is
+        // visible iff its id is some visible item's key.
+        // Held as a State (no `by` delegation) so the item bodies gate the read
+        // through their own derivedStateOf — a raw read here would invalidate
+        // every visible row on each viewport crossing.
+        val visibleSectionKeysState = remember(listState) {
+            derivedStateOf {
+                listState.layoutInfo.visibleItemsInfo.mapTo(HashSet()) { it.key }
+            }
+        }
+
         CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalScrollIdle provides
                 remember(listState) { { !listState.isScrollInProgress } }
@@ -569,6 +610,11 @@ internal fun HomeContentList(
 
             // ── presence chips ("Alex is watching Dune — join") ──────
             val showPresenceChips = state.online != null && presenceChipList.isNotEmpty()
+            // The user-orderable pre-section items' admission booleans —
+            // computed up front (the hero-merge derivation below reads them).
+            val showStatsCard = state.online != null && state.core.statsCardEnabled && state.core.statsCard != null
+            val showGenreRail = state.online != null && state.core.genreRailEnabled && state.core.genreChips.isNotEmpty()
+            val showNewsletterBanner = state.online?.newsletterBannerVisible == true
             if (showPresenceChips) {
                 item(key = "presence_chips") {
                     HomePresenceChipRow(
@@ -583,27 +629,42 @@ internal fun HomeContentList(
                 }
             }
 
-            // ── stats card ("Your library week") ─────────────────────
-            val showStatsCard = state.online != null && state.core.statsCardEnabled && state.core.statsCard != null
-            if (showStatsCard) {
-                item(key = "stats_card") {
-                    HomeStatsCard(
-                        data = state.core.statsCard,
-                        onClick = callbacks.onStatsCardClick,
-                    )
-                }
-            }
-
-            // ── genre rail ──────────────────────────────────────────
-            val showGenreRail = state.online != null && state.core.genreRailEnabled && state.core.genreChips.isNotEmpty()
-            if (showGenreRail) {
-                item(key = "genre_rail") {
-                    HomeGenreRail(
-                        genres = state.core.genreChips,
-                        onGenreClick = callbacks.onGenreClick,
-                        contentPad = state.contentPad,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-                    )
+            // ── the user-ordered pre-section trio (stats card / genre rail /
+            //    newsletter banner) ─────────────────────────────────
+            // The `home_pre_section_order` pref spells the order (normalized
+            // at the store — unknown tokens dropped, missing ones appended in
+            // canonical order); each token's item renders at its gate exactly
+            // as before. The two system banners (below) keep their fixed
+            // slots after the user-ordered block.
+            for (preSectionToken in state.core.preSectionOrder) {
+                when (preSectionToken) {
+                    "stats_card" -> if (showStatsCard) {
+                        item(key = "stats_card") {
+                            HomeStatsCard(
+                                data = state.core.statsCard,
+                                visibleMetrics = state.core.statsMetrics,
+                                onClick = callbacks.onStatsCardClick,
+                            )
+                        }
+                    }
+                    "genre_rail" -> if (showGenreRail) {
+                        item(key = "genre_rail") {
+                            HomeGenreRail(
+                                genres = state.core.genreChips,
+                                onGenreClick = callbacks.onGenreClick,
+                                contentPad = state.contentPad,
+                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                            )
+                        }
+                    }
+                    "newsletter_banner" -> if (showNewsletterBanner) {
+                        item(key = "newsletter_banner") {
+                            NewsletterBanner(
+                                onClick = callbacks.onNewsletterClick,
+                                onDismiss = callbacks.onDismissNewsletterBanner,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -627,16 +688,6 @@ internal fun HomeContentList(
                 }
             }
 
-            val showNewsletterBanner = state.online?.newsletterBannerVisible == true
-            if (showNewsletterBanner) {
-                item(key = "newsletter_banner") {
-                    NewsletterBanner(
-                        onClick = callbacks.onNewsletterClick,
-                        onDismiss = callbacks.onDismissNewsletterBanner,
-                    )
-                }
-            }
-
             // The hero-merge treatment (background gradient + zero top padding)
             // applies to the first section only when it directly follows the
             // hero — i.e. nothing above renders between the two. Derived from
@@ -648,19 +699,27 @@ internal fun HomeContentList(
             items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                 val section = sections[index]
                 val isFirstAfterHero = index == 0 && firstSectionFollowsHero
-                val isCurrentlyVisible by remember(section.id) {
-                    derivedStateOf {
-                        listState.layoutInfo.visibleItemsInfo.any { it.key == section.id }
-                    }
-                }
 
                 var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
-                // Fold the one-shot visibility latch into a LaunchedEffect so the
-                // state write happens as a side effect, not during composition —
-                // writing to MutableState during composition triggers a redundant
-                // recomposition of this item on the next frame.
-                LaunchedEffect(isCurrentlyVisible) {
-                    if (isCurrentlyVisible && !hasBeenVisible) hasBeenVisible = true
+                // The shared layout-info pass above (visibleSectionKeysState) —
+                // this item's one-shot latch reads its membership out of it
+                // instead of rescanning visibleItemsInfo per section. The read
+                // only exists while the latch is still open: the derivedStateOf
+                // invalidates this item only when THIS id's membership flips,
+                // and once hasBeenVisible latches, the block leaves composition
+                // and the row stops tracking the visible-key set entirely — a
+                // settled row never recomposes on scroll steps again.
+                if (!hasBeenVisible) {
+                    val isCurrentlyVisible by remember(section.id) {
+                        derivedStateOf { section.id in visibleSectionKeysState.value }
+                    }
+                    // Fold the one-shot visibility latch into a LaunchedEffect so the
+                    // state write happens as a side effect, not during composition —
+                    // writing to MutableState during composition triggers a redundant
+                    // recomposition of this item on the next frame.
+                    LaunchedEffect(isCurrentlyVisible) {
+                        if (isCurrentlyVisible) hasBeenVisible = true
+                    }
                 }
 
                 val sectionAnimation by androidx.compose.animation.core.animateFloatAsState(
@@ -670,6 +729,9 @@ internal fun HomeContentList(
                 )
 
                 val placementSpec = lazyItemPlacementSpec()
+                // The rows-animations pref: off = rows render at full opacity
+                // with no entrance fade/translate (the graphicsLayer is the
+                // animation's only carrier).
                 val sectionModifier = Modifier
                     .animateItem(placementSpec = placementSpec)
                     .fillMaxWidth()
@@ -684,10 +746,16 @@ internal fun HomeContentList(
                         }
                     )
                     .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
-                    .graphicsLayer {
-                        alpha = sectionAnimation
-                        translationY = (1f - sectionAnimation) * 16.dp.toPx()
-                    }
+                    .then(
+                        if (LocalHomeRowChrome.current.rowsAnimations) {
+                            Modifier.graphicsLayer {
+                                alpha = sectionAnimation
+                                translationY = (1f - sectionAnimation) * 16.dp.toPx()
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
 
                 val seedItem = section.seedItem
                 val sectionTitle = if (HomeRowModules[section.type].titleCarriesSeed && seedItem != null) {
@@ -708,9 +776,12 @@ internal fun HomeContentList(
                 // "See All" pill for the poster rows: both the offline-mirrored
                 // and the online branch render it, so the gate + click
                 // lambda is built once above the chassis dispatch and handed to
-                // whichever poster row runs.
-                val seeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
-                    if (sectionHasSeeAll(section.type)) {
+                // whichever poster row runs. The hide-See-All chrome pref
+                // drops the affordance entirely (the pill renders only when a
+                // non-null lambda arrives).
+                val hideSeeAll = LocalHomeRowChrome.current.hideSeeAll
+                val seeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle, hideSeeAll) {
+                    if (sectionHasSeeAll(section.type) && !hideSeeAll) {
                         { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
                     } else null
                 }
@@ -857,10 +928,18 @@ internal fun HomeContentList(
             item = askItem,
             onDismissRequest = { askContinueItem = null },
             onPlay = {
+                // The remember-choice pref: persist the picked action as the
+                // new click behavior so the dialog stops re-asking.
+                callbacks.onRememberAskContinueChoice?.invoke(
+                    com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.PLAY,
+                )
                 askContinueItem = null
                 renderInputs.mediaOnPlayClick(askItem)
             },
             onDetails = {
+                callbacks.onRememberAskContinueChoice?.invoke(
+                    com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.DETAILS,
+                )
                 askContinueItem = null
                 renderInputs.mediaOnItemClick(askItem)
             },
@@ -1002,6 +1081,21 @@ private fun HomeSectionOnlineTilesRow(
     val tileLongClick: (MediaItem) -> Unit = remember(callbacks, section.type) {
         { tile -> callbacks.onConfigureSection(section.type, tile.id) }
     }
+    val discoverSpacingForTiles = LocalAdaptiveInfo.current.itemSpacing(LocalTvMode.current)
+    // The `home_my_media_columns` pref: 0 keeps the chassis width; 1-6 size
+    // the tiles so exactly that many fit the row width (the same formula the
+    // discover rows use — N cards + their gaps fill the width). Values below
+    // 2 collapse to the chassis width (a single full-width library tile is
+    // not a useful render). The row width is computed here (the arm runs
+    // outside the list scope's shared dimensions).
+    val tilesWidthOverride = if (state.core.myMediaColumns in 2..6) {
+        val screenWidth = with(LocalDensity.current) {
+            androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width.toDp()
+        }
+        discoverItemWidth(screenWidth - state.contentPad * 2, discoverSpacingForTiles, state.core.myMediaColumns)
+    } else {
+        null
+    }
     HomeLibraryTilesRow(
         title = ctx.title,
         items = section.items,
@@ -1014,6 +1108,7 @@ private fun HomeSectionOnlineTilesRow(
         onTileLongClick = tileLongClick,
         onSectionLongClick = ctx.onSectionLongClick,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
+        tileWidthOverride = tilesWidthOverride,
     )
 }
 
@@ -1268,12 +1363,16 @@ private fun HomeSectionOnlinePosterRow(
         onRowFocused = ctx.onRowFocused,
         clippingEnabled = state.core.experimentalCardClippingEnabled,
         showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
-        // NEW badges: the arrival rows only (the Upcoming row's items
-        // are also library arrivals — episodes added for airing shows).
-        showNewBadges = section.type == HomeSectionType.LATEST_MEDIA ||
-            section.type == HomeSectionType.RECENTLY_ADDED ||
-            section.type == HomeSectionType.UPCOMING,
+        // NEW badges: the `home_new_badge_sections` gate (default the arrival
+        // trio — the Upcoming row's items are also library arrivals, episodes
+        // added for airing shows).
+        showNewBadges = section.type in state.core.newBadgeSections,
         homeLastVisitEpochMs = state.core.homeLastVisitEpochMs,
+        homeNewBadgeCutoffEpochMs = state.core.newBadgeCutoffEpochMs,
+        // Unwatched header counters: the pref ANDed with the badge-capable
+        // rows — the same rows whose fetch projects play state, so the count
+        // is derivable from the loaded items with no new server queries.
+        showUnwatchedCounters = state.core.rowUnwatchedCounters && section.type in state.core.newBadgeSections,
         // The air-date chip rides the Upcoming row's cards — its items
         // are unaired episodes, the premiere date being the point of the row.
         showAirDateChips = section.type == HomeSectionType.UPCOMING,

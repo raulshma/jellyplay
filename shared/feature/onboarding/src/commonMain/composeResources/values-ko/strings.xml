@@ -119,10 +119,10 @@
     <!-- PerformanceStep -->
     <string name="onboarding_performance_title">성능</string>
     <string name="onboarding_performance_subtitle">기기에 맞게 앱을 최적화하세요</string>
-    <string name="onboarding_performance_mode">성능 모드</string>
-    <string name="onboarding_performance_description">저사양 기기에서 더 부드러운 성능을 위해 애니메이션, 전환 및 이미지 품질을 낮춥니다. 설정에서 나중에 언제든 변경할 수 있습니다.</string>
-    <string name="onboarding_performance_enable">성능 모드 활성화</string>
-    <string name="onboarding_performance_enable_subtitle">저사양 기기 최적화</string>
+    <string name="onboarding_performance_mode">성능</string>
+    <string name="onboarding_performance_description">표준과 성능 단계 사이를 전환합니다: 성능 단계는 애니메이션, 전환, 이미지 작업을 억제하여 저사양 기기에서 더 부드러운 재생을 제공합니다. 효과별 세부 조정과 균형 단계 선택은 언제든 설정 → 성능에서 할 수 있습니다.</string>
+    <string name="onboarding_performance_enable">성능 단계 활성화</string>
+    <string name="onboarding_performance_enable_subtitle">저사양 기기 최적화(성능 단계)</string>
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="onboarding_feature_syncplay">SyncPlay — 함께 시청</string>

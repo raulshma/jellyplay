@@ -52,6 +52,16 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean = true
 internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = true
 
 /**
+ * Desktop hides the performance-profile section (issue #186 §5.11/§5.13):
+ * the probe/classifier reads Android signals, so AUTO would only ever resolve
+ * HIGH there — the §5.13 desktop row ("Android-only UI in v1; AUTO resolves
+ * HIGH"). An explicit profile restored from a phone backup still applies its
+ * mpv/libVLC tuning through the engine config; the sheet just offers no
+ * picker.
+ */
+internal actual fun performanceProfileAvailable(): Boolean = false
+
+/**
  *  focus diagnostic: stdout only while the desktop session harness is
  * armed (`jellyplay.harness.enabled=true` — DesktopSessionHarness's zero-cost
  * gate); silent on every normal desktop boot.
@@ -205,6 +215,9 @@ internal actual fun requestVideoFrameCapture(
     }
 }
 
+/** Precompiled once — the characters [saveCapture] scrubs out of the capture title. */
+private val FILENAME_INVALID_CHARS_REGEX = Regex("[\\\\/:*?\"<>|]")
+
 /**
  * Persists [image] under `~/Pictures/JellyPlay` (the desktop analogue of
  * Android's MediaStore folder), falling back to the temp dir when the
@@ -216,7 +229,7 @@ private fun saveCapture(image: java.awt.image.BufferedImage, titleHint: String):
     val dir = if (pictures.isDirectory || pictures.mkdirs()) pictures
     else File(System.getProperty("java.io.tmpdir"))
     val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH-mm-ss.SSS", Locale.ROOT).format(java.util.Date())
-    val safeTitle = titleHint.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().take(60)
+    val safeTitle = titleHint.replace(FILENAME_INVALID_CHARS_REGEX, " ").trim().take(60)
     val name = listOfNotNull("JellyPlay", safeTitle.takeIf { it.isNotBlank() }, stamp)
         .joinToString(" ") + ".png"
     val out = File(dir, name)

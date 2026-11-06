@@ -109,6 +109,19 @@ data class PlaybackPreferences(
     val spatialAudioEnabled: Boolean = false,
     /** Qualifies [spatialAudioEnabled] to headphone-class outputs only. */
     val spatialAudioOnlyHeadphones: Boolean = true,
+    /**
+     * ExoPlayer `DefaultLoadControl` `bufferForPlaybackMs` (250–5 000 ms) —
+     * a direct engine input, not a ceiling: a user-explicit value applies
+     * verbatim after the store's clamp. Default 1 000 preserves the engine's
+     * historical hardcoded value.
+     */
+    val exoInitialBufferMs: Int = 1_000,
+    /** ExoPlayer `bufferForPlaybackAfterRebufferMs` (500–10 000 ms). Default 3 000. */
+    val exoRebufferMs: Int = 3_000,
+    /** ExoPlayer target buffer in MB; `0` = AUTO (engine default `-1`). Explicit values clamp to 5–512. */
+    val exoTargetBufferMb: Int = 0,
+    /** Whether the back buffer is retained regardless of keyframe boundaries. Default false. */
+    val exoRetainBackBuffer: Boolean = false,
     val frameRateMatching: Boolean = false,
     /**
      * Granular refresh-rate / resolution switching mode. Supersedes
@@ -182,7 +195,72 @@ data class PlaybackPreferences(
     val skipSegmentsOnSeek: Boolean = false,
     /** Seconds before item end that the "Next up" button appears (5–120). Default 30. */
     val nextUpButtonPrerollSec: Int = 30,
-    /** The skip-intro/segment invitation countdown length (3–30 s). */
+    /** Player control-overlay enter/exit animations. Default on — see `VideoPlayerSlice`. */
+    val videoOverlayAnimations: Boolean = true,
+    /** "Restart" resume-chip display duration (0–10 000); 0 = never show. Default 3 000. */
+    val videoResumeChipMs: Long = 3_000L,
+    /** The center prev/play/next cluster. Default on. */
+    val videoShowPrevNextButtons: Boolean = true,
+    /** Brightness/volume swipe-curve sensitivity. Default DEFAULT. */
+    val videoSwipeSensitivity: PlayerSwipeSensitivity = PlayerSwipeSensitivity.DEFAULT,
+    /** Gesture-overlay dismiss delay (200–2 000). Default 800. */
+    val videoGestureOverlayLingerMs: Long = 800L,
+    /** The center double-tap zone's action. Default AUTO. */
+    val videoCenterDoubleTapAction: PlayerCenterDoubleTapAction = PlayerCenterDoubleTapAction.AUTO,
+    /** The left/right double-tap zone split. Default DEFAULT (35/65). */
+    val videoDoubleTapZoneBias: PlayerDoubleTapZoneBias = PlayerDoubleTapZoneBias.DEFAULT,
+    /** The hold-speed pill's chrome. Default DEFAULT. */
+    val videoHoldSpeedPillStyle: PlayerHoldSpeedPillStyle = PlayerHoldSpeedPillStyle.DEFAULT,
+    /** The seek bar's thickness. Default DEFAULT. */
+    val videoSeekBarStyle: PlayerSeekBarStyle = PlayerSeekBarStyle.DEFAULT,
+    /** The seek bar's buffered bands. Default on. */
+    val videoShowBufferedRange: Boolean = true,
+    /** The seek bar's chapter markers. Default on. */
+    val videoShowChapterMarkers: Boolean = true,
+    /** Hides the seek bar's elapsed/total labels (minimal mode). Default off. */
+    val videoHideSeekTimestamps: Boolean = false,
+    /** The buffered-percentage readout beside the seek bar's time row. Default off. */
+    val videoShowBufferPercent: Boolean = false,
+    /** The seek-scrub preview's target timestamp. Default on. */
+    val videoSeekPreviewTime: Boolean = true,
+    /** The active-engine chip in the player's top bar. Default off. */
+    val videoShowEngineBadge: Boolean = false,
+    /** The episode browser filters fully-watched episodes. Default off. */
+    val videoEpisodeBrowserHideWatched: Boolean = false,
+    // ── The second QoL wave: transport/HUD cadence + preset families. ──
+    /** The TV controls-auto-hide timeout multiplier over the base pref. Default X2 (the long-standing fold). */
+    val videoTvTimeoutScale: TvTimeoutScale = TvTimeoutScale.X2,
+    /** The hardware-keyboard modifier seek-step ladder family. Default DEFAULT (VLC's ladder). */
+    val videoKeyboardSeekPreset: KeyboardSeekPreset = KeyboardSeekPreset.DEFAULT,
+    /** The double-tap-and-hold repeat cadence family. Default DEFAULT. */
+    val videoHoldSeekCadence: HoldSeekCadence = HoldSeekCadence.DEFAULT,
+    /** The hold-speed pill's clearance above the bottom controls. Default DEFAULT (180dp). */
+    val videoSpeedPillClearance: SpeedPillClearance = SpeedPillClearance.DEFAULT,
+    /** The pause-details panel's fade durations. Default DEFAULT (200/300ms). */
+    val videoPauseFadeStyle: PauseFadeStyle = PauseFadeStyle.DEFAULT,
+    /** The control button clusters' arrangement. Default DEFAULT. */
+    val videoControlLayout: ControlLayout = ControlLayout.DEFAULT,
+    /** The pinch-zoom ceiling. Default X3 (the long-standing 1..3 clamp). */
+    val videoMaxZoom: MaxZoom = MaxZoom.X3,
+    /** The engine's position-poll cadence family. Default DEFAULT (250/1000ms). */
+    val videoPollCadence: PollCadence = PollCadence.DEFAULT,
+    /** Sleep-timer cancel-confirm threshold in minutes (1–30). Default 5. */
+    val videoSleepConfirmMinutes: Int = 5,
+    /** Allow the ambient backdrop under the FILL aspect override. Default off. */
+    val videoAmbientUnderFill: Boolean = false,
+    /** The buffering spinner's display rule. Default DEFAULT. */
+    val videoBufferingVeil: BufferingVeil = BufferingVeil.DEFAULT,
+    /** The speed sheet's chip preset family. Default DEFAULT (the full ladder). */
+    val videoSpeedPresetSet: SpeedPresetSet = SpeedPresetSet.DEFAULT,
+    /** Skip autoplay-next while the connection is metered. Default off. */
+    val videoAutoplayWifiOnly: Boolean = false,
+    /** The first BACK shows an in-player exit confirmation. Default off. */
+    val videoConfirmExit: Boolean = false,
+    /**
+     * The skip-intro/segment invitation countdown length (3–30 s), or
+     * [SKIP_PROMPT_WHOLE_SEGMENT_MS] to keep the button up for the whole
+     * segment (no countdown — the pre-timed-prompt behavior).
+     */
     val skipPromptDurationMs: Long = 10_000L,
     val videoEpisodeBrowserEnabled: Boolean = true,
     val videoShowPlaybackMetadata: Boolean = true,
@@ -233,6 +311,14 @@ data class PlaybackPreferences(
     /** Whether the pause surface shows item details. Default off. */
     val pauseDetailsEnabled: Boolean = false,
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    /**
+     * The device performance profile — a ceiling layered over the user's
+     * explicit quality settings (issue #186): AUTO resolves to the detected
+     * device tier, LOW / MEDIUM / HIGH pin it. Profiles never change a saved
+     * quality; the stricter of profile and user cap wins. Default AUTO —
+     * neutral until detection runs.
+     */
+    val videoPerformanceProfile: VideoPerformanceProfile = VideoPerformanceProfile.AUTO,
     /**
      * The delivery method (Auto / Force Direct Play / Force Transcode). It
      * governs whether the quality cap applies at all, so the Settings row
@@ -289,4 +375,12 @@ data class PlaybackPreferences(
      * whose video volume is the system stream's.
      */
     val rememberVolumePerContentType: Boolean = true,
-)
+) {
+    companion object {
+        /**
+         * The [skipPromptDurationMs] sentinel that keeps the skip button
+         * visible for the entire segment instead of a timed countdown.
+         */
+        const val SKIP_PROMPT_WHOLE_SEGMENT_MS = 0L
+    }
+}

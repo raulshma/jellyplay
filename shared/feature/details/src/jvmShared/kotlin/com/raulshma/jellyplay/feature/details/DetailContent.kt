@@ -226,14 +226,15 @@ internal fun DetailContent(
     )
 
     // ── promoted rail resolution ─────────────────────────────────────
-    // The fixed promoted subset of [mediaOptions] lifts into the landscape
-    // rail; the ⋮ menu suppresses exactly those ids while the rail shows them
-    // (no dupes). Effective only where the rail exists — the landscape body —
-    // and gated on the display preference; both off → the ⋮ list passes
-    // through unchanged.
+    // The promoted subset of [mediaOptions] lifts into the landscape rail; the
+    // ⋮ menu suppresses exactly those ids while the rail shows them (no
+    // dupes). Which preset promotes is the detail_promoted_rail_source pref
+    // (DEFAULT = the shipped fixed set); Effective only where the rail exists
+    // — the landscape body — and gated on the display preference; both off →
+    // the ⋮ list passes through unchanged.
     val showsLandscapeRail = isExpanded && adaptiveInfo.isLandscape
     val promotedOptionIds = if (showsLandscapeRail && state.preferences.showPromotedActionsLandscape) {
-        PromotedMediaOptionIds.toSet()
+        promotedIdsFor(state.preferences.promotedRailSource).toSet()
     } else {
         emptySet()
     }

@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.feature.player.video.VideoPlayerPlatform
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
+import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
@@ -95,6 +96,13 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             // warm's throwaway upstream chain (warmStreamHead); the engines
             // keep receiving their client through AndroidPlayerEngineFactory.
             streamingOkHttpClient = get(NetworkQualifiers.streamingHttpClient),
+            // Issue #186 §5.9: the performance-profile cache ceiling. The
+            // cache opens early (possibly before AUTO detection finishes) —
+            // the provider reads the resolver's WARMED value, whose AUTO seed
+            // is already MEDIUM (1024 MB), never unbounded. SimpleCache's
+            // bound is fixed for its lifetime, so a mid-process profile
+            // change lands on the next process launch.
+            performanceCapProvider = { get<VideoPerformanceResolver>().resolved.value.tuning },
         )
     }
     // Next-item stream-cache pre-warm: commonMain seam over VideoStreamCache's
@@ -196,6 +204,10 @@ fun androidPlayerVideoModule(context: Context): Module = module {
                 appearance = get(),
                 networkOffline = get(),
                 volumeProfile = get(),
+                // Issue #186: the performance-profile pair (the §5.7 caps /
+                // §5.8 seed seam) rides the wholesale-forwarded stores bundle.
+                performanceResolver = get(),
+                playbackCapResolver = get(),
             ),
             subtitleSources = PlayerSubtitleSources(
                 subtitleProviderRepository = get(),
@@ -227,6 +239,8 @@ fun androidPlayerVideoModule(context: Context): Module = module {
                 itemPlaybackPreferenceRepository = get(),
                 jellyfinRemotePlayCastStrategy = get(),
                 adaptiveBitrateManager = get(),
+                performanceResolver = get(),
+                playbackCapResolver = get(),
                 networkMonitor = get(),
                 userDataMutator = get(),
                 nowPlayingReporter = get(),

@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -89,6 +90,8 @@ class PlaybackStoreTest {
         // engine this binary actually ships (desktop → MPV).
         assertEquals(platformEngineSupport.default, slice.preferredPlayer)
         assertEquals(StreamingQuality.AUTO, slice.streamingQuality)
+        // Absent key → AUTO: no migration; neutral until detection runs.
+        assertEquals(VideoPerformanceProfile.AUTO, slice.videoPerformanceProfile)
         // Empty store → AUTO: the legacy `force_direct_play` key's historical
         // `true` default used to migrate fresh installs into FORCE_DIRECT_PLAY,
         // silently defeating the quality cap (Issue #1). Only an EXPLICIT
@@ -101,6 +104,62 @@ class PlaybackStoreTest {
         assertEquals(OfflinePlaybackPreference.PREFER_DOWNLOADED, slice.offlinePlaybackPreference)
         // The toggle defaults ON — the historical auto-PiP behaviour.
         assertTrue(slice.autoEnterPip)
+        // The exo-buffer rows default to today's engine values: 1000/3000 ms,
+        // the AUTO sentinel `0` (Media3's derived target), retain off.
+        assertEquals(1_000, slice.exoInitialBufferMs)
+        assertEquals(3_000, slice.exoRebufferMs)
+        assertEquals(0, slice.exoTargetBufferMb)
+        assertFalse(slice.exoRetainBackBuffer)
+    }
+
+    @Test
+    fun `exo buffer ms rows round-trip and clamp on write`() = runTest {
+        // Write-through: explicit in-range values persist verbatim.
+        store.setExoInitialBufferMs(2_000)
+        store.setExoRebufferMs(6_000)
+        var slice = settledSlice()
+        assertEquals(2_000, slice.exoInitialBufferMs)
+        assertEquals(6_000, slice.exoRebufferMs)
+        // Below-min writes clamp to the rows' floors.
+        store.setExoInitialBufferMs(50)
+        store.setExoRebufferMs(10)
+        slice = settledSlice()
+        assertEquals(250, slice.exoInitialBufferMs)
+        assertEquals(500, slice.exoRebufferMs)
+        // Above-max writes clamp to the rows' ceilings.
+        store.setExoInitialBufferMs(99_999)
+        store.setExoRebufferMs(99_999)
+        slice = settledSlice()
+        assertEquals(5_000, slice.exoInitialBufferMs)
+        assertEquals(10_000, slice.exoRebufferMs)
+    }
+
+    @Test
+    fun `exo target buffer mb keeps the AUTO sentinel and clamps explicit values`() = runTest {
+        // The 0 AUTO sentinel is preserved verbatim — the engine's derived
+        // target (-1) stands.
+        store.setExoTargetBufferMb(0)
+        assertEquals(0, settledSlice().exoTargetBufferMb)
+        // Explicit in-range values persist verbatim.
+        store.setExoTargetBufferMb(64)
+        assertEquals(64, settledSlice().exoTargetBufferMb)
+        // Explicit writes clamp into 5..512 — including small non-zero values
+        // that would otherwise sit inside the AUTO ambiguity.
+        store.setExoTargetBufferMb(2)
+        assertEquals(5, settledSlice().exoTargetBufferMb)
+        store.setExoTargetBufferMb(9_999)
+        assertEquals(512, settledSlice().exoTargetBufferMb)
+        // ...and the AUTO sentinel stays reachable after a clamped write.
+        store.setExoTargetBufferMb(0)
+        assertEquals(0, settledSlice().exoTargetBufferMb)
+    }
+
+    @Test
+    fun `setExoRetainBackBuffer round-trips`() = runTest {
+        store.setExoRetainBackBuffer(true)
+        assertTrue(settledSlice().exoRetainBackBuffer)
+        store.setExoRetainBackBuffer(false)
+        assertFalse(settledSlice().exoRetainBackBuffer)
     }
 
     @Test
@@ -109,6 +168,23 @@ class PlaybackStoreTest {
         assertFalse(settledSlice().autoEnterPip)
         store.setAutoEnterPip(true)
         assertTrue(settledSlice().autoEnterPip)
+    }
+
+    @Test
+    fun `video performance profile round-trips and resets to AUTO with playback`() = runTest {
+        // Write: an explicit tier persists verbatim.
+        store.setVideoPerformanceProfile(VideoPerformanceProfile.LOW)
+        assertEquals(VideoPerformanceProfile.LOW, settledSlice().videoPerformanceProfile)
+        store.setVideoPerformanceProfile(VideoPerformanceProfile.HIGH)
+        assertEquals(VideoPerformanceProfile.HIGH, settledSlice().videoPerformanceProfile)
+        // Reset: the key sits in the PLAYBACK reset category, so a playback
+        // reset removes it and the absent key reads AUTO again (the cached
+        // detection, if any, is runtime state - not touched here).
+        dataStore.edit { it.remove(PlaybackStore.Keys.VIDEO_PERFORMANCE_PROFILE) }
+        assertEquals(VideoPerformanceProfile.AUTO, settledSlice().videoPerformanceProfile)
+        // A corrupt stored name degrades to AUTO like every enum row.
+        dataStore.edit { it[stringPreferencesKey("video_performance_profile")] = "nonsense" }
+        assertEquals(VideoPerformanceProfile.AUTO, settledSlice().videoPerformanceProfile)
     }
 
     @Test
@@ -260,6 +336,7 @@ class PlaybackStoreTest {
         val slice = PlaybackSlice(
             preferredPlayer = PlayerType.MPV,
             streamingQuality = StreamingQuality.UHD_4K,
+            videoPerformanceProfile = VideoPerformanceProfile.LOW,
             cellularStreamingQuality = StreamingQuality.LOW_360P,
             playbackMode = PlaybackMode.FORCE_DIRECT_PLAY,
             liveStreamOption = LiveStreamOption.TRANSCODE,
@@ -269,6 +346,10 @@ class PlaybackStoreTest {
             audioPassthroughCodecs = setOf(AudioPassthroughCodec.AC3, AudioPassthroughCodec.DTS),
             maxAudioChannels = MaxAudioChannelsEnum.SEVEN_POINT_ONE,
             downmixBoostDb = 7.5f,
+            exoInitialBufferMs = 750,
+            exoRebufferMs = 4_000,
+            exoTargetBufferMb = 96,
+            exoRetainBackBuffer = true,
             frameRateMatching = true,
             refreshRateMode = RefreshRateMode.FRAME_RATE_AND_RESOLUTION,
             keepScreenOnDuringVideo = false,

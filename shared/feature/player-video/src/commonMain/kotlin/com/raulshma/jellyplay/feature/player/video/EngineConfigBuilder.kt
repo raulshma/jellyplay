@@ -2,17 +2,23 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
+import com.raulshma.jellyplay.core.model.DevicePerformanceTier
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
+import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
+import com.raulshma.jellyplay.feature.player.video.engine.exoBufferPosture
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.engine.exoTargetBufferBytesFromMb
 import com.raulshma.jellyplay.feature.player.video.engine.hdrContentFromStreams
 import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
 
@@ -79,6 +85,11 @@ internal object EngineConfigBuilder {
      * mapping shared with [build] so the two entries cannot drift): the
      * audio-effects / decoder / subtitle-delay → [EngineConfig] translation
      * over the individual state slices instead of the state bag.
+     *
+     * [performanceTuning] is the resolved performance-profile tuning
+     * (issue #186 §5.8) — the runtime caller passes the uiPrefs mirror; the
+     * default keeps the no-profile no-op so callers built before the
+     * profiles landed compile unchanged.
      */
     fun buildFromSlices(
         subtitleStyle: SubtitleStyle,
@@ -92,6 +103,7 @@ internal object EngineConfigBuilder {
         engineSpecific: EngineSpecificConfig? = null,
         deinterlace: com.raulshma.jellyplay.core.model.DeinterlaceMode =
             com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO,
+        performanceTuning: VideoPerformanceTuning = VideoPerformanceTuning.NONE,
     ): EngineConfig {
         val hdrContent = hdrContentFromStreams(mediaStreams)
         return EngineConfig(
@@ -124,7 +136,7 @@ internal object EngineConfigBuilder {
                 audioSlice = agg.audio,
                 audioEffectsSlice = agg.audioEffects,
             ),
-            engineSpecific = foldEngineSpecific(engineSpecific, agg),
+            engineSpecific = foldEngineSpecific(engineSpecific, agg, performanceTuning),
             // the session-scoped deinterlace override + the per-item HDR
             // gate ride every runtime build (the UI-state path has the streams).
             deinterlace = deinterlace,
@@ -140,12 +152,17 @@ internal object EngineConfigBuilder {
      * hydrated). [mediaStreams] drives HDR-aware subtitle styling; [itemId]
      * resolves per-item video effects; [engineSpecific] is the caller-resolved
      * typed per-engine config (or `null`).
+     *
+     * [performanceTuning] is the resolved performance-profile tuning
+     * (issue #186 §5.8) — the session manager passes the tuning it resolved
+     * for this load; the default keeps the no-profile no-op.
      */
     fun buildFromPreferences(
         agg: VideoPlayerAggregate,
         mediaStreams: List<MediaStream>,
         itemId: String?,
         engineSpecific: EngineSpecificConfig?,
+        performanceTuning: VideoPerformanceTuning = VideoPerformanceTuning.NONE,
     ): EngineConfig {
         val hdrContent = hdrContentFromStreams(mediaStreams)
         val isHdr = hdrContent.isHdr
@@ -188,7 +205,7 @@ internal object EngineConfigBuilder {
                 audioSlice = agg.audio,
                 audioEffectsSlice = agg.audioEffects,
             ),
-            engineSpecific = foldEngineSpecific(engineSpecific, agg),
+            engineSpecific = foldEngineSpecific(engineSpecific, agg, performanceTuning),
             deinterlace = com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO,
             hdrSource = isHdr,
             hdrContent = hdrContent,
@@ -225,26 +242,109 @@ internal object EngineConfigBuilder {
      *    AUTO/`null` equivalence the MIME table applies. The bitmap-subtitle
      *    scale mode rides along too (nullable: `null` = FIT) — the Exo side
      *    is FIT-only today (see the field's KDoc for the Media3 constraint).
+     *    The playback slice's four buffer rows (`exoInitialBufferMs` /
+     *    `exoRebufferMs` / `exoTargetBufferMb` / `exoRetainBackBuffer`) fold
+     *    as DIRECT engine inputs — unlike the ceiling family below, they
+     *    overwrite the blob verbatim (the MB row through
+     *    [exoTargetBufferBytesFromMb]'s AUTO-sentinel conversion). Their
+     *    defaults equal the engine defaults, so an untouched install folds
+     *    to the historical posture unchanged. They are deliberately NOT
+     *    reload triggers — the buffer numbers live on the construction-time
+     *    `DefaultLoadControl`, and a mid-session edit lands on the next
+     *    natural rebuild (next item load / mode-quality reload / engine
+     *    swap), where `LoadRebuildInputs`' `exoCfg` equality detects the
+     *    delta and takes the teardown/rebuild path.
      *
      * Any other engine-specific payload passes through untouched.
+     *
+     * ## The performance-profile ceiling (issue #186 §5.8)
+     *
+     * [tuning] is the resolved [VideoPerformanceTuning] layered over the
+     * user's prefs — a CEILING, never a floor (§5.5): HIGH is a strict no-op,
+     * and nothing here rewrites a persisted choice (the fold copies; the
+     * stores stay untouched — switching the profile off restores the user's
+     * values on the next build). The buffer rows above are the ONE
+     * non-ceiling fold in this arm: the user's explicit value applies to the
+     * engine verbatim and no tuning row caps it (the §5.9 preload-buffer
+     * ceiling lives on the REQUEST's min/max window —
+     * `PlaybackRequestPlan` — not on the LoadControl start/target posture).
+     *
+     *  - **mpv LOW wins over the user's scaler / render quality / deband /
+     *    interpolation** — the performance-sensitive knobs the profile
+     *    exists to constrain. The force-offs pin BOTH surfaces of each knob:
+     *    the structured boolean AND the persisted render pref
+     *    ([MpvEngineConfig.debandMode] / [MpvEngineConfig.motionInterpolation]),
+     *    because `MpvConfigMapping` writes the pref rows AFTER the
+     *    structured rows and the render-quality bundle — pinning only the
+     *    boolean would let an armed `debandMode = HEAVY` or
+     *    `motionInterpolation = true` pref override the profile by pair
+     *    order. `debandMode = OFF` emits the same `deband=no` the profile
+     *    wants, so the observable mpv options are identical either way.
+     *  - **libVLC**: network caching takes the MAX (the cache is a jitter
+     *    buffer, not a quality tax — a user-selected larger cache stays),
+     *    decoder threads and the loop-filter skip are profile ceilings, and
+     *    drop-late/skip frames are forced on for LOW only.
+     *  - **Exo** has no equivalent render knobs in
+     *    [ExoPlayerEngineConfig]; its pressure relief comes from the server
+     *    caps and the §5.9 buffer sizing. `hwdecOverride`, `toneMapping`,
+     *    `hdrPassthrough`, audio and subtitle styling are user/quality
+     *    decisions the profile never touches.
      */
     private fun foldEngineSpecific(
         engineSpecific: EngineSpecificConfig?,
         agg: VideoPlayerAggregate,
+        tuning: VideoPerformanceTuning,
     ): EngineSpecificConfig? = when (engineSpecific) {
         is MpvEngineConfig -> engineSpecific.copy(
             toneMappingCurve = agg.videoPlayer.mpvToneMappingCurve,
-            debandMode = agg.videoPlayer.mpvDebandMode,
-            motionInterpolation = agg.videoPlayer.mpvMotionInterpolation,
+            debandMode = if (tuning.forceMpvDebandOff) MpvDebandMode.OFF
+                else agg.videoPlayer.mpvDebandMode,
+            motionInterpolation = if (tuning.forceMpvInterpolationOff) false
+                else agg.videoPlayer.mpvMotionInterpolation,
             bitmapSubtitleScaleMode = agg.videoPlayer.bitmapSubtitleScaleMode,
             userInputConf = agg.videoPlayer.mpvInputConf.ifBlank { null },
+            renderQuality = tuning.mpvRenderQuality ?: engineSpecific.renderQuality,
+            scaler = tuning.mpvScaler ?: engineSpecific.scaler,
+            deband = if (tuning.forceMpvDebandOff) false else engineSpecific.deband,
+            interpolation = if (tuning.forceMpvInterpolationOff) false
+                else engineSpecific.interpolation,
         )
-        is ExoPlayerEngineConfig -> engineSpecific.copy(
-            hdrFormatPreference = agg.playback.hdrFormatPreference.takeUnless {
-                it == com.raulshma.jellyplay.core.model.HdrFormatPreference.AUTO
-            },
-            bitmapSubtitleScaleMode = agg.videoPlayer.bitmapSubtitleScaleMode,
+        is LibVlcEngineConfig -> engineSpecific.copy(
+            networkCaching = maxOf(
+                engineSpecific.networkCaching,
+                tuning.minLibVlcNetworkCachingMs ?: 0,
+            ),
+            decoderThreads = tuning.libVlcDecoderThreads ?: engineSpecific.decoderThreads,
+            skipLoopFilter = minOf(
+                engineSpecific.skipLoopFilter,
+                tuning.maxLibVlcSkipLoopFilter ?: engineSpecific.skipLoopFilter,
+            ),
+            dropLateFrames = engineSpecific.dropLateFrames ||
+                tuning.tier == DevicePerformanceTier.LOW,
+            skipFrames = engineSpecific.skipFrames ||
+                tuning.tier == DevicePerformanceTier.LOW,
         )
+        is ExoPlayerEngineConfig -> {
+            // The playback slice's four Exo buffer rows are DIRECT engine
+            // inputs (not ceilings — see the fold's class KDoc): they
+            // overwrite the blob's fields verbatim, through the ONE
+            // slice→posture extraction (the MB row's MiB→bytes conversion and
+            // its 0 → Media3 derive-from-tracks sentinel live there). The
+            // pref defaults equal the engine defaults (1_000 / 3_000 / AUTO /
+            // false), so an untouched install folds to the exact pre-existing
+            // posture — byte-identical config, no rebuild churn.
+            val posture = agg.playback.exoBufferPosture()
+            engineSpecific.copy(
+                hdrFormatPreference = agg.playback.hdrFormatPreference.takeUnless {
+                    it == com.raulshma.jellyplay.core.model.HdrFormatPreference.AUTO
+                },
+                bitmapSubtitleScaleMode = agg.videoPlayer.bitmapSubtitleScaleMode,
+                exoInitialBufferMs = posture.initialBufferMs,
+                exoRebufferBufferMs = posture.rebufferBufferMs,
+                exoTargetBufferBytes = posture.targetBufferBytes,
+                exoRetainBackBuffer = posture.retainBackBuffer,
+            )
+        }
         else -> engineSpecific
     }
 

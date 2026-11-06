@@ -103,6 +103,10 @@ val desktopPlayerVideoModule: Module = module {
                 appearance = get(),
                 networkOffline = get(),
                 volumeProfile = get(),
+                // Issue #186: the performance-profile pair (the §5.7 caps /
+                // §5.8 seed seam) rides the wholesale-forwarded stores bundle.
+                performanceResolver = get(),
+                playbackCapResolver = get(),
             ),
             subtitleSources = PlayerSubtitleSources(
                 subtitleProviderRepository = get(),
@@ -134,6 +138,8 @@ val desktopPlayerVideoModule: Module = module {
                 itemPlaybackPreferenceRepository = get(),
                 jellyfinRemotePlayCastStrategy = get(),
                 adaptiveBitrateManager = get(),
+                performanceResolver = get(),
+                playbackCapResolver = get(),
                 networkMonitor = get(),
                 userDataMutator = get(),
                 nowPlayingReporter = get(),

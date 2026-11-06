@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.Preferences
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
@@ -23,12 +24,32 @@ import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
 import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import kotlinx.serialization.encodeToString
 
 /** The stereo-downmix loudness compensation bounds ([PlaybackSlice.downmixBoostDb] clamps to these). */
 internal const val MIN_DOWNMIX_BOOST_DB = 0f
 internal const val MAX_DOWNMIX_BOOST_DB = 12f
 internal const val DEFAULT_DOWNMIX_BOOST_DB = 0f
+
+/**
+ * The ExoPlayer `DefaultLoadControl` bounds ([PlaybackStore]'s exo-buffer
+ * setters are the clamp owners). The target-buffer MB range is deliberately
+ * non-convex around its AUTO sentinel — see [EXO_TARGET_BUFFER_AUTO_MB].
+ */
+internal const val MIN_EXO_INITIAL_BUFFER_MS = 250
+internal const val MAX_EXO_INITIAL_BUFFER_MS = 5_000
+internal const val MIN_EXO_REBUFFER_MS = 500
+internal const val MAX_EXO_REBUFFER_MS = 10_000
+
+/**
+ * The `exo_target_buffer_mb` AUTO sentinel: `0` keeps the engine's derived
+ * target (Media3's `-1`, computed from the selected tracks), mirroring the
+ * other AUTO rows' absent-key semantics at the value level.
+ */
+internal const val EXO_TARGET_BUFFER_AUTO_MB = 0
+internal const val MIN_EXO_TARGET_BUFFER_MB = 5
+internal const val MAX_EXO_TARGET_BUFFER_MB = 512
 
 /** The passthrough codec set the legacy single-boolean surface always bitstreamed. */
 internal val DEFAULT_AUDIO_PASSTHROUGH_CODECS: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL
@@ -180,6 +201,33 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_streaming_quality_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("quality", "streaming", "resolution", "4k", "1080p", "sd"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The device performance profile (issue #186) — a CEILING layered over
+         * the user's explicit quality settings, never a rewrite of them: AUTO
+         * resolves to the detected device tier at playback time, LOW / MEDIUM /
+         * HIGH pin the tier. The detected tier itself is per-device runtime
+         * state and deliberately has no row here (never persisted as a
+         * preference, never backed up or synced). Absent key on existing
+         * installs reads AUTO — no migration; the default is neutral until
+         * detection runs. Resets with PLAYBACK.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_performance_profile",
+            default = VideoPerformanceProfile.AUTO,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_performance_profile",
+                titleKey = "ss_performance_profile_title",
+                subtitleKey = "ss_performance_profile_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf(
+                    "performance", "low end", "medium", "high end", "smooth",
+                    "stutter", "profile", "auto", "1080p", "bitrate", "device",
+                ),
                 routeKind = ROUTE_PLAYBACK_SETTINGS,
                 isAdvanced = true,
             ),
@@ -491,6 +539,129 @@ object PlaybackPreferenceSpecs {
         ),
     )
 
+    /**
+     * The ExoPlayer `DefaultLoadControl` buffer numbers — how much must be
+     * buffered before playback starts, before it resumes after a stall, how
+     * much is targeted in total, and whether the back buffer is retained
+     * regardless of keyframe boundaries.
+     *
+     * These are CEILINGS-FREE direct engine inputs, distinct from the
+     * `video_performance_profile` system above (which is a ceiling layered
+     * over the user's explicit quality choices): a user-explicit value applies
+     * to the engine verbatim (after the store setter's clamp), and nothing
+     * here rewrites or caps any other setting. The 0 / AUTO sentinel preserves
+     * today's engine default — Media3's own derived numbers stand until the
+     * user names a value. The back-buffer DURATION itself is deliberately NOT
+     * a row here: `ExoPlayerEngineConfig.backBufferDurationMs` (the engine
+     * domain) already owns and feeds it; only the retain posture is a
+     * preference row in this domain.
+     */
+    private val exoBuffers: List<PreferenceSpec<*>> = listOf(
+        /*
+         * ExoPlayer `bufferForPlaybackMs` — how much audio/video must be
+         * buffered before playback starts. The 1_000 default preserves the
+         * engine's historical hardcoded value; the store setter clamps to
+         * 250–5_000 ms.
+         */
+        PreferenceSpec.plainInt(
+            keyName = "exo_initial_buffer_ms",
+            default = 1_000,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            min = MIN_EXO_INITIAL_BUFFER_MS,
+            max = MAX_EXO_INITIAL_BUFFER_MS,
+            search = PreferenceSearchSpec(
+                id = "exo_initial_buffer_ms",
+                titleKey = "ss_exo_initial_buffer_ms_title",
+                subtitleKey = "ss_exo_initial_buffer_ms_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf(
+                    "buffer", "initial", "startup", "start", "playback", "exoplayer",
+                    "load control", "latency", "ms",
+                ),
+                // The Performance hub renders the buffer quartet beside the
+                // appearance-side effect rows; deep links land there.
+                routeKind = AppearancePreferenceSpecs.ROUTE_PERFORMANCE_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * ExoPlayer `bufferForPlaybackAfterRebufferMs` — how much must be
+         * buffered to resume after a stall. The 3_000 default preserves the
+         * engine's historical hardcoded value; the store setter clamps to
+         * 500–10_000 ms.
+         */
+        PreferenceSpec.plainInt(
+            keyName = "exo_rebuffer_ms",
+            default = 3_000,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            min = MIN_EXO_REBUFFER_MS,
+            max = MAX_EXO_REBUFFER_MS,
+            search = PreferenceSearchSpec(
+                id = "exo_rebuffer_ms",
+                titleKey = "ss_exo_rebuffer_ms_title",
+                subtitleKey = "ss_exo_rebuffer_ms_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf(
+                    "buffer", "rebuffer", "stall", "resume", "exoplayer", "load control",
+                    "ms", "lag",
+                ),
+                routeKind = AppearancePreferenceSpecs.ROUTE_PERFORMANCE_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * ExoPlayer's target buffer bytes in MB. The 0 default is the AUTO
+         * sentinel ([EXO_TARGET_BUFFER_AUTO_MB]) — the engine's `-1` stands
+         * and Media3 derives the target from the selected tracks. An explicit
+         * value (the store setter clamps to 5–512 MB) applies directly; the
+         * MB unit keeps the wire value human-scaled while the engine multiplies
+         * out to bytes. No min/max catalog bounds declared: the valid set is
+         * `0` OR 5–512, which a flat range cannot advertise honestly.
+         */
+        PreferenceSpec.plainInt(
+            keyName = "exo_target_buffer_mb",
+            default = EXO_TARGET_BUFFER_AUTO_MB,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "exo_target_buffer_mb",
+                titleKey = "ss_exo_target_buffer_mb_title",
+                subtitleKey = "ss_exo_target_buffer_mb_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf(
+                    "buffer", "target", "bytes", "mb", "memory", "exoplayer",
+                    "load control", "auto",
+                ),
+                routeKind = AppearancePreferenceSpecs.ROUTE_PERFORMANCE_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * ExoPlayer `setRetainBackBufferFromKeyframe` posture: whether the back
+         * buffer is retained regardless of keyframe boundaries (enables instant
+         * rewind, at the cost of holding decoded-era bytes). Default false —
+         * the engine's historical hardcoded value. The back-buffer DURATION
+         * row lives in the engine domain
+         * (`ExoPlayerEngineConfig.backBufferDurationMs`), not here.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "exo_retain_back_buffer",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "exo_retain_back_buffer",
+                titleKey = "ss_exo_retain_back_buffer_title",
+                subtitleKey = "ss_exo_retain_back_buffer_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf(
+                    "back buffer", "retain", "keyframe", "rewind", "seek back",
+                    "exoplayer", "memory",
+                ),
+                routeKind = AppearancePreferenceSpecs.ROUTE_PERFORMANCE_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+    )
+
     /** Frame-rate ↔ refresh-rate matching (legacy bool + enum pair). */
     private val frameRatePair: List<PreferenceSpec<*>> = listOf(
         PreferenceSpec.plainBoolean(
@@ -782,6 +953,7 @@ object PlaybackPreferenceSpecs {
             playbackMethod +
             liveOfflineDelivery +
             decoderPassthrough +
+            exoBuffers +
             frameRatePair +
             lifecycleToggles +
             subtitleSyncToggles
@@ -915,6 +1087,8 @@ object PlaybackPreferenceSpecs {
 
     val STREAMING_QUALITY: PreferenceSpec<StreamingQuality> get() = row("streaming_quality")
 
+    val VIDEO_PERFORMANCE_PROFILE: PreferenceSpec<VideoPerformanceProfile> get() = row("video_performance_profile")
+
     val CELLULAR_STREAMING_QUALITY: PreferenceSpec<StreamingQuality> get() = row("cellular_streaming_quality")
 
     val HDR_FORMAT_PREFERENCE: PreferenceSpec<HdrFormatPreference> get() = row("hdr_format_preference")
@@ -958,6 +1132,14 @@ object PlaybackPreferenceSpecs {
     val SPATIAL_AUDIO_ENABLED: PreferenceSpec<Boolean> get() = row("spatial_audio_enabled")
 
     val SPATIAL_AUDIO_ONLY_HEADPHONES: PreferenceSpec<Boolean> get() = row("spatial_audio_only_headphones")
+
+    val EXO_INITIAL_BUFFER_MS: PreferenceSpec<Int> get() = row("exo_initial_buffer_ms")
+
+    val EXO_REBUFFER_MS: PreferenceSpec<Int> get() = row("exo_rebuffer_ms")
+
+    val EXO_TARGET_BUFFER_MB: PreferenceSpec<Int> get() = row("exo_target_buffer_mb")
+
+    val EXO_RETAIN_BACK_BUFFER: PreferenceSpec<Boolean> get() = row("exo_retain_back_buffer")
 
     val FRAME_RATE_MATCHING: PreferenceSpec<Boolean> get() = row("frame_rate_matching")
 

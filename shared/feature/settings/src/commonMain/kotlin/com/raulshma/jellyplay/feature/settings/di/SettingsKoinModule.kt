@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.feature.settings.JellyPlayUserRatingsViewModel
 import com.raulshma.jellyplay.feature.settings.JellyPlayYourWatchingViewModel
 import com.raulshma.jellyplay.feature.settings.LibraryLayoutViewModel
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsViewModel
+import com.raulshma.jellyplay.feature.settings.PerformanceSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PrivacyDataViewModel
 import com.raulshma.jellyplay.feature.settings.SecretsBackupAssembler
@@ -123,6 +124,12 @@ val settingsModule: Module = module {
 
     viewModelOf(::AppearanceSettingsViewModel)
 
+    // The Performance hub (the master level dial + the granular overrides +
+    // the ExoPlayer buffer quartet). Reads the appearance + playback stores
+    // directly (the hub's fields live on their slices) and writes through the
+    // shared edit command.
+    viewModelOf(::PerformanceSettingsViewModel)
+
     // The home-layout DisplayPreferences bridge (core:data) — the manual
     // Upload/Restore actions + the autopush engine.
     viewModelOf(::HomeSettingsViewModel)
@@ -131,9 +138,10 @@ val settingsModule: Module = module {
 
     // Hand-written, not viewModelOf: the nullable audio-device seam resolves
     // with getOrNull (the ctor KDoc owns the rationale), which viewModelOf's
-    // per-param hard get() cannot express. The connection-speed probe rides
-    // the same getOrNull shape (always bound in production; nullable keeps
-    // the VM's unit-test construction seam-free).
+    // per-param hard get() cannot express. The connection-speed probe and the
+    // performance-profile resolver (core:data singles) ride the same
+    // getOrNull shape (always bound in production; nullable keeps the VM's
+    // unit-test construction seam-free).
     viewModel {
         PlaybackSettingsViewModel(
             projections = get(),
@@ -142,6 +150,7 @@ val settingsModule: Module = module {
             watchNextRefresher = get(),
             audioDeviceEnumerator = getOrNull(),
             connectionSpeedTester = getOrNull(),
+            videoPerformanceResolver = getOrNull(),
         )
     }
 

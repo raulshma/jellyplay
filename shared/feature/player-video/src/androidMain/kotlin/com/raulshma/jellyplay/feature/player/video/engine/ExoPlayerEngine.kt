@@ -553,7 +553,31 @@ class ExoPlayerEngine(
         // engineScope (terminal semantics unchanged); BasePlayerEngine's
         // self-healing engineScope hands positionFlow's ticker a fresh live
         // generation on its next read, so no paired revive is needed here.
+        //
+        // EXCEPT the UI-owned surface wiring must survive this reset:
+        // createReplacementEngine publishes the engine object BEFORE this
+        // load() builds the player (the desktop mpv wid contract needs the
+        // embed target mounted first), so the screen's PlayerView factory can
+        // run inside any suspension window between publication and here —
+        // createSurfaceView assigns playerView, and the release() below
+        // discards it. A view created that way never receives the rebuilt
+        // player (the factory runs once per engine instance, key(currentEngine)
+        // never re-runs it), PlayerView keeps player=null for the engine's
+        // lifetime, media3 routes the decoded frames to a dummy surface, and
+        // playback looks fine while the video is black — position advancing,
+        // audio playing, zero frames composited. Snapshot the UI-owned triple
+        // and restore it when the teardown dropped it and no newer view took
+        // its place; the rebuilt player re-attaches further down.
+        val preservedView = playerView
+        val preservedListener = frameSizeListener
+        val preservedSubtitleHost = externalSubtitleHost
         release()
+        if (preservedView != null && playerView == null) {
+            playerView = preservedView
+            frameSizeListener = preservedListener
+            externalSubtitleHost = preservedSubtitleHost
+            preservedListener?.let { preservedView.addOnLayoutChangeListener(it) }
+        }
         lastRebuildInputs = inputs
 
         // The rebuild's ordered build decisions, folded once (the plan owns
@@ -568,6 +592,11 @@ class ExoPlayerEngine(
                 minBufferMs = request.minBufferMs,
                 maxBufferMs = request.maxBufferMs,
                 backBufferDurationMs = exoCfg.backBufferDurationMs,
+                // The playback-slice buffer rows arrive folded into exoCfg
+                // (EngineConfigBuilder's Exo arm — direct engine inputs,
+                // defaults = the historical posture below), so the plan's
+                // start/target numbers trace to prefs like every other input.
+                bufferPosture = exoCfg.exoBufferPosture,
             ),
         )
 
@@ -639,11 +668,11 @@ class ExoPlayerEngine(
                 .setBufferDurationsMs(
                     minBufferMs,
                     maxBufferMs,
-                    bufferForPlaybackMs,
-                    bufferForPlaybackAfterRebufferMs,
+                    bufferPosture.initialBufferMs,
+                    bufferPosture.rebufferBufferMs,
                 )
-                .setTargetBufferBytes(targetBufferBytes)
-                .setBackBuffer(backBufferDurationMs, retainBackBuffer)
+                .setTargetBufferBytes(bufferPosture.targetBufferBytes)
+                .setBackBuffer(backBufferDurationMs, bufferPosture.retainBackBuffer)
                 .build()
         }
 
@@ -793,6 +822,14 @@ class ExoPlayerEngine(
         exo.addListener(listener)
         exo.addAnalyticsListener(decoderCountersListener)
         player = exo
+        // The view must mirror the engine's player under any ordering: a
+        // PlayerView created before this point (factory ran while player was
+        // still null — see the preserved view in the teardown above) holds
+        // player=null until this re-attach. When the ordering is the usual
+        // one — player built before the factory ran — this is a no-op.
+        playerView?.let { pv ->
+            if (pv.player !== exo) pv.player = exo
+        }
 
         // Engage the GL video-graph path for HDR→SDR tone mapping. Media3
         // 1.11.1 has no force-tone-map lever (`setRequestOpenGlToneMapping` is
@@ -1140,11 +1177,23 @@ class ExoPlayerEngine(
         val authority = serverUrl?.let { Uri.parse(it).authority }
         if (authority != null && token != null) {
             val authHeader = JellyfinAuthorizationHeader.tokenOnlyHeader(token)
+            // The auth pair is request-invariant, and the resolve lambda runs
+            // per HTTP media chunk — hoist the singleton header map out of it
+            // so each invocation doesn't rebuild the map (+ merge).
+            val authHeaderMap = mapOf(authHeader)
             factory = ResolvingDataSource.Factory(factory) { dataSpec ->
                 if (dataSpec.uri.authority.equals(authority, ignoreCase = true)) {
-                    dataSpec.withRequestHeaders(
-                        mapOf(authHeader) + dataSpec.httpRequestHeaders
-                    )
+                    // putIfAbsent keeps the `mapOf(authHeader) +
+                    // httpRequestHeaders` precedence: existing per-request
+                    // headers win on key conflicts.
+                    val headers = if (dataSpec.httpRequestHeaders.isEmpty()) {
+                        authHeaderMap
+                    } else {
+                        LinkedHashMap(dataSpec.httpRequestHeaders).apply {
+                            putIfAbsent(authHeader.first, authHeader.second)
+                        }
+                    }
+                    dataSpec.withRequestHeaders(headers)
                 } else {
                     dataSpec
                 }

@@ -12,10 +12,15 @@ import com.raulshma.jellyplay.core.datastore.spec.PreferenceStorage
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.HomeCardScale
+import com.raulshma.jellyplay.core.model.HomeCwProgressStyle
+import com.raulshma.jellyplay.core.model.HomeDiscoverPattern
 import com.raulshma.jellyplay.core.model.HomeHeroStyle
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeRefreshCadence
+import com.raulshma.jellyplay.core.model.NewsletterBannerWindow
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 
@@ -889,6 +894,594 @@ object HomeDiscoveryPreferenceSpecs {
         ),
     )
 
+    // ------------------------------------------------------------------
+    // Home display QoL (greeting, see-all, card chrome, clock, dock, banner)
+    // ------------------------------------------------------------------
+
+    val HOME_GREETING_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_greeting_enabled",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_greeting",
+            titleKey = "ss_home_greeting_title",
+            subtitleKey = "ss_home_greeting_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("greeting", "hello", "good morning", "welcome", "user name", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_HIDE_SEE_ALL: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_hide_see_all",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_hide_see_all",
+            titleKey = "ss_home_hide_see_all_title",
+            subtitleKey = "ss_home_hide_see_all_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("see all", "pill", "row header", "hide", "minimal", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_CARD_SCALE: PreferenceSpec<HomeCardScale> = PreferenceSpec.enumRow(
+        keyName = "home_card_scale",
+        default = HomeCardScale.DEFAULT,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_card_scale",
+            titleKey = "ss_home_card_scale_title",
+            subtitleKey = "ss_home_card_scale_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("card", "poster", "size", "scale", "width", "rows", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_CARD_CORNER_RADIUS: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_card_corner_radius",
+        default = 12,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 0,
+        max = 28,
+        search = PreferenceSearchSpec(
+            id = "home_card_corner_radius",
+            titleKey = "ss_home_card_corner_radius_title",
+            subtitleKey = "ss_home_card_corner_radius_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("corner", "radius", "rounded", "cards", "shape", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_SHOW_MODE_SWITCH: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_show_mode_switch",
+        default = true,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_show_mode_switch",
+            titleKey = "ss_home_show_mode_switch_title",
+            subtitleKey = "ss_home_show_mode_switch_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("mode", "switch", "video", "music", "toggle", "dock", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_CLOCK_SHOW_DATE: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_clock_show_date",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_clock_show_date",
+            titleKey = "ss_home_clock_show_date_title",
+            subtitleKey = "ss_home_clock_show_date_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("clock", "date", "calendar", "day", "home", "header"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_NEWSLETTER_BANNER_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_newsletter_banner_enabled",
+        default = true,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_newsletter_banner",
+            titleKey = "ss_home_newsletter_banner_title",
+            subtitleKey = "ss_home_newsletter_banner_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("newsletter", "banner", "digest", "hide", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_ALWAYS_SHOW_USER_SWITCHER: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_always_show_user_switcher",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_always_show_user_switcher",
+            titleKey = "ss_home_always_show_user_switcher_title",
+            subtitleKey = "ss_home_always_show_user_switcher_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("user", "switcher", "avatar", "profile", "accounts", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_CW_PROGRESS_STYLE: PreferenceSpec<HomeCwProgressStyle> = PreferenceSpec.enumRow(
+        keyName = "home_cw_progress_style",
+        default = HomeCwProgressStyle.DEFAULT,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_cw_progress_style",
+            titleKey = "ss_home_cw_progress_style_title",
+            subtitleKey = "ss_home_cw_progress_style_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("progress", "bar", "percent", "continue watching", "resume", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_PRESENCE_CHIPS_LIMIT: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_presence_chips_limit",
+        default = 4,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 2,
+        max = 8,
+        search = PreferenceSearchSpec(
+            id = "home_presence_chips_limit",
+            titleKey = "ss_home_presence_chips_limit_title",
+            subtitleKey = "ss_home_presence_chips_limit_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("presence", "chips", "watch party", "sessions", "limit", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_GENRE_RAIL_LIMIT: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_genre_rail_limit",
+        default = 24,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 6,
+        max = 36,
+        search = PreferenceSearchSpec(
+            id = "home_genre_rail_limit",
+            titleKey = "ss_home_genre_rail_limit_title",
+            subtitleKey = "ss_home_genre_rail_limit_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("genre", "rail", "chips", "categories", "limit", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_ASK_CONTINUE_REMEMBER: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_ask_continue_remember",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_ask_continue_remember",
+            titleKey = "ss_home_ask_continue_remember_title",
+            subtitleKey = "ss_home_ask_continue_remember_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("ask", "continue watching", "remember", "choice", "tap behavior", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_ROWS_ANIMATIONS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_rows_animations",
+        default = true,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_rows_animations",
+            titleKey = "ss_home_rows_animations_title",
+            subtitleKey = "ss_home_rows_animations_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("entrance", "animation", "fade", "sections", "rows", "motion", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    val HOME_OPAQUE_DOCK: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_opaque_dock",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_opaque_dock",
+            titleKey = "ss_home_opaque_dock_title",
+            subtitleKey = "ss_home_opaque_dock_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("dock", "opaque", "translucent", "header", "readability", "capsule", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    // ------------------------------------------------------------------
+    // Home QoL wave 3 (orderable pre-section items, badge/refresh/hero/
+    // discover/newsletter/presence/trickplay/search/tiles/stats knobs).
+    // The CSV rows' canonical token sets + shared normalizers are declared
+    // FIRST (object initialization is declaration order — the rows below
+    // read the canonical sets as their defaults). The slice rows' reads and
+    // the store's setters both route through the normalizers, so a persisted
+    // value and a freshly-set one normalize identically.
+    // ------------------------------------------------------------------
+
+    /** The pre-section block's canonical item order — the shipped render order. */
+    val HOME_PRE_SECTION_ORDER_CANONICAL: List<String> =
+        listOf("stats_card", "genre_rail", "newsletter_banner")
+
+    /** The sections the NEW badge renders on, as shipped — the arrival trio. */
+    val HOME_NEW_BADGE_SECTIONS_CANONICAL: List<HomeSectionType> =
+        listOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED, HomeSectionType.UPCOMING)
+
+    /** The stats card's metrics, as shipped — all three visible. */
+    val HOME_STATS_METRICS_CANONICAL: List<String> =
+        listOf("played", "unplayed", "minutes")
+
+    /**
+     * The [HOME_PRE_SECTION_ORDER] CSV's normalization: lowercase, split,
+     * trim, dedupe, drop unknown tokens, then append any canonical items the
+     * list was missing in canonical order. An empty result (no known token)
+     * degrades to the canonical order.
+     */
+    internal fun normalizePreSectionOrder(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return HOME_PRE_SECTION_ORDER_CANONICAL
+        val known = raw.split(',').mapNotNull { token ->
+            HOME_PRE_SECTION_ORDER_CANONICAL.find { it == token.trim().lowercase() }
+        }.distinct()
+        return if (known.isEmpty()) {
+            HOME_PRE_SECTION_ORDER_CANONICAL
+        } else {
+            known + HOME_PRE_SECTION_ORDER_CANONICAL.filterNot { it in known }
+        }
+    }
+
+    /**
+     * The [HOME_NEW_BADGE_SECTIONS] CSV's normalization: split, trim, drop
+     * names that are not [HomeSectionType] constants, dedupe. A null/absent
+     * slot serves the canonical arrival trio; an explicitly empty CSV badges
+     * nothing (the "Nowhere" preset).
+     */
+    internal fun normalizeNewBadgeSections(raw: String?): Set<HomeSectionType> {
+        if (raw == null) return HOME_NEW_BADGE_SECTIONS_CANONICAL.toSet()
+        return raw.split(',').mapNotNull { token ->
+            HomeSectionType.entries.find { it.name == token.trim().uppercase() }
+        }.toSet()
+    }
+
+    /**
+     * The [HOME_STATS_METRICS] CSV's normalization: lowercase, split, trim,
+     * dedupe, drop unknown tokens; an empty result degrades to the canonical
+     * all-three set.
+     */
+    internal fun normalizeStatsMetrics(raw: String?): Set<String> {
+        if (raw.isNullOrBlank()) return HOME_STATS_METRICS_CANONICAL.toSet()
+        val known = raw.split(',').mapNotNull { token ->
+            HOME_STATS_METRICS_CANONICAL.find { it == token.trim().lowercase() }
+        }.toSet()
+        return if (known.isEmpty()) HOME_STATS_METRICS_CANONICAL.toSet() else known
+    }
+
+    /**
+     * The pre-section block's user order as a lowercase token CSV — the
+     * orderable items between the hero and the first section row (stats
+     * card / genre rail / newsletter banner; the presence chips and the
+     * system banners keep their fixed slots). The read and the setter share
+     * [normalizePreSectionOrder]: lowercase, dedupe, drop unknown tokens,
+     * append the missing ones in canonical order. Declared as a `custom`
+     * row over the parsed token list (the JSON-blob precedent — the wire
+     * slot is the CSV string; the row's value type is what the slice
+     * carries).
+     */
+    val HOME_PRE_SECTION_ORDER: PreferenceSpec<List<String>> = PreferenceSpec.custom(
+        keyName = "home_pre_section_order",
+        default = HOME_PRE_SECTION_ORDER_CANONICAL,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_pre_section_order",
+            titleKey = "ss_home_pre_section_order_title",
+            subtitleKey = "ss_home_pre_section_order_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("pre-section", "order", "stats", "genre", "newsletter", "banner", "reorder", "arrange", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /**
+     * The sections whose cards render the NEW badge — the hardcoded arrival
+     * trio opened up to a per-section gate. The read and the setter share
+     * [normalizeNewBadgeSections]: drop unknown names, dedupe, absent slot →
+     * canonical default (an explicit empty set badges nothing). Declared as
+     * a `custom` row over the parsed section set — the wire slot is the CSV
+     * string, the row's value type is what the slice carries.
+     */
+    val HOME_NEW_BADGE_SECTIONS: PreferenceSpec<Set<HomeSectionType>> = PreferenceSpec.custom(
+        keyName = "home_new_badge_sections",
+        default = HOME_NEW_BADGE_SECTIONS_CANONICAL.toSet(),
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_new_badge_sections",
+            titleKey = "ss_home_new_badge_sections_title",
+            subtitleKey = "ss_home_new_badge_sections_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("new", "badge", "sections", "latest", "recently", "added", "upcoming", "gate", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The home feed's automatic refresh cadence (the periodic re-fetch loop). */
+    val HOME_REFRESH_CADENCE: PreferenceSpec<HomeRefreshCadence> = PreferenceSpec.enumRow(
+        keyName = "home_refresh_cadence",
+        default = HomeRefreshCadence.DEFAULT,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_refresh_cadence",
+            titleKey = "ss_home_refresh_cadence_title",
+            subtitleKey = "ss_home_refresh_cadence_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("refresh", "cadence", "interval", "automatic", "eager", "relaxed", "manual", "pull to refresh", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /**
+     * The hero carousel's idle auto-rotation dwell in milliseconds
+     * (3000–30000). The slideshow style's own pacing
+     * ([HOME_HERO_SLIDESHOW_INTERVAL_SEC]) takes precedence while that style
+     * is selected.
+     */
+    val HOME_HERO_IDLE_ROTATION_MS: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_hero_idle_rotation_ms",
+        default = 8000,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 3000,
+        max = 30000,
+        search = PreferenceSearchSpec(
+            id = "home_hero_idle_rotation_ms",
+            titleKey = "ss_home_hero_idle_rotation_title",
+            subtitleKey = "ss_home_hero_idle_rotation_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("hero", "rotation", "idle", "dwell", "milliseconds", "advance", "carousel", "speed", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The clamp every [HOME_HERO_IDLE_ROTATION_MS] read/write shares. */
+    val HOME_HERO_IDLE_ROTATION_MS_BOUNDS: ClosedRange<Int> = 3000..30000
+
+    /**
+     * Whether hero rotation defers while the home list is scrolling (the
+     * shipped 2 s re-check window). Off = rotation ticks on its dwell even
+     * mid-scroll.
+     */
+    val HERO_SCROLL_DEFER: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "hero_scroll_defer",
+        default = true,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "hero_scroll_defer",
+            titleKey = "ss_hero_scroll_defer_title",
+            subtitleKey = "ss_hero_scroll_defer_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("hero", "rotation", "scroll", "defer", "pause", "while scrolling", "carousel", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The discover rows' partition pattern (equal-size vs paced rhythms). */
+    val HOME_DISCOVER_PATTERN: PreferenceSpec<HomeDiscoverPattern> = PreferenceSpec.enumRow(
+        keyName = "home_discover_pattern",
+        default = HomeDiscoverPattern.DEFAULT,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_discover_pattern",
+            titleKey = "ss_home_discover_pattern_title",
+            subtitleKey = "ss_home_discover_pattern_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("discover", "row", "pattern", "partition", "uniform", "compact", "layout", "cards", "seerr", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /**
+     * The newsletter banner's weekday window, stacking on the
+     * [HOME_NEWSLETTER_BANNER_ENABLED] on/off toggle: DEFAULT keeps the
+     * plugin's weekday logic, ALWAYS shows the banner every day, WEEKENDS
+     * restricts it to Saturday/Sunday.
+     */
+    val HOME_NEWSLETTER_WINDOW: PreferenceSpec<NewsletterBannerWindow> = PreferenceSpec.enumRow(
+        keyName = "home_newsletter_window",
+        default = NewsletterBannerWindow.DEFAULT,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_newsletter_window",
+            titleKey = "ss_home_newsletter_window_title",
+            subtitleKey = "ss_home_newsletter_window_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("newsletter", "banner", "window", "weekday", "weekend", "digest", "always", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The presence chips' foreground poll cadence in seconds (15–300). */
+    val HOME_PRESENCE_POLL_SECONDS: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_presence_poll_seconds",
+        default = 60,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 15,
+        max = 300,
+        search = PreferenceSearchSpec(
+            id = "home_presence_poll_seconds",
+            titleKey = "ss_home_presence_poll_title",
+            subtitleKey = "ss_home_presence_poll_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("presence", "poll", "seconds", "interval", "watch party", "sessions", "cadence", "refresh", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The clamp every [HOME_PRESENCE_POLL_SECONDS] read/write shares. */
+    val HOME_PRESENCE_POLL_SECONDS_BOUNDS: ClosedRange<Int> = 15..300
+
+    /**
+     * How long the TV trickplay peek holds above the progress bar before
+     * fading out, in milliseconds (1000–5000).
+     */
+    val HOME_TRICKPLAY_PEEK_MS: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_trickplay_peek_ms",
+        default = 2500,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 1000,
+        max = 5000,
+        search = PreferenceSearchSpec(
+            id = "home_trickplay_peek_ms",
+            titleKey = "ss_home_trickplay_peek_title",
+            subtitleKey = "ss_home_trickplay_peek_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("trickplay", "peek", "hold", "preview", "thumbnail", "hover", "focus", "milliseconds", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The clamp every [HOME_TRICKPLAY_PEEK_MS] read/write shares. */
+    val HOME_TRICKPLAY_PEEK_MS_BOUNDS: ClosedRange<Int> = 1000..5000
+
+    /**
+     * The home search overlay's results-pane height cap in dp (280–640).
+     */
+    val HOME_SEARCH_RESULTS_HEIGHT_DP: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_search_results_height_dp",
+        default = 400,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 280,
+        max = 640,
+        search = PreferenceSearchSpec(
+            id = "home_search_results_height",
+            titleKey = "ss_home_search_results_height_title",
+            subtitleKey = "ss_home_search_results_height_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("search", "results", "height", "overlay", "dropdown", "pane", "size", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The clamp every [HOME_SEARCH_RESULTS_HEIGHT_DP] read/write shares. */
+    val HOME_SEARCH_RESULTS_HEIGHT_DP_BOUNDS: ClosedRange<Int> = 280..640
+
+    /**
+     * The My Media tiles row's visible-column count (0–6). 0 keeps the
+     * shipped chassis width (the tiles row scrolls at its natural card
+     * size); 1–6 size the tiles so exactly that many fit the screen width.
+     */
+    val HOME_MY_MEDIA_COLUMNS: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_my_media_columns",
+        default = 0,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 0,
+        max = 6,
+        search = PreferenceSearchSpec(
+            id = "home_my_media_columns",
+            titleKey = "ss_home_my_media_columns_title",
+            subtitleKey = "ss_home_my_media_columns_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("my media", "tiles", "columns", "grid", "width", "libraries", "row", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The clamp every [HOME_MY_MEDIA_COLUMNS] read/write shares. */
+    val HOME_MY_MEDIA_COLUMNS_BOUNDS: ClosedRange<Int> = 0..6
+
+    /**
+     * The stats card's visible metrics over played / unplayed / minutes —
+     * unselected metrics hide from the card. The read and the setter share
+     * [normalizeStatsMetrics]: drop unknown tokens, dedupe, empty → canonical
+     * default (all three). Declared as a `custom` row over the parsed
+     * metric set — the wire slot is the CSV string, the row's value type is
+     * what the slice carries.
+     */
+    val HOME_STATS_METRICS: PreferenceSpec<Set<String>> = PreferenceSpec.custom(
+        keyName = "home_stats_metrics",
+        default = HOME_STATS_METRICS_CANONICAL.toSet(),
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_stats_metrics",
+            titleKey = "ss_home_stats_metrics_title",
+            subtitleKey = "ss_home_stats_metrics_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("stats", "card", "metrics", "played", "unplayed", "minutes", "watch time", "hide", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /**
+     * The NEW-badge arrival window in days (1–30): arrivals older than the
+     * cutoff stop badgeing even though they postdate a long-absent user's
+     * last visit. 30 (the widest the clamp allows) is the closest the
+     * clamp range offers to the shipped unbounded visit-based predicate.
+     */
+    val HOME_NEW_BADGE_DAYS: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_new_badge_days",
+        default = 30,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 1,
+        max = 30,
+        search = PreferenceSearchSpec(
+            id = "home_new_badge_days",
+            titleKey = "ss_home_new_badge_days_title",
+            subtitleKey = "ss_home_new_badge_days_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("new", "badge", "days", "window", "arrival", "threshold", "recently", "expire", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The clamp every [HOME_NEW_BADGE_DAYS] read/write shares. */
+    val HOME_NEW_BADGE_DAYS_BOUNDS: ClosedRange<Int> = 1..30
+
+    /**
+     * Unwatched counters in the section-row headers: renders the row's
+     * unwatched-item count beside the title. Purely derivable from the
+     * loaded state (no new server queries) — only the arrival rows, whose
+     * fetch projects play state, show a counter, and the count covers the
+     * row's loaded items.
+     */
+    val HOME_ROW_UNWATCHED_COUNTERS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_row_unwatched_counters",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_row_unwatched_counters",
+            titleKey = "ss_home_row_unwatched_counters_title",
+            subtitleKey = "ss_home_row_unwatched_counters_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("unwatched", "counter", "count", "row", "header", "title", "badge", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /**
+     * The hero starts at a random candidate instead of the first on each
+     * home mount. Default off — the shipped first-item start.
+     */
+    val HOME_HERO_RANDOM_START: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_hero_random_start",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_hero_random_start",
+            titleKey = "ss_home_hero_random_start_title",
+            subtitleKey = "ss_home_hero_random_start_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("hero", "random", "start", "shuffle", "first", "carousel", "surprise", "home"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
     /**
      * Global one-time marker for the legacy flat-key → per-user-namespace
      * migration. Deliberately **global**, not per-user (it lives OUTSIDE the
@@ -979,6 +1572,35 @@ object HomeDiscoveryPreferenceSpecs {
         SHOW_CLOCK_ON_HOME,
         SHOW_SETTINGS_IN_HOME_SEARCH,
         HIDE_TOP_HEADER_ON_SCROLL,
+        HOME_GREETING_ENABLED,
+        HOME_HIDE_SEE_ALL,
+        HOME_CARD_SCALE,
+        HOME_CARD_CORNER_RADIUS,
+        HOME_SHOW_MODE_SWITCH,
+        HOME_CLOCK_SHOW_DATE,
+        HOME_NEWSLETTER_BANNER_ENABLED,
+        HOME_ALWAYS_SHOW_USER_SWITCHER,
+        HOME_CW_PROGRESS_STYLE,
+        HOME_PRESENCE_CHIPS_LIMIT,
+        HOME_GENRE_RAIL_LIMIT,
+        HOME_ASK_CONTINUE_REMEMBER,
+        HOME_ROWS_ANIMATIONS,
+        HOME_OPAQUE_DOCK,
+        HOME_PRE_SECTION_ORDER,
+        HOME_NEW_BADGE_SECTIONS,
+        HOME_REFRESH_CADENCE,
+        HOME_HERO_IDLE_ROTATION_MS,
+        HERO_SCROLL_DEFER,
+        HOME_DISCOVER_PATTERN,
+        HOME_NEWSLETTER_WINDOW,
+        HOME_PRESENCE_POLL_SECONDS,
+        HOME_TRICKPLAY_PEEK_MS,
+        HOME_SEARCH_RESULTS_HEIGHT_DP,
+        HOME_MY_MEDIA_COLUMNS,
+        HOME_STATS_METRICS,
+        HOME_NEW_BADGE_DAYS,
+        HOME_ROW_UNWATCHED_COUNTERS,
+        HOME_HERO_RANDOM_START,
         HOME_NS_MIGRATED,
         HOME_V3_UPGRADE_BASELINE_DONE,
     )
@@ -1403,6 +2025,223 @@ object HomeDiscoveryPreferenceSpecs {
             readForUser = { _, prefs, userId -> HIDE_TOP_HEADER_ON_SCROLL.readBoolForUser(prefs, userId) },
             writeForUser = { prefs, userId, v -> prefs[HIDE_TOP_HEADER_ON_SCROLL.userKey(userId)] = v },
         ),
+        HomeDiscoverySliceRow(
+            spec = HOME_GREETING_ENABLED,
+            get = { it.homeGreetingEnabled },
+            set = { s, v -> s.copy(homeGreetingEnabled = v) },
+            readForUser = { _, prefs, userId -> HOME_GREETING_ENABLED.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_GREETING_ENABLED.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_HIDE_SEE_ALL,
+            get = { it.homeHideSeeAll },
+            set = { s, v -> s.copy(homeHideSeeAll = v) },
+            readForUser = { _, prefs, userId -> HOME_HIDE_SEE_ALL.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_HIDE_SEE_ALL.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_CARD_SCALE,
+            get = { it.homeCardScale },
+            set = { s, v -> s.copy(homeCardScale = v) },
+            readForUser = { _, prefs, userId -> HOME_CARD_SCALE.readEnumForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_CARD_SCALE.rawUserKey(userId)] = v.name },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_CARD_CORNER_RADIUS,
+            get = { it.homeCardCornerRadius },
+            set = { s, v -> s.copy(homeCardCornerRadius = v) },
+            readForUser = { _, prefs, userId -> HOME_CARD_CORNER_RADIUS.readIntForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_CARD_CORNER_RADIUS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_SHOW_MODE_SWITCH,
+            get = { it.homeShowModeSwitch },
+            set = { s, v -> s.copy(homeShowModeSwitch = v) },
+            readForUser = { _, prefs, userId -> HOME_SHOW_MODE_SWITCH.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_SHOW_MODE_SWITCH.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_CLOCK_SHOW_DATE,
+            get = { it.homeClockShowDate },
+            set = { s, v -> s.copy(homeClockShowDate = v) },
+            readForUser = { _, prefs, userId -> HOME_CLOCK_SHOW_DATE.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_CLOCK_SHOW_DATE.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_NEWSLETTER_BANNER_ENABLED,
+            get = { it.homeNewsletterBannerEnabled },
+            set = { s, v -> s.copy(homeNewsletterBannerEnabled = v) },
+            readForUser = { _, prefs, userId -> HOME_NEWSLETTER_BANNER_ENABLED.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_NEWSLETTER_BANNER_ENABLED.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_ALWAYS_SHOW_USER_SWITCHER,
+            get = { it.homeAlwaysShowUserSwitcher },
+            set = { s, v -> s.copy(homeAlwaysShowUserSwitcher = v) },
+            readForUser = { _, prefs, userId -> HOME_ALWAYS_SHOW_USER_SWITCHER.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_ALWAYS_SHOW_USER_SWITCHER.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_CW_PROGRESS_STYLE,
+            get = { it.homeCwProgressStyle },
+            set = { s, v -> s.copy(homeCwProgressStyle = v) },
+            readForUser = { _, prefs, userId -> HOME_CW_PROGRESS_STYLE.readEnumForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_CW_PROGRESS_STYLE.rawUserKey(userId)] = v.name },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_PRESENCE_CHIPS_LIMIT,
+            get = { it.homePresenceChipsLimit },
+            set = { s, v -> s.copy(homePresenceChipsLimit = v) },
+            readForUser = { _, prefs, userId -> HOME_PRESENCE_CHIPS_LIMIT.readIntForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_PRESENCE_CHIPS_LIMIT.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_GENRE_RAIL_LIMIT,
+            get = { it.homeGenreRailLimit },
+            set = { s, v -> s.copy(homeGenreRailLimit = v) },
+            readForUser = { _, prefs, userId -> HOME_GENRE_RAIL_LIMIT.readIntForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_GENRE_RAIL_LIMIT.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_ASK_CONTINUE_REMEMBER,
+            get = { it.homeAskContinueRemember },
+            set = { s, v -> s.copy(homeAskContinueRemember = v) },
+            readForUser = { _, prefs, userId -> HOME_ASK_CONTINUE_REMEMBER.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_ASK_CONTINUE_REMEMBER.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_ROWS_ANIMATIONS,
+            get = { it.homeRowsAnimations },
+            set = { s, v -> s.copy(homeRowsAnimations = v) },
+            readForUser = { _, prefs, userId -> HOME_ROWS_ANIMATIONS.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_ROWS_ANIMATIONS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_OPAQUE_DOCK,
+            get = { it.homeOpaqueDock },
+            set = { s, v -> s.copy(homeOpaqueDock = v) },
+            readForUser = { _, prefs, userId -> HOME_OPAQUE_DOCK.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_OPAQUE_DOCK.userKey(userId)] = v },
+        ),
+        // CSV rows: the read normalizes through the shared helpers, restore
+        // re-encodes the normalized value verbatim (comma-joined).
+        HomeDiscoverySliceRow(
+            spec = HOME_PRE_SECTION_ORDER,
+            get = { it.homePreSectionOrder },
+            set = { s, v -> s.copy(homePreSectionOrder = v) },
+            readForUser = { _, prefs, userId ->
+                normalizePreSectionOrder(prefs[HOME_PRE_SECTION_ORDER.rawUserKey(userId)])
+            },
+            writeForUser = { prefs, userId, v ->
+                prefs[HOME_PRE_SECTION_ORDER.rawUserKey(userId)] = v.joinToString(",")
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_NEW_BADGE_SECTIONS,
+            get = { it.homeNewBadgeSections },
+            set = { s, v -> s.copy(homeNewBadgeSections = v) },
+            readForUser = { _, prefs, userId ->
+                normalizeNewBadgeSections(prefs[HOME_NEW_BADGE_SECTIONS.rawUserKey(userId)])
+            },
+            writeForUser = { prefs, userId, v ->
+                prefs[HOME_NEW_BADGE_SECTIONS.rawUserKey(userId)] = v.joinToString(",") { it.name }
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_REFRESH_CADENCE,
+            get = { it.homeRefreshCadence },
+            set = { s, v -> s.copy(homeRefreshCadence = v) },
+            readForUser = { _, prefs, userId -> HOME_REFRESH_CADENCE.readEnumForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_REFRESH_CADENCE.rawUserKey(userId)] = v.name },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_HERO_IDLE_ROTATION_MS,
+            get = { it.homeHeroIdleRotationMs },
+            set = { s, v -> s.copy(homeHeroIdleRotationMs = v) },
+            readForUser = { _, prefs, userId -> HOME_HERO_IDLE_ROTATION_MS.readIntForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_HERO_IDLE_ROTATION_MS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HERO_SCROLL_DEFER,
+            get = { it.heroScrollDefer },
+            set = { s, v -> s.copy(heroScrollDefer = v) },
+            readForUser = { _, prefs, userId -> HERO_SCROLL_DEFER.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HERO_SCROLL_DEFER.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_DISCOVER_PATTERN,
+            get = { it.homeDiscoverPattern },
+            set = { s, v -> s.copy(homeDiscoverPattern = v) },
+            readForUser = { _, prefs, userId -> HOME_DISCOVER_PATTERN.readEnumForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_DISCOVER_PATTERN.rawUserKey(userId)] = v.name },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_NEWSLETTER_WINDOW,
+            get = { it.homeNewsletterWindow },
+            set = { s, v -> s.copy(homeNewsletterWindow = v) },
+            readForUser = { _, prefs, userId -> HOME_NEWSLETTER_WINDOW.readEnumForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_NEWSLETTER_WINDOW.rawUserKey(userId)] = v.name },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_PRESENCE_POLL_SECONDS,
+            get = { it.homePresencePollSeconds },
+            set = { s, v -> s.copy(homePresencePollSeconds = v) },
+            readForUser = { _, prefs, userId -> HOME_PRESENCE_POLL_SECONDS.readIntForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_PRESENCE_POLL_SECONDS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_TRICKPLAY_PEEK_MS,
+            get = { it.homeTrickplayPeekMs },
+            set = { s, v -> s.copy(homeTrickplayPeekMs = v) },
+            readForUser = { _, prefs, userId -> HOME_TRICKPLAY_PEEK_MS.readIntForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_TRICKPLAY_PEEK_MS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_SEARCH_RESULTS_HEIGHT_DP,
+            get = { it.homeSearchResultsHeightDp },
+            set = { s, v -> s.copy(homeSearchResultsHeightDp = v) },
+            readForUser = { _, prefs, userId -> HOME_SEARCH_RESULTS_HEIGHT_DP.readIntForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_SEARCH_RESULTS_HEIGHT_DP.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_MY_MEDIA_COLUMNS,
+            get = { it.homeMyMediaColumns },
+            set = { s, v -> s.copy(homeMyMediaColumns = v) },
+            readForUser = { _, prefs, userId -> HOME_MY_MEDIA_COLUMNS.readIntForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_MY_MEDIA_COLUMNS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_STATS_METRICS,
+            get = { it.homeStatsMetrics },
+            set = { s, v -> s.copy(homeStatsMetrics = v) },
+            readForUser = { _, prefs, userId ->
+                normalizeStatsMetrics(prefs[HOME_STATS_METRICS.rawUserKey(userId)])
+            },
+            writeForUser = { prefs, userId, v ->
+                prefs[HOME_STATS_METRICS.rawUserKey(userId)] = v.joinToString(",")
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_NEW_BADGE_DAYS,
+            get = { it.homeNewBadgeDays },
+            set = { s, v -> s.copy(homeNewBadgeDays = v) },
+            readForUser = { _, prefs, userId -> HOME_NEW_BADGE_DAYS.readIntForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_NEW_BADGE_DAYS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_ROW_UNWATCHED_COUNTERS,
+            get = { it.homeRowUnwatchedCounters },
+            set = { s, v -> s.copy(homeRowUnwatchedCounters = v) },
+            readForUser = { _, prefs, userId -> HOME_ROW_UNWATCHED_COUNTERS.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_ROW_UNWATCHED_COUNTERS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_HERO_RANDOM_START,
+            get = { it.homeHeroRandomStart },
+            set = { s, v -> s.copy(homeHeroRandomStart = v) },
+            readForUser = { _, prefs, userId -> HOME_HERO_RANDOM_START.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_HERO_RANDOM_START.userKey(userId)] = v },
+        ),
     )
 
     /**
@@ -1432,6 +2271,35 @@ object HomeDiscoveryPreferenceSpecs {
         HOME_FOCUS_BACKDROP.searchEntry(),
         SHOW_CLOCK_ON_HOME.searchEntry(),
         HIDE_TOP_HEADER_ON_SCROLL.searchEntry(),
+        HOME_GREETING_ENABLED.searchEntry(),
+        HOME_HIDE_SEE_ALL.searchEntry(),
+        HOME_CARD_SCALE.searchEntry(),
+        HOME_CARD_CORNER_RADIUS.searchEntry(),
+        HOME_SHOW_MODE_SWITCH.searchEntry(),
+        HOME_CLOCK_SHOW_DATE.searchEntry(),
+        HOME_NEWSLETTER_BANNER_ENABLED.searchEntry(),
+        HOME_ALWAYS_SHOW_USER_SWITCHER.searchEntry(),
+        HOME_CW_PROGRESS_STYLE.searchEntry(),
+        HOME_PRESENCE_CHIPS_LIMIT.searchEntry(),
+        HOME_GENRE_RAIL_LIMIT.searchEntry(),
+        HOME_ASK_CONTINUE_REMEMBER.searchEntry(),
+        HOME_ROWS_ANIMATIONS.searchEntry(),
+        HOME_OPAQUE_DOCK.searchEntry(),
+        HOME_PRE_SECTION_ORDER.searchEntry(),
+        HOME_NEW_BADGE_SECTIONS.searchEntry(),
+        HOME_REFRESH_CADENCE.searchEntry(),
+        HOME_HERO_IDLE_ROTATION_MS.searchEntry(),
+        HERO_SCROLL_DEFER.searchEntry(),
+        HOME_DISCOVER_PATTERN.searchEntry(),
+        HOME_NEWSLETTER_WINDOW.searchEntry(),
+        HOME_PRESENCE_POLL_SECONDS.searchEntry(),
+        HOME_TRICKPLAY_PEEK_MS.searchEntry(),
+        HOME_SEARCH_RESULTS_HEIGHT_DP.searchEntry(),
+        HOME_MY_MEDIA_COLUMNS.searchEntry(),
+        HOME_STATS_METRICS.searchEntry(),
+        HOME_NEW_BADGE_DAYS.searchEntry(),
+        HOME_ROW_UNWATCHED_COUNTERS.searchEntry(),
+        HOME_HERO_RANDOM_START.searchEntry(),
         SHOW_SETTINGS_IN_HOME_SEARCH.searchEntry(),
         HOME_STATS_CARD.searchEntry(),
         HOME_GENRE_RAIL.searchEntry(),

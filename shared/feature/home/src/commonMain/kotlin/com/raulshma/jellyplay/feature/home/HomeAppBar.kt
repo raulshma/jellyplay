@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
@@ -76,6 +77,8 @@ import com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
+import com.raulshma.jellyplay.core.ui.components.rememberWallClockDateString
+import com.raulshma.jellyplay.core.ui.components.rememberWallClockHour
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
@@ -100,10 +103,20 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_search
 import com.raulshma.jellyplay.feature.home.generated.resources.home_go_online
 import com.raulshma.jellyplay.feature.home.generated.resources.home_clear_search
 import com.raulshma.jellyplay.feature.home.generated.resources.home_back
+import com.raulshma.jellyplay.feature.home.generated.resources.home_greeting_morning
+import com.raulshma.jellyplay.feature.home.generated.resources.home_greeting_afternoon
+import com.raulshma.jellyplay.feature.home.generated.resources.home_greeting_evening
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 
 /** Translucency of the home app-bar capsules and the expanded-search surface scrim. */
 private const val AppBarScrimAlpha = 0.85f
+
+/**
+ * The capsules' surface alpha for [HomeDockState.homeOpaqueDock] — the
+ * opaque-dock pref renders the capsules fully solid (1f) for readability on
+ * bright backdrops; the default keeps the shipped 0.85f translucent scrim.
+ */
+internal fun dockScrimAlpha(opaqueDock: Boolean): Float = if (opaqueDock) 1f else AppBarScrimAlpha
 
 /**
  * The dock's whole data surface, bundled — the former 15 flat params (plus
@@ -130,6 +143,16 @@ internal data class HomeDockState(
     val hasFeaturedItem: Boolean = false,
     /** Scrim-side auto-hide gate; not read by the dock body itself. */
     val hideTopHeaderOnScroll: Boolean = false,
+    /** Renders the date under the header clock. */
+    val homeClockShowDate: Boolean = false,
+    /** Renders the dock capsules opaque (fully readable on bright backdrops). */
+    val homeOpaqueDock: Boolean = false,
+    /** Renders the time-aware greeting chip in the status capsule. */
+    val homeGreetingEnabled: Boolean = false,
+    /** Whether the Video/Music mode switch renders in the end capsule. */
+    val homeShowModeSwitch: Boolean = true,
+    /** Always render the user switcher chip (even with a single user). */
+    val homeAlwaysShowUserSwitcher: Boolean = false,
     /** The user's header shortcuts, resolved (ordered, gated, icon/label final) by the ViewModel. */
     val headerShortcuts: List<ResolvedShortcut> = emptyList(),
 )
@@ -159,11 +182,18 @@ internal fun HomeTopDock(
     callbacks: HomeDockCallbacks,
     searchResultsContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * The search overlay's results-pane height cap (the
+     * `home_search_results_height_dp` pref, clamped 280-640 at the setter;
+     * default the shipped 400 dp).
+     */
+    searchResultsMaxHeightDp: Dp = 400.dp,
 ) {
     val isTv = LocalTvMode.current
 
     val hasStatusIndicators = state.headerStatus !is HeaderStatus.None || state.showClock ||
-        state.pendingSyncCount > 0 || state.offlineMode != OfflineMode.ONLINE
+        state.pendingSyncCount > 0 || state.offlineMode != OfflineMode.ONLINE ||
+        (state.homeGreetingEnabled && state.currentUser != null)
 
     Box(
         modifier = modifier
@@ -198,7 +228,7 @@ internal fun HomeTopDock(
         if (state.isSearchFocused) {
             Surface(
                 shape = ShapeCache.smooth24,
-                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
+                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = dockScrimAlpha(state.homeOpaqueDock)),
                 tonalElevation = 3.dp,
                 shadowElevation = 6.dp,
                 border = BorderStroke(
@@ -239,9 +269,9 @@ internal fun HomeTopDock(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp)
+                            .heightIn(max = searchResultsMaxHeightDp)
                             .background(
-                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha)
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = dockScrimAlpha(state.homeOpaqueDock))
                             ),
                     ) {
                         searchResultsContent()
@@ -499,7 +529,7 @@ private fun CollapsedDockContent(
     if (hasStatusIndicators) {
         Surface(
             shape = ShapeCache.smoothPill,
-            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
+            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = dockScrimAlpha(state.homeOpaqueDock)),
             tonalElevation = 2.dp,
             shadowElevation = 6.dp,
             border = BorderStroke(
@@ -521,6 +551,17 @@ private fun CollapsedDockContent(
                         tint = appBarIconColorFaded,
                     )
                 }
+                if (state.homeGreetingEnabled && state.currentUser != null) {
+                    Text(
+                        text = homeGreetingText(state.currentUser.name),
+                        color = appBarIconColorFaded,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                        maxLines = 1,
+                    )
+                }
                 if (state.showClock) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -533,13 +574,22 @@ private fun CollapsedDockContent(
                             tint = appBarIconColorFaded,
                             modifier = Modifier.size(18.dp),
                         )
-                        Text(
-                            text = rememberWallClockTimeString(),
-                            color = appBarIconColorFaded,
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                        )
+                        Column {
+                            Text(
+                                text = rememberWallClockTimeString(),
+                                color = appBarIconColorFaded,
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                            )
+                            if (state.homeClockShowDate) {
+                                Text(
+                                    text = rememberWallClockDateString(),
+                                    color = appBarIconColorFaded,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
                     }
                 }
                 if (state.pendingSyncCount > 0) {
@@ -570,7 +620,7 @@ private fun CollapsedDockContent(
     // ── End Side: Navigation, Actions & User Expressive Capsule ──
     Surface(
         shape = ShapeCache.smoothPill,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = dockScrimAlpha(state.homeOpaqueDock)),
         tonalElevation = 2.dp,
         shadowElevation = 6.dp,
         border = BorderStroke(
@@ -586,17 +636,21 @@ private fun CollapsedDockContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (state.currentUser != null && state.currentServerUsers.size >= 2) {
+            if (state.currentUser != null &&
+                (state.homeAlwaysShowUserSwitcher || state.currentServerUsers.size >= 2)
+            ) {
                 UserSwitcherChip(
                     currentUser = state.currentUser,
                     users = state.currentServerUsers,
                     onUserSwitch = callbacks.onUserSwitch,
                 )
             }
-            ModeSwitch(
-                currentMode = state.homeMode,
-                onModeChange = callbacks.onModeChange,
-            )
+            if (state.homeShowModeSwitch) {
+                ModeSwitch(
+                    currentMode = state.homeMode,
+                    onModeChange = callbacks.onModeChange,
+                )
+            }
             state.headerShortcuts.forEach { shortcut ->
                 HeaderShortcutIcon(
                     shortcut = shortcut,
@@ -727,3 +781,20 @@ private fun UserSwitcherChip(
 
 // The avatar palette helpers live in HomeUserSwitchMenu.kt (avatarColorPair /
 // avatarColorsFor) — the single home of that logic for both surfaces.
+
+/**
+ * The dock greeting's localized text: a time-of-day prefix (5-12 morning,
+ * 12-18 afternoon, otherwise evening) around the user's display name. Pure
+ * over its inputs so the pinned-content test can exercise the fold.
+ */
+@Composable
+internal fun homeGreetingText(userName: String): String {
+    val hour = rememberWallClockHour()
+    val name = userName.ifBlank { "?" }
+    val template = when {
+        hour in 5..11 -> Res.string.home_greeting_morning
+        hour in 12..17 -> Res.string.home_greeting_afternoon
+        else -> Res.string.home_greeting_evening
+    }
+    return stringResource(template, name)
+}

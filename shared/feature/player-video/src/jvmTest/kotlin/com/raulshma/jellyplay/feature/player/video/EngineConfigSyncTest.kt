@@ -22,6 +22,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -60,6 +61,8 @@ class EngineConfigSyncTest {
     private var aggregate = VideoPlayerAggregate()
     private var engineSpecific: com.raulshma.jellyplay.core.model.EngineSpecificConfig? = null
     private var deinterlace = DeinterlaceMode.AUTO
+    private var performanceTuning: com.raulshma.jellyplay.core.model.VideoPerformanceTuning =
+        com.raulshma.jellyplay.core.model.VideoPerformanceTuning.NONE
     private var engine: FakeMediaEngine? = FakeMediaEngine()
 
     // Counts every dispatch attempt (the engine handle consulted) — the
@@ -100,6 +103,7 @@ class EngineConfigSyncTest {
                 agg = aggregate,
                 engineSpecific = engineSpecific,
                 deinterlace = deinterlace,
+                performanceTuning = performanceTuning,
             )
         },
         getEngine = { engineReads++; engine },
@@ -154,6 +158,54 @@ class EngineConfigSyncTest {
         // Both paths consulted the (absent) engine handle — the build ran,
         // the `engine?.updateConfig` dispatch no-oped, nothing crashed.
         assertEquals(2, engineReads)
+    }
+
+    @Test
+    fun markDirty_foldsThePerformanceTuningSlice_intoTheEngineConfig() {
+        // Issue #186 §5.8: the runtime build passes the uiPrefs-mirrored
+        // tuning through — LOW's mpv overrides win over the user's config,
+        // exactly as the load-time buildFromPreferences path folds them.
+        performanceTuning = com.raulshma.jellyplay.core.model.VideoPerformanceMatrix.forTier(
+            com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+        )
+        engineSpecific = com.raulshma.jellyplay.core.model.MpvEngineConfig(
+            renderQuality = com.raulshma.jellyplay.core.model.MpvRenderQuality.HIGH,
+            scaler = com.raulshma.jellyplay.core.model.MpvScaler.BICUBIC,
+            deband = true,
+            interpolation = true,
+        )
+
+        controller.markDirty()
+
+        val mpv = engine!!.appliedConfigs.single().engineSpecific as com.raulshma.jellyplay.core.model.MpvEngineConfig
+        assertEquals(
+            com.raulshma.jellyplay.core.model.MpvRenderQuality.PERFORMANCE,
+            mpv.renderQuality,
+            "LOW's render override beats the user's persisted quality",
+        )
+        assertEquals(com.raulshma.jellyplay.core.model.MpvScaler.BILINEAR, mpv.scaler)
+        assertFalse(mpv.deband, "LOW forces deband off")
+        assertFalse(mpv.interpolation, "LOW forces interpolation off")
+    }
+
+    @Test
+    fun markDirty_highTuning_leavesTheUserConfigAlone() {
+        // HIGH / NONE is the no-op fold: the user's mpv config survives the
+        // rebuild byte-for-byte.
+        engineSpecific = com.raulshma.jellyplay.core.model.MpvEngineConfig(
+            renderQuality = com.raulshma.jellyplay.core.model.MpvRenderQuality.HIGH,
+            scaler = com.raulshma.jellyplay.core.model.MpvScaler.BICUBIC,
+            deband = true,
+            interpolation = true,
+        )
+
+        controller.markDirty()
+
+        val mpv = engine!!.appliedConfigs.single().engineSpecific as com.raulshma.jellyplay.core.model.MpvEngineConfig
+        assertEquals(com.raulshma.jellyplay.core.model.MpvRenderQuality.HIGH, mpv.renderQuality)
+        assertEquals(com.raulshma.jellyplay.core.model.MpvScaler.BICUBIC, mpv.scaler)
+        assertTrue(mpv.deband)
+        assertTrue(mpv.interpolation)
     }
 
     // ── the debounced path (the former updateConfigWithUiStateDebounced) ───

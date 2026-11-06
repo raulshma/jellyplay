@@ -159,7 +159,7 @@ private fun ProgramRowSection(
             horizontalArrangement = Arrangement.spacedBy(spacing),
             modifier = Modifier.tvFocusRestorer(),
         ) {
-            items(items = row.programs, key = { it.id }) { program ->
+            items(items = row.programs, key = { it.id }, contentType = { "program" }) { program ->
                 // Memoized per-item derivations + click lambdas keep ProgramCard
                 // skippable across uiState emissions — the LibraryScreen grid
                 // pattern.

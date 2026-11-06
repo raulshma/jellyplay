@@ -45,6 +45,7 @@ class NavigationSpecDerivationTest {
         "hide_bottom_nav_on_scroll" to Boolean::class,
         "hidden_nav_items" to String::class,
         "nav_item_order" to String::class,
+        "start_tab" to String::class,
     )
 
     private fun expectedKey(name: String, type: KClass<*>): Preferences.Key<*> = when (type) {
@@ -131,13 +132,14 @@ class NavigationSpecDerivationTest {
         assertEquals(NavigationPreferenceSpecs.HIDE_BOTTOM_NAV_ON_SCROLL.default, slice.hideBottomNavOnScroll)
         assertEquals(NavigationPreferenceSpecs.HIDDEN_NAV_ITEMS.default, slice.hiddenNavItems)
         assertEquals(NavigationPreferenceSpecs.NAV_ITEM_ORDER.default, slice.navItemOrder)
-        // Totality: the 4 pinned properties are ALL the slice's fields (4
+        assertEquals(NavigationPreferenceSpecs.START_TAB.default, slice.startTab)
+        // Totality: the 5 pinned properties are ALL the slice's fields (5
         // rows, every row slice-bound). A field added without a spec-default
         // pin above (and without bumping this count) fails here. Statics (the
         // @Serializable Companion, Compose's $stable) don't count.
         val instanceFields = NavigationSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(4, instanceFields)
+        assertEquals(5, instanceFields)
     }
 
     /** Writes [spec]'s default through its derived write (the default IS the row's T). */

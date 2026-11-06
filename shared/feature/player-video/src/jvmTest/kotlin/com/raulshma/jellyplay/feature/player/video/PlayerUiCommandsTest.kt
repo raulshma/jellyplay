@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import io.mockk.coEvery
 import io.mockk.every
@@ -65,6 +66,7 @@ class PlayerUiCommandsTest {
                 // The persist leg records through the store write itself (the
                 // commands' persist lambda is internal).
                 coEvery { setPlaybackMode(any()) } answers { this@Rig.calls += "persist" }
+                coEvery { setVideoPerformanceProfile(any()) } answers { this@Rig.calls += "persist" }
             },
             networkOfflineStore = mockk<NetworkOfflineStore>(relaxed = true),
             videoPlayerStore = mockk<VideoPlayerStore>(relaxed = true),
@@ -126,5 +128,57 @@ class PlayerUiCommandsTest {
 
         assertEquals(emptyList(), rig.calls, "a same-value change must not touch the mirror, " +
             "the fallback latch, the store or the reload")
+    }
+
+    // ── setPerformanceProfile (issue #186 §5.11 step 3) ──────────────────────
+
+    @Test
+    fun `setPerformanceProfile writes the mirror then persists then reloads`() {
+        val rig = Rig(PlayerUiPrefsState(videoPerformanceProfile = VideoPerformanceProfile.AUTO))
+
+        rig.commands.setPerformanceProfile(VideoPerformanceProfile.LOW)
+
+        assertEquals(
+            listOf("mirror", "persist", "reload"),
+            rig.calls,
+            "the §5.11 choreography: the mirror write moves the open sheet's chips immediately, " +
+                "the store write re-emits the aggregate, then the reload re-resolves the session " +
+                "at the current position (no fallback-latch reset — this is not a mode change)",
+        )
+        assertEquals(VideoPerformanceProfile.LOW, rig.prefs.videoPerformanceProfile)
+    }
+
+    @Test
+    fun `setPerformanceProfile reload input uses the pre-write sibling snapshot`() {
+        val rig = Rig(
+            PlayerUiPrefsState(
+                playbackMode = PlaybackMode.FORCE_TRANSCODE,
+                streamingQuality = StreamingQuality.FHD_1080P,
+                videoPerformanceProfile = VideoPerformanceProfile.AUTO,
+            ),
+        )
+
+        rig.commands.setPerformanceProfile(VideoPerformanceProfile.MEDIUM)
+
+        // The profile change reloads with the SAME mode + quality the user had
+        // (§5.11: the cap never rewrites a persisted choice) — the pre-write
+        // snapshot, never a mirror read-back.
+        assertEquals(
+            Triple(PlaybackMode.FORCE_TRANSCODE, StreamingQuality.FHD_1080P, null),
+            rig.reloaded,
+        )
+        assertEquals(VideoPerformanceProfile.MEDIUM, rig.prefs.videoPerformanceProfile)
+        assertEquals(PlaybackMode.FORCE_TRANSCODE, rig.prefs.playbackMode)
+        assertEquals(StreamingQuality.FHD_1080P, rig.prefs.streamingQuality)
+    }
+
+    @Test
+    fun `a same-profile change is a full no-op`() {
+        val rig = Rig(PlayerUiPrefsState(videoPerformanceProfile = VideoPerformanceProfile.LOW))
+
+        rig.commands.setPerformanceProfile(VideoPerformanceProfile.LOW)
+
+        assertEquals(emptyList(), rig.calls, "a re-pick must not rebuffer: no mirror write, " +
+            "no store write, no reload")
     }
 }

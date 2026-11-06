@@ -51,9 +51,15 @@ data class AppearanceScreenPreferences(
     val accentColorSwatch: String = "dynamic",
     val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     val navBarShowLabels: Boolean = true,
+    /** The start tab (a top-level destination key; "" = the shipped Home default). */
+    val startTab: String = "",
     val homeHeroEnabled: Boolean = true,
     val homeBackdropEnabled: Boolean = true,
     val performanceMode: Boolean = false,
+    // The performance master level (the hub's dial; `performanceMode` stays
+    // the derived legacy boolean). Standard falls back to the level-less
+    // summary faces.
+    val performanceLevel: PerformanceLevel = PerformanceLevel.STANDARD,
     val themeVariant: String = "standard",
     val synthwaveAccent: String = "magenta",
     val soothingAccent: String = "ocean",
@@ -124,6 +130,68 @@ data class AppearanceScreenPreferences(
     val showPromotedActionsLandscape: Boolean = true,
     /** Show live download progress on season episode rows. */
     val showDownloadProgress: Boolean = true,
+    // ── The detail-screen QoL knobs (library domain; the rows sit in the
+    // "Library & Cards" group beside the other detail toggles) ────────────
+
+    /** Cast rail item size on the media-detail header (people geometry). */
+    val castItemSize: DetailDensity = DetailDensity.DEFAULT,
+    /** Cast "See all" threshold: people hide behind it above this count. */
+    val castSeeAllLimit: Int = 12,
+    /** Parallax (translate + zoom) scroll on the detail hero backdrop. */
+    val backdropParallax: Boolean = true,
+    /** Overview synopsis collapsed line count (the "Read more" toggle). */
+    val overviewCollapseLines: Int = 3,
+    /** Hide played episodes from season lists. */
+    val hideWatchedEpisodes: Boolean = false,
+    /** Ask for confirmation before marking a single item played/unplayed. */
+    val confirmMarkPlayed: Boolean = false,
+    /** Header studio chips. */
+    val showStudioChips: Boolean = true,
+    /** Header genre chips. */
+    val showGenreChips: Boolean = true,
+    /** Header tag chips. */
+    val showTagChips: Boolean = true,
+    /** Header skip-intro/credits availability chips. */
+    val showSkipChips: Boolean = true,
+    /** Small poster thumbnails on the season tab bar. */
+    val seasonTabsArtwork: Boolean = false,
+    /** Cast & Crew grid density (the grid's column minimum). */
+    val peopleGridDensity: DetailDensity = DetailDensity.DEFAULT,
+    /** Local/remote source badges on the trailer cards. */
+    val showTrailerBadges: Boolean = true,
+    /** Persist the detail screen's inline section hides (the franchise eye-hide memory). */
+    val persistSectionHides: Boolean = false,
+    /** "More like this" row bound (both stock arms). */
+    val similarItemsLimit: Int = 12,
+    /** "Airing next" strip bound. */
+    val upcomingEpisodesLimit: Int = 12,
+    // ── The detail-screen QoL knobs, wave 2 (D17–D28) — the rows sit in the
+    // "Library & Cards" group beside the wave above ─────────────────────────
+
+    /** The detail body's stored section permutation (empty = canonical order). */
+    val sectionOrder: List<String> = emptyList(),
+    /** The entrance-stagger step (FAST/DEFAULT/SLOW over the shipped 0.045f). */
+    val staggerStyle: DetailStaggerStyle = DetailStaggerStyle.DEFAULT,
+    /** The hero backdrop's decode target (720p/1080p/1440p). */
+    val backdropResolution: DetailBackdropResolution = DetailBackdropResolution.FHD_1920,
+    /** The chapter thumbnail row's card size multiplier (0.8/1.0/1.2). */
+    val chapterCardSize: DetailChapterCardSize = DetailChapterCardSize.DEFAULT,
+    /** Review-card preview line count on the detail reviews section (clamped 2..12). */
+    val reviewsPreviewLines: Int = 6,
+    /** The person screen's filmography ordering. */
+    val filmographySort: FilmographySort = FilmographySort.DEFAULT,
+    /** Franchise "More in this collection" arm: row (BoxSet) bound (clamped 1..5). */
+    val franchiseBoxLimit: Int = 2,
+    /** Franchise arm: per-row member page bound (clamped 10..100). */
+    val franchiseMemberLimit: Int = 50,
+    /** The smart-play dispatch's candidate preference (resume/next-up/replay order). */
+    val smartPlayPriority: SmartPlayPriority = SmartPlayPriority.DEFAULT,
+    /** Stream-picker fallback language when no preferred language matched (3-letter code). */
+    val streamFallbackLanguage: String = "eng",
+    /** Which preset of ⋮-menu entries the landscape/TV promoted rail shows. */
+    val promotedRailSource: PromotedRailSource = PromotedRailSource.DEFAULT,
+    /** 2-line overview snippets on the season lists' episode rows. */
+    val episodeOverviewPreview: Boolean = false,
     /** Whether the library "Reset" pill shows a confirmation dialog before clearing. */
     val confirmLibraryReset: Boolean = true,
     val showShareMediaOption: Boolean = true,
@@ -153,4 +221,24 @@ data class AppearanceScreenPreferences(
         NewsletterSectionType.ACTIVITY_DIGEST,
     ),
     val newsletterSectionOrder: List<NewsletterSectionType> = NewsletterSectionType.DEFAULT_ORDER,
+    /** The app-wide 24-hour clock override. Default off (follow system). */
+    val timeUse24h: Boolean = false,
+    /** The media cards' animated press-scale. Default on. */
+    val cardPressAnimations: Boolean = true,
+    /** The pull-to-refresh gesture master toggle. Default on. */
+    val pullToRefreshEnabled: Boolean = true,
+    /** The app-wide backdrop dim level. Default = shipped look. */
+    val appBackdropDim: BackdropDimLevel = BackdropDimLevel.DEFAULT,
+    /** The confirmation-haptic strength remap. Default = shipped mapping. */
+    val hapticsIntensity: HapticsIntensity = HapticsIntensity.MEDIUM,
+    /** The server image-request quality override. Default = original. */
+    val imageQualityPreset: ImageQualityPreset = ImageQualityPreset.ORIGINAL,
+    /** Settings/list row density. Default = shipped spacing. */
+    val appListDensity: ListDensity = ListDensity.DEFAULT,
+    /** The press-feedback style for clickable surfaces. Default = Material ripple. */
+    val appPressEffect: PressEffectStyle = PressEffectStyle.DEFAULT,
+    /** Flat cards: remove the card shells' elevation/shadow. Default off. */
+    val appFlatCards: Boolean = false,
+    /** The scrollable containers' overscroll effect. Default = platform. */
+    val appOverscrollStyle: OverscrollStyle = OverscrollStyle.PLATFORM,
 )

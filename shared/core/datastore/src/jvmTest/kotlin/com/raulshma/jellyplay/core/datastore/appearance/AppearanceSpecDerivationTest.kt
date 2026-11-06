@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.datastore.reflectKeys
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,18 @@ class AppearanceSpecDerivationTest {
         "accent_color_swatch" to String::class,
         "color_style" to String::class,
         "performance_mode" to Boolean::class,
+        "performance_level" to String::class,
+        "perf_animations" to String::class,
+        "perf_shared_elements" to String::class,
+        "perf_nav_transitions" to String::class,
+        "perf_image_decode_cap" to String::class,
+        "perf_image_crossfade" to String::class,
+        "perf_blurhash" to String::class,
+        "perf_quality_badges" to String::class,
+        "perf_ambient_hero_video" to String::class,
+        "perf_backdrop_blur" to String::class,
+        "perf_screensaver_motion" to String::class,
+        "image_memory_cache_percent" to Int::class,
         "reduce_motion_enabled" to Boolean::class,
         "theme_variant" to String::class,
         "synthwave_mode" to Boolean::class,
@@ -70,6 +83,16 @@ class AppearanceSpecDerivationTest {
         "tv_overscan" to String::class,
         "haptics_enabled" to Boolean::class,
         "show_advanced_settings" to Boolean::class,
+        "time_use_24h" to Boolean::class,
+        "card_press_animations" to Boolean::class,
+        "pull_to_refresh_enabled" to Boolean::class,
+        "app_backdrop_dim" to String::class,
+        "haptics_intensity" to String::class,
+        "image_quality_preset" to String::class,
+        "app_list_density" to String::class,
+        "app_press_effect" to String::class,
+        "app_flat_cards" to Boolean::class,
+        "app_overscroll_style" to String::class,
     )
 
     @Test
@@ -113,10 +136,10 @@ class AppearanceSpecDerivationTest {
     fun `resetKeysFor returns exactly the APPEARANCE-category keys`() {
         val store = AppearanceStore(TestDataStoreProvider.get(), scope)
         val appearanceKeys = store.resetKeysFor(PreferenceResetCategory.APPEARANCE).map { it.name }
-        // The exact 29 keys the pre-spec reset list carried plus the
-        // tv_overscan spec row (the three legacy theme booleans and their
-        // accents included — the legacy surfaces still reset with their
-        // category).
+        // The exact pre-spec reset list plus the tv_overscan spec row and the
+        // performance rows (the three legacy theme booleans and their accents,
+        // and the legacy performance_mode boolean, included — the legacy
+        // surfaces still reset with their category).
         assertEquals(
             listOf(
                 "theme_mode",
@@ -126,6 +149,18 @@ class AppearanceSpecDerivationTest {
                 "accent_color_swatch",
                 "color_style",
                 "performance_mode",
+                "performance_level",
+                "perf_animations",
+                "perf_shared_elements",
+                "perf_nav_transitions",
+                "perf_image_decode_cap",
+                "perf_image_crossfade",
+                "perf_blurhash",
+                "perf_quality_badges",
+                "perf_ambient_hero_video",
+                "perf_backdrop_blur",
+                "perf_screensaver_motion",
+                "image_memory_cache_percent",
                 "reduce_motion_enabled",
                 "theme_variant",
                 "synthwave_mode",
@@ -149,6 +184,15 @@ class AppearanceSpecDerivationTest {
                 "hand_mode",
                 "layout_mode",
                 "tv_overscan",
+                "time_use_24h",
+                "card_press_animations",
+                "app_backdrop_dim",
+                "haptics_intensity",
+                "image_quality_preset",
+                "app_list_density",
+                "app_press_effect",
+                "app_flat_cards",
+                "app_overscroll_style",
             ).sorted(),
             appearanceKeys.sorted(),
         )
@@ -158,8 +202,8 @@ class AppearanceSpecDerivationTest {
     fun `haptics resets under MISC_APP and advanced-settings contributes to no category here`() {
         val store = AppearanceStore(TestDataStoreProvider.get(), scope)
         assertEquals(
-            listOf("haptics_enabled"),
-            store.resetKeysFor(PreferenceResetCategory.MISC_APP).map { it.name },
+            listOf("haptics_enabled", "pull_to_refresh_enabled").sorted(),
+            store.resetKeysFor(PreferenceResetCategory.MISC_APP).map { it.name }.sorted(),
         )
         // The reset-owner ledger: show_advanced_settings' EXPERIMENTAL list
         // entry is ExperimentalStore's, exactly as the hand-written lists did.
@@ -199,6 +243,58 @@ class AppearanceSpecDerivationTest {
         val legacy = emptyPreferences().toMutablePreferences()
         legacy[androidx.datastore.preferences.core.stringPreferencesKey("blue_light_filter_strength")] = "0.9"
         assertEquals(0.9f, row.readFrom(legacy))
+        // Reset: participates in the APPEARANCE category, no other.
+        assertEquals(
+            listOf(row.typedKey()),
+            AppearancePreferenceSpecs.resetKeysFor(PreferenceResetCategory.APPEARANCE)
+                .filter { it.name == row.keyName },
+        )
+    }
+
+    /**
+     * Pins the master performance row — key, default, the legacy-boolean
+     * migration read, the name-encoding round-trip, the corruption default
+     * and the reset category — derived from the spec (the write-through pin
+     * the spec KDoc calls for).
+     */
+    @Test
+    fun `performance level full row is derived from its spec`() {
+        val row = AppearancePreferenceSpecs.PERFORMANCE_LEVEL
+
+        // Key: the row's rebuilt typed key IS the store's Keys member, and
+        // the legacy boolean row beside it keeps its own key. (Compared by
+        // name: Preferences.Key equality is name-based, but the row's value
+        // type parameter differs from the Keys member's declared one.)
+        assertEquals("performance_level", row.keyName)
+        assertEquals(AppearanceStore.Keys.PERFORMANCE_LEVEL.name, row.typedKey().name)
+        assertEquals(
+            AppearanceStore.Keys.PERFORMANCE_MODE.name,
+            AppearancePreferenceSpecs.PERFORMANCE_MODE.typedKey().name,
+        )
+        // Default: served on absence (with no legacy boolean either).
+        assertEquals(PerformanceLevel.STANDARD, row.default)
+        assertEquals(PerformanceLevel.STANDARD, row.readFrom(emptyPreferences()))
+        // Migration read: absent level key + legacy `performance_mode=true`
+        // maps up to PERFORMANCE; false stays STANDARD.
+        val legacyOn = emptyPreferences().toMutablePreferences()
+        legacyOn[androidx.datastore.preferences.core.booleanPreferencesKey("performance_mode")] = true
+        assertEquals(PerformanceLevel.PERFORMANCE, row.readFrom(legacyOn))
+        val legacyOff = emptyPreferences().toMutablePreferences()
+        legacyOff[androidx.datastore.preferences.core.booleanPreferencesKey("performance_mode")] = false
+        assertEquals(PerformanceLevel.STANDARD, row.readFrom(legacyOff))
+        // Round-trip: the derived write persists the enum NAME.
+        val stored = emptyPreferences().toMutablePreferences()
+        row.writeTo(stored, PerformanceLevel.BALANCED)
+        assertEquals(
+            "BALANCED",
+            stored[androidx.datastore.preferences.core.stringPreferencesKey("performance_level")],
+        )
+        assertEquals(PerformanceLevel.BALANCED, row.readFrom(stored))
+        // Corruption: an unparseable name serves the default (no legacy
+        // re-entry).
+        val corrupt = emptyPreferences().toMutablePreferences()
+        corrupt[androidx.datastore.preferences.core.stringPreferencesKey("performance_level")] = "nonsense"
+        assertEquals(PerformanceLevel.STANDARD, row.readFrom(corrupt))
         // Reset: participates in the APPEARANCE category, no other.
         assertEquals(
             listOf(row.typedKey()),

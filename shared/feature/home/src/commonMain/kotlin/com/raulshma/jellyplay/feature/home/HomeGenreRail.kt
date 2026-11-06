@@ -113,7 +113,7 @@ internal fun HomeGenreRail(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier,
     ) {
-        items(genres, key = { it.id }) { genre ->
+        items(genres, key = { it.id }, contentType = { "genreChip" }) { genre ->
             GlassFilterChip(
                 label = genre.name,
                 selected = false,

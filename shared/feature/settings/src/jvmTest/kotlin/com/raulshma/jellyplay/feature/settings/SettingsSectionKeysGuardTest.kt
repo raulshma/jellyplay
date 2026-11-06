@@ -70,6 +70,7 @@ class SettingsSectionKeysGuardTest {
      */
     private val convertedKeys: Set<String> = setOf(
         AppearanceEntrance.key,
+        PerformanceEntrance.key,
         HomeEntrance.key,
         PlaybackEntrance.key,
         AudioEntrance.key,
@@ -97,7 +98,7 @@ class SettingsSectionKeysGuardTest {
         // domain (profile, power_user_mode, active_devices, account, activity,
         // system, item_privacy_data, group_screensaver, group_idle_ambient,
         // group_discord_presence, group_shell_hooks, item_experimental,
-        // item_whatsnew). The 11 converted domains' call sites read their
+        // item_whatsnew). The 12 converted domains' call sites read their
         // SettingsEntranceSectionRow.key and are invisible to this scan —
         // a count below this floor means discovery is broken (renamed
         // helper? new call shape?), fix the scan here.

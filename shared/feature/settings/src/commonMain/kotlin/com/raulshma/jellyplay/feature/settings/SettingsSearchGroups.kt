@@ -153,7 +153,7 @@ internal object SettingsScreenGroups {
 
     /** Derives from [AppearanceThemeRows]: 17 spec-backed rows + 2 residuals. */
     val appearanceTheme = AppearanceThemeGroup
-    /** Derives from [AppearanceNavigationRows]: spec-less residual rows. */
+    /** Derives from [AppearanceNavigationRows]: spec-less residual rows + the spec-backed global-chrome seven. */
     val appearanceNavigation = AppearanceNavigationGroup
     /** Derives from [AppearanceLibraryRows]: 3 spec-backed rows + 5 residuals, every row [RowAdmission.Always]. */
     val appearanceLibrary = AppearanceLibraryGroup
@@ -163,6 +163,27 @@ internal object SettingsScreenGroups {
     val appearanceEyeCare = AppearanceEyeCareGroup
     /** Derives from [AppearanceNewsletterRows]: three advanced residual rows. */
     val appearanceNewsletter = AppearanceNewsletterGroup
+
+    // ── PerformanceSettingsScreen (the Performance hub) ────────────────
+    // The hub's five groups derive from the fused rows in
+    // PerformanceSettingsRows.kt: the always-visible master level group and
+    // the four expert groups (motion, images, ambient, playback buffers —
+    // the last spanning the playback domain's spec declarations). The master
+    // row keeps the historical `performance_mode` search id and lives HERE
+    // (single group membership), not in the appearance screen's group — the
+    // appearance screen keeps a quick picker + a Customize deep-link beside
+    // its Reduce Motion row.
+
+    /** Derives from [PerformanceLevelRows]: the master dial ([RowAdmission.Always] — always visible). */
+    val performanceLevel = PerformanceLevelGroup
+    /** Derives from [PerformanceMotionRows]: the three motion/transition overrides, advanced-gated. */
+    val performanceMotion = PerformanceMotionGroup
+    /** Derives from [PerformanceImageRows]: the five image rows, advanced-gated. */
+    val performanceImages = PerformanceImageGroup
+    /** Derives from [PerformanceAmbientRows]: the three ambient rows, advanced-gated. */
+    val performanceAmbient = PerformanceAmbientGroup
+    /** Derives from [PlaybackBufferRows]: the ExoPlayer buffer quartet (playback-domain specs), advanced-gated. */
+    val playbackBuffers = PlaybackBufferGroup
 
     // ── PlaybackSettingsScreen ──────────────────────────────────────────
     val playbackPlayer = PlaybackPlayerGroup
@@ -263,6 +284,11 @@ internal object SettingsScreenGroups {
         appearancePerformance,
         appearanceEyeCare,
         appearanceNewsletter,
+        performanceLevel,
+        performanceMotion,
+        performanceImages,
+        performanceAmbient,
+        playbackBuffers,
         playbackPlayer,
         playbackAdvancedVideo,
         playbackEngine,
@@ -303,4 +329,28 @@ internal object SettingsScreenGroups {
 
     /** Prefix shared by every shell-hook id in the system declaration. */
     internal const val HOOKS_ID_PREFIX = "hooks_"
+
+    /**
+     * The root settings screen's ON-SCREEN reveal groups: every group whose
+     * rows are search-reveal targets (catalog `route == Route.Settings`, the
+     * NoOp arm of `settingsResultClickAction`) — the row is revealed by the
+     * pending highlight alone, so the group MUST auto-expand for it. Each
+     * member's rendering site derives its `SettingsGroup` expansion from
+     * `lastClickedSettingId in <group>.itemIdSet` (the four system groups in
+     * SettingsSections.kt, the plugin section in
+     * JellyPlayPluginSettingsSection.kt). The destructive account actions
+     * (`logout`, `sign_out_from_server`) route bare-Settings too but resolve
+     * to confirm dialogs before the reveal arm, so their group correctly
+     * stays manual. Pinned by `SettingsCatalogScreenContractTest`'s
+     * reveal-coverage tests: a new `Route.Settings` row landing in a group
+     * outside this declaration (or a group here whose ids stop routing
+     * bare-Settings) fails the build.
+     */
+    val rootRevealGroups: List<SettingsSearchItemGroup> = listOf(
+        systemScreensaver,
+        systemIdleAmbient,
+        systemDiscordPresence,
+        systemHooks,
+        jellyplayFeatures,
+    )
 }

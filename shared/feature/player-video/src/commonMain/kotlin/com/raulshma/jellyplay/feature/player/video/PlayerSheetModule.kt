@@ -338,6 +338,9 @@ internal object PlaybackModeSheetModule : PlayerSheetModule {
         val engine by sheets.engineFlow.collectAsStateWithLifecycle()
         val switchableEngines by sheets.switchableEngines.collectAsStateWithLifecycle()
         val localControlBlocked by sheets.localControlBlocked.collectAsStateWithLifecycle()
+        // The master LEVEL mirror (the Performance section's read-only Level
+        // line) — sheet-local like the verdicts above.
+        val performanceLevel by scope.viewModel.performanceLevel.collectAsStateWithLifecycle()
         val uiState = scope.uiState
         PlaybackModeSheet(
             currentMode = uiState.uiPrefs.playbackMode,
@@ -358,6 +361,18 @@ internal object PlaybackModeSheetModule : PlayerSheetModule {
             currentEngineName = engine?.displayName,
             availablePlayers = switchableEngines,
             onPlayerSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SwitchPlayerEngine(it)) },
+            // §5.11 (issue #186): the Performance section — Android-only in
+            // v1 (the platform seam) with the cast/SyncPlay hide folded in,
+            // exactly the engine section's verdict shape. The receiver owns
+            // playback while casting (§5.13's cast row), so the profile
+            // section hides like the engine section does.
+            currentPerformanceProfile = uiState.uiPrefs.videoPerformanceProfile,
+            detectedPerformanceTier = uiState.uiPrefs.detectedPerformanceTier,
+            performanceAvailable = performanceProfileAvailable() && !localControlBlocked,
+            onPerformanceSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetPerformanceProfile(it)) },
+            // The master LEVEL line (read-only): "Level" (this dial) vs the
+            // "Profile" chips above (issue #186's device-tier system).
+            performanceLevel = performanceLevel,
         )
     }
 }

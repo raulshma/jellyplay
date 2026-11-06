@@ -388,4 +388,5 @@ private class RecordingMessageBus(private val log: MutableList<String>) : Player
 
     override fun error(message: String) = Unit
     override fun info(message: PlayerVideoMessage) = Unit
+    override fun error(message: PlayerVideoMessage) = Unit
 }

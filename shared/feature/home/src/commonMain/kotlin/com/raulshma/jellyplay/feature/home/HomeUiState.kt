@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.UserInfo
 
 /**
- * The appearance/theme slice of [HomeUiState] — the five fields that always
+ * The appearance/theme slice of [HomeUiState] — the fields that always
  * change together (one [AppearanceSlice] emission) and are read together (the
  * ArtworkThemeWrapper + backdrop pair). Embedded as one value, following the
  * [SeerrRequestState] precedent: the prefs fold stays a one-line copy instead
@@ -31,7 +31,16 @@ data class AppearanceUiState(
     val oledMode: Boolean = false,
     val colorStyle: com.raulshma.jellyplay.core.model.ColorStyle = com.raulshma.jellyplay.core.model.ColorStyle.TONAL_SPOT,
     val accentColorSwatch: String = "dynamic",
-    val performanceMode: Boolean = false,
+    /**
+     * The resolved posture's backdrop-blur row (the
+     * `PerformanceConfigResolver` fold of level + overrides, resolved at the
+     * VM's prefs emission) — the ambient-home-backdrop's render gate.
+     * PERFORMANCE suppresses via AUTO; BALANCED keeps the backdrop. Default
+     * true = the shipped OFF posture.
+     */
+    val backdropBlur: Boolean = true,
+    /** The pull-to-refresh gesture master toggle. Default on. */
+    val pullToRefreshEnabled: Boolean = true,
 )
 
 /**
@@ -155,6 +164,26 @@ data class HomeUiState(
      * never recomposes on scroll.
      */
     val hideTopHeaderOnScroll: Boolean = false,
+    /** Time-aware greeting chip in the top dock. Default off. */
+    val homeGreetingEnabled: Boolean = false,
+    /** Hides the per-row "See All" pills. Default off. */
+    val homeHideSeeAll: Boolean = false,
+    /** The poster rows' card width scale. Default DEFAULT. */
+    val homeCardScale: com.raulshma.jellyplay.core.model.HomeCardScale = com.raulshma.jellyplay.core.model.HomeCardScale.DEFAULT,
+    /** The home cards' corner radius in dp (0-28). Default 12. */
+    val homeCardCornerRadius: Int = 12,
+    /** Whether the Video/Music mode switch renders in the top dock. Default on. */
+    val homeShowModeSwitch: Boolean = true,
+    /** Renders the date under the home clock. Default off. */
+    val homeClockShowDate: Boolean = false,
+    /** Always render the user switcher chip (even with a single user). Default off. */
+    val homeAlwaysShowUserSwitcher: Boolean = false,
+    /** Continue-watching progress display style. Default DEFAULT. */
+    val homeCwProgressStyle: com.raulshma.jellyplay.core.model.HomeCwProgressStyle = com.raulshma.jellyplay.core.model.HomeCwProgressStyle.DEFAULT,
+    /** The section rows' one-shot entrance fade/translate. Default on. */
+    val homeRowsAnimations: Boolean = true,
+    /** Renders the dock capsules opaque. Default off. */
+    val homeOpaqueDock: Boolean = false,
     val continueWatchingClickBehavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.DETAILS,
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     /** True while the search field holds a non-blank query. This is the only
@@ -217,6 +246,37 @@ data class HomeUiState(
      * loader with a live gate).
      */
     val trickplayPreviewEnabled: Boolean = true,
+    /** The pre-section block's user order (normalized tokens). */
+    val homePreSectionOrder: List<String> = com.raulshma.jellyplay.core.model.HomeDiscoveryPreferenceSpecsDefaults.PRE_SECTION_ORDER_CANONICAL,
+    /** The sections whose cards render the NEW badge (default the arrival trio). */
+    val homeNewBadgeSections: Set<com.raulshma.jellyplay.core.model.HomeSectionType> =
+        com.raulshma.jellyplay.core.model.HomeDiscoveryPreferenceSpecsDefaults.NEW_BADGE_SECTIONS_CANONICAL,
+    /** The hero carousel's idle auto-rotation dwell in ms (3000-30000). */
+    val homeHeroIdleRotationMs: Int = 8000,
+    /** Whether hero rotation defers while the home list is scrolling. Default on. */
+    val heroScrollDefer: Boolean = true,
+    /** The hero starts at a random candidate instead of the first. Default off. */
+    val homeHeroRandomStart: Boolean = false,
+    /** The discover rows' partition pattern. Default DEFAULT. */
+    val homeDiscoverPattern: com.raulshma.jellyplay.core.model.HomeDiscoverPattern =
+        com.raulshma.jellyplay.core.model.HomeDiscoverPattern.DEFAULT,
+    /** The My Media tiles row's visible-column count (0 = the shipped chassis width). */
+    val homeMyMediaColumns: Int = 0,
+    /** The stats card's visible metrics (subset of played/unplayed/minutes; default all). */
+    val homeStatsMetrics: Set<String> = com.raulshma.jellyplay.core.model.HomeDiscoveryPreferenceSpecsDefaults.STATS_METRICS_CANONICAL,
+    /**
+     * The NEW-badge arrival cutoff (epoch ms): arrivals older than this stop
+     * badgeing. Computed once per prefs emission as
+     * `now - home_new_badge_days × day` — [Long.MIN_VALUE] means "no cutoff"
+     * (the shipped pure visit-based predicate).
+     */
+    val homeNewBadgeCutoffEpochMs: Long = Long.MIN_VALUE,
+    /** Unwatched counters in the section-row headers. Default off. */
+    val homeRowUnwatchedCounters: Boolean = false,
+    /** The home search results pane's height cap in dp (280-640). */
+    val homeSearchResultsHeightDp: Int = 400,
+    /** How long the TV trickplay peek holds before fading (1000-5000 ms). */
+    val homeTrickplayPeekMs: Int = 2500,
     /**
      * Watch-party presence chips live outside [HomeUiState] — see the NOTE on
      * [HomeSearchState] for the pattern: the poll loop writes the whole

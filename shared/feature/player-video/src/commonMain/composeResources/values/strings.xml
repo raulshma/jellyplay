@@ -348,6 +348,37 @@
     <string name="player_video_stats_dropped_frames">Dropped Frames</string>
     <string name="player_video_stats_total_frames">Total Frames</string>
     <string name="player_video_stats_drop_rate">Drop Rate</string>
+    <!-- Stats-for-nerds: the performance-profile rows (issue #186 §5.12). -->
+    <string name="player_video_stats_profile">Profile</string>
+    <string name="player_video_stats_effective_cap">Effective Cap</string>
+    <string name="player_video_stats_no_profile_cap">No profile cap</string>
+    <string name="player_video_stats_caps_bypassed">Caps Bypassed</string>
+    <string name="player_video_stats_detection_reasons">Detection Reasons</string>
+    <string name="player_video_stats_try_auto_low">Try AUTO or LOW to transcode to 1080p</string>
+    <string name="player_video_stats_try_low_switch_engine">Try LOW; if it persists, switch the player engine</string>
+    <string name="player_video_stats_try_lower_quality">Lower quality / check Wi-Fi</string>
+    <string name="player_video_bypass_force_direct">Force Direct Play</string>
+    <string name="player_video_bypass_download">Download</string>
+    <string name="player_video_bypass_live_tv">Live TV</string>
+    <!-- The master UI-performance LEVEL (the Settings → Performance dial):
+         the stats overlay's Level row + its posture hints, and the level
+         names the playback-options sheet's read-only Level line reuses.
+         Deliberately DISTINCT vocabulary from the Profile rows/chips above
+         (issue #186's device-tier system) — never blur the two labels. -->
+    <string name="player_video_stats_level">Level</string>
+    <string name="player_video_stats_level_posture_standard">Full effects</string>
+    <string name="player_video_stats_level_posture_balanced">Most effects</string>
+    <string name="player_video_stats_level_posture_performance">Effects off</string>
+    <!-- Stats-for-nerds: the Exo buffer posture rows (the engine config's
+         effective DefaultLoadControl numbers; shown only while the active
+         engine is ExoPlayer). -->
+    <string name="player_video_stats_buffer_initial">Initial Buffer</string>
+    <string name="player_video_stats_buffer_rebuffer">Rebuffer Buffer</string>
+    <string name="player_video_stats_buffer_target">Target Buffer</string>
+    <string name="player_video_stats_buffer_auto">Auto</string>
+    <string name="player_video_stats_buffer_back">Back Buffer</string>
+    <string name="player_video_stats_buffer_back_retained">Retained</string>
+    <string name="player_video_stats_buffer_back_keyframes">Keyframe-gated</string>
     <string name="player_video_stats_buffer_size">Buffer Size</string>
     <string name="player_video_stats_vo_dropped_frames">VO Dropped Frames</string>
     <string name="player_video_stats_vo_delay">VO Delay</string>
@@ -365,6 +396,22 @@
     <string name="player_video_playback_options_engine_section">Engine</string>
     <string name="player_video_playback_options_delivery_section">Delivery</string>
     <string name="player_video_playback_options_quality_section">Quality</string>
+    <!-- Playback Options sheet: the Performance section (issue #186 §5.11).
+         One caption per profile (AUTO's subtitle is the detected-tier line
+         below); the Force Direct Play note states the §5.13 bypass. -->
+    <string name="player_video_playback_options_performance_section">Performance</string>
+    <string name="player_video_performance_detected_tier">Detected: %1$s</string>
+    <string name="player_video_performance_detecting">Detecting…</string>
+    <string name="player_video_performance_low_desc">Smooth · 1080p / 8 Mbps</string>
+    <string name="player_video_performance_medium_desc">Balanced · 1440p / 20 Mbps</string>
+    <string name="player_video_performance_high_desc">Maximum quality</string>
+    <string name="player_video_performance_caps_limited_direct_play">Caps are limited in Force Direct Play.</string>
+    <!-- Playback Options sheet: the master LEVEL read-only line beneath the
+         Profile chips ("Level" = the Settings → Performance dial — a
+         DIFFERENT system from the "Profile" chips, issue #186's device
+         tiers; the caption points the full tuning at Settings). -->
+    <string name="player_video_playback_options_level_line">Level: %1$s</string>
+    <string name="player_video_playback_options_level_caption">App-wide effects tuning — full controls in Settings → Performance.</string>
     <string name="player_video_quality_unavailable">Quality is unavailable for this playback (forced direct play, offline, cast, or SyncPlay).</string>
     <string name="player_video_playback_mode_auto_desc">Let the server pick (direct play when possible)</string>
     <string name="player_video_playback_mode_force_direct_desc">Stream the file verbatim, no transcoding</string>
@@ -448,4 +495,10 @@
 
     <!-- #13 pause-details overlay: the cast ribbon's prefix (names join with separators) -->
     <string name="pause_details_starring">Starring</string>
+
+    <!-- Confirm-exit overlay (the video_confirm_exit pref's in-player confirm). -->
+    <string name="player_video_exit_confirm_title">Close the player?</string>
+    <string name="player_video_exit_confirm_message">Press back again — or confirm — to close the player.</string>
+    <string name="player_video_exit_confirm_confirm">Close</string>
+    <string name="player_video_exit_confirm_stay">Stay</string>
 </resources>

@@ -59,9 +59,6 @@ import com.raulshma.jellyplay.feature.player.video.state.InputBindingToggleContr
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayPreparation
-import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_delete_offer_failed
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_next_episode_load
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -78,7 +75,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import org.jetbrains.compose.resources.getString
 
 // SavedStateHandle keys for surviving process death. The in-stream
 // playback position, the item it belongs to, the server session id, and the
@@ -371,6 +367,9 @@ internal class PlaybackSession(
             aggregateStore = stores.aggregateStore,
             playerLifecycleManager = sessionStack.playerLifecycleManager,
             adaptiveBitrateManager = adaptiveBitrateManager,
+            // #186 §5.7: the performance pair rides the wholesale-forwarded stores bundle.
+            videoPerformanceResolver = stores.performanceResolver,
+            playbackCapResolver = stores.playbackCapResolver,
             playerEngineFactory = sessionStack.playerEngineFactory,
             pipController = pipController,
             playbackSourceResolver = playbackSourceResolver,
@@ -899,8 +898,7 @@ internal class PlaybackSession(
             playbackSourceResolver.resolveStartPositionTicks(itemId, startPositionTicks)
         },
         onSessionPrefsApplied = { agg ->
-            autoplayController.setEnabled(agg.videoPlayer.videoAutoplayNext)
-            autoplayController.setStillWatchingThreshold(agg.videoPlayer.stillWatchingEpisodeThreshold)
+            autoplayController.seedSessionPrefs(agg)
         },
         // The per-item hydration body (its every collaborator is
         // session-internal): the videoFx mirror write, the engine-config
@@ -952,6 +950,8 @@ internal class PlaybackSession(
     private val sessionLoadPipeline: SessionLoadPipeline = sessionLoadPipelineOverride
         ?: SessionLoadPipeline(
             sessionManager = playerSessionManager,
+            // #186 §5.8: the seed stage's bounded per-load profile resolve (same transit).
+            videoPerformanceResolver = stores.performanceResolver,
             libraryApiClient = itemContent.libraryApiClient,
             aggregateStore = stores.aggregateStore,
             networkOfflineStore = stores.networkOffline,
@@ -996,7 +996,7 @@ internal class PlaybackSession(
             initialize(itemId, null, startPositionTicks)
         },
         reportLoadError = {
-            userMessageBus.error(getString(Res.string.player_video_error_next_episode_load))
+            userMessageBus.error(PlayerVideoMessage.NextEpisodeLoadFailed)
         },
         isInSyncPlayGroup = { syncPlayManager.isInSyncPlaySession },
         getCurrentGroup = { syncPlayManager.currentGroup },
@@ -1084,9 +1084,7 @@ internal class PlaybackSession(
             )
         },
         notifyDeleteFailed = { title ->
-            userMessageBus.error(
-                getString(Res.string.player_video_delete_offer_failed, title),
-            )
+            userMessageBus.error(PlayerVideoMessage.DeleteOfferFailed(title))
         },
     )
 
@@ -1389,6 +1387,9 @@ internal class PlaybackSession(
                 engineSpecific = sessionRender.effectiveMpvConfig(cachedAggregate.engine.mpvConfig),
                 // the session-scoped deinterlace cycle.
                 deinterlace = sessionRender.deinterlace,
+                // the §5.8 tuning fold (issue #186) — mirrored into uiPrefs by
+                // the §5.11 step-4 collector.
+                performanceTuning = uiState.value.uiPrefs.performanceTuning,
             )
         },
         getEngine = { playerSessionManager.engine },
@@ -2424,6 +2425,7 @@ internal class PlaybackSession(
             // redundant emission (no change) doesn't allocate a fresh uiState.
             networkMonitor.isMetered.collect { metered ->
                 if (uiState.value.isConnectionMetered != metered) {
+                    autoplayController.setConnectionMetered(metered)
                     uiState.update { it.copy(isConnectionMetered = metered) }
                 }
             }

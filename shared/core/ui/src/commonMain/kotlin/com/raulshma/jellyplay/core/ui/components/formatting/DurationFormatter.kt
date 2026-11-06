@@ -124,6 +124,30 @@ expect fun formatOneDecimal(value: Double): String
 expect fun rememberWallClockTimeString(): String
 
 /**
+ * The 24-hour-clock override — null (the default) follows the system format;
+ * a Boolean forces 24h/12h in every wall-clock consumer (the home dock clock,
+ * the player's "ends at"). Provided by the shell from the `time_use_24h`
+ * appearance pref.
+ */
+val LocalTimeFormat24hOverride = androidx.compose.runtime.staticCompositionLocalOf<Boolean?> { null }
+
+/**
+ * The current wall-clock hour of day (0-23), remembered per composition —
+ * the greeting's time-of-day selector. Not tick-refreshing: a greeting only
+ * needs to be right when home mounts.
+ */
+@Composable
+expect fun rememberWallClockHour(): Int
+
+/**
+ * The current local date, formatted with the platform's default
+ * `DateFormat.DEFAULT` (locale-aware). Remembered per composition; the home
+ * dock re-creates it on navigation, which is fresh enough for a date.
+ */
+@Composable
+expect fun rememberWallClockDateString(): String
+
+/**
  * Formats an ISO-8601 timestamp (with or without offset, e.g.
  * `2026-07-20T12:34:56Z`, `2026-07-20T12:34:56+01:00`, or the bare
  * `2026-07-20T12:34:56` produced by the Jellyfin SDK's mappers) into a
@@ -138,17 +162,25 @@ expect fun rememberWallClockTimeString(): String
 fun formatRelativeTime(isoTimestamp: String?): String? {
     if (isoTimestamp.isNullOrBlank()) return null
     val epochMillis = parseIsoTimestampToEpochMillis(isoTimestamp) ?: return null
-    val deltaMillis = wallNowMillis() - epochMillis
+    return formatRelativeAge(wallNowMillis() - epochMillis)
+}
+
+/**
+ * The epoch-millis delta fold behind [formatRelativeTime] — public so callers
+ * already holding epoch millis (the settings performance-detection row's
+ * `[PerformanceDetection.detectedAtEpochMs]`) delegate here instead of
+ * re-rolling the ladder (the ONE-seam rule this file family enforces).
+ * Same buckets: "2d ago" / "3h ago" / "5m ago" / "just now".
+ */
+fun formatRelativeAge(deltaMillis: Long): String {
     if (deltaMillis < 60_000L) return "just now"
-    val seconds = deltaMillis / 1000
-    val minutes = seconds / 60
+    val minutes = deltaMillis / 60_000
     val hours = minutes / 60
     val days = hours / 24
     return when {
         days >= 1 -> "${days}d ago"
         hours >= 1 -> "${hours}h ago"
-        minutes >= 1 -> "${minutes}m ago"
-        else -> "just now"
+        else -> "${minutes}m ago"
     }
 }
 

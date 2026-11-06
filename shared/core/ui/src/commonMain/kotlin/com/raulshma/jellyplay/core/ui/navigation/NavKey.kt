@@ -334,6 +334,18 @@ sealed class Route : NavKey {
     }
 
     /**
+     * Performance hub — the master level dial (STANDARD/BALANCED/PERFORMANCE)
+     * plus the granular tri-state effect overrides, the image knobs and the
+     * ExoPlayer buffer quartet. The search rows whose specs carry the
+     * `performance_settings` route kind deep-link here (the
+     * `AppearancePreferenceSpecs.ROUTE_PERFORMANCE_SETTINGS` constant).
+     */
+    @Serializable data class PerformanceSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
      * The player input-binding editor (issue #171 generalized): per-input
      * action assignment + enable switches over touch / wheel / keyboard /
      * D-pad. Reached from Playback settings' "Customize controls" row.

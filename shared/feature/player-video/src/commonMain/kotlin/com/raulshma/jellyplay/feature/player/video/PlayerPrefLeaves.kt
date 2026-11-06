@@ -139,6 +139,19 @@ internal val PLAYER_PREF_LEAVES: List<PlayerPrefLeaf> = listOf(
     ),
     prefLeaf("streamingQuality", { it.playback.streamingQuality }, write = { v -> copy(uiPrefs = uiPrefs.copy(streamingQuality = v)) }),
     prefLeaf("playbackMode", { it.playback.playbackMode }, write = { v -> copy(uiPrefs = uiPrefs.copy(playbackMode = v)) }),
+    // The performance-profile PREF (issue #186): the one performance leaf
+    // that is aggregate-sourced, so it rides the table like its streaming-
+    // quality/mode neighbors (seed + guarded change-time projection). The
+    // resolver-sourced siblings (detectedPerformanceTier /
+    // performanceTuning) are hand-written in the seed — the aggregate never
+    // carries runtime detection state — and the profile-change engine-config
+    // rebuild trigger is hand-written in the fanout beside the HDR posture.
+    prefLeaf(
+        "videoPerformanceProfile",
+        readAggregate = { it.playback.videoPerformanceProfile },
+        readState = { s -> s.uiPrefs.videoPerformanceProfile },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(videoPerformanceProfile = v)) },
+    ),
     prefLeaf(
         "trickplayMode",
         readAggregate = { it.videoPlayer.trickplayMode },
@@ -220,6 +233,184 @@ internal val PLAYER_PREF_LEAVES: List<PlayerPrefLeaf> = listOf(
         readAggregate = { it.videoPlayer.showNextEpisodeDetailsAfterFinish },
         readState = { s -> s.uiPrefs.showNextEpisodeDetailsAfterFinish },
         write = { v -> copy(uiPrefs = uiPrefs.copy(showNextEpisodeDetailsAfterFinish = v)) },
+    ),
+
+    // ── player-chrome customization cluster ──
+    prefLeaf(
+        "videoOverlayAnimations",
+        readAggregate = { it.videoPlayer.videoOverlayAnimations },
+        readState = { s -> s.uiPrefs.overlayAnimations },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(overlayAnimations = v)) },
+    ),
+    prefLeaf(
+        "videoResumeChipMs",
+        readAggregate = { it.videoPlayer.videoResumeChipMs },
+        readState = { s -> s.uiPrefs.resumeChipMs },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(resumeChipMs = v)) },
+    ),
+    prefLeaf(
+        "videoShowPrevNextButtons",
+        readAggregate = { it.videoPlayer.videoShowPrevNextButtons },
+        readState = { s -> s.uiPrefs.showPrevNextButtons },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(showPrevNextButtons = v)) },
+    ),
+    prefLeaf(
+        "videoSeekBarStyle",
+        readAggregate = { it.videoPlayer.videoSeekBarStyle },
+        readState = { s -> s.uiPrefs.seekBarStyle },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(seekBarStyle = v)) },
+    ),
+    prefLeaf(
+        "videoShowBufferedRange",
+        readAggregate = { it.videoPlayer.videoShowBufferedRange },
+        readState = { s -> s.uiPrefs.showBufferedRange },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(showBufferedRange = v)) },
+    ),
+    prefLeaf(
+        "videoShowChapterMarkers",
+        readAggregate = { it.videoPlayer.videoShowChapterMarkers },
+        readState = { s -> s.uiPrefs.showChapterMarkers },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(showChapterMarkers = v)) },
+    ),
+    prefLeaf(
+        "videoHideSeekTimestamps",
+        readAggregate = { it.videoPlayer.videoHideSeekTimestamps },
+        readState = { s -> s.uiPrefs.hideSeekTimestamps },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(hideSeekTimestamps = v)) },
+    ),
+    prefLeaf(
+        "videoShowBufferPercent",
+        readAggregate = { it.videoPlayer.videoShowBufferPercent },
+        readState = { s -> s.uiPrefs.showBufferPercent },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(showBufferPercent = v)) },
+    ),
+    prefLeaf(
+        "videoSeekPreviewTime",
+        readAggregate = { it.videoPlayer.videoSeekPreviewTime },
+        readState = { s -> s.uiPrefs.seekPreviewTime },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(seekPreviewTime = v)) },
+    ),
+    prefLeaf(
+        "videoShowEngineBadge",
+        readAggregate = { it.videoPlayer.videoShowEngineBadge },
+        readState = { s -> s.uiPrefs.showEngineBadge },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(showEngineBadge = v)) },
+    ),
+    prefLeaf(
+        "videoEpisodeBrowserHideWatched",
+        readAggregate = { it.videoPlayer.videoEpisodeBrowserHideWatched },
+        readState = { s -> s.episodes.videoEpisodeBrowserHideWatched },
+        write = { v -> copy(episodes = episodes.copy(videoEpisodeBrowserHideWatched = v)) },
+    ),
+    prefLeaf(
+        "videoHoldSpeedPillStyle",
+        readAggregate = { it.videoPlayer.videoHoldSpeedPillStyle },
+        readState = { s -> s.uiPrefs.holdSpeedPillStyle },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(holdSpeedPillStyle = v)) },
+    ),
+
+    // ── the second QoL wave: transport/HUD cadence + preset families ──
+    prefLeaf(
+        "videoTvTimeoutScale",
+        readAggregate = { it.videoPlayer.videoTvTimeoutScale },
+        readState = { s -> s.uiPrefs.tvTimeoutScale },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(tvTimeoutScale = v)) },
+    ),
+    prefLeaf(
+        "videoPauseFadeStyle",
+        readAggregate = { it.videoPlayer.videoPauseFadeStyle },
+        readState = { s -> s.uiPrefs.pauseFadeStyle },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(pauseFadeStyle = v)) },
+    ),
+    prefLeaf(
+        "videoControlLayout",
+        readAggregate = { it.videoPlayer.videoControlLayout },
+        readState = { s -> s.uiPrefs.controlLayout },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(controlLayout = v)) },
+    ),
+    prefLeaf(
+        "videoMaxZoom",
+        readAggregate = { it.videoPlayer.videoMaxZoom },
+        readState = { s -> s.uiPrefs.maxZoom },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(maxZoom = v)) },
+    ),
+    prefLeaf(
+        "videoPollCadence",
+        readAggregate = { it.videoPlayer.videoPollCadence },
+        readState = { s -> s.uiPrefs.pollCadence },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(pollCadence = v)) },
+    ),
+    prefLeaf(
+        "videoSleepConfirmMinutes",
+        readAggregate = { it.videoPlayer.videoSleepConfirmMinutes },
+        readState = { s -> s.uiPrefs.sleepConfirmMinutes },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(sleepConfirmMinutes = v)) },
+    ),
+    prefLeaf(
+        "videoAmbientUnderFill",
+        readAggregate = { it.videoPlayer.videoAmbientUnderFill },
+        readState = { s -> s.uiPrefs.ambientUnderFill },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(ambientUnderFill = v)) },
+    ),
+    prefLeaf(
+        "videoBufferingVeil",
+        readAggregate = { it.videoPlayer.videoBufferingVeil },
+        readState = { s -> s.uiPrefs.bufferingVeil },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(bufferingVeil = v)) },
+    ),
+    prefLeaf(
+        "videoSpeedPresetSet",
+        readAggregate = { it.videoPlayer.videoSpeedPresetSet },
+        readState = { s -> s.uiPrefs.speedPresetSet },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(speedPresetSet = v)) },
+    ),
+    prefLeaf(
+        "videoConfirmExit",
+        readAggregate = { it.videoPlayer.videoConfirmExit },
+        readState = { s -> s.uiPrefs.confirmExit },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(confirmExit = v)) },
+    ),
+    prefLeaf(
+        "videoHoldSeekCadence",
+        readAggregate = { it.videoPlayer.videoHoldSeekCadence },
+        readState = { s -> s.gestures.holdSeekCadence },
+        write = { v -> copy(gestures = gestures.copy(holdSeekCadence = v)) },
+    ),
+    prefLeaf(
+        "videoSpeedPillClearance",
+        readAggregate = { it.videoPlayer.videoSpeedPillClearance },
+        readState = { s -> s.gestures.speedPillClearance },
+        write = { v -> copy(gestures = gestures.copy(speedPillClearance = v)) },
+    ),
+    prefLeaf(
+        "videoKeyboardSeekPreset",
+        readAggregate = { it.videoPlayer.videoKeyboardSeekPreset },
+        readState = { s -> s.gestures.keyboardSeekPreset },
+        write = { v -> copy(gestures = gestures.copy(keyboardSeekPreset = v)) },
+    ),
+    prefLeaf(
+        "videoSwipeSensitivity",
+        readAggregate = { it.videoPlayer.videoSwipeSensitivity },
+        readState = { s -> s.gestures.swipeSensitivity },
+        write = { v -> copy(gestures = gestures.copy(swipeSensitivity = v)) },
+    ),
+    prefLeaf(
+        "videoCenterDoubleTapAction",
+        readAggregate = { it.videoPlayer.videoCenterDoubleTapAction },
+        readState = { s -> s.gestures.centerDoubleTapAction },
+        write = { v -> copy(gestures = gestures.copy(centerDoubleTapAction = v)) },
+    ),
+    prefLeaf(
+        "videoDoubleTapZoneBias",
+        readAggregate = { it.videoPlayer.videoDoubleTapZoneBias },
+        readState = { s -> s.gestures.doubleTapZoneBias },
+        write = { v -> copy(gestures = gestures.copy(doubleTapZoneBias = v)) },
+    ),
+    prefLeaf(
+        "videoGestureOverlayLingerMs",
+        readAggregate = { it.videoPlayer.videoGestureOverlayLingerMs },
+        readState = { s -> s.gestures.gestureOverlayLingerMs },
+        write = { v -> copy(gestures = gestures.copy(gestureOverlayLingerMs = v)) },
     ),
 
     // ── gestures ──

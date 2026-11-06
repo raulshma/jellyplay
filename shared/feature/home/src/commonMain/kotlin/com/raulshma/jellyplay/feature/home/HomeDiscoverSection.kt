@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import com.raulshma.jellyplay.core.model.HomeDiscoverPattern
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -16,13 +17,38 @@ internal val COMPACT_DISCOVER_PATTERN = listOf(3, 2, 3)
 /** Item counts per discover row on expanded (tablet/TV) layouts. */
 internal val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
 
+/** The [HomeDiscoverPattern.UNIFORM] rhythms: every row the same equal size. */
+internal val COMPACT_DISCOVER_PATTERN_UNIFORM = listOf(3, 3, 3)
+internal val EXPANDED_DISCOVER_PATTERN_UNIFORM = listOf(5, 5, 5, 5)
+
+/**
+ * The [HomeDiscoverPattern.COMPACT] rhythms: a smaller first row so more
+ * rows peek above the fold, then the default tail.
+ */
+internal val COMPACT_DISCOVER_PATTERN_COMPACT = listOf(2, 3, 3)
+internal val EXPANDED_DISCOVER_PATTERN_COMPACT = listOf(4, 5, 6, 6)
+
 /**
  * The discover pattern for a window size — the single source for both read
  * sites ([rememberDiscoverRows]' partition and HomeContentList's per-row
- * target sizes), so both share one if/else.
+ * target sizes), so both share one if/else. [pattern] selects the rhythm
+ * variant ([HomeDiscoverPattern.DEFAULT] is the shipped one).
  */
+internal fun discoverPatternFor(
+    pattern: HomeDiscoverPattern,
+    windowSizeClass: WindowSizeClass,
+): List<Int> {
+    val compact = windowSizeClass == WindowSizeClass.Compact
+    return when (pattern) {
+        HomeDiscoverPattern.DEFAULT -> if (compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
+        HomeDiscoverPattern.UNIFORM -> if (compact) COMPACT_DISCOVER_PATTERN_UNIFORM else EXPANDED_DISCOVER_PATTERN_UNIFORM
+        HomeDiscoverPattern.COMPACT -> if (compact) COMPACT_DISCOVER_PATTERN_COMPACT else EXPANDED_DISCOVER_PATTERN_COMPACT
+    }
+}
+
+/** The shipped DEFAULT rhythm — the two-arg overload's original shape. */
 internal fun discoverPatternFor(windowSizeClass: WindowSizeClass): List<Int> =
-    if (windowSizeClass == WindowSizeClass.Compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
+    discoverPatternFor(HomeDiscoverPattern.DEFAULT, windowSizeClass)
 
 /**
  * The card width fitting [targetSize] cards (plus their [spacing] gaps) into
@@ -35,10 +61,11 @@ internal fun discoverItemWidth(rowWidth: Dp, spacing: Dp, targetSize: Int): Dp =
 @Composable
 fun rememberDiscoverRows(
     allDiscoverItems: List<SeerrSearchItem>,
+    pattern: HomeDiscoverPattern = HomeDiscoverPattern.DEFAULT,
 ): List<List<SeerrSearchItem>> {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    return remember(allDiscoverItems, adaptiveInfo.windowSizeClass) {
-        partitionDiscoverRows(allDiscoverItems, discoverPatternFor(adaptiveInfo.windowSizeClass))
+    return remember(allDiscoverItems, adaptiveInfo.windowSizeClass, pattern) {
+        partitionDiscoverRows(allDiscoverItems, discoverPatternFor(pattern, adaptiveInfo.windowSizeClass))
     }
 }
 
