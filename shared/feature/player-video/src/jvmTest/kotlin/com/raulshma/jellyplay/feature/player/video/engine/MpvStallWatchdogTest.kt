@@ -206,4 +206,129 @@ class MpvStallWatchdogTest {
         // "Waiting for ..." from another component.
         assertFalse(isAimagereaderFailureLog("demux", "Waiting for scripts..."))
     }
+
+    // ── the video-only wedge (v0.11.8 regression) ───────────────────────────
+    //
+    // The AImageReader acquisition dies on the first frame while the AUDIO
+    // chain keeps clocking the playhead: READY + playing + the position
+    // ADVANCING on every tick, the seekbar visibly moving, screen black
+    // forever. The frozen-position detector reads this as health by
+    // construction — the video window owns it (POCO F1 / Adreno 630, 1080p
+    // HEVC direct path, `acquireLatestImage failed: -30001`).
+
+    /** Runs advancing-position ticks with [presented] frame state each second. */
+    private fun advancing(
+        watchdog: MpvStallWatchdog,
+        fromMs: Long,
+        toMs: Long,
+        aimagereader: Boolean,
+        presented: Boolean,
+    ): MpvStallRecoveryAction? {
+        var last: MpvStallRecoveryAction? = null
+        var i = 0L
+        for (t in fromMs..toMs step 1_000) {
+            last = watchdog.onTick(
+                nowMs = t,
+                playbackState = EnginePlaybackState.READY,
+                isPlaying = true,
+                positionMs = fromMs + i * 1_000L,
+                aimagereaderFailureObserved = aimagereader,
+                videoFramesPresented = presented,
+            )
+            i++
+        }
+        return last
+    }
+
+    @Test
+    fun advancingPositionWithAimagereaderFailureAndNoFrames_switchesHwdecAfterConfirmWindow() {
+        val watchdog = MpvStallWatchdog()
+        // The window may not fire inside the confirm period…
+        assertNull(advancing(watchdog, fromMs = 1_000L, toMs = 8_000L, aimagereader = true, presented = false))
+        // …and must fire with the copy-path switch + kick at the live position.
+        val action = watchdog.onTick(
+            nowMs = 9_000L,
+            playbackState = EnginePlaybackState.READY,
+            isPlaying = true,
+            positionMs = 9_000L,
+            aimagereaderFailureObserved = true,
+            videoFramesPresented = false,
+        )
+        assertEquals(
+            MpvStallRecoveryAction.SwitchHwdecThenKick(
+                hwdecValue = MpvStallWatchdog.HWDEC_STALL_FALLBACK,
+                kickToMs = 9_000L + MpvStallWatchdog.KICK_FORWARD_MS,
+            ),
+            action,
+        )
+    }
+
+    @Test
+    fun advancingPositionWithoutAimagereaderEvidence_neverFires() {
+        // The playhead moves and nothing implicates the zero-copy path — the
+        // video window must stay closed (a healthy-but-audio-first session).
+        val watchdog = MpvStallWatchdog()
+        assertNull(advancing(watchdog, fromMs = 1_000L, toMs = 30_000L, aimagereader = false, presented = false))
+    }
+
+    @Test
+    fun advancingPositionWithAimagereaderFailureButFramesPresented_neverFires() {
+        // Failure observed earlier in the file, frames are on screen now —
+        // the wedged reader recovered (or the kick worked). Healthy.
+        val watchdog = MpvStallWatchdog()
+        assertNull(advancing(watchdog, fromMs = 1_000L, toMs = 30_000L, aimagereader = true, presented = true))
+    }
+
+    @Test
+    fun videoWedgeRecovery_presentsFrames_nextWindowCloses() {
+        // After the switch+kick the copy path renders: presented=true resets
+        // the window AND the budget — a later second wedge starts from scratch.
+        val watchdog = MpvStallWatchdog()
+        assertNull(advancing(watchdog, fromMs = 1_000L, toMs = 8_000L, aimagereader = true, presented = false))
+        assertEquals(
+            MpvStallRecoveryAction.SwitchHwdecThenKick(
+                hwdecValue = MpvStallWatchdog.HWDEC_STALL_FALLBACK,
+                kickToMs = 9_000L + MpvStallWatchdog.KICK_FORWARD_MS,
+            ),
+            watchdog.onTick(9_000L, EnginePlaybackState.READY, true, 9_000L, aimagereaderFailureObserved = true, videoFramesPresented = false),
+        )
+        // The recovery lands: frames presented on every following tick.
+        assertNull(advancing(watchdog, fromMs = 10_000L, toMs = 20_000L, aimagereader = true, presented = true))
+        // And a second wedge re-arms from a fresh budget: window 21s..28s,
+        // fire at 29s (not immediately — the reset restored attempts=0).
+        assertNull(advancing(watchdog, fromMs = 21_000L, toMs = 28_000L, aimagereader = true, presented = false))
+        val second = watchdog.onTick(29_000L, EnginePlaybackState.READY, true, 29_000L, aimagereaderFailureObserved = true, videoFramesPresented = false)
+        assertEquals(
+            MpvStallRecoveryAction.SwitchHwdecThenKick(
+                hwdecValue = MpvStallWatchdog.HWDEC_STALL_FALLBACK,
+                kickToMs = 29_000L + MpvStallWatchdog.KICK_FORWARD_MS,
+            ),
+            second,
+        )
+    }
+
+    @Test
+    fun videoWedge_budgetIsSharedWithTheFrozenLadder_andStandsDownAfterMax() {
+        // Two attempts total (shared budget): the first via the video window,
+        // the second via the frozen ladder, then stand-down.
+        val watchdog = MpvStallWatchdog()
+        assertNull(advancing(watchdog, fromMs = 1_000L, toMs = 8_000L, aimagereader = true, presented = false))
+        val first = watchdog.onTick(9_000L, EnginePlaybackState.READY, true, 9_000L, aimagereaderFailureObserved = true, videoFramesPresented = false)
+        assertTrue(first is MpvStallRecoveryAction.SwitchHwdecThenKick)
+        // Now the playhead ALSO freezes: the frozen ladder takes over; its
+        // flag-aware first attempt is spent, so attempts==2 → switch again…
+        // but only after a fresh 8s window (opens at 10s), and only while
+        // budget remains.
+        assertNull(frozen(watchdog, fromMs = 10_000L, toMs = 17_000L, positionMs = 9_000L, aimagereader = true))
+        val second = watchdog.onTick(18_000L, EnginePlaybackState.READY, true, 9_000L, aimagereaderFailureObserved = true, videoFramesPresented = false)
+        assertEquals(
+            MpvStallRecoveryAction.SwitchHwdecThenKick(
+                hwdecValue = MpvStallWatchdog.HWDEC_STALL_FALLBACK,
+                kickToMs = 9_000L + MpvStallWatchdog.KICK_FORWARD_MS,
+            ),
+            second,
+        )
+        // attempts == MAX: everything stands down from here.
+        assertNull(frozen(watchdog, fromMs = 19_000L, toMs = 30_000L, positionMs = 9_000L, aimagereader = true))
+    }
 }
