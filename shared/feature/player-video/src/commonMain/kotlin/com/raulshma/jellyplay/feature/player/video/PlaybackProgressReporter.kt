@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.InternalPositionSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -158,10 +159,17 @@ internal class PlaybackProgressReporter(
         stalledLastPositionMs = -1L
         stalledStopReportedSessionId = null
         val engine = getMediaEngine() ?: return
+        // Prefer the engine's shared internal position stream (the
+        // MediaEngineSessionPlayer precedent): one upstream ticker per engine
+        // instance instead of a second private ticker per collector, each
+        // re-running the per-tick readback work in parallel. Engines without
+        // the capability (test doubles) fall back to the public flow unchanged.
+        val positionFlow = (engine as? InternalPositionSource)?.internalPositionFlow
+            ?: engine.positionFlow
         positionJob = scope.launch {
             var lastPos = Long.MIN_VALUE
             var lastDur = Long.MIN_VALUE
-            engine.positionFlow.collect { pos ->
+            positionFlow.collect { pos ->
                 if (engine.playbackState.value == EnginePlaybackState.ERROR) {
                     errorLatch = true
                 }

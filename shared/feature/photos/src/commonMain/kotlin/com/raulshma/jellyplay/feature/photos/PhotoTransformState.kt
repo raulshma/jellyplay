@@ -47,6 +47,20 @@ internal const val PHOTO_ZOOM_SETTLE_MS = 300L
  */
 internal const val PHOTO_MAX_DECODE_SCALE = 3f
 
+/**
+ * Strip window: the album's photo metadata is loaded in pages of this size —
+ * the initial window (first paint stays one round trip) and every widening
+ * page after it.
+ */
+internal const val PHOTO_SIBLINGS_WINDOW = 200
+
+/**
+ * Strip widening lead: navigating within this many positions of the loaded
+ * strip's end fetches the next window, so a steady swipe never runs into the
+ * unloaded edge.
+ */
+internal const val PHOTO_SIBLINGS_WIDEN_MARGIN = 25
+
 /** Which page a finished swipe asks for — or that the drag was not a swipe. */
 internal enum class SwipeDecision { PREVIOUS, NEXT, NONE }
 
@@ -165,3 +179,19 @@ internal fun photoDecodeTarget(scale: Float, currentDecodeScale: Float): Float? 
     val target = scale.coerceIn(1f, PHOTO_MAX_DECODE_SCALE)
     return target.takeIf { abs(it - currentDecodeScale) >= 0.05f }
 }
+
+/**
+ * The server-side download width of the viewer's fit-first rendition: the
+ * viewport's width in device pixels (already density-scaled — the same basis
+ * the decode ladder rasterizes against), so a `ContentScale.Fit` display is
+ * never under-sampled for any photo aspect. Fit never renders wider than the
+ * viewport, so the width alone bounds the download; portrait photos keep
+ * their aspect and stay within the same width cap. The zoom upgrade path
+ * (original resolution once a settled zoom passes fit) is what covers the
+ * pixel-peeping case; this value only ever bounds the FIRST paint.
+ *
+ * Floor of 1 so an unmeasured viewport (0 before the first layout pass)
+ * cannot mint a zero-width server query.
+ */
+internal fun photoFitNetworkMaxWidth(viewportWidthPx: Int): Int =
+    viewportWidthPx.coerceAtLeast(1)

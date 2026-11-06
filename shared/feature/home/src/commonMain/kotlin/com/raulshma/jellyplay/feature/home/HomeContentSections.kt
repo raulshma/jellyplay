@@ -1485,9 +1485,18 @@ private fun HomeStatusBannerRow(
 private fun rememberHomePosterUrl(artwork: ArtworkUrls): (MediaItem) -> String =
     remember(artwork) { { item: MediaItem -> artwork.poster(item) } }
 
+/**
+ * Server-side backdrop width for the wide-card rows the backdrop URL arms:
+ * the largest realistic card is ~440 dp (TV 240 dp base × 1.6 wide scale ×
+ * the LARGE card-scale pref) and decodes at ~2× density, so 960 px covers
+ * every tier — half the resolver's 1920 px default, which the 16:9 card
+ * never renders past.
+ */
+private const val WideCardBackdropMaxWidth = 960
+
 @Composable
 private fun rememberHomeBackdropUrl(artwork: ArtworkUrls): (MediaItem) -> String =
-    remember(artwork) { { item: MediaItem -> artwork.backdrop(item) } }
+    remember(artwork) { { item: MediaItem -> artwork.backdrop(item, maxWidth = WideCardBackdropMaxWidth) } }
 
 @Composable
 private fun rememberHomeSeriesPosterUrl(artwork: ArtworkUrls): (MediaItem) -> String =

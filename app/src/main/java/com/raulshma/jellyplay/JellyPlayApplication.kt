@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.notification.di.NotificationWorkerFactory
+import com.raulshma.jellyplay.core.network.di.toImageOkHttpClient
 import com.raulshma.jellyplay.di.androidKoinModules
 import com.raulshma.jellyplay.startup.AppStartupPrewarms
 import androidx.work.Configuration
@@ -148,7 +149,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     private val imageClient by lazy {
-        okHttpClient.newBuilder()
+        // toImageOkHttpClient() swaps in the dedicated image Dispatcher
+        // (raised per-host limit — a Jellyfin server is a single host, so the
+        // base client's default 5 would serialize poster grids behind
+        // in-flight API JSON). The rest of this chain keeps this shell's
+        // divergences:
+        okHttpClient.toImageOkHttpClient()
+            .newBuilder()
             // Drop the inherited OkHttp http_cache so image bytes aren't written
             // to disk twice. The base client's cache (`cacheDir/http_cache`,
             // sized for API JSON) is shared via newBuilder(); without this Coil

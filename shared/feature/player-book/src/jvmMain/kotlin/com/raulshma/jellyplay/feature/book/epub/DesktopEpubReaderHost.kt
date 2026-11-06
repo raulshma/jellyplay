@@ -233,16 +233,16 @@ internal actual fun rememberEpubReaderHost(
     val navigatorRef = remember { mutableStateOf<WebViewNavigator?>(null) }
     // The RAW seam, bypassing the delivery receipt: viewer failures must
     // fail the boot WITHOUT latching a delivery for a page generation that
-    // never received the book (a receipt here would bar the retry's encode
-    // via shouldEncode).
+    // never received the book (a receipt here would bar the retry's transfer
+    // via shouldSend).
     val rawEventsRef = rememberUpdatedState(onEvent)
     fun failBoot() = rawEventsRef.value.failBoot()
-    // The whole boot-transfer ladder (receipt wiring + encode, with the
-    // encode-failure fold into failBoot, + chunked send, payload release,
-    // appearance push) — see BookTransferEffects. The eval reads the
-    // navigator LIVE so the ladder reaches the CURRENT browser (a reader-file
-    // rewrite creates a new one), never a stale capture; the send/push gates
-    // can only open once a page actually loaded through it.
+    // The whole boot-transfer ladder (receipt wiring + the streamed chunk
+    // transfer, with the failure fold into failBoot, + appearance push) —
+    // see BookTransferEffects. The eval reads the navigator LIVE so the
+    // ladder reaches the CURRENT browser (a reader-file rewrite creates a
+    // new one), never a stale capture; the send/push gates can only open
+    // once a page actually loaded through it.
     val receivingEvents = BookTransferEffects(
         bookFile = bookFile,
         resumePercent = resumePercent,
@@ -251,7 +251,9 @@ internal actual fun rememberEpubReaderHost(
         delivery = delivery,
         pageLoaded = pageLoaded,
         eval = { script -> navigatorRef.value?.evaluateJavaScript(script, null) },
-        encodeBook = { file -> withContext(Dispatchers.IO) { EpubBookCodec.encodeBase64(file) } },
+        openTransfer = { file ->
+            withContext(Dispatchers.IO) { EpubBookCodec.openChunkedTransfer(file) }
+        },
         onFailBoot = ::failBoot,
     )
     val eventsRef = rememberUpdatedState(receivingEvents)

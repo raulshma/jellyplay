@@ -175,18 +175,24 @@ class EpgViewModel(
      * match invocation order — but each pass reads the source state at the
      * moment it holds the lock, so the last pass out always reads (and
      * publishes) the newest sources.
+     *
+     * The previous snapshot's rows feed [buildEpgGridData]'s diff-merge, so a
+     * channel whose program list the refresh left unchanged keeps its row
+     * instance and the screen does not re-lay it.
      */
     private suspend fun rebuildGrid() = rebuildGridMutex.withLock {
         val channels = _channels.value
         val programs = _programs.value
         val windowStart = _windowStart.value
         val windowEnd = _windowEnd.value
+        val previousRows = _gridData.value.rows
         _gridData.value = withContext(gridDispatcher) {
             buildEpgGridData(
                 channels = channels,
                 programs = programs,
                 windowStart = windowStart,
                 windowEnd = windowEnd,
+                previousRows = previousRows,
             )
         }
     }

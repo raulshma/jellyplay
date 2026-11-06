@@ -44,7 +44,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,6 +106,9 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_start_live
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_stop_live_cd
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_tab_activity_log
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_tab_log_files
+
+/** Typing pause before the message filter runs off Main. */
+private const val LOG_SEARCH_DEBOUNCE_MS = 300L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -205,9 +210,22 @@ fun LogsScreen(
             val query = searchQuery.trim()
             when (state.selectedTabIndex) {
                 0 -> {
-                    val filteredLines = remember(state.selectedLogFileLines, query) {
-                        if (query.isEmpty()) state.selectedLogFileLines
-                        else state.selectedLogFileLines.filter { query in it.text }
+                    // The O(n) message filter over the retained line window
+                    // runs off Main after a typing pause — per-keystroke
+                    // main-thread filtering of thousands of lines is the
+                    // jank source. Each edit restarts this effect (cancel
+                    // and replace), which IS the debounce; the file-name
+                    // filter is a tiny list and stays inline.
+                    var filteredLines by remember { mutableStateOf(state.selectedLogFileLines) }
+                    LaunchedEffect(state.selectedLogFileLines, query) {
+                        if (query.isEmpty()) {
+                            filteredLines = state.selectedLogFileLines
+                        } else {
+                            delay(LOG_SEARCH_DEBOUNCE_MS)
+                            filteredLines = withContext(Dispatchers.Default) {
+                                state.selectedLogFileLines.filter { query in it.text }
+                            }
+                        }
                     }
                     val filteredFiles = remember(state.logFiles, query) {
                         if (query.isEmpty()) state.logFiles
@@ -227,10 +245,19 @@ fun LogsScreen(
                     )
                 }
                 1 -> {
-                    val filteredEntries = remember(state.activityEntries, query) {
-                        if (query.isEmpty()) state.activityEntries
-                        else state.activityEntries.filter { entry ->
-                            query in entry.name || (entry.overview?.contains(query) == true) || query in entry.type
+                    // Same off-main + typing-pause filter as the file tab —
+                    // the paged activity list grows with every more-load.
+                    var filteredEntries by remember { mutableStateOf(state.activityEntries) }
+                    LaunchedEffect(state.activityEntries, query) {
+                        if (query.isEmpty()) {
+                            filteredEntries = state.activityEntries
+                        } else {
+                            delay(LOG_SEARCH_DEBOUNCE_MS)
+                            filteredEntries = withContext(Dispatchers.Default) {
+                                state.activityEntries.filter { entry ->
+                                    query in entry.name || (entry.overview?.contains(query) == true) || query in entry.type
+                                }
+                            }
                         }
                     }
                     ActivityLogTab(
@@ -326,16 +353,30 @@ private fun LogFilesTab(
                 )
             } else {
                 val listState = rememberLazyListState()
-                
-                var hasInitialScrolled by remember(selectedLogFileName) { mutableStateOf(false) }
 
-                LaunchedEffect(selectedLogFileLines.size) {
+                var hasInitialScrolled by remember(selectedLogFileName) { mutableStateOf(false) }
+                // Follow-mode scroll policy: the engage (initial open, or
+                // resuming a paused poll) gets one animated jump to the tail;
+                // every subsequent automatic poll tick snaps. An animated
+                // scroll across thousands of lines per 5 s tick fights any
+                // user scroll in flight and burns frames for no benefit.
+                var animateNextFollow by remember(selectedLogFileName) { mutableStateOf(true) }
+
+                LaunchedEffect(selectedLogFileLines.size, isPollingActive) {
                     if (selectedLogFileLines.isNotEmpty()) {
                         if (!hasInitialScrolled) {
                             listState.scrollToItem(selectedLogFileLines.lastIndex)
                             hasInitialScrolled = true
                         } else if (isPollingActive) {
-                            listState.animateScrollToItem(selectedLogFileLines.lastIndex)
+                            if (animateNextFollow) {
+                                listState.animateScrollToItem(selectedLogFileLines.lastIndex)
+                                animateNextFollow = false
+                            } else {
+                                listState.scrollToItem(selectedLogFileLines.lastIndex)
+                            }
+                        } else {
+                            // Paused: re-arm the animated jump for the next resume.
+                            animateNextFollow = true
                         }
                     }
                 }

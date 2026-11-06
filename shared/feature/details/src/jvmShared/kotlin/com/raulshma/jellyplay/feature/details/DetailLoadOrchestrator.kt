@@ -255,6 +255,16 @@ internal class DetailLoadOrchestrator(
      * stale flight path from the previous item is rejected before it writes.
      */
     fun load(itemId: String, refresh: Boolean) {
+        // Same-item re-entry short-circuit: the screen re-fires the load on
+        // every composition of the same item (rotation, back-press re-entry,
+        // return from the player), and re-running the pipeline would blank the
+        // rendered detail to the loading veil and restart the whole enrichment
+        // fan-out for data the state already holds. When the guard's item is
+        // still the requested one and its detail is resolved, there is nothing
+        // to load; freshness stays owned by the explicit refresh callers
+        // (pull-to-refresh, the user-data change feed — both pass
+        // refresh = true and never short-circuit here).
+        if (!refresh && loadGuard.itemId == itemId && _state.value.detail != null) return
         // Record the item we're loading synchronously — and bump the load
         // epoch in the same atomic step — so that a stale
         // loadSeerrDataIfNeeded() call (from a freshly-composed screen still

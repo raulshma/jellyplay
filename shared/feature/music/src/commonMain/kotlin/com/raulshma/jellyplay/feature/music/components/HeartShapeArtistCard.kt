@@ -83,7 +83,7 @@ fun HeartShapeArtistCard(
             Box(
                 modifier = Modifier
                     .size(120.dp)
-                    .clip(HeartShape())
+                    .clip(cachedHeartShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
@@ -95,7 +95,7 @@ fun HeartShapeArtistCard(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(120.dp)
-                            .clip(HeartShape()),
+                            .clip(cachedHeartShape),
                     )
                 }
             }

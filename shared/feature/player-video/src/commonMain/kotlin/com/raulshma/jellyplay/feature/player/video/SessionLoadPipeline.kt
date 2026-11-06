@@ -352,7 +352,18 @@ internal class SessionLoadPipeline(
 
         hooks.initializeTrickplay(request.itemId, source)
 
-        hooks.reportPlaybackStart(request.itemId, source, sessionState.playMethod)
+        // Fire-and-forget start report: the POST runs on the caller's scope
+        // (the same outlive-the-load-coroutine pattern as fetchMediaSegments
+        // below) so a slow server cannot gate position tracking — the seekbar
+        // and the media session — behind the round-trip. Failure behavior is
+        // unchanged: the repository's report-or-stage folds a failed send into
+        // the outbox and returns a Result this caller discards, exactly as the
+        // awaited form did. The report's first progress post still follows it:
+        // the progress loop's first cycle runs after its interval delay, and
+        // both run FIFO on the same main dispatcher.
+        scope.launch {
+            hooks.reportPlaybackStart(request.itemId, source, sessionState.playMethod)
+        }
 
         hooks.startPositionTracking()
         hooks.startProgressReporting()

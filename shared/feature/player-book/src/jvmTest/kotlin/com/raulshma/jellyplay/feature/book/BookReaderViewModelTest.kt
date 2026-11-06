@@ -33,6 +33,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -118,6 +119,9 @@ class BookReaderViewModelTest {
         speechEngine: BookSpeechEngine = NoopBookSpeechEngine,
         playbackFocus: com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus =
             com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
+        // The read-aloud sentence split hops to this dispatcher — the test
+        // main, so advanceUntilIdle() drives the split deterministically.
+        speechSplitDispatcher: CoroutineDispatcher = mainDispatcher,
     ): BookReaderViewModel = BookReaderViewModel(
         detailFeed = detailFeed,
         playbackRepository = playbackRepository,
@@ -129,6 +133,7 @@ class BookReaderViewModelTest {
         pdfOutlineParser = PdfOutlineParser(),
         speechEngine = speechEngine,
         playbackFocus = playbackFocus,
+        speechSplitDispatcher = speechSplitDispatcher,
         flushScope = CoroutineScope(UnconfinedTestDispatcher(mainDispatcher.scheduler)),
     )
 

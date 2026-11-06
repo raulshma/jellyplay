@@ -264,10 +264,14 @@ private fun AnalyticsContent(
         } else {
             itemsIndexed(
                 visibleSessions,
-                // Sessions carry no unique id — the key is positional with the
-                // row identity folded in (the list is replaced wholesale on
-                // every refetch, so index-stable keys never collide).
-                key = { index, session -> "$index/${session.userId}/${session.itemId}/${session.endedAt}" },
+                // Sessions carry no unique id — the key is the row's own
+                // identity tuple (user + item + the session's start/end
+                // stamps + device), which is unique within the ledger: a
+                // removal above a row must not shift every following key.
+                key = { _, session ->
+                    "${session.userId}/${session.itemId}/${session.startedAt}/" +
+                        "${session.endedAt}/${session.deviceName}/${session.clientName}"
+                },
                 contentType = { _, _ -> "session" },
             ) { _, session ->
                 SessionRowCard(

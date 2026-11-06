@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
@@ -123,7 +124,7 @@ class RequestsViewModel(
         downloadProgress.map { it[tmdbId] }.distinctUntilChanged()
 
     /** Shared permit bound for both enrichment fan-outs (the former enrichEach semaphore). */
-    private val enrichSemaphore = Semaphore(4)
+    private val fanOutSemaphore = Semaphore(4)
 
     /**
      * Media-details enrichment: one fetch per distinct (tmdbId, kind) pair.
@@ -132,7 +133,7 @@ class RequestsViewModel(
      */
     private val mediaEnricher = IdEnricher<Pair<Int, SeerrMediaKind>, RequestMediaInfo>(
         scope = scope,
-        semaphore = enrichSemaphore,
+        semaphore = fanOutSemaphore,
         fetch = { (tmdbId, kind) ->
             // The movie/TV fetch fork reads the model's [SeerrMediaKind.pick]
             // — UNKNOWN rides the tv leg, exactly like the former
@@ -168,7 +169,7 @@ class RequestsViewModel(
     /** Direct *arr download-progress + queue-row enrichment, keyed by tmdbId. */
     private val downloadEnricher = IdEnricher<Int, ArrQueueItem>(
         scope = scope,
-        semaphore = enrichSemaphore,
+        semaphore = fanOutSemaphore,
         fetch = { tmdbId -> arrRepository.getQueueForTmdb(tmdbId) },
         merge = { tmdbId, item ->
             _downloadProgress.update {
@@ -434,7 +435,9 @@ class RequestsViewModel(
 
     /**
      * Shared body for [approveSelected] / [declineSelected]: flips
-     * [actionInProgress], runs [action] against each selected id, then clears
+     * [actionInProgress], runs [action] against each selected id — a bounded
+     * [Semaphore.mapConcurrent] fan-out (the same ladder the id enrichment
+     * uses) instead of one sequential round-trip per request — then clears
      * selection and refreshes the list. Per-item failures are surfaced inside
      * the Seerr result by the repository; here we only drive the fan-out.
      */
@@ -443,7 +446,7 @@ class RequestsViewModel(
         if (ids.isEmpty()) return
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            ids.forEach { id -> action(id) }
+            fanOutSemaphore.mapConcurrent(ids) { id -> action(id) }
             _state.value = _state.value.copy(
                 actionInProgress = false,
                 selection = _state.value.selection.cleared(),

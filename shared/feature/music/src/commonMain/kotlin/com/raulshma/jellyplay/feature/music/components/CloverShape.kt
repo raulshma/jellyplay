@@ -61,3 +61,12 @@ class CloverShape : Shape {
         return Outline.Generic(path)
     }
 }
+
+/**
+ * Shared [CloverShape] instance for the album-card clips (the ShapeCache
+ * singleton idiom). The shape is stateless — [CloverShape.createOutline]
+ * derives everything from its `size` argument — so the two clips per card
+ * (container + image) can share one instance instead of each card in a row
+ * allocating two fresh shapes per composition pass.
+ */
+val cachedCloverShape = CloverShape()

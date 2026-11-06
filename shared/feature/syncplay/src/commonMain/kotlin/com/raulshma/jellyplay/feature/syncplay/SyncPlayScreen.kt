@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.syncplay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
+import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -162,9 +164,9 @@ fun SyncPlayScreen(
         tag = "syncplay_init",
     )
 
-    LaunchedEffect(Unit) {
-        viewModel.loadGroups()
-    }
+    // The initial group load is the ViewModel's init job — the screen's first
+    // composition rides it; a LaunchedEffect fetch here would double the
+    // request on every entry.
 
     // The group-list backoff poll lives in the ViewModel (the refresh cycle
     // module); the screen only binds it to visibility. Keyed on membership so
@@ -226,6 +228,11 @@ fun SyncPlayScreen(
                     val defaultEffectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
                     AnimatedContent(
                         targetState = currentGroup,
+                        // The transition keys on the GROUP identity, not the
+                        // state object: group-state copies (progress, members
+                        // updating) re-render the content in place instead of
+                        // re-running the slide transition.
+                        contentKey = { it.groupId },
                         transitionSpec = {
                             (fadeIn(defaultEffectsSpec) + slideInHorizontally(initialOffsetX = { it }))
                                 .togetherWith(fadeOut(defaultEffectsSpec) + slideOutHorizontally(targetOffsetX = { -it }))
@@ -252,6 +259,16 @@ fun SyncPlayScreen(
                             description = stringResource(Res.string.syncplay_create_group_together),
                         )
                     } else {
+                        // Shared entrance reveal for the whole list — ONE
+                        // Animatable driven once when the list mounts
+                        // (rememberDetailEntrance + Modifier.detailEntrance,
+                        // the DownloadsScreen idiom) replaces the per-row
+                        // `mutableStateOf + LaunchedEffect + AnimatedVisibility`
+                        // triple. Rows read the progress inside the
+                        // graphicsLayer lambda (draw phase), so rows composed
+                        // later during scroll render at the settled 1f
+                        // immediately.
+                        val entrance = rememberDetailEntrance()
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -261,22 +278,14 @@ fun SyncPlayScreen(
                             verticalArrangement = Arrangement.spacedBy(spacing),
                         ) {
                             itemsIndexed(groups, key = { _, it -> it.groupId }, contentType = { _, _ -> "syncPlayGroup" }) { index, group ->
-                                val visible = remember { mutableStateOf(false) }
-                                LaunchedEffect(Unit) { visible.value = true }
-                                AnimatedVisibility(
-                                    visible = visible.value,
-                                    enter = fadeIn(
-                                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
-                                    ) + slideInVertically(
-                                        initialOffsetY = { it / 10 },
-                                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                SyncPlayGroupCard(
+                                    group = group,
+                                    onJoin = { viewModel.requestJoin(group) },
+                                    modifier = Modifier.detailEntrance(
+                                        progress = { entrance.value },
+                                        slideDivisor = 10f,
                                     ),
-                                ) {
-                                    SyncPlayGroupCard(
-                                        group = group,
-                                        onJoin = { viewModel.requestJoin(group) },
-                                    )
-                                }
+                                )
                             }
                         }
                     }
@@ -345,9 +354,10 @@ fun SyncPlayScreen(
 private fun SyncPlayGroupCard(
     group: SyncPlayGroup,
     onJoin: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .focusIndicator(ShapeCache.smooth12)
             .clickable(onClick = onJoin),

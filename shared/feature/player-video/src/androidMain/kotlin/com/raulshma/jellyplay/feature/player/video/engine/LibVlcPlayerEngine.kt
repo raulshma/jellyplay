@@ -51,6 +51,12 @@ class LibVlcPlayerEngine(
         // materialize as a new spu track (see VlcSlaveRegistration).
         private const val SLAVE_TRACK_POLL_DELAY_MS = 250L
         private const val SLAVE_TRACK_REGISTRATION_ATTEMPTS = 16
+
+        // Upper bound on how long the stats change-guard's sample may suppress
+        // the full track re-read (the mpv adapter's same-named cadence): the
+        // hedge for a track movement libVLC never announced through an ES*
+        // event.
+        private const val FULL_STATS_REREAD_MS = 2_000L
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
@@ -125,10 +131,80 @@ class LibVlcPlayerEngine(
     private var videoLayout: VLCVideoLayout? = null
     private var currentPlaybackRequest: PlaybackRequest? = null
 
+    /**
+     * The coalesced track rebuild (the mpv adapter's [TrackRefreshCoalescer]
+     * shape): the ES* events arrive in bursts — a selection fires select-side
+     * and enumeration events within ~50 ms — and each used to run its own
+     * synchronous `getAudioTracks`/`getSpuTracks` JNI sweep on the main
+     * thread. A burst now collapses into one rebuild once it settles. The
+     * rebuild runs on the main dispatcher ([engineScope], like mpv's
+     * buildTracks-on-main rationale): the JNI reads stay serialized against
+     * the per-media teardown, which also runs on main.
+     */
+    private val trackRefresh = TrackRefreshCoalescer(
+        scopeProvider = { engineScope },
+        onRefresh = ::refreshTracksCoalesced,
+    )
+
+    /**
+     * The coalesced rebuild's landing. Guarded on the live player like mpv's
+     * coalesced host: a refresh that raced the per-media teardown must not
+     * publish an empty sweep over the next media's half-initialized state.
+     */
+    private fun refreshTracksCoalesced() {
+        if (mediaPlayer == null) return
+        val tracks = buildTracks()
+        if (tracks != _availableTracks.value) {
+            _availableTracks.value = tracks
+        }
+    }
+
+    /**
+     * Whether the track-derived stats inputs (`videoResolution` /
+     * `audioCodec`) must be re-read. Armed by the ES* event arms (the only
+     * way the track list moves mid-media) and by the per-media teardown
+     * ([resetForNextMedia] / [onResetItemScopedState]) — a fresh media's
+     * first stats tick must read. The 1 Hz stats tick skips its JNI track
+     * reads entirely while this is clear and the buffered input has not
+     * moved; the guard's cadence arm is the hedge for a track movement
+     * libVLC never announced.
+     */
+    @Volatile
+    private var statsInputsDirty = true
+
+    /**
+     * The shared stats change-guard (the Exo/mpv [StatsPublishGuard] host):
+     * the cheap sample is the event-cached buffered position, the cadence
+     * arm bounds how long a frozen sample suppresses the full read.
+     */
+    private val statsGuard = StatsPublishGuard(
+        fullRereadCadenceMs = FULL_STATS_REREAD_MS,
+        nowMs = android.os.SystemClock::elapsedRealtime,
+    )
+
+    /**
+     * The last buffering percentage applied to the buffered-state flows,
+     * quantized to whole percent ([MediaPlayer.Event.Buffering]'s arm) —
+     * `-1` after a media switch so the new media's first (0%) event
+     * publishes even though it quantizes to 0.
+     */
+    private var lastAppliedBufferPercent = -1
+
     private var pendingPlay = false
     private var hasRenderer = false
     private var pendingRendererItem: RendererItem? = null
     private var cachedDurationMs: Long = 0L
+
+    /**
+     * Event-cached playhead (ms), maintained by the `TimeChanged` listener —
+     * the mpv `cachedPositionMs` mirror: the position getter and the ticker's
+     * per-tick readbacks read this instead of issuing a JNI `MediaPlayer.time`
+     * read 3–4× per tick. VLC emits `TimeChanged` on every clock update
+     * (including through a seek's flush), so the cache tracks the playhead
+     * with the event cadence; a 0 event keeps the getter on the pending
+     * start/seek hold (the cached value only wins once it is real).
+     */
+    private var cachedPositionMs: Long = 0L
 
     /**
      * Side-loaded-subtitle id registry: libVLC spu track id → [SubtitleSource.id].
@@ -205,26 +281,58 @@ class LibVlcPlayerEngine(
                 _playbackState.value = EnginePlaybackState.ENDED
             }
             MediaPlayer.Event.Buffering -> {
-                val bufPercent = event.buffering
-                _playbackState.value = if (bufPercent < 100f) EnginePlaybackState.BUFFERING else EnginePlaybackState.READY
-                val dur = durationMs
-                if (dur > 0) {
-                    _bufferedPositionMs.value = ((bufPercent / 100f) * dur).toLong()
+                // Quantize the libVLC percentage to 1% steps BEFORE it enters
+                // state: the events arrive in bursts during caching, each a
+                // fraction of a percent apart, and every event used to
+                // allocate a fresh ranges list and rewrite both buffered
+                // flows for a sub-percent move. A quantized value equal to
+                // the last applied one reuses the cached state wholesale —
+                // no allocation, no write. (The band's start pins to the
+                // applying event's position; during a caching burst the
+                // playhead barely advances, so the 1% quantization loses
+                // nothing visible.)
+                val quantizedPercent = event.buffering.toInt().coerceIn(0, 100)
+                if (quantizedPercent != lastAppliedBufferPercent) {
+                    lastAppliedBufferPercent = quantizedPercent
+                    _playbackState.value =
+                        if (quantizedPercent < 100) EnginePlaybackState.BUFFERING else EnginePlaybackState.READY
+                    val dur = durationMs
+                    if (dur > 0) {
+                        _bufferedPositionMs.value = (quantizedPercent / 100f * dur).toLong()
+                    }
+                    // libVLC exposes only a 0..100 buffering percentage —
+                    // the fraction-ahead approximation bands [position, position +
+                    // fraction * duration]. Full (100%) buffering shades through
+                    // the end of the item.
+                    _bufferedRanges.value = BufferedRanges.aheadOfPosition(
+                        positionMs = currentPositionMs,
+                        fraction = quantizedPercent / 100f,
+                        durationMs = dur,
+                    )
                 }
-                // libVLC exposes only a 0..100 buffering percentage —
-                // the fraction-ahead approximation bands [position, position +
-                // fraction * duration]. Full (100%) buffering shades through
-                // the end of the item.
-                _bufferedRanges.value = BufferedRanges.aheadOfPosition(
-                    positionMs = currentPositionMs,
-                    fraction = bufPercent / 100f,
-                    durationMs = dur,
-                )
+            }
+            MediaPlayer.Event.TimeChanged -> {
+                cachedPositionMs = event.timeChanged
+                // A real position consumes the pending start/seek hold (the
+                // getter's former read-consume, moved to the event that owns
+                // the truth); a 0 event leaves the hold armed.
+                if (event.timeChanged > 0L) {
+                    pendingStartPositionMs = 0L
+                }
+            }
+            MediaPlayer.Event.LengthChanged -> {
+                val len = event.lengthChanged
+                if (len > 0L) {
+                    cachedDurationMs = len
+                }
             }
             MediaPlayer.Event.ESAdded,
             MediaPlayer.Event.ESDeleted,
             MediaPlayer.Event.ESSelected -> {
-                _availableTracks.value = buildTracks()
+                // The track list is also the stats model's input — arm the
+                // stats tick's full read before the coalesced rebuild lands.
+                statsInputsDirty = true
+                trackRefresh.request()
             }
             MediaPlayer.Event.EncounteredError -> {
                 _playbackState.value = EnginePlaybackState.ERROR
@@ -333,6 +441,11 @@ class LibVlcPlayerEngine(
     /** The libVLC residue cleared alongside the base published-state reset: the cached duration. */
     override fun onResetItemScopedState() {
         cachedDurationMs = 0L
+        // The stats model dies with the item too — the new item's first stats
+        // tick must read + publish fresh, never suppressed by the previous
+        // item's sample (the Exo/mpv resetStatsGuard arm).
+        statsInputsDirty = true
+        resetStatsGuard()
     }
 
     /**
@@ -350,6 +463,11 @@ class LibVlcPlayerEngine(
      * serialized release thread.
      */
     private fun resetForNextMedia() {
+        // A pending coalesced rebuild must never fire against the NEXT
+        // media's half-initialized player (or after teardown nulls it) — the
+        // same cancel-before-teardown order mpv's release runs its coalescer
+        // through.
+        trackRefresh.cancel()
         mainHandler.removeCallbacksAndMessages(null)
         // Invalidate in-flight polls and drop per-media registration state:
         // track ids are meaningless for the next media.
@@ -359,6 +477,17 @@ class LibVlcPlayerEngine(
         pendingPlay = false
         currentPlaybackRequest = null
         pendingStartPositionMs = 0L
+        // The event caches die with the media too: on a reused engine a stale
+        // playhead/duration must never bleed into the next item's first reads
+        // (the getter would serve the previous item's values until the new
+        // media's first events land).
+        cachedPositionMs = 0L
+        cachedDurationMs = 0L
+        // The buffering quantization's last-applied stamp ditto: the new
+        // media's first (0%) event must publish even though it quantizes to
+        // the same whole percent the previous media ended on.
+        lastAppliedBufferPercent = -1
+        statsInputsDirty = true
         mediaPlayer?.let { mp ->
             mediaPlayer = null
             // The event listener must not outlive the player it was bound to:
@@ -430,6 +559,10 @@ class LibVlcPlayerEngine(
             // immediately because the seek was a no-op.
             if (wasEnded) {
                 mp.time = 0L
+                // Mirror the seek's cache write-through: the restart-from-end
+                // must not report the previous item run's tail position until
+                // the first TimeChanged lands.
+                cachedPositionMs = 0L
             }
         } catch (_: Exception) {}
     }
@@ -447,6 +580,10 @@ class LibVlcPlayerEngine(
         // `time` write can be dropped by a stopped player, and the display
         // must not fall back to 0 meanwhile.
         pendingStartPositionMs = positionMs.coerceAtLeast(0L)
+        // Write the target through the event cache so the display snaps to it
+        // immediately; the TimeChanged stream re-syncs during the seek's
+        // flush, and a dropped write self-corrects on the next event.
+        cachedPositionMs = pendingStartPositionMs
         try { mediaPlayer?.time = positionMs } catch (_: Exception) {}
     }
 
@@ -894,27 +1031,25 @@ class LibVlcPlayerEngine(
 
     override val currentPositionMs: Long
         get() {
-            val pending = pendingStartPositionMs
-            return try {
-                val mp = mediaPlayer ?: return pending
-                val time = mp.time
-                if (time > 0L) {
-                    // First real position — the pending start is consumed.
-                    pendingStartPositionMs = 0L
-                    time
-                } else {
-                    pending
-                }
-            } catch (_: Exception) { pending }
+            // The event cache (TimeChanged) is the position source — the JNI
+            // read is gone from the hot path. The pending start/seek hold
+            // covers the window before the first real event lands: a 0 cached
+            // value (fresh media, or a restart from ENDED) never outranks it.
+            val cached = cachedPositionMs
+            return if (cached > 0L) cached else pendingStartPositionMs
         }
 
     override val durationMs: Long
-        get() = try {
-            val len = (mediaPlayer?.length ?: 0L).coerceAtLeast(0L)
-            if (len > 0) { cachedDurationMs = len; len }
-            else if (hasRenderer && cachedDurationMs > 0) cachedDurationMs
-            else 0L
-        } catch (_: Exception) { if (hasRenderer && cachedDurationMs > 0) cachedDurationMs else 0L }
+        get() {
+            // Event-cached (LengthChanged) first; until the event lands, the
+            // legacy JNI length read fills the cache — the unknown window
+            // only, never the steady state.
+            cachedDurationMs.takeIf { it > 0L }?.let { return it }
+            return try {
+                val len = (mediaPlayer?.length ?: 0L).coerceAtLeast(0L)
+                if (len > 0) { cachedDurationMs = len; len } else 0L
+            } catch (_: Exception) { 0L }
+        }
 
     override val playbackSpeed: Float
         get() = try { mediaPlayer?.rate ?: 1f } catch (_: Exception) { 1f }
@@ -944,6 +1079,15 @@ class LibVlcPlayerEngine(
     private fun updateVideoStats() {
         val mp = mediaPlayer ?: return
         try {
+            // The change guard first (the Exo/mpv mirror): the track reads
+            // below are JNI round-trips, worth paying only once an input
+            // actually moved. The cheap sample is the event-cached buffered
+            // position; the track-derived inputs ride [statsInputsDirty]
+            // (event-announced); the cadence arm forces a periodic full
+            // read even if neither moved. publishStatsIfChanged stays the
+            // final emit guard.
+            if (!statsInputsDirty && !statsGuard.admit(_bufferedPositionMs.value)) return
+            statsInputsDirty = false
             val videoTrack = try { mp.currentVideoTrack } catch (_: Exception) { null }
             val newStats = EngineVideoStats(
                 videoResolution = videoTrack?.let { vt ->

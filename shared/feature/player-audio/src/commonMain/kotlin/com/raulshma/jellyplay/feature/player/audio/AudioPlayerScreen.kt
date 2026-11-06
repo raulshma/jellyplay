@@ -48,6 +48,7 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.data.playback.QueueUndoEvent
@@ -99,13 +100,24 @@ fun AudioPlayerScreen(
     val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
 
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Slice collection, not whole-state: the root collects the per-slice
+    // flows (track meta, transport, lyrics, sleep timer) and the queue and
+    // favorite leaves collect their own slices further down — a queue
+    // emission, favorite flip or speed change renews only the scopes that
+    // read that slice, not this ~900-line body. The projections live in
+    // [AudioPlayerStateSlices] (screen-scoped, VM surface untouched).
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    val slices = remember(viewModel) {
+        AudioPlayerStateSlices(viewModel.uiState, coroutineScope)
+    }
+    val trackMeta by slices.trackMeta.collectAsStateWithLifecycle()
+    val transport by slices.transport.collectAsStateWithLifecycle()
+    val lyricsState by slices.lyricsState.collectAsStateWithLifecycle()
+    val sleepTimer by slices.sleepTimerState.collectAsStateWithLifecycle()
+    val queueState = slices.queueState
     // The effects slice is controller-owned state (AudioEffectsController's
     // EffectsCommandCore), re-exposed by the VM — not a uiState field.
     val effects by viewModel.effectsState.collectAsStateWithLifecycle()
-    val lyricsState = uiState.lyrics
-    val sleepTimer = uiState.sleepTimer
-    val queueState = uiState.queue
     val playlistPicker by viewModel.playlistPicker.state.collectAsStateWithLifecycle()
 
     // The ONE sheet admission fold (ReaderSheetStack precedent): every
@@ -118,10 +130,10 @@ fun AudioPlayerScreen(
 
     var showErrorOverlay by remember { mutableStateOf(false) }
 
-    LaunchedEffect(uiState.playbackError) {
+    LaunchedEffect(transport.playbackError) {
         // Show the persistent error overlay only. A snackbar was previously shown here too,
         // which was redundant with the overlay and auto-dismissed before the user could react.
-        showErrorOverlay = uiState.playbackError != null
+        showErrorOverlay = transport.playbackError != null
     }
 
     // Surface an "Undo" affordance after destructive queue operations
@@ -195,7 +207,6 @@ fun AudioPlayerScreen(
     LaunchedEffect(preferences.audioLyricsVisible) {
         sheets.showLyrics = preferences.audioLyricsVisible
     }
-    val currentDownloadItem by viewModel.currentDownloadItem.collectAsStateWithLifecycle()
     val abLoopStart by viewModel.abLoopStartMs.collectAsStateWithLifecycle(initialValue = null)
     val abLoopEnd by viewModel.abLoopEndMs.collectAsStateWithLifecycle(initialValue = null)
 
@@ -225,14 +236,13 @@ fun AudioPlayerScreen(
     // Animatables for swipe gestures
     val swipeDismissOffset = remember { androidx.compose.animation.core.Animatable(0f) }
     val horizontalSwipeOffset = remember { androidx.compose.animation.core.Animatable(0f) }
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     var dragDirection by remember { mutableStateOf<AudioDragDirection?>(null) }
     var totalDragX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var totalDragY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     ArtworkThemeWrapper(
-        imageUrl = uiState.albumArtUrl.ifBlank { null },
+        imageUrl = trackMeta.albumArtUrl.ifBlank { null },
         dynamicTheming = preferences.theme.dynamicTheming,
         darkTheme = isDarkTheme,
         oledMode = preferences.theme.oledMode,
@@ -370,7 +380,7 @@ fun AudioPlayerScreen(
                                     viewModel.onEvent(AudioPlayerUiEvent.SeekTo(target))
                                 }
                                 DoubleTapSeekAction.SeekForward -> {
-                                    val duration = uiState.duration
+                                    val duration = transport.duration
                                     val target = (viewModel.currentPositionState.value + DOUBLE_TAP_SEEK_MS)
                                         .coerceAtMost(duration)
                                     viewModel.onEvent(AudioPlayerUiEvent.SeekTo(target))
@@ -403,7 +413,7 @@ fun AudioPlayerScreen(
                     onQueueClick = { sheets.show(AudioPlayerSheet.Queue) },
                     onMenuToggle = { sheets.showMenu = it },
                     showMenu = sheets.showMenu,
-                    speed = uiState.speed,
+                    speed = transport.speed,
                     dialogueBoostEnabled = effects.dialogueBoostEnabled,
                     dialogueBoostStrength = effects.dialogueBoostStrength,
                     nightModeEnabled = effects.nightModeEnabled,
@@ -415,7 +425,7 @@ fun AudioPlayerScreen(
                     onDialogueBoostStrengthChange = { viewModel.onEvent(AudioPlayerUiEvent.SetDialogueBoostStrength(it)) },
                     onNightModeClick = { sheets.showMenu = false; viewModel.onEvent(AudioPlayerUiEvent.ToggleNightMode) },
                     onNightModeStrengthChange = { viewModel.onEvent(AudioPlayerUiEvent.SetNightModeStrength(it)) },
-                    onAmbientClick = { sheets.showMenu = false; onAmbientClick(uiState.albumArtUrl.ifBlank { null }, uiState.title, uiState.artist) },
+                    onAmbientClick = { sheets.showMenu = false; onAmbientClick(trackMeta.albumArtUrl.ifBlank { null }, trackMeta.title, trackMeta.artist) },
                     onAddToPlaylistClick = { sheets.showMenu = false; viewModel.onEvent(AudioPlayerUiEvent.OpenPlaylistPicker) },
                     sleepTimerActive = sleepTimer.active,
                     sleepTimerEndOfEpisode = sleepTimer.endOfEpisode,
@@ -441,9 +451,9 @@ fun AudioPlayerScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             AlbumArtwork(
-                                albumArtUrl = uiState.albumArtUrl,
-                                albumArtBlurHash = uiState.albumArtBlurHash,
-                                title = uiState.title,
+                                albumArtUrl = trackMeta.albumArtUrl,
+                                albumArtBlurHash = trackMeta.albumArtBlurHash,
+                                title = trackMeta.title,
                                 scale = artworkScale.value,
                                 isExpanded = true,
                                 lyricsVisible = sheets.showLyrics,
@@ -467,25 +477,25 @@ fun AudioPlayerScreen(
                             verticalArrangement = Arrangement.Center
                         ) {
                             TrackInfoSection(
-                                title = uiState.title,
-                                artist = uiState.artist,
-                                artistId = uiState.artistId,
+                                title = trackMeta.title,
+                                artist = trackMeta.artist,
+                                artistId = trackMeta.artistId,
                                 onArtistClick = onArtistClick,
                             )
                             Spacer(Modifier.height(28.dp))
                             PixelProgressSection(
                                 currentPosition = viewModel.currentPositionState,
-                                duration = uiState.duration,
-                                isPlaying = uiState.isPlaying,
+                                duration = transport.duration,
+                                isPlaying = transport.isPlaying,
                                 accentColor = accentColor,
                                 onSeek = { frac ->
-                                    if (uiState.duration > 0) viewModel.onEvent(AudioPlayerUiEvent.SeekTo((frac * uiState.duration).toLong()))
+                                    if (transport.duration > 0) viewModel.onEvent(AudioPlayerUiEvent.SeekTo((frac * transport.duration).toLong()))
                                 },
                             )
                             Spacer(Modifier.height(16.dp))
                             PixelTransportControls(
-                                isPlaying = uiState.isPlaying,
-                                isLoading = uiState.isLoading,
+                                isPlaying = transport.isPlaying,
+                                isLoading = transport.isLoading,
                                 onTogglePlayPause = { viewModel.onEvent(AudioPlayerUiEvent.TogglePlayPause) },
                                 onSkipPrevious = { viewModel.onEvent(AudioPlayerUiEvent.SkipToPrevious) },
                                 onSkipNext = { viewModel.onEvent(AudioPlayerUiEvent.SkipToNext) },
@@ -495,10 +505,9 @@ fun AudioPlayerScreen(
                             )
                             Spacer(Modifier.height(12.dp))
                             PixelSecondaryControls(
-                                shuffleMode = queueState.shuffleMode,
-                                repeatMode = queueState.repeatMode,
-                                isFavorite = uiState.isFavorite,
-                                downloadItem = currentDownloadItem,
+                                queueState = queueState,
+                                isFavoriteFlow = slices.isFavorite,
+                                downloadItemFlow = viewModel.currentDownloadItem,
                                 abLoopStartMs = abLoopStart,
                                 abLoopEndMs = abLoopEnd,
                                 showDownload = viewModel.isDownloadSupported,
@@ -506,7 +515,7 @@ fun AudioPlayerScreen(
                                 onCycleRepeatMode = { viewModel.onEvent(AudioPlayerUiEvent.CycleRepeatMode) },
                                 onToggleFavorite = { viewModel.onEvent(AudioPlayerUiEvent.ToggleFavorite) },
                                 onDownloadClick = {
-                                    if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
+                                    if (viewModel.currentDownloadItem.value?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
                                         sheets.show(AudioPlayerSheet.DeleteConfirm)
                                     } else {
                                         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
@@ -518,8 +527,7 @@ fun AudioPlayerScreen(
                             )
                             Spacer(Modifier.height(16.dp))
                             NextTrackSection(
-                                queue = queueState.queue,
-                                currentIndex = queueState.currentIndex,
+                                queueState = queueState,
                                 onSkipTrack = { viewModel.onEvent(AudioPlayerUiEvent.RemoveFromQueue(it)) },
                                 accentColor = accentColor,
                             )
@@ -530,9 +538,9 @@ fun AudioPlayerScreen(
                     Spacer(Modifier.weight(0.5f))
 
                     AlbumArtwork(
-                        albumArtUrl = uiState.albumArtUrl,
-                        albumArtBlurHash = uiState.albumArtBlurHash,
-                        title = uiState.title,
+                        albumArtUrl = trackMeta.albumArtUrl,
+                        albumArtBlurHash = trackMeta.albumArtBlurHash,
+                        title = trackMeta.title,
                         scale = artworkScale.value,
                         isExpanded = false,
                         lyricsVisible = sheets.showLyrics,
@@ -557,25 +565,25 @@ fun AudioPlayerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         TrackInfoSection(
-                            title = uiState.title,
-                            artist = uiState.artist,
-                            artistId = uiState.artistId,
+                            title = trackMeta.title,
+                            artist = trackMeta.artist,
+                            artistId = trackMeta.artistId,
                             onArtistClick = onArtistClick,
                         )
                         Spacer(Modifier.height(24.dp))
                         PixelProgressSection(
                             currentPosition = viewModel.currentPositionState,
-                            duration = uiState.duration,
-                            isPlaying = uiState.isPlaying,
+                            duration = transport.duration,
+                            isPlaying = transport.isPlaying,
                             accentColor = accentColor,
                             onSeek = { frac ->
-                                if (uiState.duration > 0) viewModel.onEvent(AudioPlayerUiEvent.SeekTo((frac * uiState.duration).toLong()))
+                                if (transport.duration > 0) viewModel.onEvent(AudioPlayerUiEvent.SeekTo((frac * transport.duration).toLong()))
                             },
                         )
                         Spacer(Modifier.height(20.dp))
                         PixelTransportControls(
-                            isPlaying = uiState.isPlaying,
-                            isLoading = uiState.isLoading,
+                            isPlaying = transport.isPlaying,
+                            isLoading = transport.isLoading,
                             onTogglePlayPause = { viewModel.onEvent(AudioPlayerUiEvent.TogglePlayPause) },
                             onSkipPrevious = { viewModel.onEvent(AudioPlayerUiEvent.SkipToPrevious) },
                             onSkipNext = { viewModel.onEvent(AudioPlayerUiEvent.SkipToNext) },
@@ -585,10 +593,9 @@ fun AudioPlayerScreen(
                         )
                         Spacer(Modifier.height(12.dp))
                         PixelSecondaryControls(
-                            shuffleMode = queueState.shuffleMode,
-                            repeatMode = queueState.repeatMode,
-                            isFavorite = uiState.isFavorite,
-                            downloadItem = currentDownloadItem,
+                            queueState = queueState,
+                            isFavoriteFlow = slices.isFavorite,
+                            downloadItemFlow = viewModel.currentDownloadItem,
                             abLoopStartMs = abLoopStart,
                             abLoopEndMs = abLoopEnd,
                             showDownload = viewModel.isDownloadSupported,
@@ -596,7 +603,7 @@ fun AudioPlayerScreen(
                             onCycleRepeatMode = { viewModel.onEvent(AudioPlayerUiEvent.CycleRepeatMode) },
                             onToggleFavorite = { viewModel.onEvent(AudioPlayerUiEvent.ToggleFavorite) },
                             onDownloadClick = {
-                                if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
+                                if (viewModel.currentDownloadItem.value?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
                                     sheets.show(AudioPlayerSheet.DeleteConfirm)
                                 } else {
                                     viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
@@ -608,8 +615,7 @@ fun AudioPlayerScreen(
                         )
                         Spacer(Modifier.height(16.dp))
                         NextTrackSection(
-                            queue = queueState.queue,
-                            currentIndex = queueState.currentIndex,
+                            queueState = queueState,
                             onSkipTrack = { viewModel.onEvent(AudioPlayerUiEvent.RemoveFromQueue(it)) },
                             accentColor = accentColor,
                         )
@@ -624,11 +630,17 @@ fun AudioPlayerScreen(
             val cardWidthDp = 260.dp
             val cardWidthPx = remember(density) { with(density) { cardWidthDp.toPx() } }
 
+            // The overlays read the queue slice through a plain .value read:
+            // these branches are reached only mid-drag (the offset read above
+            // already recomposes this scope per drag frame), so a queue
+            // mutation while idle must not subscribe this scope — the
+            // queue-consuming leaves below collect the slice themselves.
             if (horizontalSwipeOffset.value < 0) {
-                val nextIndex = if (queueState.currentIndex >= 0 && queueState.queue.isNotEmpty()) {
-                    (queueState.currentIndex + 1) % queueState.queue.size
+                val currentQueue = queueState.value
+                val nextIndex = if (currentQueue.currentIndex >= 0 && currentQueue.queue.isNotEmpty()) {
+                    (currentQueue.currentIndex + 1) % currentQueue.queue.size
                 } else 0
-                val nextTrack = queueState.queue.getOrNull(nextIndex)
+                val nextTrack = currentQueue.queue.getOrNull(nextIndex)
                 if (nextTrack != null) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -649,10 +661,11 @@ fun AudioPlayerScreen(
                     }
                 }
             } else if (horizontalSwipeOffset.value > 0) {
-                val prevIndex = if (queueState.currentIndex >= 0 && queueState.queue.isNotEmpty()) {
-                    (queueState.currentIndex - 1 + queueState.queue.size) % queueState.queue.size
+                val currentQueue = queueState.value
+                val prevIndex = if (currentQueue.currentIndex >= 0 && currentQueue.queue.isNotEmpty()) {
+                    (currentQueue.currentIndex - 1 + currentQueue.queue.size) % currentQueue.queue.size
                 } else 0
-                val prevTrack = queueState.queue.getOrNull(prevIndex)
+                val prevTrack = currentQueue.queue.getOrNull(prevIndex)
                 if (prevTrack != null) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -682,7 +695,7 @@ fun AudioPlayerScreen(
             )
 
             AnimatedVisibility(
-                visible = showErrorOverlay && uiState.playbackError != null,
+                visible = showErrorOverlay && transport.playbackError != null,
                 enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                 exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
                 modifier = Modifier.align(Alignment.BottomCenter),
@@ -702,7 +715,7 @@ fun AudioPlayerScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            uiState.playbackError ?: "",
+                            transport.playbackError ?: "",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.weight(1f),
@@ -728,26 +741,32 @@ fun AudioPlayerScreen(
     } // Close ArtworkThemeWrapper
 
     // ── Bottom sheets (unchanged functionality) ──
-    if (sheets.showQueue && queueState.queue.isNotEmpty()) {
-        val radioState by viewModel.radioState.collectAsStateWithLifecycle()
-        QueueSheet(
-            queue = queueState.queue,
-            currentIndex = queueState.currentIndex,
-            isRadioActive = radioState.active,
-            onStopRadio = { viewModel.onEvent(AudioPlayerUiEvent.StopRadio) },
-            onSelect = { index ->
-                viewModel.onEvent(AudioPlayerUiEvent.PlayFromQueue(index))
-                sheets.hide(AudioPlayerSheet.Queue)
-            },
-            onRemove = { index -> viewModel.onEvent(AudioPlayerUiEvent.RemoveFromQueue(index)) },
-            onMove = { fromIndex, toIndex -> viewModel.onEvent(AudioPlayerUiEvent.MoveQueueItem(fromIndex, toIndex)) },
-            onDismiss = { sheets.hide(AudioPlayerSheet.Queue) },
-        )
+    // The queue sheet collects its own slice inside the visibility branch, so
+    // the sheet-closed scope never reads the queue (a queue mutation while the
+    // sheet is hidden cannot reach this scope).
+    if (sheets.showQueue) {
+        val sheetQueueState by slices.queueState.collectAsStateWithLifecycle()
+        if (sheetQueueState.queue.isNotEmpty()) {
+            val radioState by viewModel.radioState.collectAsStateWithLifecycle()
+            QueueSheet(
+                queue = sheetQueueState.queue,
+                currentIndex = sheetQueueState.currentIndex,
+                isRadioActive = radioState.active,
+                onStopRadio = { viewModel.onEvent(AudioPlayerUiEvent.StopRadio) },
+                onSelect = { index ->
+                    viewModel.onEvent(AudioPlayerUiEvent.PlayFromQueue(index))
+                    sheets.hide(AudioPlayerSheet.Queue)
+                },
+                onRemove = { index -> viewModel.onEvent(AudioPlayerUiEvent.RemoveFromQueue(index)) },
+                onMove = { fromIndex, toIndex -> viewModel.onEvent(AudioPlayerUiEvent.MoveQueueItem(fromIndex, toIndex)) },
+                onDismiss = { sheets.hide(AudioPlayerSheet.Queue) },
+            )
+        }
     }
 
     if (sheets.showSpeedPicker) {
         SpeedPickerSheet(
-            currentSpeed = uiState.speed,
+            currentSpeed = transport.speed,
             onSelect = { viewModel.onEvent(AudioPlayerUiEvent.ChangePlaybackSpeed(it)) },
             onDismiss = { sheets.hide(AudioPlayerSheet.SpeedPicker) },
         )
@@ -769,8 +788,8 @@ fun AudioPlayerScreen(
 
     if (sheets.showLyricsSearch) {
         LyricsSearchSheet(
-            artist = uiState.artist,
-            title = uiState.title,
+            artist = trackMeta.artist,
+            title = trackMeta.title,
             searchResults = lyricsState.searchResults,
             isSearching = lyricsState.isSearching,
             onSearch = { viewModel.onEvent(AudioPlayerUiEvent.SearchLyrics(it)) },
@@ -896,16 +915,21 @@ fun AudioPlayerScreen(
  * over (remove) it. Hidden when the queue is empty or only one track remains
  * (nothing to skip). Only shows a *real* next track — when the current track is
  * last and the queue doesn't wrap, there is no upcoming item to skip.
+ *
+ * Collects the queue slice HERE (the leaf-collect idiom): a queue emission
+ * renews only this section, not the player body around it.
  */
 @Composable
 private fun NextTrackSection(
-    queue: List<com.raulshma.jellyplay.core.data.playback.AudioQueueItem>,
-    currentIndex: Int,
+    queueState: StateFlow<QueueState>,
     onSkipTrack: (Int) -> Unit,
     accentColor: Color,
 ) {
+    val state by queueState.collectAsStateWithLifecycle()
+    val queue = state.queue
     if (queue.size <= 1) return
     // A genuine upcoming track exists only when current isn't the last item.
+    val currentIndex = state.currentIndex
     if (currentIndex < 0 || currentIndex >= queue.lastIndex) return
     val nextIndex = currentIndex + 1
     val nextTrack = queue.getOrNull(nextIndex) ?: return

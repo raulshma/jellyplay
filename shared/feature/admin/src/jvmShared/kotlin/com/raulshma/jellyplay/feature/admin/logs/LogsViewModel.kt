@@ -58,6 +58,17 @@ class LogsViewModel(
         /** Cap for the live dedup id set — 2× the display buffer it guards. */
         const val MAX_LIVE_ENTRY_IDS = MAX_LIVE_ENTRIES * 2
 
+        /**
+         * Retained tail of the selected file's [LogLine] list. Server logs
+         * routinely hold 50k-200k lines; keeping the whole file in compose
+         * state pins tens of MB and pays an O(n) list copy per append. The
+         * retained window indexes into the FULL file ([LogLine.index] is the
+         * original line number), so scroll keys stay unique and the diff's
+         * append fast path maps the window back onto the re-downloaded
+         * content by that offset.
+         */
+        const val LOG_TAIL_WINDOW = 8_000
+
         /** Server page size for the paginated activity fetch (cold load + more-loads). */
         const val ACTIVITY_PAGE_SIZE = 50
 
@@ -174,8 +185,10 @@ class LogsViewModel(
                 // Strings — parse off Main (the LicensesViewModel idiom),
                 // publish on Main.
                 val lines = withContext(parseDispatcher) {
-                    content.lines().mapIndexed { index, text ->
-                        LogLine(index = index, text = text, isNew = false, addedTime = 0L)
+                    val all = content.lines()
+                    val from = (all.size - LOG_TAIL_WINDOW).coerceAtLeast(0)
+                    all.subList(from, all.size).mapIndexed { i, text ->
+                        LogLine(index = from + i, text = text, isNew = false, addedTime = 0L)
                     }
                 }
                 _state.value = _state.value.copy(
@@ -240,52 +253,72 @@ class LogsViewModel(
      */
     private fun diffAgainst(oldLines: List<LogLine>, content: String): List<LogLine>? {
         val newLinesText = content.lines()
-        val appendOnly = isAppendOf(oldLines, newLinesText)
+        val windowStart = oldLines.firstOrNull()?.index ?: 0
+        val oldCount = windowStart + oldLines.size
+        val appendOnly = newLinesText.size >= oldCount &&
+            isAppendOf(oldLines, newLinesText, windowStart)
 
         return when {
-            appendOnly && newLinesText.size == oldLines.size -> null
+            appendOnly && newLinesText.size == oldCount -> null
             appendOnly -> {
-                val startIndex = oldLines.size
                 val now = System.currentTimeMillis()
-                val appended = newLinesText.subList(startIndex, newLinesText.size)
+                val appended = newLinesText.subList(oldCount, newLinesText.size)
                     .mapIndexed { i, text ->
                         LogLine(
-                            index = startIndex + i,
+                            index = oldCount + i,
                             text = text,
                             isNew = true,
                             addedTime = now,
                         )
                     }
-                oldLines + appended
+                retainTail(oldLines + appended)
             }
-            newLinesText != oldLines.map { it.text } -> {
-                newLinesText.mapIndexed { index, text ->
-                    if (index < oldLines.size && oldLines[index].text == text) {
-                        oldLines[index]
-                    } else {
-                        LogLine(
-                            index = index,
-                            text = text,
-                            isNew = index >= oldLines.size,
-                            addedTime = if (index >= oldLines.size) System.currentTimeMillis() else 0L,
-                        )
-                    }
-                }
+            else -> {
+                // Rotation / truncation / rewrite: re-derive against the
+                // window's offset slice, reusing unchanged lines so their
+                // isNew / addedTime state survives.
+                retainTail(
+                    newLinesText.mapIndexed { index, text ->
+                        val windowIdx = index - windowStart
+                        if (windowIdx in oldLines.indices && oldLines[windowIdx].text == text) {
+                            oldLines[windowIdx]
+                        } else {
+                            LogLine(
+                                index = index,
+                                text = text,
+                                isNew = index >= oldCount,
+                                addedTime = if (index >= oldCount) System.currentTimeMillis() else 0L,
+                            )
+                        }
+                    },
+                )
             }
-            else -> null
         }
     }
 
     /**
-     * True when [oldLines] is a line-for-line prefix of [newLinesText] — i.e.
-     * the file only grew. Compares the full prefix rather than just the
-     * boundary line so a same-size or partial rewrite (rotation) can't slip
-     * through as an "append" and leave stale lines on screen.
+     * The retained state is the LAST [LOG_TAIL_WINDOW] lines. LogLine.index
+     * values are the original file line numbers, so the LazyColumn keys stay
+     * unique and stable across window slides.
      */
-    private fun isAppendOf(oldLines: List<LogLine>, newLinesText: List<String>): Boolean {
-        if (newLinesText.size < oldLines.size) return false
+    private fun retainTail(lines: List<LogLine>): List<LogLine> =
+        if (lines.size <= LOG_TAIL_WINDOW) lines else lines.takeLast(LOG_TAIL_WINDOW)
+
+    /**
+     * True when [oldLines] (the retained tail window starting at
+     * [windowStart]) is a line-for-line slice of [newLinesText] at that
+     * offset — i.e. the file only grew past the window. Compares the full
+     * window rather than just the boundary line so a same-size or partial
+     * rewrite (rotation) can't slip through as an "append" and leave stale
+     * lines on screen. Caller guarantees [newLinesText] covers the window.
+     */
+    private fun isAppendOf(
+        oldLines: List<LogLine>,
+        newLinesText: List<String>,
+        windowStart: Int,
+    ): Boolean {
         for (i in oldLines.indices) {
-            if (newLinesText[i] != oldLines[i].text) return false
+            if (newLinesText[windowStart + i] != oldLines[i].text) return false
         }
         return true
     }

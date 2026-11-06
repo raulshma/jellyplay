@@ -159,6 +159,7 @@ class OnboardingViewModelTest {
         seerrPreferencesStore = seerrPreferencesStore,
         seerrSecureCredentialsStore = seerrSecureCredentialsStore,
         editor = buildEditor(),
+        seerrSecureWriteDispatcher = mainDispatcher,
     )
 
     @Test
@@ -346,6 +347,10 @@ class OnboardingViewModelTest {
         vm.seerrEditActions.setDiscoverEnabled(true)
         vm.seerrEditActions.setStreamingRegion("DE")
         vm.seerrEditActions.setDiscoverRegion("FR")
+        // The per-keystroke field writes are debounced — run the typing pause
+        // out on the virtual clock BEFORE disconnect, which cancels any write
+        // still pending so it cannot resurrect cleared state.
+        advanceUntilIdle()
         vm.seerrEditActions.disconnect()
         advanceUntilIdle()
 

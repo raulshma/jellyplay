@@ -25,6 +25,16 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
  * The high-frequency [AudioPlayerViewModel.currentPosition] is intentionally kept
  * *outside* this object so the 250ms playback tick triggers a narrow recomposition
  * rather than copying the whole state.
+ *
+ * The screen root does not collect this whole state —
+ * [AudioPlayerStateSlices] projects it into slice flows
+ * ([AudioPlayerStateSlices.trackMeta] / [AudioPlayerStateSlices.transport] /
+ * the already-nested [QueueState] / [LyricsState] / [SleepTimerState] plus
+ * the scalar favorite), and each composable scope collects only the slice it
+ * renders. The two classes below give the flat fields their seams: a queue
+ * emission, favorite flip or speed change re-maps the projections, and
+ * Compose's structural-equality state writes leave the scopes that don't
+ * read that slice untouched.
  */
 @Immutable
 data class AudioPlayerUiState(
@@ -46,6 +56,36 @@ data class AudioPlayerUiState(
     val queue: QueueState = QueueState(),
     // The "Add to playlist" picker lives on the ViewModel's
     // [PlaylistPickerStateHolder] (its own StateFlow snapshot), not here.
+)
+
+/**
+ * The track-identity slice — who is playing and what art renders for them.
+ * Changes only when the playing track changes (or its blur hash resolves);
+ * the artwork theme wrapper, track info row and ambient hand-off read it.
+ */
+@Immutable
+data class AudioTrackMetaState(
+    val title: String = "",
+    val artist: String = "",
+    val artistId: String? = null,
+    val album: String = "",
+    val albumArtUrl: String = "",
+    val albumArtBlurHash: String? = null,
+)
+
+/**
+ * The playback-status slice — engine-driven scalars that move with playback
+ * state rather than with the track: play/pause, duration, loading, speed and
+ * the last playback error. The progress row, transport row, error overlay
+ * and speed picker read it.
+ */
+@Immutable
+data class AudioTransportState(
+    val isPlaying: Boolean = false,
+    val duration: Long = 0L,
+    val isLoading: Boolean = false,
+    val speed: Float = 1.0f,
+    val playbackError: String? = null,
 )
 
 /**

@@ -521,18 +521,16 @@ internal class PlayerSessionManager(
             return
         }
 
-        initializeEngine(playerType, detail, null, url, startPositionTicks, agg, mimeType = mimeHint)
+        // initializeEngine also re-attaches the provider-sourced subtitles
+        // (OpenSubtitles/Wyzie) persisted for this item in the streaming-
+        // subtitle store: `SubtitleManager` always writes provider downloads
+        // there regardless of online/offline playback, so offline (downloaded)
+        // media must restore them too — otherwise a subtitle downloaded once
+        // vanishes on reopen. No server stream list exists offline, so no
+        // deletion reconciliation runs (the null streams input).
 
         // Attach external subtitles bundled with the download (offline subs).
         sessionSubtitleSources.loadOfflineSubtitles(itemId, downloadPath)
-
-        // Re-attach provider-sourced subtitles (OpenSubtitles/Wyzie) persisted
-        // for this item in the streaming-subtitle store. `SubtitleManager`
-        // always writes provider downloads there regardless of online/offline
-        // playback, so offline (downloaded) media must restore them too —
-        // otherwise a subtitle downloaded once vanishes on reopen. No server
-        // stream list exists offline, so no deletion reconciliation runs.
-        sessionSubtitleSources.loadStreamingSubtitles(itemId, currentStreams = null)
 
         // Best-effort catch-up for sidecar subtitles added on the server AFTER
         // the download was made: the bundle is a download-time snapshot,
@@ -851,13 +849,21 @@ internal class PlayerSessionManager(
             return
         }
 
-        initializeEngine(playerType, detail, source, url, startPositionTicks, agg, playMethod)
-
-        // Re-attach subtitles previously saved from an external provider
-        // (OpenSubtitles/Wyzie) for this streaming item. These persist across
-        // replays on-device, so a subtitle downloaded once (even offline) is
-        // available on the next playback without a server round-trip.
-        sessionSubtitleSources.loadStreamingSubtitles(itemId, streams)
+        initializeEngine(
+            playerType = playerType,
+            detail = detail,
+            source = source,
+            url = url,
+            startPositionTicks = startPositionTicks,
+            agg = agg,
+            playMethod = playMethod,
+            // Re-attach subtitles previously saved from an external provider
+            // (OpenSubtitles/Wyzie) for this streaming item. These persist
+            // across replays on-device, so a subtitle downloaded once (even
+            // offline) is available on the next playback without a server
+            // round-trip.
+            persistedSubtitleStreams = streams,
+        )
 
         _sessionState.update { it.copy(isReady = true) }
         publishNowPlayingMeta()
@@ -872,6 +878,8 @@ internal class PlayerSessionManager(
         agg: VideoPlayerAggregate,
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
         mimeType: String? = null,
+        /** The server stream list the persisted provider subs reconcile against (null offline). */
+        persistedSubtitleStreams: List<MediaStream>? = null,
     ) {
         // Reuse the live engine when the player type is unchanged (the common
         // binge-watch/autoplay case): every engine's load() resets per-item
@@ -902,6 +910,27 @@ internal class PlayerSessionManager(
 
         val externalSubtitles = sessionSubtitleSources.buildExternalSubtitles(detail, source, playMethod)
 
+        // Persisted provider subtitles (OpenSubtitles/Wyzie). On ExoPlayer they
+        // ride the INITIAL request: its per-sub side-load path rebuilds the
+        // media (setMediaItem + prepare) after the first prepare, once per sub,
+        // discarding the buffered ranges each time. Engines with a cheap
+        // incremental side-load (mpv sub-add, libVLC addSlave) keep it — and
+        // must, because libVLC's side-loaded-id registration is diff-based
+        // against the post-start track list and cannot pair load-time slaves
+        // without misregistering concurrently surfacing embedded tracks.
+        val persistedSubtitles = sessionSubtitleSources.loadStreamingSubtitles(
+            itemId = detail.item.id,
+            currentStreams = persistedSubtitleStreams,
+        )
+        val mergedExternalSubtitles = if (playerType == PlayerType.EXO_PLAYER) {
+            val knownUrls = externalSubtitles.mapTo(HashSet()) { it.url }
+            externalSubtitles + persistedSubtitles
+                .filter { it.url !in knownUrls }
+                .distinctBy { it.url }
+        } else {
+            externalSubtitles
+        }
+
         val artworkUri = artworkUrls.poster(detail.item, maxWidth = 300)
 
         // The 20-field request as one pure fold (the MpvLoadOptionsPlan
@@ -921,7 +950,7 @@ internal class PlayerSessionManager(
                 detail = detail,
                 agg = agg,
                 streams = _sessionState.value.mediaStreams,
-                externalSubtitles = externalSubtitles,
+                externalSubtitles = mergedExternalSubtitles,
                 artworkUri = artworkUri,
                 serverUrl = playbackIdentity.serverUrl(),
                 token = playbackIdentity.accessToken(),
@@ -944,6 +973,12 @@ internal class PlayerSessionManager(
         maybeNotifyVlcClientCertificateUnsupported(playerType)
         lastPlaybackRequest = request
         eng.load(request)
+
+        // Non-Exo engines keep the incremental side-load path, post-load as
+        // before (see the merge note above).
+        if (playerType != PlayerType.EXO_PLAYER) {
+            persistedSubtitles.forEach { addExternalSubtitle(it) }
+        }
     }
 
     /**

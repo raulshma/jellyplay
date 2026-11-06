@@ -122,22 +122,39 @@ internal fun rememberDetailScrollState(
     // inputs so they don't reallocate per recompose and so the derivedStateOf
     // blocks below capture the current value instead of one frozen at first
     // composition (which was a latent bug on rotation / window resize / TV toggle).
-    val (baseBackdropHeight, collapsedHeight, spacerHeightPx) = remember(backdropHeight, density) {
+    val (baseBackdropHeight, collapsedHeightPx, spacerHeightPx) = remember(backdropHeight, density) {
         with(density) {
             val base = (backdropHeight.toPx() / 1.2f).toDp()
             val collapsed = backdropHeight.toPx()
             val spacer = (base - 150.dp).toPx()
-            Triple(base, collapsed, spacer)
+            // The spacer is the parallax window's constant prefix: list item 0
+            // holds exactly [spacer] px, so while the first content item is the
+            // first visible one the total scroll offset is spacer + its offset.
+            DetailBackdropMetrics(base, collapsed, spacer)
         }
     }
-    val scrollOffsetState = remember(spacerHeightPx) {
+    val scrollOffsetState = remember(spacerHeightPx, collapsedHeightPx) {
         derivedStateOf {
-            (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) + listState.firstVisibleItemScrollOffset.toFloat()
+            when (listState.firstVisibleItemIndex) {
+                // Inside the spacer: the offset is the in-item scroll exactly.
+                0 -> listState.firstVisibleItemScrollOffset.toFloat()
+                // Inside the first content item: the spacer is the entire
+                // prefix, so spacer + in-item offset is the exact total.
+                1 -> spacerHeightPx + listState.firstVisibleItemScrollOffset
+                // Past the first content item the parallax window is over (the
+                // true prefix also includes the first item's full height, which
+                // the lazy layout no longer reports). Every consumer of this
+                // offset clamps at the backdrop's collapse fraction — reporting
+                // the collapsed ceiling pins the fraction at 1 exactly as the
+                // deep-scroll behavior demands, without an unbounded value
+                // leaking into the backdrop's parallax translation/scale.
+                else -> collapsedHeightPx
+            }
         }
     }
-    val scrollFractionState = remember(collapsedHeight) {
+    val scrollFractionState = remember(collapsedHeightPx) {
         derivedStateOf {
-            (scrollOffsetState.value / collapsedHeight).coerceIn(0f, 1f)
+            (scrollOffsetState.value / collapsedHeightPx).coerceIn(0f, 1f)
         }
     }
 
@@ -226,3 +243,15 @@ internal fun rememberDetailScrollState(
         containerColorState = containerColorState,
     )
 }
+
+/**
+ * The density-resolved backdrop metrics shared between the scroll math and the
+ * hero band: the parallax tier's base dp plus the pixel sizes the offset
+ * derivation needs (the collapse ceiling = the tier's full backdrop height,
+ * and the spacer item's exact height).
+ */
+private data class DetailBackdropMetrics(
+    val baseBackdropHeight: Dp,
+    val collapsedHeightPx: Float,
+    val spacerHeightPx: Float,
+)

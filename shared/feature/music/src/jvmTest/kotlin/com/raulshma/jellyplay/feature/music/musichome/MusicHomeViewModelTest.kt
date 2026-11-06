@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -8,6 +10,7 @@ import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
@@ -77,6 +80,8 @@ class MusicHomeViewModelTest {
     private val homeDiscoveryStore: HomeDiscoveryStore = mockk()
     private val offlineModeManager: OfflineModeManager = mockk()
     private val userMessageBus: MusicMessageBus = mockk()
+    private val sessionIdentity: SessionIdentityProvider = mockk()
+    private val sessionCacheRegistry: SessionCacheRegistry = mockk(relaxed = true)
 
     private val homeModeFlow = MutableStateFlow(HomeDiscoverySlice())
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
@@ -94,6 +99,11 @@ class MusicHomeViewModelTest {
         every { activeDownloads.getActiveDownloadCount() } returns flowOf(0)
         every { userMessageBus.error(any()) } just Runs
         every { offlineModeManager.toggleManualOffline() } just Runs
+        // The sections cache keys by identity; the registry registration is
+        // relaxed (the VM test exercises the cache logic, not the transition
+        // hook).
+        coEvery { sessionIdentity.cacheIdentity() } returns CacheIdentity.UNKNOWN
+        every { sessionIdentity.cacheIdentitySnapshot() } returns CacheIdentity.UNKNOWN
         // The deferred refresher collects this for the whole VM lifetime.
         every { userDataChanges.userDataChanges } returns userDataEvents
     }
@@ -122,7 +132,10 @@ class MusicHomeViewModelTest {
     }
 
     /** Constructs the VM — the init collectors run their first load inline. */
-    private fun createViewModel() {
+    private fun createViewModel(
+        sectionsCache: MusicHomeSectionsCache =
+            MusicHomeSectionsCache(sessionIdentity, sessionCacheRegistry),
+    ) {
         viewModel = MusicHomeViewModel(
             userDataChanges = userDataChanges,
             musicCatalogue = musicCatalogue,
@@ -134,6 +147,7 @@ class MusicHomeViewModelTest {
             homeDiscoveryStore = homeDiscoveryStore,
             offlineModeManager = offlineModeManager,
             userMessageBus = userMessageBus,
+            sectionsCache = sectionsCache,
         )
     }
 
@@ -240,6 +254,32 @@ class MusicHomeViewModelTest {
         coVerify(exactly = 2) { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
         assertEquals(1, viewModel.uiState.value.sections.size)
         assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
+    fun freshEntryWithinTtl_servesCachedAggregateAndStaysRefreshable() = runTest(mainDispatcher) {
+        // One cache shared by two VM instances — a fresh music home
+        // navigation (new ViewModel) replays the last complete aggregate
+        // within the TTL instead of re-running the five-query fan-out.
+        val sharedCache = MusicHomeSectionsCache(sessionIdentity, sessionCacheRegistry)
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel(sharedCache)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+
+        createViewModel(sharedCache)
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.sections.size)
+        assertFalse(viewModel.uiState.value.isLoading)
+        coVerify(exactly = 1) { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+
+        // Pull-to-refresh bypasses the snapshot and re-fetches.
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertEquals(1, viewModel.uiState.value.sections.size)
     }
 
     @Test

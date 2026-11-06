@@ -29,9 +29,13 @@ import com.raulshma.jellyplay.feature.book.epub.EpubEvent
 import com.raulshma.jellyplay.feature.book.epub.EpubRelocation
 import com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph
 import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -136,6 +140,12 @@ class BookReaderViewModel(
      */
     private val bookmarksSyncRepository: BookmarksSyncRepository = NoopBookmarksSyncRepository(),
     /**
+     * Where the read-aloud loop hops a chapter's sentence split off the main
+     * thread (ReaderSpeechController). Defaulted so tests and platforms
+     * without an explicit dispatcher compile unchanged.
+     */
+    private val speechSplitDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
      * Process-wide scope for the exit flush: [reportNow] with `final = true`
      * runs from `onDispose`, and viewModelScope is already cancelled by the
      * time `onCleared()` tears the screen down — a plain launch there would
@@ -206,6 +216,7 @@ class BookReaderViewModel(
         onSpeakParagraph = { _, cfi -> readerSession?.followSpeech(cfi) },
         onFinished = {},
         onError = {},
+        splitDispatcher = speechSplitDispatcher,
     )
 
     internal val speechState: StateFlow<ReaderSpeechState> = speechController.state
@@ -303,6 +314,19 @@ class BookReaderViewModel(
     private var pendingJumpPage: Int? = null
     private var document: BookDocument? = null
     private val pageCache = PageCache<ImageBitmap>()
+
+    /**
+     * In-flight renders, keyed like [PageCache] — the coalesce seam between
+     * the neighbor prefetch and the pager's own tile composition, which can
+     * race for the same (page, width): one render runs, the other awaits it
+     * (the PDF back-ends serialize renders behind a lock, so an uncoalesced
+     * duplicate would queue behind the identical render it is racing). The
+     * deferred owns the cache put so the entry lands for every waiter,
+     * including callers cancelled mid-await; cleared with the session — a
+     * completed deferred carries the previous book's bitmap under a key the
+     * next book could reuse.
+     */
+    private val inFlightRenders = mutableMapOf<PageCacheKey, Deferred<ImageBitmap?>>()
     private var currentPage = 0
 
     /**
@@ -432,6 +456,7 @@ class BookReaderViewModel(
         document?.close()
         document = null
         pageCache.clear()
+        inFlightRenders.clear()
         currentPage = 0
         currentPercent = 0.0
         latestEpubCfi = null
@@ -529,11 +554,21 @@ class BookReaderViewModel(
     /** Render (or cache-hit) one page for the pager; null keeps the placeholder tile. */
     suspend fun requestPage(pageIndex: Int, widthPx: Int): ImageBitmap? {
         val doc = document ?: return null
-        pageCache[PageCacheKey(pageIndex, widthPx)]?.let { return it }
+        val key = PageCacheKey(pageIndex, widthPx)
+        pageCache[key]?.let { return it }
+        // Coalesce with an identical in-flight render; all access stays on
+        // the main-confined scope, so the check-then-claim pair is atomic.
+        val inFlight = inFlightRenders[key]
+        if (inFlight != null) return inFlight.await()
         // Back-ends hop to Dispatchers.IO themselves; the bitmap lands in the
-        // cache on the caller's context (StateFlow-safe either way).
-        val bitmap = doc.renderPage(pageIndex, widthPx)
-        return bitmap?.also { pageCache.put(PageCacheKey(pageIndex, widthPx), it) }
+        // cache inside the deferred (this scope is main-confined, same as the
+        // caller's context the put used to ride).
+        val deferred = scope.async {
+            doc.renderPage(pageIndex, widthPx)?.also { pageCache.put(key, it) }
+        }
+        deferred.invokeOnCompletion { inFlightRenders.remove(key) }
+        inFlightRenders[key] = deferred
+        return deferred.await()
     }
 
     /**

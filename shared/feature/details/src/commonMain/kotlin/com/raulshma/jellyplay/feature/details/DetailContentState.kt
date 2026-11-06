@@ -39,6 +39,20 @@ internal val LocalEpisodeDownloadProgress = compositionLocalOf<Map<String, Float
 internal val LocalActiveDownloadFlow = staticCompositionLocalOf<kotlinx.coroutines.flow.Flow<DownloadItem?>?> { null }
 
 /**
+ * The late-landing enrichment sub-flow ([DetailLateEnrichments] over the live
+ * content state, deduped on that projection), provided by the screen as the
+ * FLOW — not the value — mirroring [LocalActiveDownloadFlow]'s placement rule:
+ * the scroll body collects it once (section admission + the seasons band fold
+ * read the merged view) and the backdrop's narrow host leaf-collects its two
+ * late reads (the merged trailer list, the theme clip), so an enrichment
+ * landing never re-executes the screen root or the content scaffold above the
+ * list. The default is the never-emitting all-defaults holder — a call site
+ * without a provider renders the base state unmodified.
+ */
+internal val LocalDetailLateEnrichments =
+    staticCompositionLocalOf<kotlinx.coroutines.flow.Flow<DetailLateEnrichments>> { DetailLateEnrichments.emptyFlow }
+
+/**
  * Pure-data bundle for the media-detail content tree.
  *
  * Groups every value the `DetailContent` → `DetailContentBody` → section

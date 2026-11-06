@@ -143,4 +143,30 @@ class PhotoTransformStateTest {
         assertEquals(1f, photoDecodeTarget(1f, 2.5f), "collapsing to fit frees the scaled decode")
         assertEquals(1f, photoDecodeTarget(0.5f, 3f), "a sub-fit pinch still targets the base")
     }
+
+    // ── fit-first network ladder ───────────────────────────────────────────
+
+    @Test
+    fun `fit network width tracks the viewport width`() {
+        assertEquals(1080, photoFitNetworkMaxWidth(1080))
+        assertEquals(2560, photoFitNetworkMaxWidth(2560))
+        assertEquals(2400, photoFitNetworkMaxWidth(2400))
+    }
+
+    @Test
+    fun `fit network width floors at 1 for an unmeasured viewport`() {
+        assertEquals(1, photoFitNetworkMaxWidth(0))
+        assertEquals(1, photoFitNetworkMaxWidth(-4))
+    }
+
+    @Test
+    fun `a settled zoom past fit is the upgrade trigger`() {
+        // The same ladder drives both the decode retarget and the network
+        // upgrade: a target above 1f upgrades; the dead band and the fit base
+        // never do.
+        assertNull(photoDecodeTarget(scale = 1.005f, currentDecodeScale = 1f))
+        assertNull(photoDecodeTarget(scale = 1.02f, currentDecodeScale = 1f), "within the dead band — no upgrade")
+        assertTrue(photoDecodeTarget(scale = 1.06f, currentDecodeScale = 1f)!! > 1f)
+        assertTrue(photoDecodeTarget(scale = 2.5f, currentDecodeScale = 1f)!! > 1f)
+    }
 }

@@ -17,14 +17,14 @@ import kotlinx.coroutines.test.runTest
 /**
  * Pins the desktop actual of the [StatisticsExport] seam — the file-degradation
  * half (no Android share sheet): the per-user CSV lands in `java.io.tmpdir`
- * with the exact `User,Plays,...` header and RFC-style quoting (names are
- * always wrapped in double quotes, embedded quotes doubled — commas and quote
- * characters in a display name must not break the row shape), and the
- * "My Year in Jellyfin" summary writes every populated section (hours, titles,
- * top-5 items, top-3 genres, streak) while OMITTING zero sections for an empty
- * detail page. The AWT folder-open is best-effort UI sugar outside the seam's
- * contract (runCatching'd in the actual); these tests force headless so the
- * exports stay quiet when possible.
+ * with the exact `User,Plays,Movies,Episodes,Songs,WatchTimeSec,CompletionRate`
+ * header and RFC-style quoting (names are always wrapped in double quotes,
+ * embedded quotes doubled — commas and quote characters in a display name must
+ * not break the row shape), and the "My Year in Jellyfin" summary writes every
+ * populated section (hours, titles, top-5 items, top-3 genres, streak) while
+ * OMITTING zero sections for an empty detail page. The AWT folder-open is
+ * best-effort UI sugar outside the seam's contract (runCatching'd in the
+ * actual); these tests force headless so the exports stay quiet when possible.
  *
  * NOT pinned here: the swallow-on-write-failure catch — a tmpdir write cannot
  * be made to fail portably; and [rememberStatisticsExport] (Composable).
@@ -47,10 +47,23 @@ class DesktopStatisticsExportTest {
         System.clearProperty("java.awt.headless")
     }
 
+    /**
+     * Files the export landed under [prefix] since [before]. The mtime filter
+     * carries a small backwards slack: the shared tmpdir's stamping and this
+     * process's wall clock are independent clocks, and an exact `>=` read has
+     * been observed to miss a file written a millisecond "before" its own
+     * stamp. (The prefix scopes the slack — cross-test bleed is excluded by
+     * the embedded timestamp in the file names.)
+     */
     private fun newFilesSince(prefix: String, before: Long): List<File> =
-        tmpdir.listFiles { f -> f.name.startsWith(prefix) && f.lastModified() >= before }
+        tmpdir.listFiles { f -> f.name.startsWith(prefix) && f.lastModified() >= before - MTIME_SLACK_MS }
             ?.sortedBy { it.name }
             .orEmpty()
+
+    private companion object {
+        /** The mtime comparison's backwards slack (see [newFilesSince]). */
+        const val MTIME_SLACK_MS = 2_000L
+    }
 
     // ----------------------------------------------------------------- CSV
 

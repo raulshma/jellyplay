@@ -23,8 +23,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
  *
  *  - **Streaming store** ([loadStreamingSubtitles]) — provider subtitles
  *    (OpenSubtitles/Wyzie) persisted in the durable streaming-subtitle store,
- *    side-loaded on both online and offline playback, reconciled against the
- *    server's live stream list so a deleted subtitle is not resurrected.
+ *    attached on both online and offline playback (into the initial request
+ *    or incrementally, per the caller), reconciled against the server's live
+ *    stream list so a deleted subtitle is not resurrected.
  *  - **Offline manifest** ([loadOfflineSubtitles]) — the sidecars bundled with
  *    a download, with the bitmap-codec engine-capability gate.
  *  - **Server streams** ([buildExternalSubtitles]) — the shared subtitle URL
@@ -59,26 +60,33 @@ internal class SessionSubtitleSources(
 ) {
 
     /**
-     * Side-loads subtitles previously persisted by `SubtitleManager` into the
-     * durable streaming-subtitle store. Mirrors [loadOfflineSubtitles] but for
-     * streaming (non-downloaded) items — keyed by `itemId`, not a media-file
-     * path. Files missing on disk are silently skipped.
+     * Collects the subtitles previously persisted by `SubtitleManager` into
+     * the durable streaming-subtitle store as [SubtitleSource]s. Mirrors
+     * [loadOfflineSubtitles] but for streaming (non-downloaded) items — keyed
+     * by `itemId`, not a media-file path. Files missing on disk are silently
+     * skipped.
      *
      * Entries that recorded a SavedSubtitle.serverStreamIndex are reconciled
      * against [currentStreams]: when the user deleted the subtitle from the
-     * metadata editor, its server stream is gone — and side-loading the local
+     * metadata editor, its server stream is gone — and attaching the local
      * copy would resurrect the deleted track on every playback. Null disables
      * reconciliation (offline playback has no server state to reconcile
      * against). Legacy entries (no recorded index) and device-only downloads
      * (upload failed, so no index was ever recorded) always load: the durable
      * local copy is their only copy.
+     *
+     * Returns the sources without attaching them: the caller decides whether
+     * they ride the initial playback request (engines whose per-sub side-load
+     * forces a media rebuild) or go through the incremental
+     * [addExternalSubtitle] path.
      */
-    suspend fun loadStreamingSubtitles(itemId: String, currentStreams: List<MediaStream>?) {
+    suspend fun loadStreamingSubtitles(itemId: String, currentStreams: List<MediaStream>?): List<SubtitleSource> {
         val saved = streamingSubtitleStore.loadAll(itemId)
         val currentIndexes = currentStreams
             ?.filter { it.type == StreamType.SUBTITLE }
             ?.map { it.index }
             ?.toSet()
+        val sources = mutableListOf<SubtitleSource>()
         for (entry in saved) {
             val recordedIndex = entry.serverStreamIndex
             if (recordedIndex != null && currentIndexes != null && recordedIndex !in currentIndexes) {
@@ -91,7 +99,7 @@ internal class SessionSubtitleSources(
             }
             val file = streamingSubtitleStore.fileFor(itemId, entry)
             if (!file.exists()) continue
-            addExternalSubtitle(
+            sources.add(
                 SubtitleSource(
                     url = fileUriString(file),
                     label = entry.language ?: entry.fileName,
@@ -104,6 +112,7 @@ internal class SessionSubtitleSources(
                 ),
             )
         }
+        return sources
     }
 
     /**

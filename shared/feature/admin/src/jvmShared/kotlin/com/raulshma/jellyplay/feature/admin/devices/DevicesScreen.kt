@@ -259,7 +259,12 @@ fun DevicesScreen(
                                     }
                                     itemsIndexed(
                                         items = devices,
-                                        key = { index, device -> "${userName}_${index}_${device.id}" },
+                                        // Key on the device's own id (unique
+                                        // within a user's group; the userName
+                                        // prefix keeps cross-group ids apart) —
+                                        // an index fold would shift every
+                                        // following key on removal.
+                                        key = { _, device -> "${userName}_${device.id}" },
                                         contentType = { _, _ -> "deviceItem" },
                                     ) { _, device ->
                                         DeviceItem(

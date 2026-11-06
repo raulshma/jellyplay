@@ -12,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
@@ -123,6 +124,71 @@ class EpgGridLayoutTest {
         val grid = buildEpgGridData(channels, emptyList(), windowStart, windowEnd)
         assertEquals(1, grid.rows.size)
         assertTrue(grid.rows[0].timedPrograms.isEmpty())
+    }
+
+    // ── Diff-merge row reuse ────────────────────────────────────────────────
+
+    @Test
+    fun buildEpgGridData_reuses_the_previous_row_instance_for_an_unchanged_channel() {
+        val channels = listOf(channel("a"))
+        val programs = listOf(
+            program("p1", "a", "2026-06-22T15:00:00Z", "2026-06-22T15:30:00Z"),
+        )
+        val first = buildEpgGridData(channels, programs, windowStart, windowEnd)
+        val rebuilt = buildEpgGridData(channels, programs, windowStart, windowEnd, previousRows = first.rows)
+
+        // Structurally equal AND instance-identical: the diff-merge carries
+        // the previous snapshot's row over so the screen's per-row remember
+        // and Compose skippability treat the row as untouched.
+        assertEquals(first.rows, rebuilt.rows)
+        assertSame(first.rows[0], rebuilt.rows[0])
+    }
+
+    @Test
+    fun buildEpgGridData_relays_a_row_whose_programs_changed() {
+        val channels = listOf(channel("a"))
+        val first = buildEpgGridData(
+            channels,
+            listOf(program("p1", "a", "2026-06-22T15:00:00Z", "2026-06-22T15:30:00Z")),
+            windowStart,
+            windowEnd,
+        )
+        val rebuilt = buildEpgGridData(
+            channels,
+            listOf(
+                program("p1", "a", "2026-06-22T15:00:00Z", "2026-06-22T15:30:00Z"),
+                program("p2", "a", "2026-06-22T15:30:00Z", "2026-06-22T16:00:00Z"),
+            ),
+            windowStart,
+            windowEnd,
+            previousRows = first.rows,
+        )
+
+        assertFalse(rebuilt.rows[0] === first.rows[0])
+        assertEquals(listOf("p1", "p2"), rebuilt.rows[0].timedPrograms.map { it.program.id })
+    }
+
+    @Test
+    fun buildEpgGridData_reuses_unchanged_rows_and_relays_dropped_ones_when_the_window_slides() {
+        val channels = listOf(channel("steady"), channel("shrinking"))
+        val programs = listOf(
+            // Fully inside both windows → row stays put.
+            program("steady-p1", "steady", "2026-06-22T15:00:00Z", "2026-06-22T15:30:00Z"),
+            // Ends inside the slid-out tail (windowStart moves 5 minutes) → dropped.
+            program("dropped", "shrinking", "2026-06-22T14:00:00Z", "2026-06-22T14:03:00Z"),
+        )
+        val first = buildEpgGridData(channels, programs, windowStart, windowEnd)
+        val slid = buildEpgGridData(
+            channels,
+            programs,
+            windowStart = windowStart.plus(5.minutes),
+            windowEnd = windowEnd.plus(5.minutes),
+            previousRows = first.rows,
+        )
+
+        assertSame(first.rows[0], slid.rows[0], "the untouched row keeps its instance")
+        assertFalse(slid.rows[1] === first.rows[1], "the row that lost a program re-lays")
+        assertTrue(slid.rows[1].timedPrograms.isEmpty())
     }
 
     // ── layoutChannelRow ────────────────────────────────────────────────────

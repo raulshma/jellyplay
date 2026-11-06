@@ -16,12 +16,14 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -81,7 +83,7 @@ class PhotoViewerViewModelTest {
     /** Three-photo album the viewer can page through via parentId siblings. */
     private fun stubAlbumSiblings(parentId: String = "album-1") {
         coEvery {
-            libraryApiClient.getMediaItems(parentId = parentId, filters = any(), limit = 200)
+            libraryApiClient.getMediaItems(parentId = parentId, filters = any(), limit = PHOTO_SIBLINGS_WINDOW)
         } returns Result.success(
             SearchResult(items = listOf(photo1, photo2, photo3), totalRecordCount = 3, startIndex = 0)
         )
@@ -114,9 +116,10 @@ class PhotoViewerViewModelTest {
     }
 
     @Test
-    fun `load queries siblings as photos capped at 200`() = runTest {
+    fun `load queries the first strip window as photos`() = runTest {
         // The album strip must only ever contain photos, regardless of what
-        // else lives in the parent folder.
+        // else lives in the parent folder — and the initial window is a single
+        // startIndex-0 page (first paint stays one round trip).
         val vm = createViewModel()
         loadViewerInAlbum(vm)
 
@@ -124,8 +127,118 @@ class PhotoViewerViewModelTest {
             libraryApiClient.getMediaItems(
                 parentId = "album-1",
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.PHOTO)),
-                limit = 200,
+                startIndex = 0,
+                limit = PHOTO_SIBLINGS_WINDOW,
             )
+        }
+    }
+
+    @Test
+    fun `load pages the strip forward until the opened photo is found`() = runTest {
+        // The opened photo sits past the first window: discovery walks the
+        // strip's stable sort page by page until it resolves.
+        val pageOne = List(PHOTO_SIBLINGS_WINDOW) { i -> MediaItem(id = "early-$i", name = "Early $i", mediaType = MediaType.PHOTO) }
+        val target = MediaItem(id = "deep", name = "Deep", mediaType = MediaType.PHOTO)
+        val pageTwo = listOf(target)
+        coEvery {
+            libraryApiClient.getMediaItems(parentId = "album-1", filters = any(), startIndex = 0, limit = any())
+        } returns Result.success(
+            SearchResult(items = pageOne, totalRecordCount = PHOTO_SIBLINGS_WINDOW + 1, startIndex = 0)
+        )
+        coEvery {
+            libraryApiClient.getMediaItems(parentId = "album-1", filters = any(), startIndex = PHOTO_SIBLINGS_WINDOW, limit = any())
+        } returns Result.success(
+            SearchResult(items = pageTwo, totalRecordCount = PHOTO_SIBLINGS_WINDOW + 1, startIndex = PHOTO_SIBLINGS_WINDOW)
+        )
+        coEvery { detailFeed.getMediaDetail("deep", force = false) } returns Result.success(MediaDetail(item = target))
+
+        val vm = createViewModel()
+        vm.load(itemId = "deep", parentId = "album-1")
+        advanceUntilIdle()
+
+        assertEquals(PHOTO_SIBLINGS_WINDOW + 1, vm.state.value.siblings.size)
+        assertEquals(target, vm.state.value.photo)
+        assertEquals(PHOTO_SIBLINGS_WINDOW, vm.state.value.currentIndex)
+        assertEquals(PHOTO_SIBLINGS_WINDOW + 1, vm.state.value.totalSiblings)
+    }
+
+    @Test
+    fun `load degrades to the pages that resolved when a page fails`() = runTest {
+        val pageOne = List(PHOTO_SIBLINGS_WINDOW) { i -> MediaItem(id = "early-$i", name = "Early $i", mediaType = MediaType.PHOTO) }
+        coEvery {
+            libraryApiClient.getMediaItems(parentId = "album-1", filters = any(), startIndex = 0, limit = any())
+        } returns Result.success(
+            SearchResult(items = pageOne, totalRecordCount = 400, startIndex = 0)
+        )
+        coEvery {
+            libraryApiClient.getMediaItems(parentId = "album-1", filters = any(), startIndex = PHOTO_SIBLINGS_WINDOW, limit = any())
+        } returns Result.failure(RuntimeException("flaky page"))
+
+        val vm = createViewModel()
+        vm.load(itemId = "missing-from-loaded", parentId = "album-1")
+        advanceUntilIdle()
+
+        // The strip keeps the resolved page; the opened photo stays current
+        // (index 0) and the error surfaces.
+        assertEquals(PHOTO_SIBLINGS_WINDOW, vm.state.value.siblings.size)
+        assertNull(vm.state.value.error)
+        assertTrue(vm.state.value.photo != null)
+    }
+
+    @Test
+    fun `navigating near the strip end widens the strip by one window`() = runTest {
+        coEvery {
+            libraryApiClient.getMediaItems(parentId = "album-1", filters = any(), startIndex = 0, limit = any())
+        } returns Result.success(
+            SearchResult(items = listOf(photo1, photo2, photo3), totalRecordCount = 250, startIndex = 0)
+        )
+        // The first widening page: a full window past the loaded strip, which
+        // pushes the loaded end beyond the widen margin (index + 25).
+        val widenedPage = List(PHOTO_SIBLINGS_WINDOW) { i ->
+            MediaItem(id = "later-$i", name = "Later $i", mediaType = MediaType.PHOTO)
+        }
+        coEvery {
+            libraryApiClient.getMediaItems(parentId = "album-1", filters = any(), startIndex = 3, limit = any())
+        } returns Result.success(
+            SearchResult(items = widenedPage, totalRecordCount = 250, startIndex = 3)
+        )
+        coEvery { detailFeed.getMediaDetail(photo3.id, force = false) } returns Result.success(MediaDetail(item = photo3))
+
+        val vm = createViewModel()
+        vm.load(itemId = "p3", parentId = "album-1")
+        advanceUntilIdle()
+        // The opened photo sits at index 2 of a 3-item first window — within
+        // PHOTO_SIBLINGS_WIDEN_MARGIN of the loaded end, so the load's own
+        // widening pass appends the next window immediately.
+        assertEquals(3 + PHOTO_SIBLINGS_WINDOW, vm.state.value.siblings.size)
+        assertEquals(photo1, vm.state.value.siblings.first())
+        assertEquals(250, vm.state.value.totalSiblings)
+
+        // Navigating inside the (now wider) loaded area — past the widen
+        // margin, no further fetch fires.
+        vm.navigateTo(1)
+        advanceUntilIdle()
+
+        assertEquals(3 + PHOTO_SIBLINGS_WINDOW, vm.state.value.siblings.size)
+        coVerify(exactly = 1) {
+            libraryApiClient.getMediaItems(parentId = "album-1", filters = any(), startIndex = 0, limit = any())
+        }
+        coVerify(exactly = 1) {
+            libraryApiClient.getMediaItems(parentId = "album-1", filters = any(), startIndex = 3, limit = any())
+        }
+    }
+
+    @Test
+    fun `widening is skipped once the strip covers the album total`() = runTest {
+        val vm = createViewModel()
+        loadViewerInAlbum(vm)
+
+        // totalSiblings = 3 and the strip already holds 3 — no further fetch.
+        vm.navigateTo(2)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            libraryApiClient.getMediaItems(parentId = "album-1", filters = any(), startIndex = any(), limit = any())
         }
     }
 
@@ -194,6 +307,40 @@ class PhotoViewerViewModelTest {
         assertEquals(1, vm.state.value.currentIndex)
         assertEquals(photo2, vm.state.value.photo)
         coVerify(exactly = 0) { detailFeed.getMediaDetail("p1", force = false) }
+    }
+
+    @Test
+    fun `a superseded detail fetch is cancelled and cannot publish its result`() = runTest {
+        val vm = createViewModel()
+        loadViewerInAlbum(vm)
+
+        // Park the first navigation's detail fetch mid-flight.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { detailFeed.getMediaDetail("p1", force = false) } coAnswers { gate.await(); Result.success(MediaDetail(item = photo1)) }
+        vm.navigateTo(0)
+        runCurrent() // the p1 fetch is now parked inside the detail read
+
+        // The second navigation supersedes it: the parked fetch is cancelled
+        // before the new one launches.
+        vm.navigateTo(2)
+        advanceUntilIdle()
+
+        assertEquals(photo3, vm.state.value.photoDetail?.item)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        // The late-completing superseded fetch never publishes over photo3.
+        assertEquals(photo3, vm.state.value.photoDetail?.item)
+    }
+
+    @Test
+    fun `requestOriginalResolution is idempotent and accumulates per photo`() = runTest {
+        val vm = createViewModel()
+
+        vm.requestOriginalResolution("p1")
+        vm.requestOriginalResolution("p1")
+        vm.requestOriginalResolution("p2")
+
+        assertEquals(setOf("p1", "p2"), vm.originalResolutionIds.value)
     }
 
     @Test

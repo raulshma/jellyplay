@@ -63,6 +63,35 @@ class PhotoViewerViewModel(
     private var slideshowJob: Job? = null
 
     /**
+     * The in-flight per-photo detail read. Superseded navigations cancel the
+     * previous fetch before launching the next, so a fast swipe-through can
+     * never stack concurrent detail calls (nor land an older result after a
+     * newer one — the write guard below re-checks currency on completion).
+     */
+    private var detailJob: Job? = null
+
+    /**
+     * The in-flight strip-widening fetch (one at a time; a new trigger while
+     * one runs is dropped — the widening re-fires on the next navigation if
+     * the edge is still close).
+     */
+    private var widenJob: Job? = null
+
+    /** The parent folder of the loaded strip — the widening fetch's scope. */
+    private var siblingsParentId: String? = null
+
+    /**
+     * Photos whose display request was upgraded to the original resolution
+     * after a zoom past fit. Once a photo is here it stays for the viewer's
+     * lifetime: the original is in Coil's disk cache from the upgrade, so
+     * swiping back to the photo re-requests the SAME url (no downgrade to the
+     * fitted rendition, no second download), and its fitted decode serves as
+     * the placeholder while it decodes.
+     */
+    private val _originalResolutionIds = composeState(emptySet<String>())
+    val originalResolutionIds: androidx.compose.runtime.State<Set<String>> get() = _originalResolutionIds.asState()
+
+    /**
      * Whether this platform can export the viewed photo (save to gallery /
      * share). Gates the viewer's save/share action buttons — false on desktop
      * until a gallery/share-sheet story lands there (voice-search seam pattern).
@@ -70,6 +99,7 @@ class PhotoViewerViewModel(
     val canExportPhotos: Boolean get() = photoExport.isSupported
 
     fun load(itemId: String, parentId: String?) {
+        detailJob?.cancel()
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
 
@@ -85,26 +115,24 @@ class PhotoViewerViewModel(
             }
 
             if (parentId != null) {
-                val siblingsResult = libraryApiClient.getMediaItems(
-                    parentId = parentId,
-                    filters = com.raulshma.jellyplay.core.model.LibraryFilters(
-                        mediaTypes = listOf(MediaType.PHOTO),
-                    ),
-                    limit = 200,
-                )
-                val items = siblingsResult.getOrNull()?.items ?: emptyList()
+                siblingsParentId = parentId
+                val (items, total) = loadSiblingsWindow(itemId, parentId)
                 _state.value = _state.value.copy(
                     photo = item,
                     photoDetail = detail,
                     siblings = items,
+                    totalSiblings = total,
                     currentIndex = items.indexOfFirst { it.id == itemId }.coerceAtLeast(0),
                     isLoading = false,
                 )
+                ensureSiblingsWindow()
             } else {
+                siblingsParentId = null
                 _state.value = _state.value.copy(
                     photo = item,
                     photoDetail = detail,
                     siblings = listOf(item),
+                    totalSiblings = 1,
                     currentIndex = 0,
                     isLoading = false,
                 )
@@ -112,20 +140,107 @@ class PhotoViewerViewModel(
         }
     }
 
+    /**
+     * The initial strip window: pages the parent's photos forward from the
+     * strip start until the opened photo is found (the server gives no
+     * "position of item" read, so discovery walks the same stable sort the
+     * strip displays), the album is exhausted, or a page fails (degrade to
+     * whatever loaded — the strip just starts shorter). The first window is
+     * the fast path: a photo near the strip start paints after one round
+     * trip, unchanged from the former single capped fetch.
+     *
+     * Returns the deduped strip and the server's total (null when nothing
+     * resolved — the strip then has no widening target).
+     */
+    private suspend fun loadSiblingsWindow(
+        itemId: String,
+        parentId: String,
+    ): Pair<List<com.raulshma.jellyplay.core.model.MediaItem>, Int?> {
+        val loaded = mutableListOf<com.raulshma.jellyplay.core.model.MediaItem>()
+        val seenIds = mutableSetOf<String>()
+        var total: Int? = null
+        var startIndex = 0
+        while (loaded.none { it.id == itemId }) {
+            val page = fetchSiblingsPage(parentId, startIndex) ?: break
+            total = page.totalRecordCount.takeIf { it > 0 } ?: total
+            val fresh = page.items.filterNot { it.id in seenIds }
+            seenIds.addAll(fresh.map { it.id })
+            loaded.addAll(fresh)
+            val lastPage = page.items.isEmpty() || (total != null && startIndex + page.items.size >= total)
+            if (lastPage) break
+            startIndex += page.items.size
+        }
+        return loaded to total
+    }
+
+    private suspend fun fetchSiblingsPage(
+        parentId: String,
+        startIndex: Int,
+    ): com.raulshma.jellyplay.core.model.SearchResult? = libraryApiClient.getMediaItems(
+        parentId = parentId,
+        filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+            mediaTypes = listOf(MediaType.PHOTO),
+        ),
+        startIndex = startIndex,
+        limit = PHOTO_SIBLINGS_WINDOW,
+    ).getOrNull()
+
     fun navigateTo(index: Int) {
         val items = _state.value.siblings
         if (index in items.indices) {
             _state.value = _state.value.copy(currentIndex = index, photo = items[index])
             loadDetailForCurrentPhoto(items[index].id)
+            ensureSiblingsWindow()
         }
     }
 
     private fun loadDetailForCurrentPhoto(itemId: String) {
-        launch {
+        detailJob?.cancel()
+        detailJob = launch {
             val detailResult = detailFeed.getMediaDetail(itemId, force = false)
-            detailResult.getOrNull()?.let { detail ->
-                _state.value = _state.value.copy(photoDetail = detail)
+            // A completed-but-superseded fetch must not overwrite the newer
+            // photo's detail (the cancel above covers the in-flight case; this
+            // re-check covers the completion that raced it).
+            if (itemId == _state.value.photo?.id) {
+                detailResult.getOrNull()?.let { detail ->
+                    _state.value = _state.value.copy(photoDetail = detail)
+                }
             }
+        }
+    }
+
+    /**
+     * Strip widening: while the user navigates within [PHOTO_SIBLINGS_WIDEN_MARGIN]
+     * of the loaded strip's end and the album has more pages, fetch the next
+     * window and append it (deduped — the album may have changed between
+     * fetches). One fetch in flight at a time; a failed page leaves the strip
+     * as-is and the next edge-approach retries.
+     */
+    private fun ensureSiblingsWindow() {
+        val state = _state.value
+        val parentId = siblingsParentId ?: return
+        val total = state.totalSiblings ?: return
+        if (state.siblings.size >= total) return
+        if (state.currentIndex < state.siblings.lastIndex - PHOTO_SIBLINGS_WIDEN_MARGIN) return
+        if (widenJob?.isActive == true) return
+        widenJob = launch {
+            val page = fetchSiblingsPage(parentId, startIndex = _state.value.siblings.size) ?: return@launch
+            val current = _state.value
+            val seenIds = current.siblings.mapTo(mutableSetOf()) { it.id }
+            val fresh = page.items.filterNot { it.id in seenIds }
+            if (fresh.isEmpty()) return@launch
+            _state.value = current.copy(siblings = current.siblings + fresh)
+        }
+    }
+
+    /**
+     * Marks [itemId] as upgraded to the original-resolution request (the
+     * zoom-settle hook in the display path). Idempotent — the set only grows
+     * for the viewer's lifetime.
+     */
+    fun requestOriginalResolution(itemId: String) {
+        if (itemId !in _originalResolutionIds.value) {
+            _originalResolutionIds.value = _originalResolutionIds.value + itemId
         }
     }
 
@@ -262,6 +377,8 @@ class PhotoViewerViewModel(
     override fun onCleared() {
         super.onCleared()
         slideshowJob?.cancel()
+        detailJob?.cancel()
+        widenJob?.cancel()
     }
 }
 
@@ -275,11 +392,16 @@ sealed class SaveResult {
  * (content), the album strip (siblings), the strip cursor (index), and the
  * load/error pair (loadState). One value so a navigation can never publish a
  * torn combination (photo from one sibling list, index from another).
+ *
+ * [totalSiblings] is the album's server-side total behind the strip — the
+ * widening target that tells the strip when to stop growing (null before the
+ * first window resolves, or for the parentless single-photo mode).
  */
 data class PhotoViewerState(
     val photo: MediaItem? = null,
     val photoDetail: MediaDetail? = null,
     val siblings: List<MediaItem> = emptyList(),
+    val totalSiblings: Int? = null,
     val currentIndex: Int = 0,
     val isLoading: Boolean = false,
     val error: String? = null,

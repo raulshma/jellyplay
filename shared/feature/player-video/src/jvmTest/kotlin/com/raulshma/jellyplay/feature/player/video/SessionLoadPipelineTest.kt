@@ -250,7 +250,11 @@ class SessionLoadPipelineTest {
         // (it must survive a load-job cancellation); the spine's
         // `coroutineScope` yield at the episode-fetch stage lets it land
         // exactly where the former hook fired — between the tracking starts
-        // and the episode fetches.
+        // and the episode fetches. The start report rides the same
+        // fire-and-forget shape, launched BEFORE the tracking starts: the
+        // spine's synchronous tail (tracking starts) runs first, then the
+        // queued report body, then the queued segments fetch — a slow server
+        // POST can no longer gate the seekbar/media session.
         assertEquals(
             listOf(
                 "reconcileSyncPlayQueue",
@@ -266,9 +270,9 @@ class SessionLoadPipelineTest {
                 "applyMediaDetail",
                 "onInitializing(false)",
                 "initializeTrickplay",
-                "reportPlaybackStart",
                 "startPositionTracking",
                 "startProgressReporting",
+                "reportPlaybackStart",
                 "onSegmentsFetched(0)",
                 "fetchAdjacentEpisodes",
                 "loadSeriesEpisodes",

@@ -106,6 +106,7 @@ class ReaderSpeechControllerTest {
             host = { host },
             onSpeakParagraph = { index, cfi -> spoke.add(index to cfi) },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
 
         controller.start(paragraphs("one", "two"))
@@ -135,6 +136,7 @@ class ReaderSpeechControllerTest {
             host = { null },
             onSpeakParagraph = { _, _ -> },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs("one", "two"))
         controller.stop()
@@ -155,6 +157,7 @@ class ReaderSpeechControllerTest {
             host = { null },
             onSpeakParagraph = { _, _ -> },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs("one", "two"))
         controller.skipForward() // utterance 0 superseded by utterance 1
@@ -175,6 +178,7 @@ class ReaderSpeechControllerTest {
             host = { null },
             onSpeakParagraph = { _, _ -> },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs("one", "two"))
         engine.complete() // now on paragraph 1
@@ -203,6 +207,7 @@ class ReaderSpeechControllerTest {
             host = { host },
             onSpeakParagraph = { _, _ -> },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs("one", "two", "three"))
 
@@ -227,6 +232,7 @@ class ReaderSpeechControllerTest {
             host = { null },
             onSpeakParagraph = { _, _ -> },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs("one", "two"))
         engine.complete()
@@ -247,6 +253,7 @@ class ReaderSpeechControllerTest {
             host = { null },
             onSpeakParagraph = { _, _ -> },
             onFinished = { finished++ },
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs("one"))
         controller.stop()
@@ -270,6 +277,7 @@ class ReaderSpeechControllerTest {
             onSpeakParagraph = { _, _ -> },
             onFinished = { finished++ },
             onError = { errors++ },
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs("one"))
         controller.engineLost()
@@ -288,6 +296,7 @@ class ReaderSpeechControllerTest {
             host = { host },
             onSpeakParagraph = { _, _ -> },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs())
         assertTrue(engine.spoken.isEmpty())
@@ -305,6 +314,7 @@ class ReaderSpeechControllerTest {
             host = { host },
             onSpeakParagraph = { _, _ -> },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.awaitContext(cfi = "epubcfi(/6/4!/4/2)")
         assertEquals(ReaderSpeechState(active = true), controller.state.value)
@@ -322,6 +332,7 @@ class ReaderSpeechControllerTest {
             host = { null },
             onSpeakParagraph = { index, cfi -> spoke.add(index to cfi) },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs("First one. Second two! Third three?"))
 
@@ -345,6 +356,7 @@ class ReaderSpeechControllerTest {
             host = { null },
             onSpeakParagraph = { _, _ -> },
             onFinished = {},
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.start(paragraphs("First one. Second two. Third three."))
 
@@ -379,6 +391,11 @@ class ReaderSpeechControllerTest {
  * harness used to be the only way to reach): relocation release, the
  * book-end identity guard, the empty-chapter percent-stall guard, and the
  * timeout that re-requests when a book-end turn never relocates.
+ *
+ * The controller's scope is an unconfined dispatcher bound to the test
+ * scheduler: `start()` must run its whole chain synchronously on the caller
+ * (as production's main-confined loop does), while the chapter-advance
+ * timeout's `delay` still rides the shared virtual clock (advanceTimeBy).
  */
 class ReaderSpeechContinuationTest {
 
@@ -430,9 +447,10 @@ class ReaderSpeechContinuationTest {
         val host = RecordingHost()
         val controller = ReaderSpeechController(
             engine = engine,
-            scope = backgroundScope,
+            scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             host = { host },
             onSpeakParagraph = { _, _ -> },
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         // Non-null start cfi so the INITIAL context request is distinguishable
         // from the null re-requests the continuation protocol issues.
@@ -456,9 +474,10 @@ class ReaderSpeechContinuationTest {
         val host = RecordingHost()
         val controller = ReaderSpeechController(
             engine = engine,
-            scope = backgroundScope,
+            scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             host = { host },
             onSpeakParagraph = { _, _ -> },
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         // Non-null start cfi: the initial request must not pollute the
         // null-re-request counts below.
@@ -480,9 +499,10 @@ class ReaderSpeechContinuationTest {
         val engine = FakeSpeechEngine()
         val controller = ReaderSpeechController(
             engine = engine,
-            scope = backgroundScope,
+            scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             host = { null },
             onSpeakParagraph = { _, _ -> },
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.awaitContext()
         val chapter = paragraphs("one")
@@ -503,9 +523,10 @@ class ReaderSpeechContinuationTest {
         val engine = FakeSpeechEngine()
         val controller = ReaderSpeechController(
             engine = engine,
-            scope = backgroundScope,
+            scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             host = { null },
             onSpeakParagraph = { _, _ -> },
+            splitDispatcher = UnconfinedTestDispatcher(),
         )
         controller.awaitContext()
         controller.onSpeechContext(paragraphs("one"), currentPercent = 0.5)

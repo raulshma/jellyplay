@@ -46,6 +46,7 @@ class MusicHomeViewModel(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: MusicMessageBus,
+    private val sectionsCache: MusicHomeSectionsCache,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(MusicHomeUiState())
@@ -80,6 +81,15 @@ class MusicHomeViewModel(
         fetch = { _, _ -> fetchSections() },
     )
 
+    /**
+     * Whether the next fetch body may serve the cached section aggregate
+     * (the construction-time entry load's fresh-entry fast path, see
+     * [fetchSections]). Main-confined like the coordinator it feeds and
+     * overwritten by every [loadSections] — a cancelled entry load can
+     * never leak the grant into a later load.
+     */
+    private var serveCacheOnNextFetch = false
+
     val deferredRefresher: DeferredUserDataRefresher get() = fetchCoordinator.deferredRefresher
 
     val activeDownloadCount = activeDownloads.getActiveDownloadCount()
@@ -92,12 +102,19 @@ class MusicHomeViewModel(
             }
         }
         launch {
+            // The FIRST online emission is the fresh entry into the screen —
+            // the one load allowed to serve the sections TTL snapshot (see
+            // [fetchSections]). Every later collector-triggered load is a
+            // regeneration (return-online after offline) or a user action
+            // and re-fetches.
+            var firstOnlineLoad = true
             offlineModeManager.offlineMode.collect { mode ->
                 _uiState.update { it.copy(offlineMode = mode) }
                 if (mode != OfflineMode.ONLINE) {
                     _uiState.update { it.copy(sections = emptyList()) }
                 } else {
-                    loadSections()
+                    loadSections(serveFromCache = firstOnlineLoad)
+                    firstOnlineLoad = false
                 }
             }
         }
@@ -113,14 +130,22 @@ class MusicHomeViewModel(
      * (see [fetchCoordinator]). Everything else about the load lifecycle
      * lives in [DeferredFetchCoordinator].
      *
+     * [serveFromCache] grants the fetch body the fresh-entry fast path —
+     * serving the cached section aggregate within its TTL (see
+     * [fetchSections]). Only the offline-mode collector's FIRST online
+     * emission (the fresh entry into the screen) passes true; every explicit
+     * load — pull-to-refresh, error retry, return-online — defaults to
+     * false and re-fetches.
+     *
      * The isLoading publish is synchronous, BEFORE
      * [DeferredFetchCoordinator.load]'s launch: the pull-to-refresh spinner
      * keys off isLoading, so the screen must read Loading the moment this
      * returns — not after the scope dispatches. The fetch body keys its
      * loud/silent decisions off the same phase (see [fetchSections]).
      */
-    fun loadSections() {
+    fun loadSections(serveFromCache: Boolean = false) {
         _uiState.update { it.copy(isLoading = true) }
+        serveCacheOnNextFetch = serveFromCache
         fetchCoordinator.load(Unit, force = true)
     }
 
@@ -173,6 +198,24 @@ class MusicHomeViewModel(
         }
         if (loud) {
             _uiState.update { it.copy(error = null) }
+        }
+        // The fresh-entry fast path ([MusicHomeSectionsCache]): the
+        // construction-time entry load replays the last complete aggregate
+        // when it is still within the TTL instead of re-running the
+        // five-query fan-out. It rides the coordinator's load lifecycle (not
+        // a short-circuit before it) so the deferred refresher's regeneration
+        // contract stays armed — every later load passes
+        // [serveCacheOnNextFetch] = false: pull-to-refresh invalidated the
+        // entry, the retry after a cold error has nothing cached anyway
+        // (only complete results are written), and the silent regeneration
+        // heals an announced change, which by definition the snapshot
+        // predates.
+        if (serveCacheOnNextFetch) {
+            serveCacheOnNextFetch = false
+            sectionsCache.get()?.let { cached ->
+                _uiState.update { it.copy(sections = cached, isLoading = false, error = null) }
+                return
+            }
         }
         val sectionsList = mutableListOf<MusicHomeSection>()
 
@@ -230,6 +273,12 @@ class MusicHomeViewModel(
                 section(MusicHomeSectionType.FAVORITE_TRACKS, results[4])?.let(sectionsList::add)
 
                 val complete = results.all { it != null }
+                // Only complete aggregates are cached — a partial result
+                // dropped rows the next entry's fetch must heal, so caching
+                // it would serve the gaps for the whole TTL.
+                if (complete) {
+                    sectionsCache.put(sectionsList.toList())
+                }
                 if (loud || complete) {
                     _uiState.update { it.copy(sections = sectionsList) }
                 }
@@ -268,10 +317,11 @@ class MusicHomeViewModel(
     }
 
     fun refresh() {
-        // No cache bypass needed: every query this screen shows
-        // (favorites + filtered items) is an uncached passthrough in the
-        // repository, so the old global invalidateCaches() call was a
-        // no-op for this screen's data.
+        // User-initiated refresh: drop the cached section aggregate first so
+        // the load below re-fetches (the repository queries themselves are
+        // uncached passthroughs — the TTL snapshot in [MusicHomeSectionsCache]
+        // is this screen's only cache layer).
+        sectionsCache.invalidate()
         loadSections()
     }
 
