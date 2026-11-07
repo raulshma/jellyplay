@@ -364,6 +364,37 @@ class MusicHomeViewModel(
         }
     }
 
+    /**
+     * Plays the spotlight [track] with listening context instead of a bare
+     * one-row queue — a one-row queue strands the transport: skip is blocked
+     * at the RepeatNone tail and the engine parks when the track ends, so the
+     * spotlight's Play read as broken (device-verified 2026-11-07: "Queue —
+     * 1 of 1", Next a no-op, STOPPED at track end — all the chassis's
+     * designed 1-row behavior). Queue shape, first match wins: the track's
+     * album starting at the track's row (a null [MediaItem.parentId] — /Items
+     * rows don't project the linkage — falls to the detail read), else the
+     * spotlight section's own rows starting at the track (server data can
+     * carry no album linkage at all — device-verified: detail parentId/album
+     * all null on filename-imported tracks), else the single row.
+     */
+    fun playSpotlightTrack(track: MediaItem, context: List<MediaItem>) {
+        launch {
+            val albumId = track.parentId
+                ?: libraryApiClient.getMediaDetail(track.id).getOrNull()?.item?.parentId
+            val albumQueue = albumId?.let { musicCatalogue.getAlbumTracks(it, force = false).getOrNull() }
+            val albumStart = albumQueue?.indexOfFirst { it.id == track.id }?.takeIf { it >= 0 }
+
+            when {
+                albumQueue != null && albumStart != null ->
+                    audioQueueFacade.playTracks(albumQueue, startIndex = albumStart)
+                context.any { it.id == track.id } && context.size > 1 ->
+                    audioQueueFacade.playTracks(context, startIndex = context.indexOfFirst { it.id == track.id })
+                else ->
+                    audioQueueFacade.playTracks(listOf(track))
+            }
+        }
+    }
+
     fun playArtist(artistId: String) {
         launch {
             libraryApiClient.getArtistAlbums(artistId, limit = 50)

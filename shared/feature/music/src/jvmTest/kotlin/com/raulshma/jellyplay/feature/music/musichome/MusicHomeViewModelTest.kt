@@ -652,6 +652,134 @@ class MusicHomeViewModelTest {
         }
     }
 
+    // ── spotlight track plays with listening context ────────────────────────
+    //
+    // The spotlight's RECENTLY_PLAYED/FAVORITE_TRACKS Play arm used to call
+    // playAll(listOf(item)) — a one-row queue over which the chassis's
+    // designed behaviors read as broken on device (skip blocked at the
+    // RepeatNone tail, the engine parked at track end). The regression is
+    // the queue SHAPE, so these pin the shape ladder: the album queue at the
+    // track's row (parentId, else the detail read), else the spotlight
+    // section's rows at the track's row, else the single row. The section
+    // fallback is the DEVICE shape: server data can carry no album linkage
+    // at all (filename-imported tracks have null parentId/album everywhere).
+
+    @Test
+    fun playSpotlightTrack_playsTheAlbumStartingAtTheTrackRow() = runTest(mainDispatcher) {
+        stubHomeQueries()
+        val album = listOf(item("a0"), item("a1"), item("hit"), item("a3"))
+        coEvery { musicCatalogue.getAlbumTracks("al1", force = false) } returns Result.success(album)
+        coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
+            AudioQueueOutcome.Started(emptyList(), 0)
+        createViewModel()
+
+        viewModel.playSpotlightTrack(item("hit").copy(parentId = "al1"), emptyList())
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            audioQueueFacade.playTracks(album, 2, false, null, ImageUrlProvider.DEFAULT_MAX_WIDTH)
+        }
+    }
+
+    @Test
+    fun playSpotlightTrack_rowWithoutParentIdResolvesTheAlbumFromTheDetail() = runTest(mainDispatcher) {
+        stubHomeQueries()
+        val album = listOf(item("a0"), item("hit"), item("a2"))
+        coEvery { libraryApiClient.getMediaDetail("hit") } returns
+            Result.success(
+                com.raulshma.jellyplay.core.model.MediaDetail(
+                    item = item("hit").copy(parentId = "al1"),
+                    mediaSources = emptyList(),
+                )
+            )
+        coEvery { musicCatalogue.getAlbumTracks("al1", force = false) } returns Result.success(album)
+        coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
+            AudioQueueOutcome.Started(emptyList(), 0)
+        createViewModel()
+
+        viewModel.playSpotlightTrack(item("hit"), emptyList())
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            audioQueueFacade.playTracks(album, 1, false, null, ImageUrlProvider.DEFAULT_MAX_WIDTH)
+        }
+    }
+
+    @Test
+    fun playSpotlightTrack_noAlbumLinkageQueuesTheSectionStartingAtTheTrackRow() = runTest(mainDispatcher) {
+        stubHomeQueries()
+        // The device shape: the row AND the detail read both carry no album
+        // linkage, so the section rows themselves become the queue.
+        coEvery { libraryApiClient.getMediaDetail("hit") } returns
+            Result.success(
+                com.raulshma.jellyplay.core.model.MediaDetail(
+                    item = item("hit"),
+                    mediaSources = emptyList(),
+                )
+            )
+        coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
+            AudioQueueOutcome.Started(emptyList(), 0)
+        createViewModel()
+
+        val section = listOf(item("hit"), item("n1"), item("n2"), item("n3"))
+        viewModel.playSpotlightTrack(item("hit"), section)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            audioQueueFacade.playTracks(section, 0, false, null, ImageUrlProvider.DEFAULT_MAX_WIDTH)
+        }
+        coVerify(exactly = 0) { musicCatalogue.getAlbumTracks(any(), any()) }
+    }
+
+    @Test
+    fun playSpotlightTrack_sectionQueueStartsAtTheTracksOwnRow() = runTest(mainDispatcher) {
+        stubHomeQueries()
+        coEvery { libraryApiClient.getMediaDetail("n2") } returns
+            Result.success(
+                com.raulshma.jellyplay.core.model.MediaDetail(
+                    item = item("n2"),
+                    mediaSources = emptyList(),
+                )
+            )
+        coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
+            AudioQueueOutcome.Started(emptyList(), 0)
+        createViewModel()
+
+        val section = listOf(item("n0"), item("n1"), item("n2"))
+        viewModel.playSpotlightTrack(item("n2"), section)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            audioQueueFacade.playTracks(section, 2, false, null, ImageUrlProvider.DEFAULT_MAX_WIDTH)
+        }
+    }
+
+    @Test
+    fun playSpotlightTrack_unresolvableAlbumFallsBackToTheSectionThenTheSingleRow() = runTest(mainDispatcher) {
+        stubHomeQueries()
+        coEvery { libraryApiClient.getMediaDetail("t1") } returns
+            Result.failure(RuntimeException("test"))
+        coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
+            AudioQueueOutcome.Started(emptyList(), 0)
+        createViewModel()
+
+        // No section context (or one that lacks the track): the single row.
+        val track = item("t1")
+        viewModel.playSpotlightTrack(track, emptyList())
+        advanceUntilIdle()
+        coVerify(exactly = 1) {
+            audioQueueFacade.playTracks(listOf(track), 0, false, null, ImageUrlProvider.DEFAULT_MAX_WIDTH)
+        }
+        coVerify(exactly = 0) { musicCatalogue.getAlbumTracks(any(), any()) }
+
+        // A section that doesn't contain the track degrades the same way.
+        viewModel.playSpotlightTrack(track, listOf(item("x1"), item("x2")))
+        advanceUntilIdle()
+        coVerify(exactly = 2) {
+            audioQueueFacade.playTracks(listOf(track), 0, false, null, ImageUrlProvider.DEFAULT_MAX_WIDTH)
+        }
+    }
+
     @Test
     fun playAlbums_playsConcatenatedPairsWithPerAlbumFallback() = runTest(mainDispatcher) {
         stubHomeQueries()

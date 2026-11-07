@@ -235,7 +235,7 @@ fun MusicHomeScreen(
                                         MusicHomeSectionType.LATEST_ALBUMS,
                                         MusicHomeSectionType.TOP_RATED_ALBUMS -> viewModel.playAlbum(spotlightItem.id)
                                         MusicHomeSectionType.RECENTLY_PLAYED,
-                                        MusicHomeSectionType.FAVORITE_TRACKS -> viewModel.playAll(listOf(spotlightItem))
+                                        MusicHomeSectionType.FAVORITE_TRACKS -> viewModel.playSpotlightTrack(spotlightItem, spotlightSection.items)
                                     }
                                 },
                                 modifier = Modifier
