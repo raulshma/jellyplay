@@ -3,10 +3,12 @@ package com.raulshma.jellyplay.core.data.concurrency
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
 
@@ -56,15 +58,26 @@ import kotlin.coroutines.coroutineContext
  *    awaiter would fail too. An awaiter whose `await()` throws
  *    [CancellationException] re-throws only when its own [Job] is
  *    cancelled; otherwise the interruption came from the originator and the
- *    awaiter RE-ENTERS [getOrFetch] on its own (still-alive) scope: the
- *    [key] supplier is re-read (a session switch that landed mid-flight
- *    must not write the retry's result under the stale key — the
- *    await-time re-read `EpisodeCatalogueImpl.awaitFlight` had), a fresh
- *    epoch is captured at the new flight's start, and — because the
- *    re-entry goes back through the mutex and the in-flight map — several
- *    surviving awaiters collapse again: the first through the mutex becomes
- *    the new originator and the rest join its flight, instead of every
- *    orphaned awaiter firing its own full scan concurrently.
+ *    awaiter retries in the NEXT ITERATION of [getOrFetch]'s flat retry
+ *    loop (never a nested re-entry — device-verified StackOverflowError,
+ *    see the loop's comment): the [key] supplier is re-read (a session
+ *    switch that landed mid-flight must not write the retry's result under
+ *    the stale key — the await-time re-read `EpisodeCatalogueImpl.awaitFlight`
+ *    had), a fresh epoch is captured at the new flight's start, and —
+ *    because the re-entry goes back through the mutex and the in-flight
+ *    map — several surviving awaiters collapse again: the first through the
+ *    mutex becomes the new originator and the rest join its flight, instead
+ *    of every orphaned awaiter firing its own full scan concurrently.
+ *  - **Dead-marker sweep.** The in-flight marker exists before the flight's
+ *    async body runs, and a cancellation landing before that body starts
+ *    skips its cleanup `finally` entirely (a contended cleanup lock in an
+ *    already-cancelled coroutine strands the marker the same way) — the
+ *    marker then holds a dead `Deferred` that every joiner awaits, ladders
+ *    on, and re-joins: a silent livelock (device-verified audio prewarm
+ *    hang). So the sweep is part of the ladder: a surviving awaiter evicts
+ *    the marker if it still holds the flight it joined (identity-checked —
+ *    never a replacement flight a concurrent joiner installed), and the
+ *    flight's own cleanup runs under [NonCancellable] with the same guard.
  *
  * The epoch is injected, not owned: [SingleFlightFetcher] shares its
  * owner's `AtomicLong` with non-flight guarded writers so a single
@@ -105,60 +118,98 @@ internal class SingleFlight<K : Any, V : Any>(
         fetch: suspend (epochAtStart: Long) -> Pair<V, Boolean>,
         store: (K, V) -> Unit,
     ): V {
-        val startKey = key()
-        fastRead?.invoke(startKey)?.let { return it }
-        return coroutineScope {
-            val deferred: Deferred<V> = mutex.withLock {
-                // Re-check under the lock: a concurrent flight may have
-                // completed and stored between the fast-path read above and
-                // here — its result is consumed exactly once, from here.
-                readCached(startKey)?.let { return@coroutineScope it }
-                inFlight.getOrPut(startKey) {
-                    val epochAtStart = epoch.get()
-                    // async on the current coroutineScope so the fetch runs on
-                    // the caller's dispatcher (not a fixed background scope).
-                    async {
-                        try {
-                            val (value, mayStore) = fetch(epochAtStart)
-                            if (mayStore) {
-                                // Veto + store as one mutex-held section: an
-                                // invalidateAll eviction cannot slip between
-                                // them (see the class KDoc's write bullet).
-                                mutex.withLock {
-                                    if (epoch.get() == epochAtStart) {
-                                        store(startKey, value)
+        // The cancellation ladder is a FLAT loop, never a nested re-entry.
+        // REGRESSION (device-verified 2026-10-02, AudioPlaybackManager's
+        // prewarm churn; 2026-11-07, a section Play-all burst): a retry that
+        // re-enters getOrFetch inside the coroutineScope nests one scope per
+        // dead flight, and a churn burst of cancelled originators with
+        // surviving awaiters resolves that nesting synchronously — a fatal
+        // StackOverflowError with the `getOrFetch ↔ coroutineScope` cycle
+        // filling the stack. A loop iteration is the same re-entry — the key
+        // supplier is re-read, the mutex and the in-flight map are re-entered
+        // (surviving awaiters still collapse into one replacement flight), a
+        // fresh epoch is captured at the replacement flight's start — without
+        // the per-retry stack frames.
+        while (true) {
+            val startKey = key()
+            fastRead?.invoke(startKey)?.let { return it }
+            // Null means "retry": the flight this caller joined died with its
+            // originator while this caller survived.
+            val value: V? = coroutineScope {
+                val deferred: Deferred<V> = mutex.withLock {
+                    // Re-check under the lock: a concurrent flight may have
+                    // completed and stored between the fast-path read above and
+                    // here — its result is consumed exactly once, from here.
+                    readCached(startKey)?.let { return@coroutineScope it }
+                    inFlight.getOrPut(startKey) {
+                        val epochAtStart = epoch.get()
+                        // async on the current coroutineScope so the fetch runs on
+                        // the caller's dispatcher (not a fixed background scope).
+                        async {
+                            try {
+                                val (value, mayStore) = fetch(epochAtStart)
+                                if (mayStore) {
+                                    // Veto + store as one mutex-held section: an
+                                    // invalidateAll eviction cannot slip between
+                                    // them (see the class KDoc's write bullet).
+                                    mutex.withLock {
+                                        if (epoch.get() == epochAtStart) {
+                                            store(startKey, value)
+                                        }
+                                    }
+                                }
+                                value
+                            } finally {
+                                // Clear the in-flight marker — NonCancellable
+                                // because this coroutine may already be cancelled
+                                // (its originator died): a plain withLock here
+                                // throws CancellationException on a contended
+                                // lock and the marker then outlives the flight,
+                                // a dead Deferred every joiner re-joins (device-
+                                // verified hang). The identity guard keeps this
+                                // sweep from evicting a REPLACEMENT flight that
+                                // a surviving joiner installed while this one
+                                // unwound.
+                                val self = coroutineContext[Job]
+                                withContext(NonCancellable) {
+                                    mutex.withLock {
+                                        if (inFlight[startKey] === self) {
+                                            inFlight.remove(startKey)
+                                        }
                                     }
                                 }
                             }
-                            value
-                        } finally {
-                            // Clear the in-flight marker. Guarded so a
-                            // concurrent awaiter that already grabbed the
-                            // Deferred still sees the completed value, but a
-                            // later caller re-fetches.
-                            mutex.withLock { inFlight.remove(startKey) }
                         }
                     }
                 }
+                try {
+                    deferred.await()
+                } catch (ce: CancellationException) {
+                    val job = coroutineContext[Job]
+                    // Re-throw only if THIS caller was itself cancelled; otherwise
+                    // the originator was cancelled and the NEXT loop iteration is
+                    // this caller's replacement flight — under a re-read key and
+                    // a fresh epoch capture, back through the mutex and the
+                    // in-flight map so surviving awaiters still collapse.
+                    if (job?.isCancelled == true) throw ce
+                    // But first, sweep the marker if it still holds the flight
+                    // this caller joined. A flight's cleanup can be skipped
+                    // outright — cancellation landing before its async body ever
+                    // started skips the try/finally entirely — and then the
+                    // marker keeps holding the dead Deferred: the next getOrPut
+                    // below re-joins it, awaits, ladders, re-joins — a silent
+                    // livelock the caller never escapes (device-verified). The
+                    // identity check never evicts a replacement flight a
+                    // concurrent joiner already installed.
+                    mutex.withLock {
+                        if (inFlight[startKey] === deferred) {
+                            inFlight.remove(startKey)
+                        }
+                    }
+                    null
+                }
             }
-            try {
-                deferred.await()
-            } catch (ce: CancellationException) {
-                val job = coroutineContext[Job]
-                // Re-throw only if THIS caller was itself cancelled; otherwise
-                // the originator was cancelled and a fresh flight on this
-                // still-alive caller is safe — under a re-read key and a
-                // fresh epoch capture.
-                if (job?.isCancelled == true) throw ce
-                // REGRESSION (device-verified 2026-10-02): with AudioPlaybackManager's
-                // prewarm-window cancel/restart churn, a surviving caller can hit this
-                // retry while the outer coroutineScope is completing — the nested
-                // scopes resolve synchronously in a cycle and overflow the stack
-                // (fatal StackOverflowError; log: scratch/crash-singeFlight-soe.log).
-                // Retry OUTSIDE this coroutineScope (bounded loop at the call site or
-                // a flat suspendCancellableCoroutine re-entry), never nested inside it.
-                getOrFetch(key, fastRead, readCached, fetch, store)
-            }
+            if (value != null) return value
         }
     }
 
