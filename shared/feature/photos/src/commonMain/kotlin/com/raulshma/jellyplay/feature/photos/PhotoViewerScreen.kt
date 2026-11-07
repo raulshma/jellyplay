@@ -125,14 +125,6 @@ import com.raulshma.jellyplay.feature.photos.generated.resources.photos_reset
 private val filmstripThumbShape = smoothCornerShape(6.dp)
 
 /**
- * The extra key Coil's MemoryCacheService appends to a transformation-free
- * request's auto-derived memory-cache key (the resolved size string rides
- * under it). Hoisted for the photo viewer's placeholder handoff, which
- * rebuilds a fitted request's key by hand — see [PhotoImage].
- */
-private const val COIL_MEMORY_SIZE_EXTRA_KEY = "coil#size"
-
-/**
  * Holds the viewer's in-flight neighbor prefetches (the home hero's
  * enqueue-targetless-preload posture): the only product is Coil's disk +
  * memory caches — no target, no transition. Each settle REPLACES the
@@ -760,16 +752,12 @@ private fun PhotoImage(
     // memory-cache key: the quality-cap-transformed URL plus Coil's resolved
     // size string under the `coil#size` extra (the display path passes the
     // size unclamped — performanceModeAware = false — so no clamp applies
-    // here either).
+    // here either). Guarded like the prefetcher above: the viewport reads 0
+    // on the photo's first composition frame (pre-layout), where a Size-built
+    // key would throw.
     val qualityCap = LocalImageQualityCap.current
     val fitPlaceholderKey = remember(fitUrl, qualityCap, viewportWidthPx, viewportHeightPx) {
-        coil3.memory.MemoryCache.Key(
-            key = mediaImageUrl(fitUrl, qualityCap),
-            extras = mapOf(
-                COIL_MEMORY_SIZE_EXTRA_KEY to
-                    coil3.size.Size(viewportWidthPx, viewportHeightPx).toString(),
-            ),
-        )
+        photoFitPlaceholderMemoryCacheKey(fitUrl, qualityCap, viewportWidthPx, viewportHeightPx)
     }
     var lastTapTime by remember { mutableStateOf(0L) }
     // Per-photo, like the screen's transform reset per index: a photo switch
@@ -927,7 +915,7 @@ private fun PhotoImage(
             // The fitted decode stands in for the upgraded original request
             // while it loads (null on the fitted request itself — its own key
             // is what Coil resolves anyway).
-            placeholderMemoryCacheKey = fitPlaceholderKey.takeIf { isOriginalResolution },
+            placeholderMemoryCacheKey = fitPlaceholderKey?.takeIf { isOriginalResolution },
             colorFilter = colorFilter,
         )
     }

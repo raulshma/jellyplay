@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.photos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.setValue
+import com.raulshma.jellyplay.core.ui.image.mediaImageUrl
 import kotlin.math.abs
 
 /**
@@ -195,3 +196,41 @@ internal fun photoDecodeTarget(scale: Float, currentDecodeScale: Float): Float? 
  */
 internal fun photoFitNetworkMaxWidth(viewportWidthPx: Int): Int =
     viewportWidthPx.coerceAtLeast(1)
+
+/**
+ * The extra key Coil's MemoryCacheService appends to a transformation-free
+ * request's auto-derived memory-cache key (the resolved size string rides
+ * under it). Hoisted for the photo viewer's placeholder handoff, which
+ * rebuilds a fitted request's key by hand — see [photoFitPlaceholderMemoryCacheKey].
+ */
+internal const val COIL_MEMORY_SIZE_EXTRA_KEY = "coil#size"
+
+/**
+ * The memory-cache key the fitted rendition's request resolves under, rebuilt
+ * by hand so the upgraded original-resolution request can hand off to the
+ * still-cached fitted decode ([PhotoImage]'s placeholderMemoryCacheKey) —
+ * the quality-cap-transformed URL plus Coil's resolved size string under
+ * [COIL_MEMORY_SIZE_EXTRA_KEY].
+ *
+ * Null while the viewport is unmeasured (0 before the first layout pass):
+ * [coil3.size.Size] rejects non-positive dimensions, and a key built from a
+ * guessed size would never match the display request's auto-derived key
+ * anyway. The null branch is a no-op in practice — an upgraded request only
+ * exists after a zoom settle, by which point the viewer has been laid out
+ * for at least a frame.
+ */
+internal fun photoFitPlaceholderMemoryCacheKey(
+    fitUrl: String,
+    qualityCap: Int?,
+    viewportWidthPx: Int,
+    viewportHeightPx: Int,
+): coil3.memory.MemoryCache.Key? {
+    if (viewportWidthPx <= 0 || viewportHeightPx <= 0) return null
+    return coil3.memory.MemoryCache.Key(
+        key = mediaImageUrl(fitUrl, qualityCap),
+        extras = mapOf(
+            COIL_MEMORY_SIZE_EXTRA_KEY to
+                coil3.size.Size(viewportWidthPx, viewportHeightPx).toString(),
+        ),
+    )
+}
