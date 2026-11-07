@@ -42,10 +42,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -130,10 +133,8 @@ internal data class HomeDockState(
     val offlineMode: OfflineMode,
     val homeMode: HomeMode,
     val headerStatus: HeaderStatus,
-    val pendingSyncCount: Int,
     val showClock: Boolean,
     val currentUser: UserInfo?,
-    val currentServerUsers: List<UserInfo>,
     /** True while the search field is focused/expanded (branch + dpad routing). */
     val isSearchFocused: Boolean,
     val isGoingOnline: Boolean = false,
@@ -178,6 +179,8 @@ internal fun HomeTopDock(
     appBarIconColor: Color,
     appBarIconColorFaded: Color,
     searchQuery: String,
+    pendingSyncCount: StateFlow<Int>,
+    currentServerUsers: StateFlow<List<UserInfo>>,
     state: HomeDockState,
     callbacks: HomeDockCallbacks,
     searchResultsContent: @Composable () -> Unit,
@@ -191,8 +194,16 @@ internal fun HomeTopDock(
 ) {
     val isTv = LocalTvMode.current
 
+    // The pending-sync count and server-user list are collected here, not by
+    // the caller's orchestrator: only the dock (and for the count, only the
+    // badge leaf that renders it) recomposes on an outbox enqueue/drain tick.
+    // The count folds to a boolean for the indicator-presence checks so
+    // badge-number ticks don't re-execute this body — only the 0↔N flips do.
+    val pendingSyncCountState = pendingSyncCount.collectAsStateWithLifecycle()
+    val hasPendingSync by remember { derivedStateOf { pendingSyncCountState.value > 0 } }
+
     val hasStatusIndicators = state.headerStatus !is HeaderStatus.None || state.showClock ||
-        state.pendingSyncCount > 0 || state.offlineMode != OfflineMode.ONLINE ||
+        hasPendingSync || state.offlineMode != OfflineMode.ONLINE ||
         (state.homeGreetingEnabled && state.currentUser != null)
 
     Box(
@@ -288,6 +299,9 @@ internal fun HomeTopDock(
             ) {
                 CollapsedDockContent(
                     hasStatusIndicators = hasStatusIndicators,
+                    hasPendingSync = hasPendingSync,
+                    pendingSyncCount = pendingSyncCount,
+                    currentServerUsers = currentServerUsers,
                     state = state,
                     callbacks = callbacks,
                     appBarIconColorFaded = appBarIconColorFaded,
@@ -418,11 +432,14 @@ private fun OfflineToggleIcon(
  */
 @Composable
 private fun SyncStatusIcon(
-    pendingCount: Int,
+    pendingCountFlow: StateFlow<Int>,
     isDraining: Boolean,
     tint: Color,
     onClick: () -> Unit,
 ) {
+    // The raw count is collected in this leaf, not at the dock scope: badge
+    // ticks (count N → N+1 while queued) recompose only this icon.
+    val pendingCount by pendingCountFlow.collectAsStateWithLifecycle()
     val syncFocusState = rememberTvFocusState()
     val reducedMotion = LocalReducedMotion.current
     // One remembered fallback rotation shared by both branches — the
@@ -521,10 +538,16 @@ private fun HeaderShortcutIcon(
 @Composable
 private fun CollapsedDockContent(
     hasStatusIndicators: Boolean,
+    hasPendingSync: Boolean,
+    pendingSyncCount: StateFlow<Int>,
+    currentServerUsers: StateFlow<List<UserInfo>>,
     state: HomeDockState,
     callbacks: HomeDockCallbacks,
     appBarIconColorFaded: Color,
 ) {
+    // The user list changes rarely (login/logout on this server); the badge
+    // count flows straight into [SyncStatusIcon] instead — see below.
+    val serverUsers by currentServerUsers.collectAsStateWithLifecycle()
     // ── Start Side: Connectivity & Status Expressive Capsule (Only shown when indicators exist) ──
     if (hasStatusIndicators) {
         Surface(
@@ -592,9 +615,9 @@ private fun CollapsedDockContent(
                         }
                     }
                 }
-                if (state.pendingSyncCount > 0) {
+                if (hasPendingSync) {
                     SyncStatusIcon(
-                        pendingCount = state.pendingSyncCount,
+                        pendingCountFlow = pendingSyncCount,
                         isDraining = state.offlineMode == OfflineMode.ONLINE,
                         tint = appBarIconColorFaded,
                         onClick = callbacks.onShowSyncDetails,
@@ -637,11 +660,11 @@ private fun CollapsedDockContent(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (state.currentUser != null &&
-                (state.homeAlwaysShowUserSwitcher || state.currentServerUsers.size >= 2)
+                (state.homeAlwaysShowUserSwitcher || serverUsers.size >= 2)
             ) {
                 UserSwitcherChip(
                     currentUser = state.currentUser,
-                    users = state.currentServerUsers,
+                    users = serverUsers,
                     onUserSwitch = callbacks.onUserSwitch,
                 )
             }

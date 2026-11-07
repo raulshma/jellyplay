@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.AdminSessionFeed
 import com.raulshma.jellyplay.core.model.AdminDashboardSummary
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
@@ -18,6 +19,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -50,6 +52,20 @@ class AdminDashboardViewModelTest {
         replay = 1,
         extraBufferCapacity = 8,
     )
+
+    /** replay = 1 mirrors the production channel's shareIn(replay = 1). */
+    private val sessionsFlow = kotlinx.coroutines.flow.MutableSharedFlow<List<SessionInfo>>(
+        replay = 1,
+        extraBufferCapacity = 8,
+    )
+
+    private var feedLastPushAtMs = 0L
+
+    /** The live-session feed seam (same push shape the production channel has). */
+    private val sessionFeed = object : AdminSessionFeed {
+        override val sessions: Flow<List<SessionInfo>> = sessionsFlow
+        override val sessionsLastPushAtMs: Long get() = feedLastPushAtMs
+    }
 
     private val scanTask = ScheduledTaskInfo(
         id = "task-1",
@@ -141,6 +157,32 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
+    fun `a sub-percent progress push does not rebuild the dashboard state`() = runTest(mainDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = emptyList()))
+        val viewModel = AdminDashboardViewModel(adminRepository)
+        advanceUntilIdle()
+
+        val running = scanTask.copy(state = TaskState.RUNNING, currentProgressPercentage = 25.0)
+        tasksFlow.tryEmit(listOf(scanTask, running))
+        advanceUntilIdle()
+        val stateAfterFirstPush = viewModel.uiState.value
+        assertEquals(listOf(running), stateAfterFirstPush.runningTasks)
+
+        // The next push moved only the progress double, inside the same
+        // whole-percent reading — the gate holds the state object (and its
+        // collectors) untouched.
+        tasksFlow.tryEmit(listOf(scanTask, running.copy(currentProgressPercentage = 25.9)))
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value === stateAfterFirstPush)
+
+        // Crossing the whole-percent line (or any structural change) lands.
+        val advanced = running.copy(currentProgressPercentage = 26.0)
+        tasksFlow.tryEmit(listOf(scanTask, advanced))
+        advanceUntilIdle()
+        assertEquals(listOf(advanced), viewModel.uiState.value.runningTasks)
+    }
+
+    @Test
     fun `WS pushes exclude hidden tasks from the running list`() = runTest(mainDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = emptyList()))
         val viewModel = AdminDashboardViewModel(adminRepository)
@@ -214,6 +256,118 @@ class AdminDashboardViewModelTest {
         // The replay paints first, but with no fresh push the REST snapshot
         // must win — a frozen running-tasks card is the bug this guards.
         assertEquals(listOf(snapshotRunning), state.runningTasks)
+    }
+
+    // ── live session feed (WS Sessions push) ─────────────────────────────
+
+    @Test
+    fun `session pushes update the list and drop ended sessions`() = runTest(mainDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(sessions = emptyList()))
+        val viewModel = AdminDashboardViewModel(adminRepository, sessionFeed)
+        advanceUntilIdle()
+
+        val playing = session.copy(nowPlayingItem = com.raulshma.jellyplay.core.model.SessionNowPlayingItem(id = "i-1", name = "Movie"))
+        sessionsFlow.tryEmit(listOf(playing))
+        advanceUntilIdle()
+        assertEquals(listOf(playing), viewModel.uiState.value.sessions)
+
+        // The session ended: the next push clears the list.
+        sessionsFlow.tryEmit(emptyList())
+        advanceUntilIdle()
+        assertEquals(emptyList<SessionInfo>(), viewModel.uiState.value.sessions)
+    }
+
+    @Test
+    fun `a playstate-only session push does not rebuild the dashboard state`() = runTest(mainDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(sessions = emptyList()))
+        val viewModel = AdminDashboardViewModel(adminRepository, sessionFeed)
+        advanceUntilIdle()
+
+        val playing = session.copy(nowPlayingItem = com.raulshma.jellyplay.core.model.SessionNowPlayingItem(id = "i-1", name = "Movie"))
+        sessionsFlow.tryEmit(listOf(playing))
+        advanceUntilIdle()
+        val stateAfterFirstPush = viewModel.uiState.value
+        assertEquals(listOf(playing), stateAfterFirstPush.sessions)
+
+        // The next push moved only the playstate (position ticks drift at the
+        // server's push cadence) — the gate holds the state object untouched.
+        sessionsFlow.tryEmit(
+            listOf(playing.copy(playState = com.raulshma.jellyplay.core.model.SessionPlayState(positionTicks = 900_000_000L)))
+        )
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value === stateAfterFirstPush)
+
+        // A rendered change (now-playing title) lands.
+        val switched = playing.copy(nowPlayingItem = com.raulshma.jellyplay.core.model.SessionNowPlayingItem(id = "i-2", name = "Other Movie"))
+        sessionsFlow.tryEmit(listOf(switched))
+        advanceUntilIdle()
+        assertEquals(listOf(switched), viewModel.uiState.value.sessions)
+    }
+
+    @Test
+    fun `REST snapshot does not overwrite sessions after a fresh WS push`() = runTest(mainDispatcher) {
+        val snapshotSessions = listOf(SessionInfo(id = "s-9", userName = "Old", deviceName = "Stale"))
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(sessions = snapshotSessions))
+
+        val viewModel = AdminDashboardViewModel(adminRepository, sessionFeed)
+        val state = viewModel.uiState.first { !it.isLoading }
+        assertEquals(snapshotSessions, state.sessions) // seeded first frame
+
+        // WS pushes a newer list — it takes over immediately.
+        val wsSessions = listOf(session.copy(deviceName = "Pixel"))
+        feedLastPushAtMs = System.currentTimeMillis()
+        sessionsFlow.tryEmit(wsSessions)
+        advanceUntilIdle()
+        assertEquals(wsSessions, viewModel.uiState.value.sessions)
+
+        // A later loadDashboard() carries the (now stale) snapshot: the feed
+        // owns the field, so the UI must not flicker back to the old list.
+        viewModel.loadDashboard()
+        advanceUntilIdle()
+        assertEquals(wsSessions, viewModel.uiState.value.sessions)
+    }
+
+    @Test
+    fun `a stale session feed keeps the REST snapshot authoritative`() = runTest(mainDispatcher) {
+        // Dead socket: the channel's last push is old (timestamp 0), but its
+        // shared flow still replays the last list to a new collector.
+        val replayed = listOf(session.copy(deviceName = "Replay"))
+        sessionsFlow.tryEmit(replayed)
+        val snapshotSessions = listOf(SessionInfo(id = "s-9", userName = "Fresh", deviceName = "Rest"))
+        // The mocked fetch must land AFTER the replayed emission, as a real
+        // REST snapshot always does (network latency vs instant replay).
+        coEvery { adminRepository.getDashboardSummary() } coAnswers {
+            delay(1)
+            Result.success(summary(sessions = snapshotSessions))
+        }
+
+        val viewModel = AdminDashboardViewModel(adminRepository, sessionFeed)
+        val state = viewModel.uiState.first { !it.isLoading }
+
+        // The replay paints first, but with no fresh push the REST snapshot
+        // must win — a frozen session list is the bug this guards.
+        assertEquals(snapshotSessions, state.sessions)
+    }
+
+    @Test
+    fun `stop session still refreshes only the sessions read`() = runTest(mainDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
+        coEvery { adminRepository.stopSession("s-1") } returns Result.success(Unit)
+        val refreshed = listOf(SessionInfo(id = "s-2", userName = "Bob", deviceName = "Tablet"))
+        coEvery { adminRepository.getSessions() } returns Result.success(refreshed)
+        val viewModel = AdminDashboardViewModel(adminRepository, sessionFeed)
+        advanceUntilIdle()
+
+        viewModel.showStopSessionDialog(session)
+        viewModel.stopSession()
+        advanceUntilIdle()
+
+        // The feed does not retire the stop's sessions-only re-read (the stop
+        // succeeded server-side; its own refresh settles the list even when
+        // no push lands).
+        assertEquals(refreshed, viewModel.uiState.value.sessions)
+        coVerify(exactly = 1) { adminRepository.getDashboardSummary() }
+        coVerify(exactly = 1) { adminRepository.getSessions() }
     }
 
     @Test
@@ -311,9 +465,11 @@ class AdminDashboardViewModelTest {
     // ── stop-session dialog choreography (PendingConfirmation machine) ──
 
     @Test
-    fun `stop session success clears the pending dialog and reloads the dashboard`() = runTest(mainDispatcher) {
+    fun `stop session success clears the pending dialog and refreshes only the sessions`() = runTest(mainDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
         coEvery { adminRepository.stopSession("s-1") } returns Result.success(Unit)
+        val refreshedSessions = listOf(SessionInfo(id = "s-2", userName = "Bob", deviceName = "Tablet"))
+        coEvery { adminRepository.getSessions() } returns Result.success(refreshedSessions)
         val viewModel = AdminDashboardViewModel(adminRepository)
         advanceUntilIdle()
 
@@ -328,8 +484,30 @@ class AdminDashboardViewModelTest {
         assertNull(viewModel.uiState.value.pendingStopSession.item)
         assertTrue(!viewModel.uiState.value.isStoppingSession)
         assertNull(viewModel.uiState.value.error)
-        // Initial load + the post-stop reload.
-        coVerify(atLeast = 2) { adminRepository.getDashboardSummary() }
+        // The stop changed only the session list, so the refresh is the one
+        // sessions read — the full summary ladder does not rerun.
+        coVerify(exactly = 1) { adminRepository.getDashboardSummary() }
+        coVerify(exactly = 1) { adminRepository.getSessions() }
+        assertEquals(refreshedSessions, viewModel.uiState.value.sessions)
+    }
+
+    @Test
+    fun `a failed sessions refetch after a successful stop degrades silently`() = runTest(mainDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
+        coEvery { adminRepository.stopSession("s-1") } returns Result.success(Unit)
+        coEvery { adminRepository.getSessions() } returns Result.failure(RuntimeException("offline"))
+        val viewModel = AdminDashboardViewModel(adminRepository)
+        advanceUntilIdle()
+        val sessionsBeforeStop = viewModel.uiState.value.sessions
+
+        viewModel.stopSession()
+        advanceUntilIdle()
+
+        // The stop succeeded and its settle arm ran; the stale session list
+        // stays on screen with no error surfaced.
+        assertNull(viewModel.uiState.value.pendingStopSession.item)
+        assertNull(viewModel.uiState.value.error)
+        assertEquals(sessionsBeforeStop, viewModel.uiState.value.sessions)
     }
 
     @Test
@@ -338,6 +516,7 @@ class AdminDashboardViewModelTest {
         // Park the stop request mid-flight so isStoppingSession stays raised.
         val gate = CompletableDeferred<Unit>()
         coEvery { adminRepository.stopSession("s-1") } coAnswers { gate.await(); Result.success(Unit) }
+        coEvery { adminRepository.getSessions() } returns Result.success(emptyList())
         val viewModel = AdminDashboardViewModel(adminRepository)
         advanceUntilIdle()
 

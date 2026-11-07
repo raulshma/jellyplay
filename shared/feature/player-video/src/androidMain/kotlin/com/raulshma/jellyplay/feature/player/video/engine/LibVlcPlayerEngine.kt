@@ -4,6 +4,7 @@ import android.content.Context
 
 import android.net.Uri
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
 import android.view.View
@@ -47,9 +48,15 @@ class LibVlcPlayerEngine(
         // The tester's external track must win auto-selection immediately.
         private const val EXTERNAL_SUBTITLE_PRIORITY = 4
         // Poll cadence + budget while waiting for a just-added slave subtitle to
-        // materialize as a new spu track (see [scheduleSlaveTrackRegistration]).
+        // materialize as a new spu track (see VlcSlaveRegistration).
         private const val SLAVE_TRACK_POLL_DELAY_MS = 250L
         private const val SLAVE_TRACK_REGISTRATION_ATTEMPTS = 16
+
+        // Upper bound on how long the stats change-guard's sample may suppress
+        // the full track re-read (the mpv adapter's same-named cadence): the
+        // hedge for a track movement libVLC never announced through an ES*
+        // event.
+        private const val FULL_STATS_REREAD_MS = 2_000L
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
@@ -57,15 +64,147 @@ class LibVlcPlayerEngine(
     override val capabilities = EngineCapabilityMatrix.LIBVLC
     override val displayName: String = PlayerType.LIBVLC.displayName
 
-    private var libVLC: LibVLC? = null
+    // ── Cached libVLC handle + background native release ───────────────────
+    // The engine object is reused across items by PlayerSessionManager
+    // (unchanged player type → same engine, `initializeEngine`), so the libVLC
+    // instance does not have to die with each item: a libvlc_new is a plugin
+    // scan + full native allocation on the main thread, and the binge case
+    // replays it per episode only to arrive at the very same option list. The
+    // cache below keys the live handle on the EXACT option list that produced
+    // it ([buildLibVlcInstanceOptions]; structural equality — every input the
+    // instance config depends on (language prefs, passthrough, filters, cache
+    // settings, renderer posture, low-RAM tier) is folded into that list), so
+    // an identical next load reuses the handle and creates only the fresh
+    // `MediaPlayer` + `Media` it actually needs, and any option delta retires
+    // the old handle instead.
+    //
+    // Retirement — and the terminal `release()` teardown — never calls
+    // `LibVLC.release()` on the main thread: libvlc_release synchronously
+    // destroys the whole instance (module unloads, thread joins) and blocks
+    // for tens to hundreds of ms, which the mpv adapter already routes onto a
+    // dedicated release HandlerThread. The two pieces are deliberately split:
+    // EVERYTHING MediaPlayer-side (stop / detachViews / MediaPlayer.release)
+    // stays on the main thread, because those calls land in libVLC's
+    // VideoHelper / AWindow / SurfaceHelper, which remove layout listeners and
+    // surface-holder callbacks — Android View-tree work that must run where
+    // the views live — while `LibVLC.release()` is pure native teardown with
+    // no Android surface involvement and is the expensive half of the stall.
+    private val handleCache = VlcHandleCache<LibVLC>()
+
+    private var releaseThreadGeneration: HandlerThread? = null
+
+    /**
+     * Dedicated background thread for native libVLC teardown. Mirrors mpv's
+     * `MpvRelease` thread: self-healing, because every release quits the
+     * thread, so each read must return a live generation — a Handler cached
+     * across releases would post into the quit looper, which silently
+     * discards the message and skips the destroy entirely. Created lazily so
+     * a session that never retires a handle pays nothing.
+     *
+     * The quit check at the end of [release] deliberately reads the FIELD (not
+     * this self-healing accessor): a dying engine must not spawn a thread just
+     * to quit it. Re-use resurrects the thread on the next retire, exactly as
+     * the accessor guarantees.
+     */
+    private val releaseThread: HandlerThread
+        get() = releaseThreadGeneration
+            ?.takeIf { it.isAlive }
+            ?: HandlerThread("VlcRelease", android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                .also { it.start() }
+                .also { releaseThreadGeneration = it }
+    private val releaseHandler: Handler get() = Handler(releaseThread.looper)
+
+    /**
+     * The serialized retire scheduler over [releaseHandler]. Wired eagerly:
+     * the lambdas defer every accessor read to retire time, so each schedule
+     * lands on the CURRENT thread generation (never a quit looper).
+     */
+    private val vlcReleaseQueue = VlcHandleReleaseQueue<LibVLC>(
+        dispatch = { release -> releaseHandler.post(release) },
+        destroy = { vlc -> try { vlc.release() } catch (_: Exception) {} },
+        onSuperseded = { scheduled, current ->
+            Log.w(TAG, "Superseded libVLC release running: scheduled gen $scheduled, current gen $current")
+        },
+    )
+
     private var mediaPlayer: MediaPlayer? = null
     private var videoLayout: VLCVideoLayout? = null
     private var currentPlaybackRequest: PlaybackRequest? = null
+
+    /**
+     * The coalesced track rebuild (the mpv adapter's [TrackRefreshCoalescer]
+     * shape): the ES* events arrive in bursts — a selection fires select-side
+     * and enumeration events within ~50 ms — and each used to run its own
+     * synchronous `getAudioTracks`/`getSpuTracks` JNI sweep on the main
+     * thread. A burst now collapses into one rebuild once it settles. The
+     * rebuild runs on the main dispatcher ([engineScope], like mpv's
+     * buildTracks-on-main rationale): the JNI reads stay serialized against
+     * the per-media teardown, which also runs on main.
+     */
+    private val trackRefresh = TrackRefreshCoalescer(
+        scopeProvider = { engineScope },
+        onRefresh = ::refreshTracksCoalesced,
+    )
+
+    /**
+     * The coalesced rebuild's landing. Guarded on the live player like mpv's
+     * coalesced host: a refresh that raced the per-media teardown must not
+     * publish an empty sweep over the next media's half-initialized state.
+     */
+    private fun refreshTracksCoalesced() {
+        if (mediaPlayer == null) return
+        val tracks = buildTracks()
+        if (tracks != _availableTracks.value) {
+            _availableTracks.value = tracks
+        }
+    }
+
+    /**
+     * Whether the track-derived stats inputs (`videoResolution` /
+     * `audioCodec`) must be re-read. Armed by the ES* event arms (the only
+     * way the track list moves mid-media) and by the per-media teardown
+     * ([resetForNextMedia] / [onResetItemScopedState]) — a fresh media's
+     * first stats tick must read. The 1 Hz stats tick skips its JNI track
+     * reads entirely while this is clear and the buffered input has not
+     * moved; the guard's cadence arm is the hedge for a track movement
+     * libVLC never announced.
+     */
+    @Volatile
+    private var statsInputsDirty = true
+
+    /**
+     * The shared stats change-guard (the Exo/mpv [StatsPublishGuard] host):
+     * the cheap sample is the event-cached buffered position, the cadence
+     * arm bounds how long a frozen sample suppresses the full read.
+     */
+    private val statsGuard = StatsPublishGuard(
+        fullRereadCadenceMs = FULL_STATS_REREAD_MS,
+        nowMs = android.os.SystemClock::elapsedRealtime,
+    )
+
+    /**
+     * The last buffering percentage applied to the buffered-state flows,
+     * quantized to whole percent ([MediaPlayer.Event.Buffering]'s arm) —
+     * `-1` after a media switch so the new media's first (0%) event
+     * publishes even though it quantizes to 0.
+     */
+    private var lastAppliedBufferPercent = -1
 
     private var pendingPlay = false
     private var hasRenderer = false
     private var pendingRendererItem: RendererItem? = null
     private var cachedDurationMs: Long = 0L
+
+    /**
+     * Event-cached playhead (ms), maintained by the `TimeChanged` listener —
+     * the mpv `cachedPositionMs` mirror: the position getter and the ticker's
+     * per-tick readbacks read this instead of issuing a JNI `MediaPlayer.time`
+     * read 3–4× per tick. VLC emits `TimeChanged` on every clock update
+     * (including through a seek's flush), so the cache tracks the playhead
+     * with the event cadence; a 0 event keeps the getter on the pending
+     * start/seek hold (the cached value only wins once it is real).
+     */
+    private var cachedPositionMs: Long = 0L
 
     /**
      * Side-loaded-subtitle id registry: libVLC spu track id → [SubtitleSource.id].
@@ -80,7 +219,7 @@ class LibVlcPlayerEngine(
      * registration decision (the diff against the pre-add baseline, the poll
      * budget, the serialization and the generation guard) lives in
      * [VlcSlaveRegistration]; this engine executes its verdicts here.
-     * [releaseInternal] clears the map since track ids don't survive a media
+     * [resetForNextMedia] clears the map since track ids don't survive a media
      * change.
      */
     @Volatile
@@ -94,7 +233,7 @@ class LibVlcPlayerEngine(
     )
 
     /**
-     * Incremented on every teardown ([releaseInternal]); scheduled polls carry
+     * Incremented on every teardown ([resetForNextMedia]); scheduled polls carry
      * their generation and abort when it moves, so a late tick can never
      * register a stale diff against the NEXT media's track ids.
      */
@@ -142,26 +281,58 @@ class LibVlcPlayerEngine(
                 _playbackState.value = EnginePlaybackState.ENDED
             }
             MediaPlayer.Event.Buffering -> {
-                val bufPercent = event.buffering
-                _playbackState.value = if (bufPercent < 100f) EnginePlaybackState.BUFFERING else EnginePlaybackState.READY
-                val dur = durationMs
-                if (dur > 0) {
-                    _bufferedPositionMs.value = ((bufPercent / 100f) * dur).toLong()
+                // Quantize the libVLC percentage to 1% steps BEFORE it enters
+                // state: the events arrive in bursts during caching, each a
+                // fraction of a percent apart, and every event used to
+                // allocate a fresh ranges list and rewrite both buffered
+                // flows for a sub-percent move. A quantized value equal to
+                // the last applied one reuses the cached state wholesale —
+                // no allocation, no write. (The band's start pins to the
+                // applying event's position; during a caching burst the
+                // playhead barely advances, so the 1% quantization loses
+                // nothing visible.)
+                val quantizedPercent = event.buffering.toInt().coerceIn(0, 100)
+                if (quantizedPercent != lastAppliedBufferPercent) {
+                    lastAppliedBufferPercent = quantizedPercent
+                    _playbackState.value =
+                        if (quantizedPercent < 100) EnginePlaybackState.BUFFERING else EnginePlaybackState.READY
+                    val dur = durationMs
+                    if (dur > 0) {
+                        _bufferedPositionMs.value = (quantizedPercent / 100f * dur).toLong()
+                    }
+                    // libVLC exposes only a 0..100 buffering percentage —
+                    // the fraction-ahead approximation bands [position, position +
+                    // fraction * duration]. Full (100%) buffering shades through
+                    // the end of the item.
+                    _bufferedRanges.value = BufferedRanges.aheadOfPosition(
+                        positionMs = currentPositionMs,
+                        fraction = quantizedPercent / 100f,
+                        durationMs = dur,
+                    )
                 }
-                // libVLC exposes only a 0..100 buffering percentage —
-                // the fraction-ahead approximation bands [position, position +
-                // fraction * duration]. Full (100%) buffering shades through
-                // the end of the item.
-                _bufferedRanges.value = BufferedRanges.aheadOfPosition(
-                    positionMs = currentPositionMs,
-                    fraction = bufPercent / 100f,
-                    durationMs = dur,
-                )
+            }
+            MediaPlayer.Event.TimeChanged -> {
+                cachedPositionMs = event.timeChanged
+                // A real position consumes the pending start/seek hold (the
+                // getter's former read-consume, moved to the event that owns
+                // the truth); a 0 event leaves the hold armed.
+                if (event.timeChanged > 0L) {
+                    pendingStartPositionMs = 0L
+                }
+            }
+            MediaPlayer.Event.LengthChanged -> {
+                val len = event.lengthChanged
+                if (len > 0L) {
+                    cachedDurationMs = len
+                }
             }
             MediaPlayer.Event.ESAdded,
             MediaPlayer.Event.ESDeleted,
             MediaPlayer.Event.ESSelected -> {
-                _availableTracks.value = buildTracks()
+                // The track list is also the stats model's input — arm the
+                // stats tick's full read before the coalesced rebuild lands.
+                statsInputsDirty = true
+                trackRefresh.request()
             }
             MediaPlayer.Event.EncounteredError -> {
                 _playbackState.value = EnginePlaybackState.ERROR
@@ -171,147 +342,26 @@ class LibVlcPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
-        releaseInternal(releaseVlc = true)
+        // Per-media teardown only: the previous item's MediaPlayer dies here;
+        // the libVLC handle survives when the option list computed below is
+        // unchanged (the common binge advance) — see the cache block comment.
+        resetForNextMedia()
 
         currentPlaybackRequest = request
         pendingStartPositionMs = request.startPositionMs.coerceAtLeast(0L)
 
-        val vlcCfg = (currentConfig.engineSpecific as? LibVlcEngineConfig) ?: LibVlcEngineConfig()
-
-        val options = arrayListOf(
-            "--aout=${vlcCfg.audioOutput.key}",
+        // The instance config as one pure fold: everything libvlc_new consumes
+        // is folded into this list, and the list IS the cache key — equal list,
+        // equal instance, so the previous handle is reused verbatim.
+        val options = buildLibVlcInstanceOptions(
+            config = currentConfig,
+            preferredAudioLanguage = request.preferredAudioLanguage,
+            preferredSubtitleLanguage = request.preferredSubtitleLanguage,
+            hasRenderer = hasRenderer,
+            isLowRamDevice = isLowRamDevice,
         )
 
-        request.preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
-            options.add("--audio-language=$language")
-        }
-        request.preferredSubtitleLanguage?.takeIf { it.isNotBlank() }?.let { language ->
-            options.add("--sub-language=$language")
-        }
-
-        if (vlcCfg.audioTimeStretch) {
-            options.add("--audio-time-stretch")
-        }
-
-        if (vlcCfg.skipLoopFilter > 0) {
-            options.add("--avcodec-skiploopfilter")
-            options.add(vlcCfg.skipLoopFilter.toString())
-        }
-        if (vlcCfg.skipFrame > 0) {
-            options.add("--avcodec-skip-frame")
-            options.add(vlcCfg.skipFrame.toString())
-        }
-        options.add("--avcodec-skip-idct")
-        options.add("0")
-
-        if (vlcCfg.decoderThreads > 0) {
-            options.add("--avcodec-threads=${vlcCfg.decoderThreads}")
-        }
-
-        val networkCaching = when {
-            vlcCfg.networkCaching > 0 -> vlcCfg.networkCaching
-            isLowRamDevice -> 1500
-            else -> 3000
-        }
-        options.add("--network-caching=$networkCaching")
-
-        if (isLowRamDevice) {
-            // Low-RAM tradeoff: VLC's clock synchronisation periodically
-            // adjusts the playback clock to keep audio/video aligned, which
-            // costs CPU on memory-constrained devices. Disabling it here
-            // reduces decode contention (avoiding stutter / dropped frames)
-            // at the cost of potential long-term A/V drift on long streams.
-            // Revisit if drift reports surface for the low-RAM tier; the
-            // escape hatch is to lower `decoderThreads`/`skipFrame` instead.
-            options.add("--clock-jitter=0")
-            options.add("--clock-synchro=0")
-        }
-
-        if (vlcCfg.dropLateFrames) {
-            options.add("--drop-late-frames")
-        }
-        if (vlcCfg.skipFrames) {
-            options.add("--skip-frames")
-        }
-
-        if (currentConfig.audioDelayMs != 0L) {
-            options.add("--audio-desync=${currentConfig.audioDelayMs.toInt()}")
-        }
-
-        if (currentConfig.audioPassthrough && !hasRenderer) {
-            // The enabled-codec allowlist replaces the legacy fixed list;
-            // an empty set composes nothing (no bitstreaming) — see
-            // libVlcPassthroughCodecList.
-            libVlcPassthroughCodecList(currentConfig.audioPassthroughCodecs)?.let { codecs ->
-                options.add("--codec=$codecs")
-            }
-        }
-
-        if (hasRenderer) {
-            options.add("--sout-keep")
-            options.add("--sout-chromecast-conversion-quality=2")
-        }
-
-        when (currentConfig.audioEffects.channelMixMode) {
-            ChannelMixMode.STEREO_DOWNMIX -> options.add("--stereo-mode=stereo")
-            ChannelMixMode.MONO -> options.add("--stereo-mode=mono")
-            ChannelMixMode.SURROUND_UPMIX -> options.add("--stereo-mode=surround")
-            ChannelMixMode.AUTO -> {}
-        }
-
-        // The channel cap AFTER the channel-mix mode: when both want a
-        // --stereo-mode value the stricter cap wins (VLC resolves duplicate
-        // options last-wins).
-        libVlcChannelCapOption(currentConfig.audioEffects.maxAudioChannels)?.let { options.add(it) }
-
-        // Night mode + audio normalization share the ONE `--audio-filter`
-        // option (a duplicate `--audio-filter` resolves last-wins, so the
-        // filters compose into a single comma list), and when both want the
-        // compressor filter — libVLC exposes a single filter instance — ONE
-        // param set applies, night mode's (the deliberate user choice; the
-        // DYNAMIC arm's fixed pair below is skipped). Like every other audio
-        // effect here this is a load-time option: a mid-playback toggle takes
-        // the documented reload path (see [onConfigChanged]).
-        val audioFilters = LinkedHashSet<String>()
-        if (currentConfig.audioEffects.nightModeEnabled) {
-            audioFilters += "compressor"
-        }
-        if (currentConfig.audioEffects.audioNormalizationEnabled) {
-            when (currentConfig.audioEffects.audioNormalizationMode) {
-                AudioNormalizationMode.DYNAMIC -> audioFilters += "compressor"
-                AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> audioFilters += "normvol"
-                AudioNormalizationMode.NONE -> {}
-            }
-        }
-        if (audioFilters.isNotEmpty()) {
-            options.add("--audio-filter=${audioFilters.joinToString(separator = ",")}")
-        }
-        if (currentConfig.audioEffects.nightModeEnabled) {
-            options.addAll(libVlcNightModeCompressorOptions(currentConfig.audioEffects.nightModeStrength))
-        }
-        if (currentConfig.audioEffects.audioNormalizationEnabled &&
-            !currentConfig.audioEffects.nightModeEnabled &&
-            currentConfig.audioEffects.audioNormalizationMode == AudioNormalizationMode.DYNAMIC
-        ) {
-            options.add("--compressor-ratio=3")
-            options.add("--compressor-threshold=-18")
-        }
-        if (currentConfig.audioEffects.audioNormalizationEnabled &&
-            (currentConfig.audioEffects.audioNormalizationMode == AudioNormalizationMode.TRACK ||
-                currentConfig.audioEffects.audioNormalizationMode == AudioNormalizationMode.ALBUM)
-        ) {
-            options.add("--norm-max-level=0.8")
-        }
-
-        val vlc = try {
-            LibVLC(context.applicationContext, options)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to create LibVLC", e)
-            currentPlaybackRequest = null
-            _errorFlow.tryEmit(EngineError.Render(e))
-            return
-        }
-        libVLC = vlc
+        val vlc = obtainVlcHandle(options) ?: return
 
         val mp = MediaPlayer(vlc)
         mp.setEventListener(eventListener)
@@ -363,21 +413,61 @@ class LibVlcPlayerEngine(
 
     override fun release() {
         engineScope.cancel()
-        releaseInternal(releaseVlc = true)
+        resetForNextMedia()
+        // Terminal teardown stays DESTRUCTIVE for the handle: the cache is
+        // dropped here too, so a defensive re-use of a released engine can
+        // never adopt the retiring instance (it observes an empty cache and
+        // builds a fresh one).
+        retireCachedVlcHandle()
         hasRenderer = false
         pendingRendererItem = null
         // Published-flow resets live in BasePlayerEngine. Its cue reset
         // is a same-value write here — libVLC never publishes cues — so the
         // observable reset set is unchanged.
         resetPublishedEngineState()
+        // Stop the dedicated release thread once the engine is fully torn
+        // down. The retire scheduled just above has already captured its
+        // handle and will run to completion — quitSafely dispatches messages
+        // that are already due before the looper dies, and the retire's
+        // closure holds its own object reference — but no new work can be
+        // enqueued onto a dying thread. The self-healing accessor resurrects
+        // the thread if the engine is ever re-used.
+        val releaseThread = releaseThreadGeneration
+        if (releaseThread?.isAlive == true) {
+            runCatching { releaseThread.quitSafely() }
+        }
     }
 
     /** The libVLC residue cleared alongside the base published-state reset: the cached duration. */
     override fun onResetItemScopedState() {
         cachedDurationMs = 0L
+        // The stats model dies with the item too — the new item's first stats
+        // tick must read + publish fresh, never suppressed by the previous
+        // item's sample (the Exo/mpv resetStatsGuard arm).
+        statsInputsDirty = true
+        resetStatsGuard()
     }
 
-    private fun releaseInternal(releaseVlc: Boolean) {
+    /**
+     * Per-media teardown: everything tied to the CURRENT media/player, shared
+     * verbatim by [load] (next item) and [release] (session end).
+     *
+     * MediaPlayer-side only, and deliberately main-thread: `stop()`,
+     * `detachViews()` and `MediaPlayer.release()` each descend into libVLC's
+     * VideoHelper/AWindow/SurfaceHelper, which remove layout listeners,
+     * surface-holder callbacks and TextureView listeners — View-tree writes
+     * that must run where the views live (the engine is main-thread-affine,
+     * matching BasePlayerEngine's threading contract). What this does NOT do
+     * is destroy the libVLC instance: that is the retired-handle path
+     * ([retireCachedVlcHandle] / [obtainVlcHandle]) and it runs on the
+     * serialized release thread.
+     */
+    private fun resetForNextMedia() {
+        // A pending coalesced rebuild must never fire against the NEXT
+        // media's half-initialized player (or after teardown nulls it) — the
+        // same cancel-before-teardown order mpv's release runs its coalescer
+        // through.
+        trackRefresh.cancel()
         mainHandler.removeCallbacksAndMessages(null)
         // Invalidate in-flight polls and drop per-media registration state:
         // track ids are meaningless for the next media.
@@ -387,19 +477,75 @@ class LibVlcPlayerEngine(
         pendingPlay = false
         currentPlaybackRequest = null
         pendingStartPositionMs = 0L
+        // The event caches die with the media too: on a reused engine a stale
+        // playhead/duration must never bleed into the next item's first reads
+        // (the getter would serve the previous item's values until the new
+        // media's first events land).
+        cachedPositionMs = 0L
+        cachedDurationMs = 0L
+        // The buffering quantization's last-applied stamp ditto: the new
+        // media's first (0%) event must publish even though it quantizes to
+        // the same whole percent the previous media ended on.
+        lastAppliedBufferPercent = -1
+        statsInputsDirty = true
         mediaPlayer?.let { mp ->
             mediaPlayer = null
+            // The event listener must not outlive the player it was bound to:
+            // a release dispatched here clears VLCObject's handler, so no
+            // queued native event can fire into a half-torn-down player — and
+            // the next media's fresh MediaPlayer installs its own listener
+            // anyway.
             mp.setEventListener(null)
             try { if (mp.isPlaying) mp.stop() } catch (_: Exception) {}
             try { mp.detachViews() } catch (_: Exception) {}
             try { mp.release() } catch (_: Exception) {}
         }
         mediaPlayer = null
-        if (releaseVlc) {
-            libVLC?.let { try { it.release() } catch (_: Exception) {} }
-            libVLC = null
-            videoLayout = null
+        // The layout is recomposed per item/attach cycle by the screen seam;
+        // clearing it here forces the same attach choreography a full VLC
+        // rebuild used to take, so the cached-handle path is view-for-view
+        // identical to the old behavior.
+        videoLayout = null
+    }
+
+    /**
+     * Cache lookup + fill for the libVLC instance. An option-identical load
+     * returns the cached handle untouched (no native work); any delta retires
+     * the old handle onto the release thread and builds a fresh instance.
+     *
+     * The evict-before-create ordering is what makes the retire safe: the slot
+     * is emptied synchronously HERE, on the main thread, so from this moment
+     * no other main-thread call (a concurrent-looking [load], a session
+     * [release], the reload paths' cache reads) can observe — and adopt — a
+     * handle whose destruction is already scheduled. The retired closure only
+     * ever touches the object IT captured, never the slot, so a stale
+     * release can structurally never destroy a handle a newer load is using.
+     *
+     * The retired handle and its replacement may coexist briefly (old instance
+     * still draining down on the release thread while the new one scans
+     * plugins) — independent libvlc instances in one process are supported
+     * (VLC's own thumbnailer does this), and the overlap is exactly what keeps
+     * the option-delta transition off the main thread instead of serializing
+     * destroy-then-create on it.
+     */
+    private fun obtainVlcHandle(options: List<String>): LibVLC? {
+        handleCache.reusableFor(options)?.let { return it }
+        handleCache.evict()?.let { retired -> vlcReleaseQueue.retire(retired) }
+        return try {
+            val vlc = LibVLC(context.applicationContext, options)
+            handleCache.install(vlc, options)
+            vlc
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create LibVLC", e)
+            currentPlaybackRequest = null
+            _errorFlow.tryEmit(EngineError.Render(e))
+            null
         }
+    }
+
+    /** Retires whatever handle is cached — the terminal [release] path. */
+    private fun retireCachedVlcHandle() {
+        handleCache.evict()?.let { retired -> vlcReleaseQueue.retire(retired) }
     }
 
     override fun play() {
@@ -413,6 +559,10 @@ class LibVlcPlayerEngine(
             // immediately because the seek was a no-op.
             if (wasEnded) {
                 mp.time = 0L
+                // Mirror the seek's cache write-through: the restart-from-end
+                // must not report the previous item run's tail position until
+                // the first TimeChanged lands.
+                cachedPositionMs = 0L
             }
         } catch (_: Exception) {}
     }
@@ -430,6 +580,10 @@ class LibVlcPlayerEngine(
         // `time` write can be dropped by a stopped player, and the display
         // must not fall back to 0 meanwhile.
         pendingStartPositionMs = positionMs.coerceAtLeast(0L)
+        // Write the target through the event cache so the display snaps to it
+        // immediately; the TimeChanged stream re-syncs during the seek's
+        // flush, and a dropped write self-corrects on the next event.
+        cachedPositionMs = pendingStartPositionMs
         try { mediaPlayer?.time = positionMs } catch (_: Exception) {}
     }
 
@@ -673,7 +827,7 @@ class LibVlcPlayerEngine(
 
     private fun reloadMediaForSubtitleStyleChange() {
         val mp = mediaPlayer ?: return
-        val vlc = libVLC ?: return
+        val vlc = handleCache.current ?: return
         val request = currentPlaybackRequest ?: return
         withPreservedPlayback { snap ->
             rebuildMediaForReload(mp, vlc, request, snap)
@@ -693,7 +847,7 @@ class LibVlcPlayerEngine(
 
     private fun reloadForRendererInternal(renderer: RendererItem?) {
         val mp = mediaPlayer ?: return
-        val vlc = libVLC ?: return
+        val vlc = handleCache.current ?: return
         val request = currentPlaybackRequest ?: return
         try {
             mp.setRenderer(renderer)
@@ -877,27 +1031,25 @@ class LibVlcPlayerEngine(
 
     override val currentPositionMs: Long
         get() {
-            val pending = pendingStartPositionMs
-            return try {
-                val mp = mediaPlayer ?: return pending
-                val time = mp.time
-                if (time > 0L) {
-                    // First real position — the pending start is consumed.
-                    pendingStartPositionMs = 0L
-                    time
-                } else {
-                    pending
-                }
-            } catch (_: Exception) { pending }
+            // The event cache (TimeChanged) is the position source — the JNI
+            // read is gone from the hot path. The pending start/seek hold
+            // covers the window before the first real event lands: a 0 cached
+            // value (fresh media, or a restart from ENDED) never outranks it.
+            val cached = cachedPositionMs
+            return if (cached > 0L) cached else pendingStartPositionMs
         }
 
     override val durationMs: Long
-        get() = try {
-            val len = (mediaPlayer?.length ?: 0L).coerceAtLeast(0L)
-            if (len > 0) { cachedDurationMs = len; len }
-            else if (hasRenderer && cachedDurationMs > 0) cachedDurationMs
-            else 0L
-        } catch (_: Exception) { if (hasRenderer && cachedDurationMs > 0) cachedDurationMs else 0L }
+        get() {
+            // Event-cached (LengthChanged) first; until the event lands, the
+            // legacy JNI length read fills the cache — the unknown window
+            // only, never the steady state.
+            cachedDurationMs.takeIf { it > 0L }?.let { return it }
+            return try {
+                val len = (mediaPlayer?.length ?: 0L).coerceAtLeast(0L)
+                if (len > 0) { cachedDurationMs = len; len } else 0L
+            } catch (_: Exception) { 0L }
+        }
 
     override val playbackSpeed: Float
         get() = try { mediaPlayer?.rate ?: 1f } catch (_: Exception) { 1f }
@@ -927,6 +1079,15 @@ class LibVlcPlayerEngine(
     private fun updateVideoStats() {
         val mp = mediaPlayer ?: return
         try {
+            // The change guard first (the Exo/mpv mirror): the track reads
+            // below are JNI round-trips, worth paying only once an input
+            // actually moved. The cheap sample is the event-cached buffered
+            // position; the track-derived inputs ride [statsInputsDirty]
+            // (event-announced); the cadence arm forces a periodic full
+            // read even if neither moved. publishStatsIfChanged stays the
+            // final emit guard.
+            if (!statsInputsDirty && !statsGuard.admit(_bufferedPositionMs.value)) return
+            statsInputsDirty = false
             val videoTrack = try { mp.currentVideoTrack } catch (_: Exception) { null }
             val newStats = EngineVideoStats(
                 videoResolution = videoTrack?.let { vt ->
@@ -977,8 +1138,8 @@ class LibVlcPlayerEngine(
                     result.add(
                         MediaTrack(
                             // Prefer the side-loaded subtitle's stable
-                            // SubtitleSource.id (registered by the post-add diff
-                            // in scheduleSlaveTrackRegistration) over the
+                            // SubtitleSource.id (registered by the post-add
+                            // diff in VlcSlaveRegistration) over the
                             // synthetic vlc id — mirrors ExoPlayer's
                             // SubtitleConfiguration.id and mpv's label registry,
                             // and is what lets a downloaded subtitle be resolved
@@ -999,4 +1160,286 @@ class LibVlcPlayerEngine(
         return result
     }
 
+}
+
+// ── Pure policy surface ──────────────────────────────────────────────────────
+// The three declarations below are the decision half of the engine's
+// handle-cache work, extracted as pure, libVLC-free logic so the shipped
+// decisions are the tested decisions (the LibVlcAudioMappings /
+// VlcSlaveRegistration precedent). They reference no Android API and no
+// org.videolan type; the engine is the sole caller.
+
+/**
+ * The libVLC instance option list for one load — the single source of the
+ * `libvlc_new` argv, and therefore the exact cache key the handle cache
+ * compares (structural list equality: an equal list means an identical native
+ * instance config, so reusing the cached handle is observationally equivalent
+ * to rebuilding it).
+ *
+ * Total and deterministic: every input is a plain config value or a Boolean —
+ * no context, no native reads — which is what makes both the list content and
+ * the equality policy host-test-pinnable without a LibVLC instance. The
+ * per-Media options (video filters, subtitle freetype rows, headers, start
+ * time) are NOT part of this list — they ride [Media.addOption] in
+ * `LibVlcPlayerEngine.buildMedia` and never affect instance identity.
+ *
+ * Option order is load-bearing only in one spot (the channel cap is appended
+ * AFTER the channel-mix mode so the stricter `--stereo-mode` wins VLC's
+ * last-wins duplicate resolution) but is kept fully deterministic everywhere:
+ * the list doubles as the reuse key, and a stable order is what makes the
+ * binge advance a bit-identical match.
+ */
+internal fun buildLibVlcInstanceOptions(
+    config: EngineConfig,
+    preferredAudioLanguage: String?,
+    preferredSubtitleLanguage: String?,
+    hasRenderer: Boolean,
+    isLowRamDevice: Boolean,
+): List<String> {
+    val vlcCfg = (config.engineSpecific as? LibVlcEngineConfig) ?: LibVlcEngineConfig()
+
+    val options = arrayListOf(
+        "--aout=${vlcCfg.audioOutput.key}",
+    )
+
+    preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
+        options.add("--audio-language=$language")
+    }
+    preferredSubtitleLanguage?.takeIf { it.isNotBlank() }?.let { language ->
+        options.add("--sub-language=$language")
+    }
+
+    if (vlcCfg.audioTimeStretch) {
+        options.add("--audio-time-stretch")
+    }
+
+    if (vlcCfg.skipLoopFilter > 0) {
+        options.add("--avcodec-skiploopfilter")
+        options.add(vlcCfg.skipLoopFilter.toString())
+    }
+    if (vlcCfg.skipFrame > 0) {
+        options.add("--avcodec-skip-frame")
+        options.add(vlcCfg.skipFrame.toString())
+    }
+    options.add("--avcodec-skip-idct")
+    options.add("0")
+
+    if (vlcCfg.decoderThreads > 0) {
+        options.add("--avcodec-threads=${vlcCfg.decoderThreads}")
+    }
+
+    val networkCaching = when {
+        vlcCfg.networkCaching > 0 -> vlcCfg.networkCaching
+        isLowRamDevice -> 1500
+        else -> 3000
+    }
+    options.add("--network-caching=$networkCaching")
+
+    if (isLowRamDevice) {
+        // Low-RAM tradeoff: VLC's clock synchronisation periodically
+        // adjusts the playback clock to keep audio/video aligned, which
+        // costs CPU on memory-constrained devices. Disabling it here
+        // reduces decode contention (avoiding stutter / dropped frames)
+        // at the cost of potential long-term A/V drift on long streams.
+        // Revisit if drift reports surface for the low-RAM tier; the
+        // escape hatch is to lower `decoderThreads`/`skipFrame` instead.
+        options.add("--clock-jitter=0")
+        options.add("--clock-synchro=0")
+    }
+
+    if (vlcCfg.dropLateFrames) {
+        options.add("--drop-late-frames")
+    }
+    if (vlcCfg.skipFrames) {
+        options.add("--skip-frames")
+    }
+
+    if (config.audioDelayMs != 0L) {
+        options.add("--audio-desync=${config.audioDelayMs.toInt()}")
+    }
+
+    if (config.audioPassthrough && !hasRenderer) {
+        // The enabled-codec allowlist replaces the legacy fixed list;
+        // an empty set composes nothing (no bitstreaming) — see
+        // libVlcPassthroughCodecList.
+        libVlcPassthroughCodecList(config.audioPassthroughCodecs)?.let { codecs ->
+            options.add("--codec=$codecs")
+        }
+    }
+
+    if (hasRenderer) {
+        options.add("--sout-keep")
+        options.add("--sout-chromecast-conversion-quality=2")
+    }
+
+    when (config.audioEffects.channelMixMode) {
+        ChannelMixMode.STEREO_DOWNMIX -> options.add("--stereo-mode=stereo")
+        ChannelMixMode.MONO -> options.add("--stereo-mode=mono")
+        ChannelMixMode.SURROUND_UPMIX -> options.add("--stereo-mode=surround")
+        ChannelMixMode.AUTO -> {}
+    }
+
+    // The channel cap AFTER the channel-mix mode: when both want a
+    // --stereo-mode value the stricter cap wins (VLC resolves duplicate
+    // options last-wins).
+    libVlcChannelCapOption(config.audioEffects.maxAudioChannels)?.let { options.add(it) }
+
+    // Night mode + audio normalization share the ONE `--audio-filter`
+    // option (a duplicate `--audio-filter` resolves last-wins, so the
+    // filters compose into a single comma list), and when both want the
+    // compressor filter — libVLC exposes a single filter instance — ONE
+    // param set applies, night mode's (the deliberate user choice; the
+    // DYNAMIC arm's fixed pair below is skipped). Like every other audio
+    // effect here this is a load-time option: a mid-playback toggle takes
+    // the documented reload path (see LibVlcPlayerEngine.onConfigChanged).
+    val audioFilters = LinkedHashSet<String>()
+    if (config.audioEffects.nightModeEnabled) {
+        audioFilters += "compressor"
+    }
+    if (config.audioEffects.audioNormalizationEnabled) {
+        when (config.audioEffects.audioNormalizationMode) {
+            AudioNormalizationMode.DYNAMIC -> audioFilters += "compressor"
+            AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> audioFilters += "normvol"
+            AudioNormalizationMode.NONE -> {}
+        }
+    }
+    if (audioFilters.isNotEmpty()) {
+        options.add("--audio-filter=${audioFilters.joinToString(separator = ",")}")
+    }
+    if (config.audioEffects.nightModeEnabled) {
+        options.addAll(libVlcNightModeCompressorOptions(config.audioEffects.nightModeStrength))
+    }
+    if (config.audioEffects.audioNormalizationEnabled &&
+        !config.audioEffects.nightModeEnabled &&
+        config.audioEffects.audioNormalizationMode == AudioNormalizationMode.DYNAMIC
+    ) {
+        options.add("--compressor-ratio=3")
+        options.add("--compressor-threshold=-18")
+    }
+    if (config.audioEffects.audioNormalizationEnabled &&
+        (config.audioEffects.audioNormalizationMode == AudioNormalizationMode.TRACK ||
+            config.audioEffects.audioNormalizationMode == AudioNormalizationMode.ALBUM)
+    ) {
+        options.add("--norm-max-level=0.8")
+    }
+
+    return options
+}
+
+/**
+ * The cached-handle slot behind `LibVlcPlayerEngine`'s libVLC reuse: holds the
+ * live instance together with the option list that produced it, and answers
+ * the two questions each load asks — is the cached handle good for these
+ * options, and what must be retired before a new one is installed.
+ *
+ * Pure and generic (no Android, no org.videolan type) so the reuse/retire
+ * policy is pinnable without a LibVLC instance, the VlcSlaveRegistration
+ * precedent. NOT thread-safe by design: every call runs on the engine's main
+ * thread; the serialized release thread receives only the retired object the
+ * engine hands it — it never touches this slot, which is the invariant that
+ * makes "a stale release can never destroy a handle a newer load is reusing"
+ * structural rather than guarded.
+ */
+internal class VlcHandleCache<H : Any> {
+
+    private var handle: H? = null
+    private var producingOptions: List<String>? = null
+
+    /** The live handle regardless of options — the reload paths' handle read. */
+    val current: H? get() = handle
+
+    /**
+     * The cached handle when it was produced by EXACTLY [options] (structural
+     * list equality), else null. Null also when the cache is empty — a retired
+     * or never-filled slot never serves a load.
+     */
+    fun reusableFor(options: List<String>): H? {
+        val cached = handle ?: return null
+        return cached.takeIf { producingOptions == options }
+    }
+
+    /**
+     * Installs [handle] as the product of [options]. The key is stored as a
+     * defensive copy: the list handed to `LibVLC`'s constructor is iterated
+     * (not mutated) by libVLC, but the slot outlives the load call, so its key
+     * must not alias a list a caller could keep mutating.
+     */
+    fun install(handle: H, options: List<String>) {
+        this.handle = handle
+        this.producingOptions = options.toList()
+    }
+
+    /**
+     * Drops the cached handle and returns it for the caller's release
+     * schedule (null when the slot was empty). After this call the handle can
+     * no longer be reached through the cache — no later lookup, reload or
+     * load can adopt an instance whose destruction is already scheduled.
+     */
+    fun evict(): H? {
+        val retired = handle
+        handle = null
+        producingOptions = null
+        return retired
+    }
+}
+
+/**
+ * The serialized retire scheduler for retired libVLC handles — the decision
+ * half of the `VlcRelease` HandlerThread machinery (the `MpvRelease` twin),
+ * extracted as pure logic so the generation policy is pinnable without
+ * Android threading: the engine supplies [dispatch] (`Handler.post` on the
+ * release thread), [destroy] (`LibVLC.release`) and [onSuperseded]
+ * (`Log.w`) as seams.
+ *
+ * Generation policy — the ordering guarantee behind the whole retire path:
+ * every [retire] bumps a monotone counter and posts a closure carrying the
+ * generation it was scheduled under; the closure re-reads the counter when it
+ * runs (the release thread serializes closures, so they observe the counter
+ * in schedule order). The check is an ordering ASSERTION, not a skip-guard:
+ * each closure captured its own handle object, and the engine cleared the
+ * cache slot synchronously BEFORE this schedule could even be posted — so a
+ * superseded generation can only mean a newer retire queued behind this one
+ * on the same serialized thread, holding a DIFFERENT object. Skipping a
+ * superseded closure would leak its handle; every closure therefore destroys
+ * its capture unconditionally, and the generation surfaces the supersede
+ * order through [onSuperseded] for diagnosis. ("Superseded" here is expected
+ * on a rapid option flip-flop — two retires in one load burst — not an
+ * error.)
+ *
+ * Memory visibility: the counter is `@Volatile` — written on the main thread
+ * in [retire], read on the release thread inside the closures; monotone
+ * increments make any observed value sound (a closure never sees a generation
+ * older than everything scheduled before it).
+ *
+ * Not thread-safe beyond that contract: [retire] must be called from the
+ * engine's main thread (the callers are `load` and `release`), which is what
+ * keeps generation assignment and cache-slot eviction in one place.
+ */
+internal class VlcHandleReleaseQueue<H : Any>(
+    /** Submits a release closure — `releaseHandler.post` on Android. */
+    private val dispatch: (release: () -> Unit) -> Unit,
+    /** Destroys one retired handle — `LibVLC.release` on Android. */
+    private val destroy: (H) -> Unit,
+    /** Supersede telemetry, carrying (scheduled, current) — `Log.w` on Android. */
+    private val onSuperseded: (scheduled: Int, current: Int) -> Unit = { _, _ -> },
+) {
+
+    @Volatile
+    private var generation = 0
+
+    /**
+     * Schedules [handle] for destruction on the serialized release thread.
+     * Call-side contract: the handle must already be unreachable through the
+     * engine's cache (the eviction happens synchronously before this call).
+     */
+    fun retire(handle: H) {
+        generation += 1
+        val scheduled = generation
+        dispatch {
+            if (scheduled != generation) {
+                onSuperseded(scheduled, generation)
+            }
+            destroy(handle)
+        }
+    }
 }

@@ -56,6 +56,14 @@ data class TimedProgram(
     val end: Instant,
 )
 
+/**
+ * One channel's guide slice. A structural-equality [data class] so a rebuild
+ * can diff-merge against the previous snapshot: when a channel's programs are
+ * unchanged the PREVIOUS instance is carried over (see [buildEpgGridData]),
+ * and downstream `remember(row, …)` caches plus Compose skippability key off
+ * that instance identity — an unchanged row never recomposes across a guide
+ * refresh.
+ */
 @Immutable
 data class EpgChannelRow(
     val channel: LiveTvChannel,
@@ -91,14 +99,25 @@ data class ChannelRowLayout(
  *    its bounds so adjacent shows never render past the grid edge.
  *  - Rows are ordered to match [channels] (server order). Programs within a
  *    row are sorted by start time ascending.
+ *  - Diff-merge against [previousRows]: when a rebuilt row is structurally
+ *    equal to the previous snapshot's row for the same channel id, the
+ *    previous INSTANCE is emitted instead of the fresh one. Callers rebuild
+ *    on every guide refresh (where most channels' schedules are unchanged),
+ *    and the carried-over instances let the screen's per-row `remember` and
+ *    Compose's skippability treat those rows as untouched — only genuinely
+ *    changed rows re-lay. The comparison is the data classes' structural
+ *    equality; the merged output is identical either way, so this is purely
+ *    a recomposition-saving identity guarantee.
  */
 fun buildEpgGridData(
     channels: List<LiveTvChannel>,
     programs: List<LiveTvProgram>,
     windowStart: Instant,
     windowEnd: Instant,
+    previousRows: List<EpgChannelRow> = emptyList(),
 ): EpgGridData {
     val byChannel = programs.groupBy { it.channelId }
+    val previousByChannelId = previousRows.associateBy { it.channel.id }
     val rows = channels.map { channel ->
         val timed = (byChannel[channel.id] ?: emptyList())
             .mapNotNull { program ->
@@ -111,10 +130,12 @@ fun buildEpgGridData(
             }
             .filter { it.end > windowStart && it.start < windowEnd }
             .sortedBy { it.start.toEpochMilliseconds() }
-        EpgChannelRow(
+        val rebuilt = EpgChannelRow(
             channel = channel,
             timedPrograms = timed,
         )
+        val previous = previousByChannelId[channel.id]
+        if (previous != null && previous == rebuilt) previous else rebuilt
     }
     return EpgGridData(
         windowStart = windowStart,

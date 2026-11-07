@@ -144,6 +144,15 @@ internal class OfflineHomeGate(
                         flowOf(emptyList())
                     }
                 }
+                // The repository flow re-emits on every download-progress
+                // write; re-emissions whose render-relevant fingerprint
+                // (see [offlineEpisodesRenderKey]) is unchanged are dropped
+                // here, so a progress tick skips the state write and the
+                // downstream offline rebuild it would trigger — the same
+                // render-key dedupe the library collector above applies.
+                .distinctUntilChangedBy { episodes ->
+                    offlineEpisodesRenderKey(episodes)
+                }
                 .collect { episodes ->
                     _state.update { it.copy(offlineEpisodes = episodes) }
                 }
@@ -272,6 +281,19 @@ private fun offlineRenderKey(gate: OfflineGate, emission: OfflineLibraryEmission
         add(gate)
         add(emission.pending)
         emission.items.forEach { addAll(it.offlineRenderKeyFields()) }
+    }
+
+/**
+ * The render-relevant fingerprint of a gated episodes emission: the per-item
+ * [offlineRenderKeyFields]. The episodes repository flow re-emits on every
+ * download-progress write with fields home never renders, so keying the
+ * collector's dedupe on this instead of whole-[OfflineMediaItem] equality
+ * collapses those ticks before the state write — the mirror of
+ * [offlineRenderKey] for the episodes collector.
+ */
+private fun offlineEpisodesRenderKey(episodes: List<OfflineMediaItem>): List<Any?> =
+    buildList(episodes.size + 1) {
+        episodes.forEach { addAll(it.offlineRenderKeyFields()) }
     }
 
 /**

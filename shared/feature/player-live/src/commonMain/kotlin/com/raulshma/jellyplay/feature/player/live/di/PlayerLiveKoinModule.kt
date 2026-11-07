@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.live.di
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.feature.player.live.LiveTvPlayerViewModel
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
+import com.raulshma.jellyplay.feature.player.live.data.LiveChannelListCache
 import com.raulshma.jellyplay.feature.player.live.engine.CatalogTranscodeReasonsRenderer
 import com.raulshma.jellyplay.feature.player.live.engine.TranscodeReasonsRenderer
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -70,12 +71,19 @@ val playerLiveModule: Module = module {
             // Android-only — androidPlayerLiveModule binds it; desktop (where
             // the live screen never composes) resolves null.
             mediaSessionFactory = getOrNull(),
+            // The channel-list TTL memo: a process single so the list
+            // fetched on one player entry serves re-entries inside the TTL
+            // window (the LastChannelStore seam shape).
+            channelListCache = get(),
         )
     }
     single {
         LastChannelStore(
             prefs = get(),
         )
+    }
+    single {
+        LiveChannelListCache()
     }
     single<TranscodeReasonsRenderer> { CatalogTranscodeReasonsRenderer }
 }

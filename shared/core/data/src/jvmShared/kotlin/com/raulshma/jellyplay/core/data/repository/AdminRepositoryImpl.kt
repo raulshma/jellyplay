@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
+import com.raulshma.jellyplay.core.data.realtime.SessionsRealtimeChannel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -45,8 +46,9 @@ class AdminRepositoryImpl constructor(
     private val libraryApiClient: LibraryApiClient,
     private val engine: JellyfinApiEngine,
     private val realtimeTasks: ScheduledTasksRealtimeChannel,
+    private val realtimeSessions: SessionsRealtimeChannel,
     private val activityLogRealtimeChannel: ActivityLogRealtimeChannel,
-) : AdminRepository {
+) : AdminRepository, AdminSessionFeed {
 
     override val scheduledTasks: Flow<List<ScheduledTaskInfo>>
         get() = realtimeTasks.tasks
@@ -56,6 +58,12 @@ class AdminRepositoryImpl constructor(
 
     override val libraryScanTask: Flow<ScheduledTaskInfo?>
         get() = realtimeTasks.scanLibraryTask
+
+    override val sessions: Flow<List<SessionInfo>>
+        get() = realtimeSessions.sessions
+
+    override val sessionsLastPushAtMs: Long
+        get() = realtimeSessions.lastPushAtMs
 
     override suspend fun getSystemInfo(): Result<SystemInfo> = adminApiClient.getSystemInfo()
 

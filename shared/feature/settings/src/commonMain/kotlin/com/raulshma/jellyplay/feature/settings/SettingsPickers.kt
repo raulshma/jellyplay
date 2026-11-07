@@ -72,6 +72,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_save
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_picker_no_results
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_picker_search
 
+/** Lazy-list key for a null picker option — an identity sentinel no real option value can equal. */
+private val NullOptionKey = Any()
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsChipPickerSheet(
@@ -254,8 +257,12 @@ internal fun <T> SettingsListPickerSheet(
     var searching by rememberSaveable(title) { mutableStateOf(false) }
     var query by rememberSaveable(title) { mutableStateOf("") }
     val searchLabel = stringResource(Res.string.settings_picker_search)
-    val visibleItems = items.filter {
-        matchesPickerQuery(query, label(it), subtitle(it), it.toString())
+    // The match runs per option (label + subtitle + toString); remembered off
+    // the query so recompositions that don't change it skip the re-filter.
+    val visibleItems = remember(items, query) {
+        items.filter {
+            matchesPickerQuery(query, label(it), subtitle(it), it.toString())
+        }
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val focusManager = LocalFocusManager.current
@@ -294,7 +301,16 @@ internal fun <T> SettingsListPickerSheet(
                 Text(stringResource(Res.string.settings_picker_no_results), modifier = Modifier.padding(24.dp))
             }
             LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                itemsIndexed(visibleItems, contentType = { _, _ -> "option" }) { index, item ->
+                // Row key = the option value itself (options are distinct
+                // choices), so an option's identity survives filter edits
+                // instead of shifting with its index. A null option keys on
+                // an identity sentinel — Unit/strings could collide with a
+                // real option's value.
+                itemsIndexed(
+                    visibleItems,
+                    key = { _, item -> item ?: NullOptionKey },
+                    contentType = { _, _ -> "option" },
+                ) { index, item ->
                     val selected = isSelected(item)
                     val shape = when {
                         visibleItems.size == 1 -> ShapeCache.smooth16

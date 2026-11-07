@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -49,6 +50,7 @@ import com.raulshma.jellyplay.core.datastore.reader.ReadingLayout
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -159,9 +161,29 @@ internal fun PagedReaderContent(
         val coordinator = rememberPagedPagerCoordinator(
             pagerState = pagerState,
             animated = { prefs.global.animatedPageTurns },
-            // Settles report a SLOT; the VM learns the slot's lead page.
+            // Settles report a SLOT; the VM learns the slot's lead page, then
+            // the screen warms the neighbor slots' renders — the same
+            // requestPage the tiles use, with the same raster parameters, so
+            // the next page turn's tile composes from the cache instead of
+            // starting its extract+decode cold (a tile that composed first
+            // coalesces into the same render inside the VM). Sequential: the
+            // PDF back-ends serialize behind their own render lock anyway,
+            // and one queued render keeps the decode memory spike to a single
+            // page. Runs on the screen scope so nothing outlives the reader;
+            // the callback re-arms per recomposition through the
+            // coordinator's rememberUpdatedState, so a fit/surface change is
+            // visible at the next settle.
             onPageSettled = { slot ->
                 viewModel.onPageChanged(SpreadSlots.firstPageOfSlot(slot, content.pageCount, layout))
+                scope.launch {
+                    val neighbors = buildList {
+                        if (slot > 0) addAll(SpreadSlots.pagesOfSlot(slot - 1, content.pageCount, layout))
+                        if (slot < slotCount - 1) addAll(SpreadSlots.pagesOfSlot(slot + 1, content.pageCount, layout))
+                    }
+                    for (page in neighbors) {
+                        viewModel.requestPage(page, surfaceWidthPx, surfaceHeightPx, fitMode)
+                    }
+                }
             },
         )
         LaunchedEffect(coordinator) { coordinator.attach(this) }
@@ -177,6 +199,10 @@ internal fun PagedReaderContent(
             modifier = Modifier.fillMaxSize(),
             reverseLayout = direction == ReadingDirection.RTL,
             key = { it },
+            // Keep the neighbor slot composed so a page turn renders from the
+            // warm cache instead of starting its IO extract+decode cold at
+            // the settle (the onboarding pager's posture).
+            beyondViewportPageCount = 1,
         ) { slot ->
             val pages = SpreadSlots.pagesOfSlot(slot, content.pageCount, layout)
             when {
@@ -366,19 +392,25 @@ private fun PageTile(
         }
     }
 
-    // Settle → re-raster: keys on the visual scale, so pinch frames and
-    // animation frames keep cancelling the timer; the still moment fires it.
-    LaunchedEffect(pageIndex, widthPx, heightPx, fitMode, zoomState.visual) {
-        delay(ZOOM_SETTLE_MS)
-        // Pure decide-then-apply: the retarget rule (cap, 0.05 dead-band,
-        // base-scale skip) lives in pageRasterTarget, pinned beside the state.
-        val target = pageRasterTarget(zoomState.visual, zoomState.raster) ?: return@LaunchedEffect
-        val fresh = viewModel.requestPage(pageIndex, widthPx, heightPx, fitMode, target)
-        if (fresh == null) return@LaunchedEffect
-        bitmap.value = fresh
-        zoomState.raster = target
-        zoomState.zoom = zoomState.visual / if (target > 1f) target else 1f
-        zoomState.clampPan()
+    // Settle → re-raster: snapshotFlow re-emits on every visual-scale change
+    // and collectLatest cancels the pending settle when a new value arrives —
+    // the same restart-on-new-value semantics the scale-keyed relaunch had,
+    // but the subscription is coroutine-side: composition never reads the
+    // scale, so pinch frames no longer recompose this scope.
+    LaunchedEffect(pageIndex, widthPx, heightPx, fitMode) {
+        snapshotFlow { zoomState.visual }
+            .collectLatest {
+                delay(ZOOM_SETTLE_MS)
+                // Pure decide-then-apply: the retarget rule (cap, 0.05 dead-band,
+                // base-scale skip) lives in pageRasterTarget, pinned beside the state.
+                val target = pageRasterTarget(zoomState.visual, zoomState.raster) ?: return@collectLatest
+                val fresh = viewModel.requestPage(pageIndex, widthPx, heightPx, fitMode, target)
+                if (fresh == null) return@collectLatest
+                bitmap.value = fresh
+                zoomState.raster = target
+                zoomState.zoom = zoomState.visual / if (target > 1f) target else 1f
+                zoomState.clampPan()
+            }
     }
 
     Box(

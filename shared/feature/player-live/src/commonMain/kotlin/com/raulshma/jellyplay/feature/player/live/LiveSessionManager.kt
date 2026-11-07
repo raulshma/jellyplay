@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 private const val TAG = "LiveSessionManager"
 
@@ -24,9 +26,9 @@ private const val TAG = "LiveSessionManager"
  * 2. The DIRECT_STREAM probe-override ([shouldIgnoreServerTranscodeVerdict]):
  *    when the user asked for Direct Stream but the server resolved a
  *    transcode, the live-source probe failed even though the tuner session
- *    is live — the verdict is ignored and a forced re-request runs instead.
- *    This policy stays HERE, client-side; the repository owns only the
- *    choreography.
+ *    is live — the verdict is ignored and the forced re-request's ladder
+ *    result is used instead. This policy stays HERE, client-side; the
+ *    repository owns only the choreography.
  * 3. The forced re-request (`forceLiveStreamFallback`) makes the repository
  *    run its live ladder — fetch PlaybackInfo with
  *    `autoOpenLiveStream=true` semantics and a **blank** `mediaSourceId`
@@ -39,6 +41,13 @@ private const val TAG = "LiveSessionManager"
  *    works even when the source flags are all false.
  * 4. Returns null only when both paths fail — the caller surfaces the
  *    actual cause.
+ *
+ * Round-trip shape per tune: under DIRECT_STREAM the server-verdict arm and
+ * the forced-ladder arm run as ONE bounded two-way fan-out (see
+ * [resolveWithFallbackFanOut]) so the probe-override case — the only case
+ * that needs the ladder — never pays a second sequential resolve; AUTO and
+ * TRANSCODE accept the server's pick, resolve once, and only fall to a
+ * sequential ladder when the verdict arm offers nothing.
  *
  * The same entry serves the ordinary tune (`option` = the user's
  * [LiveStreamOption] preference) and the engine-requested transcode
@@ -79,24 +88,21 @@ internal class LiveSessionManager(
             playerType = playerType,
             liveStreamOption = option,
         )
+        // DIRECT_STREAM is the one option whose verdict can be overridden
+        // ([shouldIgnoreServerTranscodeVerdict]) — the only case where the
+        // forced ladder is needed on a Resolved verdict — so it is the one
+        // option resolved as a two-way fan-out. AUTO/TRANSCODE keep the
+        // single-resolve shape (their fallback only fires on a failed verdict
+        // arm, which is rare, and a speculative second PlaybackInfo per tune
+        // would buy nothing there).
+        if (option == LiveStreamOption.DIRECT_STREAM) {
+            return resolveWithFallbackFanOut(channel.name, request)
+        }
+
         when (val verdict = playbackRepository.resolvePlayable(request)) {
             is PlaybackResolution.Resolved ->
-                // DIRECT_STREAM probe-override policy (LiveStreamResolution,
-                // pinned by LiveStreamResolutionTest): when the user asked
-                // for Direct Stream but the server resolved a transcode, the
-                // live-source probe failed even though the tuner session is
-                // live — ignore the verdict and fall to the forced
-                // re-request below; AUTO/TRANSCODE options accept the
-                // server's pick.
-                if (!shouldIgnoreServerTranscodeVerdict(option, verdict.playback.playMethod)) {
-                    return verdict.playback
-                } else {
-                    Log.w(
-                        TAG,
-                        "Server resolved transcode for ${channel.name} despite " +
-                            "DIRECT_STREAM request (probe failed); forcing direct stream"
-                    )
-                }
+                // AUTO/TRANSCODE options accept the server's pick.
+                return verdict.playback
             PlaybackResolution.Unplayable, is PlaybackResolution.StaticFallback ->
                 Log.w(TAG, "resolvePlayback returned null for ${channel.name} (option=$option); falling back to fetchPlaybackInfo")
         }
@@ -113,4 +119,67 @@ internal class LiveSessionManager(
             else -> null
         }
     }
+
+    /**
+     * The DIRECT_STREAM resolve: the server-verdict arm and the forced
+     * fallback-ladder arm issued as one bounded two-way fan-out (the cap this
+     * choreography allows itself — two concurrent PlaybackInfo requests per
+     * tune, both for the same channel), with the pick made by the server's
+     * ACTUAL verdict exactly as the former sequential ladder picked:
+     *
+     *  - a verdict the probe-override trusts → the verdict's playback, the
+     *    speculative ladder result discarded (its in-flight request is
+     *    cancelled, so the common direct-stream tune costs no extra bytes);
+     *  - a transcode verdict under DIRECT_STREAM (probe failed — tuner is
+     *    live) or an Unplayable/StaticFallback verdict → the ladder's
+     *    playback, already in flight instead of one round trip away.
+     *
+     * The ladder arm is the same [PlaybackResolveRequest] with
+     * `forceLiveStreamFallback = true`; both arms carry identical
+     * channel/stream-index fields, so whichever result is picked preserves
+     * the exact play-method semantics of the sequential choreography — only
+     * the WAIT order changed.
+     */
+    private suspend fun resolveWithFallbackFanOut(
+        channelName: String,
+        request: PlaybackResolveRequest,
+    ): ResolvedPlayback? = coroutineScope {
+        val verdictDeferred = async { playbackRepository.resolvePlayable(request) }
+        val fallbackDeferred = async {
+            playbackRepository.resolvePlayable(request.copy(forceLiveStreamFallback = true))
+        }
+        when (val verdict = verdictDeferred.await()) {
+            is PlaybackResolution.Resolved -> {
+                val forced = shouldIgnoreServerTranscodeVerdict(
+                    request.liveStreamOption ?: LiveStreamOption.DIRECT_STREAM,
+                    verdict.playback.playMethod,
+                )
+                if (!forced) {
+                    // Trusted verdict — the speculative ladder call is cut
+                    // short (in-flight HTTP cancelled with this scope's
+                    // child) and its result never read.
+                    fallbackDeferred.cancel()
+                    verdict.playback
+                } else {
+                    Log.w(
+                        TAG,
+                        "Server resolved transcode for $channelName despite " +
+                            "DIRECT_STREAM request (probe failed); forcing direct stream"
+                    )
+                    fallbackDeferred.await().playbackOrNull()
+                }
+            }
+            PlaybackResolution.Unplayable, is PlaybackResolution.StaticFallback -> {
+                Log.w(
+                    TAG,
+                    "resolvePlayback returned null for $channelName " +
+                        "(option=${request.liveStreamOption}); falling back to fetchPlaybackInfo",
+                )
+                fallbackDeferred.await().playbackOrNull()
+            }
+        }
+    }
+
+    private fun PlaybackResolution.playbackOrNull(): ResolvedPlayback? =
+        (this as? PlaybackResolution.Resolved)?.playback
 }

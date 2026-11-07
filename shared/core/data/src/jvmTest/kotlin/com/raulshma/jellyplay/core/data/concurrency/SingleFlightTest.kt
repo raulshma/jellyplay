@@ -1,11 +1,15 @@
 package com.raulshma.jellyplay.core.data.concurrency
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -342,5 +346,85 @@ class SingleFlightTest {
         )
         assertEquals("v2", later)
         assertEquals(2, fetches)
+    }
+
+    @Test
+    fun `a joiner whose flight died before its body started retries into a fresh flight`() = runTest {
+        // Device-verified 2026-11-07 (audio prewarm hang): the in-flight
+        // marker exists BEFORE the flight's async body ever runs, and a
+        // cancellation landing while the async is still queued skips the body
+        // and its cleanup finally entirely (its sibling loss — the cleanup
+        // finally's withLock throwing CancellationException on a contended
+        // lock — strands the marker the same way). The marker then holds a
+        // dead Deferred that every subsequent joiner awaits, ladders on, and
+        // re-joins — forever, silently. White-box: the stranding race itself
+        // is a multithreaded scheduling window no single-threaded test can
+        // close, so the marker is seeded directly — this pins the repair
+        // contract, that the ladder SWEEPS a dead marker instead of spinning
+        // on it. The delay in the key supplier bounds the buggy spin (each
+        // dead-marker retry advances virtual time) so the red run fails on
+        // this timeout instead of wedging the scheduler.
+        val flight = SingleFlight<String, String>(AtomicLong(0L))
+        @Suppress("UNCHECKED_CAST")
+        val inFlight = SingleFlight::class.java.getDeclaredField("inFlight").apply {
+            isAccessible = true
+        }.get(flight) as MutableMap<String, Deferred<String>>
+        val deadFlight = CompletableDeferred<String>()
+        deadFlight.cancel(CancellationException("originator died before its body started"))
+        inFlight["k"] = deadFlight
+
+        val cache = mutableMapOf<String, String>()
+        var fetches = 0
+
+        val joiner = async {
+            flight.getOrFetch(
+                key = { delay(1); "k" },
+                readCached = { cache[it] },
+                fetch = { fetches++; "fresh" to true },
+                store = { k, v -> cache[k] = v },
+            )
+        }
+        val joined = runCatching { withTimeout(5_000) { joiner.await() } }
+        joiner.cancelAndJoin()
+
+        assertEquals(
+            "fresh",
+            joined.getOrThrow(),
+            "the surviving joiner must sweep the dead marker and run its own replacement flight",
+        )
+        assertEquals(1, fetches, "the dead flight never fetched; only the replacement did")
+        assertEquals("fresh", cache["k"], "the replacement flight's store lands")
+    }
+
+    @Test
+    fun `a churn burst of dead flights retries flat — no StackOverflowError`() = runTest {
+        // Device-verified 2026-11-07 (a section Play-all burst; the same
+        // shape as the 2026-10-02 prewarm regression): a surviving caller
+        // that rides out tens of thousands of dead originators must not
+        // accumulate a coroutineScope per retry. The nested re-entry this
+        // pins against overflowed a ~1 MB stack after roughly a thousand
+        // retries; the flat loop iterates to 50_000 without growing the
+        // stack. The single caller's fetch dies with a cancellation for the
+        // first CHURN_ROUNDS rounds (each death reads as a cancelled
+        // originator, not a failed fetch) and then completes.
+        val churnRounds = 50_000
+        var fetches = 0
+        val flight = SingleFlight<String, String>(AtomicLong(0L))
+        val cache = mutableMapOf<String, String>()
+
+        val result = flight.getOrFetch(
+            key = { "k" },
+            readCached = { cache[it] },
+            fetch = {
+                val round = fetches++
+                if (round < churnRounds) throw CancellationException("churn-$round")
+                "done" to true
+            },
+            store = { k, v -> cache[k] = v },
+        )
+
+        assertEquals("done", result)
+        assertEquals(churnRounds + 1, fetches, "every dead flight is retried, then the completing one runs")
+        assertEquals("done", cache["k"], "the completing flight's store lands")
     }
 }

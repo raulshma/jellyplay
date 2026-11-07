@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
+import com.raulshma.jellyplay.core.data.realtime.SessionsRealtimeChannel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -53,6 +54,7 @@ class AdminRepositoryImplTest {
     private lateinit var userApiClient: UserApiClient
     private lateinit var engine: JellyfinApiEngine
     private lateinit var realtimeTasks: ScheduledTasksRealtimeChannel
+    private lateinit var realtimeSessions: SessionsRealtimeChannel
     private lateinit var activityLogChannel: ActivityLogRealtimeChannel
     private lateinit var repository: AdminRepositoryImpl
 
@@ -70,6 +72,7 @@ class AdminRepositoryImplTest {
         userApiClient = mockk()
         engine = mockk()
         realtimeTasks = mockk()
+        realtimeSessions = mockk()
         activityLogChannel = mockk()
         // The router-address read the URL builder consumes; the default mirrors
         // "no failover configured" (active == the server's primary).
@@ -77,6 +80,8 @@ class AdminRepositoryImplTest {
         every { realtimeTasks.tasks } returns flowOf(emptyList())
         every { realtimeTasks.scanLibraryTask } returns flowOf(null)
         every { realtimeTasks.lastPushAtMs } returns 0L
+        every { realtimeSessions.sessions } returns flowOf(emptyList())
+        every { realtimeSessions.lastPushAtMs } returns 0L
         every { activityLogChannel.entries(any()) } returns flowOf()
         repository = AdminRepositoryImpl(
             adminApiClient = adminApiClient,
@@ -85,6 +90,7 @@ class AdminRepositoryImplTest {
             libraryApiClient = mockk<LibraryApiClient>(relaxed = true),
             engine = engine,
             realtimeTasks = realtimeTasks,
+            realtimeSessions = realtimeSessions,
             activityLogRealtimeChannel = activityLogChannel,
         )
     }

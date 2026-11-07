@@ -82,7 +82,7 @@ fun CloverShapeAlbumCard(
             Box(
                 modifier = Modifier
                     .size(140.dp)
-                    .clip(CloverShape())
+                    .clip(cachedCloverShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
@@ -94,7 +94,7 @@ fun CloverShapeAlbumCard(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(140.dp)
-                            .clip(CloverShape()),
+                            .clip(cachedCloverShape),
                     )
                 }
             }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -33,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -151,13 +153,20 @@ fun EpgScreen(
                     isRefreshing = viewModel.isLoading,
                     onRefresh = { viewModel.loadGuide() },
                 ) {
+                    // The default record callback is remembered so every grid
+                    // refresh (a new gridData instance arrives every fetch)
+                    // hands the rows the SAME lambda instance — reused rows
+                    // skip recomposition instead of seeing a fresh unstable
+                    // parameter.
+                    val defaultRecordClick =
+                        remember(onRecordClick) { { program: LiveTvProgram -> viewModel.requestRecord(program) } }
                     EpgGrid(
                         gridData = viewModel.gridData,
                         now = viewModel.now.collectAsStateWithLifecycle(),
                         contentPadding = contentPad,
                         bottomPadding = bottomPad,
                         onProgramClick = onProgramClick,
-                        onRecordClick = onRecordClick ?: { program -> viewModel.requestRecord(program) },
+                        onRecordClick = onRecordClick ?: defaultRecordClick,
                         focusRequester = focusRequester,
                     )
                 }
@@ -200,8 +209,8 @@ private fun EpgGrid(
     // D-pad right/left first runs the normal focus search; when there is no
     // focusable program in that direction but the shared timeline window can
     // still scroll, nudge it so the revealed programs become the next focus
-    // targets (all cells stay composed, so focus search picks them up once
-    // they're scrolled into view).
+    // targets (the one-step runway keeps the immediate next cell composed, so
+    // focus search picks it up; the nudge recomposes the next step's cells).
     fun shiftTimeline(forward: Boolean): Boolean {
         val delta = with(density) { TIMELINE_SHIFT_DP.dp.roundToPx() } * if (forward) 1 else -1
         val target = (horizontalScrollState.value + delta).coerceIn(0, horizontalScrollState.maxValue)
@@ -216,7 +225,7 @@ private fun EpgGrid(
         tag = "epg_init",
     )
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .onDpadKey(
@@ -224,6 +233,15 @@ private fun EpgGrid(
                 onLeft = { focusManager.moveFocus(FocusDirection.Left) || shiftTimeline(forward = false) },
             ),
     ) {
+        // The program-strip viewport: grid width minus the sticky channel
+        // column. Drives the cell-composition window's step (half the
+        // viewport), so a row composes only the cells near the visible
+        // scroll range — see [ChannelProgramsStrip].
+        val stripViewportPx = (constraints.maxWidth - with(density) { channelColumnWidth.toPx() })
+            .roundToInt()
+            .coerceAtLeast(1)
+        val viewportStepPx = (stripViewportPx / 2).coerceAtLeast(1)
+
         LazyColumn(
             state = lazyListState,
             modifier = Modifier.fillMaxSize(),
@@ -246,11 +264,14 @@ private fun EpgGrid(
                 key = { _, row -> "channel_${row.channel.id}" },
                 contentType = { _, _ -> "channel_row" },
             ) { index, row ->
-                // Layout is purely geometric: depends only on the (stable)
-                // row + grid window, NOT on `now`. Re-laid out only when the
-                // data or fetch window changes, so the 30s now-tick never
-                // invalidates it.
-                val rowLayout = remember(row, gridData) {
+                // Layout is purely geometric: depends only on the row's data
+                // + the grid window bounds, NOT on `now` and NOT on the
+                // EpgGridData instance identity — keyed on the bounds so a
+                // diff-merged (instance-reused) row under a fresh snapshot
+                // still hits this cache. Re-laid out only when the data or
+                // fetch window changes, so the 30s now-tick never invalidates
+                // it.
+                val rowLayout = remember(row, gridData.windowStart, gridData.windowEnd) {
                     layoutChannelRow(row, gridData)
                 }
                 ChannelProgramsRow(
@@ -259,6 +280,8 @@ private fun EpgGrid(
                     now = now,
                     channelColumnWidth = channelColumnWidth,
                     totalWidthDp = gridData.totalWidthDp,
+                    stripViewportPx = stripViewportPx,
+                    viewportStepPx = viewportStepPx,
                     horizontalScrollState = horizontalScrollState,
                     onProgramClick = onProgramClick,
                     onRecordClick = onRecordClick,
@@ -381,13 +404,82 @@ private fun ChannelProgramsRow(
     now: State<kotlin.time.Instant>,
     channelColumnWidth: androidx.compose.ui.unit.Dp,
     totalWidthDp: Float,
+    stripViewportPx: Int,
+    viewportStepPx: Int,
     horizontalScrollState: androidx.compose.foundation.ScrollState,
     onProgramClick: (LiveTvProgram) -> Unit,
     onRecordClick: ((LiveTvProgram) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    Row(modifier = modifier.fillMaxWidth().height(EpgGridLayout.CHANNEL_ROW_HEIGHT)) {
+        // Sticky channel-name cell
+        ChannelNameCell(
+            name = rowLayout.channel.name,
+            number = rowLayout.channel.number,
+            width = channelColumnWidth,
+        )
+        // Programs strip — horizontal scroll shared with header row.
+        ChannelProgramsStrip(
+            rowLayout = rowLayout,
+            windowStart = windowStart,
+            now = now,
+            totalWidthDp = totalWidthDp,
+            stripViewportPx = stripViewportPx,
+            viewportStepPx = viewportStepPx,
+            horizontalScrollState = horizontalScrollState,
+            onProgramClick = onProgramClick,
+            onRecordClick = onRecordClick,
+        )
+    }
+}
+
+/**
+ * The per-row program strip. The scroll geometry is IDENTICAL to the former
+ * always-full strip — the same shared [horizontalScrollState] over the same
+ * full-window-width content box — but only the cells near the visible scroll
+ * range are COMPOSED:
+ *
+ * The shared scroll offset is read through a coarse anchor
+ * ([viewportStepPx]-granular step index) instead of per frame: between step
+ * boundaries scrolling recomposes nothing (the scroll itself is the usual
+ * layout/draw-phase operation), and crossing a boundary recomposes the strip
+ * once to swap in the newly revealed cells. The composed window spans one
+ * full step of runway behind the anchor and the viewport plus one step
+ * ahead, so cells at the edges are always composed before they scroll into
+ * view — including the D-pad focus search's next target.
+ *
+ * Cells keep their absolute window-relative offsets inside the full-width
+ * content box, so pixels-per-minute, the sticky time header alignment, the
+ * now-line and the scroll linkage between header and rows are unchanged.
+ */
+@Composable
+private fun ChannelProgramsStrip(
+    rowLayout: ChannelRowLayout,
+    windowStart: kotlin.time.Instant,
+    now: State<kotlin.time.Instant>,
+    totalWidthDp: Float,
+    stripViewportPx: Int,
+    viewportStepPx: Int,
+    horizontalScrollState: androidx.compose.foundation.ScrollState,
+    onProgramClick: (LiveTvProgram) -> Unit,
+    onRecordClick: ((LiveTvProgram) -> Unit)?,
+) {
+    // The coarse scroll anchor: which [viewportStepPx] step the shared scroll
+    // offset currently sits in. The derived read means a scroll frame only
+    // notifies this strip when the step index itself flips.
+    val anchorStep by remember(horizontalScrollState, viewportStepPx) {
+        derivedStateOf { horizontalScrollState.value / viewportStepPx }
+    }
+    // The composed window, in strip dp: one step behind the anchor through
+    // the anchor + viewport + one step. Covers the visible range for every
+    // scroll offset within the anchor's step, with a full step of runway on
+    // each side.
+    val densityFactor = LocalDensity.current.density
+    val composeStartDp = ((anchorStep - 1) * viewportStepPx) / densityFactor
+    val composeEndDp = (anchorStep * viewportStepPx + stripViewportPx + viewportStepPx) / densityFactor
+
     // Derive the single currently-live program id for this row from `now`.
-    // `now` arrives as a State so the 30s tick never recomposes this row:
+    // `now` arrives as a State so the 30s tick never recomposes this strip:
     // the derived value re-evaluates on each tick and notifies readers only
     // when the live program id actually flips — so just the one cell whose
     // live status changes is invalidated, not the entire program strip.
@@ -404,27 +496,28 @@ private fun ChannelProgramsRow(
             live?.program?.id
         }
     }
-    Row(modifier = modifier.fillMaxWidth().height(EpgGridLayout.CHANNEL_ROW_HEIGHT)) {
-        // Sticky channel-name cell
-        ChannelNameCell(
-            name = rowLayout.channel.name,
-            number = rowLayout.channel.number,
-            width = channelColumnWidth,
-        )
-        // Programs strip — horizontal scroll shared with header row.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(horizontalScrollState),
-        ) {
-            Box(modifier = Modifier.width(totalWidthDp.dp)) {
-                rowLayout.programLayouts.forEach { layout ->
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(horizontalScrollState),
+    ) {
+        Box(modifier = Modifier.width(totalWidthDp.dp)) {
+            rowLayout.programLayouts.forEach { layout ->
+                // Viewport limit: skip cells entirely outside the composed
+                // window (half-open [start, start+width) interval overlap).
+                val layoutEndDp = layout.startOffsetDp + layout.widthDp
+                if (layout.startOffsetDp >= composeEndDp || layoutEndDp <= composeStartDp) return@forEach
+                // Keyed by program id so a step-boundary recomposition that
+                // shifts the visible list only composes the newly revealed
+                // cells — surviving cells keep their slots and skip.
+                key(layout.program.id) {
                     // Memoize per-cell click lambdas so they don't reallocate
                     // on every recomposition of the strip.
-                    val clickLambda = remember(layout.program.id, onProgramClick) {
+                    val clickLambda = remember(onProgramClick) {
                         { onProgramClick(layout.program) }
                     }
-                    val recordLambda = remember(layout.program.id, onRecordClick) {
+                    val recordLambda = remember(onRecordClick) {
                         onRecordClick?.let { cb -> { cb(layout.program) } }
                     }
                     ProgramCell(

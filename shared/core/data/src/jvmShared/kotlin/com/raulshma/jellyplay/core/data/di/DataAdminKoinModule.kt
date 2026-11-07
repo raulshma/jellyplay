@@ -1,9 +1,11 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.realtime.SessionsRealtimeChannel
 import com.raulshma.jellyplay.core.data.repository.AdminBackupRepository
 import com.raulshma.jellyplay.core.data.repository.AdminBackupRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AdminRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.AdminSessionFeed
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsLabelProvider
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepositoryImpl
@@ -43,10 +45,25 @@ internal val dataAdminModule: Module = module {
             libraryApiClient = get(),
             engine = get(),
             realtimeTasks = get(),
+            realtimeSessions = get(),
             activityLogRealtimeChannel = get(),
         )
     }
     single<AdminRepository> { get<AdminRepositoryImpl>() }
+    // The dashboard's live session feed (the AdminBackupRepository facade
+    // split: the ratchet'd admin union does not grow for it) — the same
+    // AdminRepositoryImpl single behind a narrow seam.
+    single<AdminSessionFeed> { get<AdminRepositoryImpl>() }
+    // The sessions push channel (the ScheduledTasksRealtimeChannel pattern):
+    // app-lifetime single over the shared socket, decoding the server's
+    // un-subscribed `Sessions` envelopes.
+    single {
+        SessionsRealtimeChannel(
+            webSocketClient = get(),
+            json = get(),
+            scope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
     // Admin facade split (the [PluginAdminRepository] pattern): the backups
     // screen's narrow collaborator over AdminApiClient's raw-path backup
     // calls — the AdminRepository surface ratchet forbids growing the union.

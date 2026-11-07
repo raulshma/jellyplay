@@ -34,6 +34,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
@@ -365,6 +366,30 @@ class EpgViewModelTest {
 
         assertEquals(listOf(channel), vm.channels)
         assertEquals(listOf("chan-9"), vm.gridData.rows.map { it.channel.id })
+        assertNull(vm.error)
+        vm.stopLoops()
+    }
+
+    @Test
+    fun autoRefresh_keeps_row_instances_for_channels_the_refresh_left_unchanged() = vmTest {
+        val channel = LiveTvChannel(id = "chan-1", name = "CNN")
+        val airing = program(id = "p1", start = fakeNow.minus(600.seconds), end = fakeNow.plus(1_200.seconds))
+        coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns
+            Result.success(EpgGuide(channels = listOf(channel), programs = listOf(airing)))
+        val vm = createViewModel()
+        testScheduler.runCurrent()
+        val rowsBefore = vm.gridData.rows
+
+        // The 5-minute refresh returns the SAME guide (the fixed clock makes
+        // the window identical too): the row must keep its INSTANCE across
+        // the rebuild, not merely its content.
+        vm.startAutoRefresh()
+        mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
+        mainDispatcher.scheduler.runCurrent()
+        mainDispatcher.scheduler.runCurrent()
+
+        assertEquals(1, vm.gridData.rows.size)
+        assertSame(rowsBefore.single(), vm.gridData.rows.single())
         assertNull(vm.error)
         vm.stopLoops()
     }

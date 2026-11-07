@@ -40,6 +40,9 @@ val adminModule: Module = module {
     viewModel {
         AdminDashboardViewModel(
             adminRepository = get(),
+            // The dashboard's live session feed (the AdminSessionFeed facade
+            // split's single — the sessions WS push behind the session list).
+            sessionFeed = get(),
             jellyPlayStatusStore = get(),
             jellyPlayFeatureGate = get(),
             // The broadcast composer's api seam (the `events` family's

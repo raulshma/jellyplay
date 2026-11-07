@@ -43,13 +43,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import coil3.SingletonImageLoader
+import coil3.request.ImageRequest
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +90,9 @@ import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
+import com.raulshma.jellyplay.core.ui.components.LocalImageQualityCap
+import com.raulshma.jellyplay.core.ui.components.rememberImagesDataSaverActive
+import com.raulshma.jellyplay.core.ui.image.mediaImageUrl
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -116,6 +123,40 @@ import com.raulshma.jellyplay.feature.photos.generated.resources.photos_reset
 // ShapeCache tokens flatten to zero corner in synthwave mode, and this shape
 // must stay rounded).
 private val filmstripThumbShape = smoothCornerShape(6.dp)
+
+/**
+ * Holds the viewer's in-flight neighbor prefetches (the home hero's
+ * enqueue-targetless-preload posture): the only product is Coil's disk +
+ * memory caches — no target, no transition. Each settle REPLACES the
+ * outstanding pair first, so a fast swipe that lands before the last prefetch
+ * finished drops the now-stale transfer instead of letting it burn bandwidth
+ * toward an entry nobody will read; [cancel] runs at composition leave so no
+ * prefetch outlives the viewer.
+ */
+private class NeighborPhotoPrefetcher {
+    private var disposables: List<coil3.request.Disposable> = emptyList()
+
+    fun prefetch(context: coil3.PlatformContext, urls: List<String>, decodeSize: coil3.size.Size) {
+        cancel()
+        disposables = urls.filter { it.isNotBlank() }.map { url ->
+            SingletonImageLoader.get(context).enqueue(
+                ImageRequest.Builder(context)
+                    .data(url)
+                    // Same URL + decode size as the display request → the same
+                    // auto-derived cache keys (the memory-cache key embeds the
+                    // size string). No transition: a targetless preload, only
+                    // the caches matter.
+                    .size(decodeSize)
+                    .build()
+            )
+        }
+    }
+
+    fun cancel() {
+        disposables.forEach { it.dispose() }
+        disposables = emptyList()
+    }
+}
 
 /** One arm of the photo viewer's ordered back ladder. */
 sealed interface PhotoViewerBackAction {
@@ -191,6 +232,60 @@ fun PhotoViewerScreen(
         transform.reset()
     }
 
+    // The viewport both image paths share — measured once on this root Box
+    // (the full-screen surface [PhotoImage] fits its photo into), so the
+    // prefetch's decode bounds and the display request's are the same value
+    // by construction, and their memory-cache keys can never drift.
+    var prefetchViewportWidth by remember { mutableIntStateOf(0) }
+    var prefetchViewportHeight by remember { mutableIntStateOf(0) }
+    // The neighbor prefetcher + the exact request shape the display path
+    // mints: the fit-first rendition URL ([PhotoViewerViewModel.getImageUrl]
+    // at [photoFitNetworkMaxWidth], the same builder [PhotoImage] reads for
+    // the un-zoomed display) through the same quality-cap transform
+    // [MediaImage] applies, decoded at the viewport size with the display
+    // path's no-clamp posture. Every settle (swipe / d-pad / slideshow — all
+    // funnel through navigateTo's index change) REPLACES the outstanding
+    // pair, and leaving the composition cancels whatever is in flight.
+    val neighborPrefetcher = remember { NeighborPhotoPrefetcher() }
+    DisposableEffect(neighborPrefetcher) {
+        onDispose { neighborPrefetcher.cancel() }
+    }
+    val prefetchContext = coil3.compose.LocalPlatformContext.current
+    val prefetchQualityCap = LocalImageQualityCap.current
+    // Data saver holds the prefetch back exactly as it holds the display
+    // request (which stays on the blurHash while active) — a metered
+    // connection never pays for photos the user hasn't opened yet.
+    val prefetchDataSaverActive = rememberImagesDataSaverActive()
+    LaunchedEffect(
+        currentIndex, siblings, prefetchDataSaverActive, prefetchQualityCap,
+        prefetchViewportWidth, prefetchViewportHeight,
+    ) {
+        if (prefetchDataSaverActive) return@LaunchedEffect
+        if (prefetchViewportWidth <= 0 || prefetchViewportHeight <= 0) return@LaunchedEffect
+        val neighbors = listOfNotNull(
+            siblings.getOrNull(currentIndex - 1),
+            siblings.getOrNull(currentIndex + 1),
+        )
+        if (neighbors.isEmpty()) return@LaunchedEffect
+        neighborPrefetcher.prefetch(
+            context = prefetchContext,
+            urls = neighbors.map { neighbor ->
+                // Fit-first, matching the display request a swipe to this
+                // neighbor mints. (A neighbor already upgraded to the original
+                // keeps benefiting: the fitted rendition is exactly the
+                // placeholder key its upgraded request hands off to.)
+                mediaImageUrl(
+                    viewModel.getImageUrl(
+                        neighbor,
+                        maxWidth = photoFitNetworkMaxWidth(prefetchViewportWidth),
+                    ),
+                    prefetchQualityCap,
+                )
+            },
+            decodeSize = coil3.size.Size(prefetchViewportWidth, prefetchViewportHeight),
+        )
+    }
+
     LaunchedEffect(showFilmstrip) {
         kotlinx.coroutines.delay(100)
         if (showFilmstrip) {
@@ -235,6 +330,10 @@ fun PhotoViewerScreen(
             .background(Color.Black)
             .focusRequester(rootFocusRequester)
             .focusable()
+            .onSizeChanged {
+                prefetchViewportWidth = it.width
+                prefetchViewportHeight = it.height
+            }
             .onDpadKeyEvent(
                 onBack = { e ->
                     if (e.isKeyUp) {
@@ -314,6 +413,8 @@ fun PhotoViewerScreen(
                     photo = photo!!,
                     viewModel = viewModel,
                     currentIndex = currentIndex,
+                    viewportWidthPx = prefetchViewportWidth,
+                    viewportHeightPx = prefetchViewportHeight,
                     transform = transform,
                     onTap = { if (!isTv) showControls = !showControls },
                     onDoubleTap = { currentScale ->
@@ -619,21 +720,46 @@ private fun PhotoImage(
     photo: com.raulshma.jellyplay.core.model.MediaItem,
     viewModel: PhotoViewerViewModel,
     currentIndex: Int,
+    viewportWidthPx: Int,
+    viewportHeightPx: Int,
     transform: PhotoTransformState,
     onTap: () -> Unit,
     onDoubleTap: (currentScale: Float) -> Unit,
     colorFilter: androidx.compose.ui.graphics.ColorFilter? = null,
 ) {
-    val imageUrl = remember(photo) {
-        // Original resolution (null maxWidth — the param is omitted on the
-        // wire), the photo's own Primary tag as the cache-buster.
-        viewModel.getImageUrl(photo, maxWidth = null)
+    // Fit-first network ladder. The un-zoomed display requests the
+    // viewport-width rendition (server-side maxWidth — the download is
+    // bounded to what a Fit display can sample, instead of the original);
+    // once a settled zoom passes fit the request upgrades to the original
+    // once per photo ([PhotoViewerViewModel.requestOriginalResolution] — the
+    // set keeps the upgraded request across swipes so returning re-requests
+    // the SAME url from Coil's caches instead of downgrading), and the decode
+    // ladder stays the memory bound in both postures.
+    val isOriginalResolution = photo.id in viewModel.originalResolutionIds.value
+    val fitMaxWidth = photoFitNetworkMaxWidth(viewportWidthPx)
+    val fitUrl = remember(photo, fitMaxWidth) {
+        viewModel.getImageUrl(photo, maxWidth = fitMaxWidth)
+    }
+    val imageUrl = if (isOriginalResolution) {
+        remember(photo) { viewModel.getImageUrl(photo, maxWidth = null) }
+    } else {
+        fitUrl
+    }
+    // While the upgraded original loads, Coil paints the still-cached fitted
+    // decode as its placeholder — the swap from the fitted rendition never
+    // drops to the blurHash (swiping back to an upgraded photo benefits the
+    // same way). The key reproduces the fitted request's auto-derived
+    // memory-cache key: the quality-cap-transformed URL plus Coil's resolved
+    // size string under the `coil#size` extra (the display path passes the
+    // size unclamped — performanceModeAware = false — so no clamp applies
+    // here either). Guarded like the prefetcher above: the viewport reads 0
+    // on the photo's first composition frame (pre-layout), where a Size-built
+    // key would throw.
+    val qualityCap = LocalImageQualityCap.current
+    val fitPlaceholderKey = remember(fitUrl, qualityCap, viewportWidthPx, viewportHeightPx) {
+        photoFitPlaceholderMemoryCacheKey(fitUrl, qualityCap, viewportWidthPx, viewportHeightPx)
     }
     var lastTapTime by remember { mutableStateOf(0L) }
-    // The decode ladder rasterizes against this Box — the image Fits inside
-    // it, so viewport × decodeScale is the most pixels the screen can show.
-    var viewportWidthPx by remember { mutableStateOf(1080) }
-    var viewportHeightPx by remember { mutableStateOf(1920) }
     // Per-photo, like the screen's transform reset per index: a photo switch
     // restarts at the fitted decode.
     var decodeScale by remember(photo.id) { mutableFloatStateOf(1f) }
@@ -646,23 +772,23 @@ private fun PhotoImage(
     // scale, so pinch frames no longer recompose this scope. ContentScale.Fit
     // re-fits ANY decode to this Box, so swapping the decode size never
     // moves the rendered image — the graphicsLayer below keeps the raw
-    // transform and the zoom stays continuous.
+    // transform and the zoom stays continuous. The same settled zoom past
+    // fit is the network ladder's upgrade hook: the request moves to the
+    // original resolution (once per photo) exactly when the decode moves
+    // past the viewport.
     LaunchedEffect(photo.id) {
         snapshotFlow { transform.scale }
             .collectLatest {
                 kotlinx.coroutines.delay(PHOTO_ZOOM_SETTLE_MS)
                 val target = photoDecodeTarget(transform.scale, decodeScale) ?: return@collectLatest
                 decodeScale = target
+                if (target > 1f) viewModel.requestOriginalResolution(photo.id)
             }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .onSizeChanged {
-                viewportWidthPx = it.width.coerceAtLeast(1)
-                viewportHeightPx = it.height.coerceAtLeast(1)
-            }
             // A thin adapter: the gesture machine's decisions (zoom band, pan
             // admission, tap discrimination, swipe direction) live in
             // PhotoGesturePolicy / PhotoTransformState — this loop only
@@ -776,15 +902,20 @@ private fun PhotoImage(
                 },
             contentScale = ContentScale.Fit,
             // Decode ladder: viewport-fit at 1×, viewport × the settled zoom
-            // after (capped at PHOTO_MAX_DECODE_SCALE) — never the original.
+            // after (capped at PHOTO_MAX_DECODE_SCALE) — the decode is always
+            // bounded by the viewport regardless of the downloaded rendition.
             size = coil3.size.Size(
                 (viewportWidthPx * decodeScale).roundToInt().coerceAtLeast(1),
                 (viewportHeightPx * decodeScale).roundToInt().coerceAtLeast(1),
             ),
             // Full-screen surface: the ladder's decode passes unclamped —
             // performance mode's concrete-size tiers (768²/256²) would
-            // regress the sharpness the ORIGINAL request was exempt from.
+            // regress the sharpness a full-screen photo needs.
             performanceModeAware = false,
+            // The fitted decode stands in for the upgraded original request
+            // while it loads (null on the fitted request itself — its own key
+            // is what Coil resolves anyway).
+            placeholderMemoryCacheKey = fitPlaceholderKey?.takeIf { isOriginalResolution },
             colorFilter = colorFilter,
         )
     }

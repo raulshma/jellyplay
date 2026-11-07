@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
+import com.raulshma.jellyplay.feature.player.live.data.LiveChannelListCache
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineConfig
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
@@ -97,6 +98,13 @@ internal class LivePlaybackSession(
     private val lastChannelStore: LastChannelStore,
     private val transcodeReasonsRenderer: TranscodeReasonsRenderer,
     playbackRepository: PlaybackRepository,
+    /**
+     * The TTL memo for the channel list (the module's Koin single — shared
+     * across player entries so a re-entry inside the TTL skips the
+     * `GET /LiveTv/Channels` round trip). Defaults to a fresh instance so a
+     * bare-constructed session (jvmTest) fetches exactly as before.
+     */
+    private val channelListCache: LiveChannelListCache = LiveChannelListCache(),
     /**
      * The system media-session factory (gh-178 headset control). Android-only
      * — null on desktop (documented-latent, like the audio / PiP seams); the
@@ -227,6 +235,18 @@ internal class LivePlaybackSession(
     // ── Entry + channel list ──────────────────────────────────────────────────
 
     /**
+     * The channel-list memo's scope key — the active (server, token) pair, so
+     * a previous server's or user's list can never be served to the next
+     * within the TTL. Null when there is no active session (no server URL or
+     * token): the memo is bypassed, fetch-fresh and don't-cache.
+     */
+    private fun channelListScopeKey(): String? {
+        val serverUrl = playbackIdentity.serverUrl() ?: return null
+        val token = playbackIdentity.accessToken() ?: return null
+        return "$serverUrl::$token"
+    }
+
+    /**
      * The load entry (the ViewModel's initialize funnel after its PiP-latch
      * clears and route-override capture): idempotent — the `initialized`
      * latch means recompositions re-firing the route cannot restart
@@ -249,8 +269,19 @@ internal class LivePlaybackSession(
     ) {
         loadingChannels = true
         emit(LivePlaybackEvent.ChannelLoadStarted)
-        val loaded = liveTvRepository.getLiveTvChannels(limit = CHANNEL_LIST_LIMIT)
-            .getOrNull().orEmpty()
+        // Cache-aside over the module's TTL memo: a re-entry inside the
+        // window reuses the previous entry's list (same server + user scope),
+        // a miss fetches the capped list as before. Only a successful,
+        // non-empty fetch is memoized — a failed load is retried on the next
+        // entry exactly as before, and with no active session scope the memo
+        // is bypassed entirely.
+        val scopeKey = channelListScopeKey()
+        val fetched = scopeKey?.let { channelListCache.get(it) }
+            ?: liveTvRepository.getLiveTvChannels(limit = CHANNEL_LIST_LIMIT).getOrNull()
+        if (!fetched.isNullOrEmpty() && scopeKey != null) {
+            channelListCache.put(scopeKey, fetched)
+        }
+        val loaded = fetched.orEmpty()
         if (loaded.isEmpty()) {
             // Load failed (or returned nothing): a zap queued during the
             // load is dropped — applying it against a missing list is

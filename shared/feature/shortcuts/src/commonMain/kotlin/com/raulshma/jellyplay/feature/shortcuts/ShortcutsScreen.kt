@@ -349,7 +349,16 @@ fun ShortcutsScreen(
 
                         if (numColumns > 1) {
                             val chunks = shortcuts.chunked(numColumns)
-                            itemsIndexed(chunks, key = { index, _ -> "chunk_${category.name}_$index" }, contentType = { _, _ -> "shortcutChunk" }) { _, chunk ->
+                            // Key on the row's first shortcut's route (unique
+                            // within the category, same identity the
+                            // single-column branch keys on) instead of the
+                            // chunk index: an insertion or removal above a row
+                            // must not shift every following row's identity.
+                            itemsIndexed(
+                                chunks,
+                                key = { _, chunk -> "chunk_${category.name}_${chunk.first().route}" },
+                                contentType = { _, _ -> "shortcutChunk" },
+                            ) { _, chunk ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()

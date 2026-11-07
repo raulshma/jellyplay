@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
 import android.view.View
@@ -226,8 +227,13 @@ class ExoPlayerEngine(
     private var currentNormalizationGain: Float? = null
 
     private val equalizerHelper = EqualizerHelper()
-    private val highPassFilter = HighPassFilterAudioProcessor()
-    private val dialogueBoost = DialogueBoostHelper(equalizerHelper, highPassFilter)
+
+    // The in-sink DSP set below is rebuilt per full player rebuild (see
+    // [rebuildAudioEffectSet]): the released player's drain on the release
+    // thread owns the old instances exclusively, so the new player's
+    // playback thread never shares an AudioProcessor with a draining one.
+    private var highPassFilter = HighPassFilterAudioProcessor()
+    private var dialogueBoost = DialogueBoostHelper(equalizerHelper, highPassFilter)
     private val nightMode = NightModeHelper()
     private val bassBoostHelper = BassBoostHelper()
     private val virtualizerHelper = VirtualizerHelper()
@@ -238,9 +244,9 @@ class ExoPlayerEngine(
     // real DSP (channel matrixing, dynamic compression, ReplayGain,
     // sub-bass high-pass) that the android.media.audiofx helpers above
     // cannot do. Installed via the custom renderers factory in load().
-    private val channelMixProcessor = ChannelMixAudioProcessor()
-    private val dynamicsProcessor = DynamicsCompressorAudioProcessor()
-    private val replayGainProcessor = ReplayGainAudioProcessor()
+    private var channelMixProcessor = ChannelMixAudioProcessor()
+    private var dynamicsProcessor = DynamicsCompressorAudioProcessor()
+    private var replayGainProcessor = ReplayGainAudioProcessor()
 
     /**
      * The platform spatializer facts + observer (API-32-guarded; query-only —
@@ -312,8 +318,12 @@ class ExoPlayerEngine(
      * attach/apply/release surface. Owns the bookkeeping
      * (`audioEffectsAttached`, `lastAudioEffectsConfig`,
      * `lastAppliedReverbPreset`) that used to live on the engine.
+     *
+     * Rebuilt alongside the processors it wraps on every full player rebuild
+     * ([rebuildAudioEffectSet]) — its processor references must be the same
+     * instances the new renderers factory installs into the new sink.
      */
-    private val audioEffectChain = AudioEffectChain(
+    private var audioEffectChain = AudioEffectChain(
         dialogueBoost = dialogueBoost,
         nightMode = nightMode,
         equalizerHelper = equalizerHelper,
@@ -506,6 +516,79 @@ class ExoPlayerEngine(
     private val currentExoConfig: ExoPlayerEngineConfig
         get() = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
 
+    // ── Dedicated background thread for the player teardown ────────────────
+    // Same shape as the mpv/libVLC release threads in this package: the
+    // blocking final teardown of the native handle runs off the main looper.
+    //
+    // ExoPlayerImpl.release() blocks the CALLING thread — up to its release
+    // timeout — while the internal playback thread runs resetInternal +
+    // renderer/codec teardown (a ConditionVariable join). On the main looper
+    // (which invokes release() from the Compose onDispose, and from load()'s
+    // teardown-as-reset before a rebuild) that join is a frame stall sized
+    // by codec release. The instance handed to this thread is fully
+    // detached first — both listeners removed, PlayerView cleared, engine
+    // field nulled, all on main BEFORE the post — so the posted release is
+    // the final operation on it and no callback can observe the teardown
+    // (callback delivery stops at the listener removal, which happens on
+    // the same main looper that would have received them). Media3 enforces
+    // its application-thread contract with a log line (the throwing variant
+    // is a debug opt-in), so the posted release surfaces one
+    // "player-accessed-on-wrong-thread" warning per teardown — the accepted
+    // cost of keeping the join off main.
+    //
+    // The in-sink AudioProcessor instances are the one shared resource the
+    // draining player still touches during this window (the old sink's
+    // reset() resets them from the old playback thread); [load]'s rebuild
+    // path installs a fresh set into the new player (see
+    // [rebuildAudioEffectSet]) so the drain and the new pipeline never race
+    // one.
+    //
+    // Self-healing like [BasePlayerEngine.engineScope]: every release quits
+    // the thread, so each read must return a live generation — a Handler
+    // cached across releases would post into the quit looper, which
+    // silently discards the message and skips the release entirely.
+    private var releaseThreadGeneration: HandlerThread? = null
+
+    private val releaseThread: HandlerThread
+        get() = releaseThreadGeneration
+            ?.takeIf { it.isAlive }
+            ?: HandlerThread("ExoRelease", android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                .also { it.start() }
+                .also { releaseThreadGeneration = it }
+    private val releaseHandler: Handler get() = Handler(releaseThread.looper)
+
+    /**
+     * Fresh in-sink processor instances (and the chain/dialogue-boost
+     * wrappers that hold them) for a rebuilt player. Called on the full
+     * rebuild path of [load] AFTER the old player's release has been handed
+     * to the release thread: the old player's drain resets the OLD
+     * processors on the old playback thread while the new player's playback
+     * thread configures the NEW ones — unsynchronized `AudioProcessor`
+     * implementations must never be shared across those two threads. Every
+     * processor knob is config-derived ([AudioEffectChain.apply] re-applies
+     * the full surface from `currentConfig` at the end of [load]), so the
+     * fresh instances need no state carried over.
+     */
+    private fun rebuildAudioEffectSet() {
+        highPassFilter = HighPassFilterAudioProcessor()
+        dialogueBoost = DialogueBoostHelper(equalizerHelper, highPassFilter)
+        channelMixProcessor = ChannelMixAudioProcessor()
+        dynamicsProcessor = DynamicsCompressorAudioProcessor()
+        replayGainProcessor = ReplayGainAudioProcessor()
+        audioEffectChain = AudioEffectChain(
+            dialogueBoost = dialogueBoost,
+            nightMode = nightMode,
+            equalizerHelper = equalizerHelper,
+            bassBoostHelper = bassBoostHelper,
+            virtualizerHelper = virtualizerHelper,
+            reverbHelper = reverbHelper,
+            loudnessEnhancerHelper = loudnessEnhancerHelper,
+            channelMixProcessor = channelMixProcessor,
+            dynamicsProcessor = dynamicsProcessor,
+            replayGainProcessor = replayGainProcessor,
+        )
+    }
+
     override fun load(request: PlaybackRequest) {
         ensurePlayerThread("load")
 
@@ -578,6 +661,9 @@ class ExoPlayerEngine(
             externalSubtitleHost = preservedSubtitleHost
             preservedListener?.let { preservedView.addOnLayoutChangeListener(it) }
         }
+        // The released player's release() is draining on the release thread;
+        // the rebuild below must not share the in-sink processors with it.
+        rebuildAudioEffectSet()
         lastRebuildInputs = inputs
 
         // The rebuild's ordered build decisions, folded once (the plan owns
@@ -929,17 +1015,32 @@ class ExoPlayerEngine(
     /**
      * Common tail of the rebuild ([load]) and reuse ([reusePlayerForRequest])
      * paths: record the item-scoped state, then start playback with the resume
-     * position folded into a single prepare. With a non-zero subtitle delay
-     * configured at boot (typically a persisted per-item correction), the
-     * onConfigChanged → refreshSubtitlesForOffsetChange reload never ran —
-     * updateConfig fires before load() creates the player, so the reload
-     * no-ops and the saved delay only took effect once re-adjusted
-     * mid-playback. Reload once at the requested start position so Media3
-     * re-parses cues through the OffsettingSubtitleParserFactory with the
-     * delay applied — the same proven path the live slider uses.
-     * setMediaItem(item, startPosMs) folds the seek into the reload so there
-     * is a single prepare (no double-buffer) and the resume position is
-     * preserved; the no-delay path seeks after prepare instead.
+     * position folded into the prepare — `setMediaItem(item, startPositionMs)`
+     * → `prepare()` → `play()`, one path for every load shape.
+     *
+     * Why the position is ALWAYS folded into `setMediaItem` and never applied
+     * as a post-prepare seek: preparation then starts AT the resume position
+     * instead of resolving position 0 first and immediately seeking away — on
+     * direct play that erases the initial HTTP range fetch at 0 (its bytes are
+     * thrown away the moment the correction seek lands), and on HLS/transcode
+     * it saves the extra playlist/segment fetch at 0 plus the position
+     * discontinuity that seek fires. One prepare, no double-buffer, and one
+     * fewer client-visible seek event. The subtitle-delay boot case keeps
+     * working unchanged through the same fold: a delay configured before
+     * load() (updateConfig fires before load() creates the player, so the
+     * refreshSubtitlesForOffsetChange reload no-ops) is applied by the initial
+     * parse through the OffsettingSubtitleParserFactory at the folded
+     * position — the same proven path the live slider uses.
+     *
+     * [PlaybackRequest.startPositionMs] passes through untouched, including
+     * 0: Media3's two-arg overload reads the value as an explicit absolute
+     * start (only `C.TIME_UNSET` would mean "default position"), and `0`
+     * resolves to the same position-0 start the former `setMediaItem(item)` +
+     * skip-the-seek path produced for these plain, unclipped items (no
+     * clippingConfiguration/liveConfiguration default-position offset).
+     * Keeping the value raw — never rewriting it to `C.TIME_UNSET` — means a
+     * future clipping-aware MediaItem cannot silently turn an explicit
+     * "start at 0" into "start at the clipped default".
      */
     private fun attachMediaItemAndPrepare(
         exo: ExoPlayer,
@@ -951,18 +1052,9 @@ class ExoPlayerEngine(
         serverDurationMs = request.serverDurationMs
         currentSubtitleConfigs.clear()
         currentSubtitleConfigs.addAll(subtitleConfigs)
-        if (currentConfig.subtitleDelayMs != 0L) {
-            exo.setMediaItem(mediaItem, request.startPositionMs)
-            exo.prepare()
-            exo.play()
-        } else {
-            exo.setMediaItem(mediaItem)
-            exo.prepare()
-            if (request.startPositionMs > 0) {
-                exo.seekTo(request.startPositionMs)
-            }
-            exo.play()
-        }
+        exo.setMediaItem(mediaItem, request.startPositionMs)
+        exo.prepare()
+        exo.play()
     }
 
     /**
@@ -1259,8 +1351,15 @@ class ExoPlayerEngine(
     override fun release() {
         ensurePlayerThread("release")
         engineScope.cancel()
-        player?.removeListener(listener)
-        player?.removeAnalyticsListener(decoderCountersListener)
+        // Detach the instance from every main-thread surface FIRST, then hand
+        // the blocking release join to the release thread (see the thread's
+        // KDoc). Nulling the field before the listener removals mirrors mpv's
+        // released-first ordering: no main-thread path can reach the instance
+        // once its teardown is scheduled.
+        val releasedPlayer = player
+        player = null
+        releasedPlayer?.removeListener(listener)
+        releasedPlayer?.removeAnalyticsListener(decoderCountersListener)
         frameSizeListener?.let { playerView?.removeOnLayoutChangeListener(it) }
         frameSizeListener = null
         // Detach the screen-pinned host first so subtitle views are released from
@@ -1271,8 +1370,20 @@ class ExoPlayerEngine(
         externalSubtitleHost = null
         playerView?.player = null
         playerView = null
-        player?.release()
-        player = null
+        releasedPlayer?.let { exo ->
+            // The codec/renderer teardown joins the internal playback thread
+            // (blocking the caller for up to the release timeout) — the same
+            // blocking-native-destroy shape mpv/libVLC post to their release
+            // threads. The instance is fully detached at this point; this is
+            // its final operation.
+            releaseHandler.post {
+                try {
+                    exo.release()
+                } catch (e: Exception) {
+                    Log.w(TAG, "ExoPlayer release failed", e)
+                }
+            }
+        }
         trackSelector = null
         currentMediaItem = null
         serverDurationMs = 0L
@@ -1304,6 +1415,15 @@ class ExoPlayerEngine(
         assHandler = null
         assEnabledForSession = false
         activeTrackIsAss = false
+        // The post scheduled above is already due — quitSafely dispatches due
+        // messages before the looper dies, so the release runs to completion
+        // while no new work can be enqueued onto a dying thread. The
+        // self-healing accessor resurrects the thread if the engine is ever
+        // re-used.
+        val releaseThread = releaseThreadGeneration
+        if (releaseThread?.isAlive == true) {
+            runCatching { releaseThread.quitSafely() }
+        }
     }
 
     override fun play() = runOnPlayerThread {

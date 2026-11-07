@@ -22,6 +22,8 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.composables.icons.tabler.Tabler
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.outline.Trash
@@ -133,7 +135,17 @@ fun MediaDetailScreen(
         activeTrailerKey = null
     }
 
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // The root's BASE projection: the uiState with the late-landing
+    // enrichment leaves (trailers/reviews/similar/franchise/...) pinned to
+    // their defaults, deduped on that projection so an enrichment landing no
+    // longer re-executes this scope's state-bag construction and the content
+    // scaffold below it. The late leaves ride the sub-flow provided to the
+    // content tree further down ([LocalDetailLateEnrichments]), leaf-collected
+    // where they are consumed (the scroll body's admission fold, the seasons
+    // band, the backdrop host).
+    val uiState by remember(viewModel) {
+        viewModel.uiState.map { it.withoutLateEnrichments() }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(DetailUiState())
     // Download-lifecycle slice, slim projection: the always-composed
     // root needs only the button spinner + picker + downloaded-ids +
     // cellular-warning fields (they flow into DetailContentState below), so
@@ -557,7 +569,11 @@ fun MediaDetailScreen(
                                     localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
                                     remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
                                     audioStreamIndex = viewModel.selectedAudioIndex,
-                                    trailers = uiState.trailers,
+                                    // Read live off the VM's flow: the root
+                                    // collects the base projection, whose
+                                    // trailer leaf is pinned empty — the merged
+                                    // list is a late enrichment.
+                                    trailers = viewModel.uiState.value.trailers,
                                     // The loaded detail item IS the route id; fall
                                     // back to the raw getter for the pre-load window.
                                     currentItemPosterUrl = uiState.detail?.item
@@ -865,6 +881,15 @@ fun MediaDetailScreen(
                         // the DetailContentState construction above.
                         LocalActiveDownloadFlow provides
                             remember(itemId) { viewModel.downloads.downloadFlow(itemId) },
+                        // The late-landing enrichment sub-flow (see the local's
+                        // KDoc): the scroll body collects it for the merged
+                        // admission/render view and the backdrop host
+                        // leaf-collects its two late reads — never this root.
+                        LocalDetailLateEnrichments provides remember(viewModel) {
+                            viewModel.uiState
+                                .map { it.lateEnrichments() }
+                                .distinctUntilChanged()
+                        },
                     ) {
                         DetailContent(
                             state = state,

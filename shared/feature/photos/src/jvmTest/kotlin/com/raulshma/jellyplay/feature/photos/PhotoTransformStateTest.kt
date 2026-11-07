@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.photos
 
+import com.raulshma.jellyplay.core.ui.image.mediaImageUrl
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -142,5 +143,70 @@ class PhotoTransformStateTest {
     fun `decode retarget falls back to the fitted base on a zoom-out`() {
         assertEquals(1f, photoDecodeTarget(1f, 2.5f), "collapsing to fit frees the scaled decode")
         assertEquals(1f, photoDecodeTarget(0.5f, 3f), "a sub-fit pinch still targets the base")
+    }
+
+    // ── fit-first network ladder ───────────────────────────────────────────
+
+    @Test
+    fun `fit network width tracks the viewport width`() {
+        assertEquals(1080, photoFitNetworkMaxWidth(1080))
+        assertEquals(2560, photoFitNetworkMaxWidth(2560))
+        assertEquals(2400, photoFitNetworkMaxWidth(2400))
+    }
+
+    @Test
+    fun `fit network width floors at 1 for an unmeasured viewport`() {
+        assertEquals(1, photoFitNetworkMaxWidth(0))
+        assertEquals(1, photoFitNetworkMaxWidth(-4))
+    }
+
+    @Test
+    fun `a settled zoom past fit is the upgrade trigger`() {
+        // The same ladder drives both the decode retarget and the network
+        // upgrade: a target above 1f upgrades; the dead band and the fit base
+        // never do.
+        assertNull(photoDecodeTarget(scale = 1.005f, currentDecodeScale = 1f))
+        assertNull(photoDecodeTarget(scale = 1.02f, currentDecodeScale = 1f), "within the dead band — no upgrade")
+        assertTrue(photoDecodeTarget(scale = 1.06f, currentDecodeScale = 1f)!! > 1f)
+        assertTrue(photoDecodeTarget(scale = 2.5f, currentDecodeScale = 1f)!! > 1f)
+    }
+
+    // ── placeholder handoff key ────────────────────────────────────────────
+
+    @Test
+    fun `placeholder handoff key is null for an unmeasured viewport`() {
+        // PhotoImage composes before the first layout pass whenever the photo
+        // resolves synchronously — the key builder must not construct a Size
+        // from a zero/negative viewport (coil3 rejects non-positive px).
+        assertNull(photoFitPlaceholderMemoryCacheKey("http://x/img", null, 0, 0))
+        assertNull(photoFitPlaceholderMemoryCacheKey("http://x/img", null, 0, 1080))
+        assertNull(photoFitPlaceholderMemoryCacheKey("http://x/img", null, 1080, 0))
+        assertNull(photoFitPlaceholderMemoryCacheKey("http://x/img", null, -4, 1080))
+    }
+
+    @Test
+    fun `placeholder handoff key reproduces the fitted request's auto-derived key`() {
+        val fitUrl = "http://x/img?maxWidth=1080"
+        val key = photoFitPlaceholderMemoryCacheKey(fitUrl, qualityCap = 90, viewportWidthPx = 1080, viewportHeightPx = 2246)!!
+        assertEquals(mediaImageUrl(fitUrl, 90), key.key)
+        assertEquals(
+            coil3.size.Size(1080, 2246).toString(),
+            key.extras[COIL_MEMORY_SIZE_EXTRA_KEY],
+            "the coil#size extra is exactly what Coil's resolved-size string rides under",
+        )
+    }
+
+    @Test
+    fun `placeholder handoff key applies the quality cap to the key url only`() {
+        val fitUrl = "http://x/img?maxWidth=1080"
+        assertEquals(
+            mediaImageUrl(fitUrl, 90),
+            photoFitPlaceholderMemoryCacheKey(fitUrl, 90, 1080, 2246)!!.key,
+        )
+        assertEquals(
+            fitUrl,
+            photoFitPlaceholderMemoryCacheKey(fitUrl, null, 1080, 2246)!!.key,
+            "a null cap keeps the URL verbatim",
+        )
     }
 }

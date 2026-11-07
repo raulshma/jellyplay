@@ -96,6 +96,8 @@ data class AnalyticsSessionRow(
     val endedAt: Long,
     val clientName: String?,
     val deviceName: String?,
+    /** The session's server-side start stamp — part of the row's stable identity. */
+    val startedAt: Long = 0,
 )
 
 @Immutable
@@ -447,5 +449,6 @@ internal fun toSessionRow(session: JellyPlayAnalyticsSession): AnalyticsSessionR
         endedAt = session.endedAt,
         clientName = session.clientName,
         deviceName = session.deviceName,
+        startedAt = session.startedAt,
     )
 }

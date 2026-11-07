@@ -1224,9 +1224,8 @@ fun VideoPlayerScreen(
             // Zero effect when the pref is off or the video fills the surface
             // (the policy folds the geometry; the FILL/CROP override modes
             // fill by construction and gate it off here).
-            val ambientVideoAspect = remember(uiState.media.mediaStreams) {
-                videoStreamAspect(uiState.media.mediaStreams)
-            }
+            val ambientStreams = uiState.media.mediaStreams
+            val ambientVideoAspect = remember(ambientStreams) { videoStreamAspect(ambientStreams) }
             AmbientBackdropLayer(
                 imageUrl = uiState.media.artworkUrl,
                 videoAspect = ambientVideoAspect,
@@ -1234,6 +1233,7 @@ fun VideoPlayerScreen(
                     uiState.uiPrefs.ambientBlurEnabled, effectiveAspectRatio(aspectRatio, detectedAspectRatio),
                     uiState.uiPrefs.ambientUnderFill,
                 ),
+                performanceTier = uiState.uiPrefs.performanceTuning.tier, // LOW drops the blur RenderEffect
             )
 
             // Platform surface seam: Android hosts the engine's

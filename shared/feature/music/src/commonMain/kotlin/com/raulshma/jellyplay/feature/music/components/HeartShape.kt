@@ -44,3 +44,12 @@ class HeartShape : Shape {
         return Outline.Generic(path)
     }
 }
+
+/**
+ * Shared [HeartShape] instance for the artist-card clips (the ShapeCache
+ * singleton idiom). The shape is stateless — [HeartShape.createOutline]
+ * derives everything from its `size` argument — so the two clips per card
+ * (container + image) can share one instance instead of each card in a row
+ * allocating two fresh shapes per composition pass.
+ */
+val cachedHeartShape = HeartShape()

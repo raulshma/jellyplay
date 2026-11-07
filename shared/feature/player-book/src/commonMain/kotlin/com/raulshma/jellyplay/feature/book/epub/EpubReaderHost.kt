@@ -9,8 +9,6 @@ import com.raulshma.jellyplay.feature.book.ReaderPrefsSnapshot
 import com.raulshma.jellyplay.feature.book.epubCssStack
 import com.raulshma.jellyplay.feature.book.epubLineHeight
 import com.raulshma.jellyplay.feature.book.epubMarginsPx
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import okio.Path
 
 /** Where the reflowable reader is in its boot/ready sequence (fed by `reader.js`). */
@@ -245,12 +243,22 @@ internal fun String.toJsonStringLiteral(): String = buildString {
 }
 
 /**
- * Max base64 chars per `loadBookChunk` frame. A whole-book single
- * evaluateJavascript payload peaks at ~3x the book size in transient memory
- * and Android WebView is known to fail on multi-MB script strings — chunks
- * stay far below that ceiling.
+ * The opened book's chunked boot transfer — the send loop's only view of the
+ * file. Implemented jvmShared-side (EpubBookCodec) because the reads need
+ * java.io; the loop in [streamBookChunks] is common. One transfer at a
+ * time: the opener owns the IO hop, [nextChunkBase64] the per-chunk
+ * read+encode (so no transfer step ever pins whole-book bytes or a
+ * whole-book base64 string — each chunk is dead once its eval completes),
+ * and [close] releases the underlying stream.
  */
-internal const val BOOK_CHUNK_CHARS = 1_500_000
+internal interface EpubBookTransfer : AutoCloseable {
+
+    /** Exact byte count the chunks reassemble to — the begin frame's completeness header. */
+    val totalBytes: Long
+
+    /** The next chunk as standalone-decodable base64, or null after the last one. */
+    suspend fun nextChunkBase64(): String?
+}
 
 /*
  * The reader.js command surface, shaped once here so the Android and desktop
@@ -276,16 +284,23 @@ internal fun EpubAppearance.toJsonArg(): String = buildString {
 }
 
 internal fun buildLoadBookBeginScript(
-    chunkCount: Int,
+    totalBytes: Long,
     resumePercent: Double,
     appearance: EpubAppearance,
 ): String = "window.jellyPlayReader.loadBookBegin(" +
-    "$chunkCount, ${resumePercent.coerceIn(0.0, 1.0)}, ${appearance.toJsonArg().toJsonStringLiteral()})"
+    "$totalBytes, ${resumePercent.coerceIn(0.0, 1.0)}, ${appearance.toJsonArg().toJsonStringLiteral()})"
 
 internal fun buildLoadBookChunkScript(index: Int, chunk: String): String =
     "window.jellyPlayReader.loadBookChunk($index, \"$chunk\")"
 
 internal fun buildLoadBookEndScript(): String = "window.jellyPlayReader.loadBookEnd()"
+
+/**
+ * Drops a partial assembly (a transfer failed/cancelled mid-stream): reader.js
+ * discards the buffer it had accumulated so no half-book stays pinned in the
+ * page's JS heap awaiting an end frame that will never come.
+ */
+internal fun buildLoadBookAbortScript(): String = "window.jellyPlayReader.loadBookAbort()"
 
 internal fun buildSetThemeScript(theme: ReaderTheme): String =
     "window.jellyPlayReader.setTheme('${theme.toJsName()}')"
@@ -349,30 +364,32 @@ internal fun buildSetAutoScrollScript(enabled: Boolean, pxPerSec: Int): String =
 internal fun buildConsumeEventsScript(): String = "window.jellyPlayReader.consumeEvents()"
 
 /**
- * The chunked book transfer — reader.js assembles the chunks and decodes once
- * on loadBookEnd. The saved appearance rides the begin frame so the rendition
- * is built with the user's preferences. [eval] is the platform's
+ * The streamed book transfer — [transfer] hands out the book as standalone
+ * base64 chunks (read+encoded off-main inside the source); reader.js writes
+ * each decoded chunk into a buffer preallocated from the begin frame's
+ * totalBytes header and opens only once loadBookEnd confirms the received
+ * byte count against it. The saved appearance rides the begin frame so the
+ * rendition is built with the user's preferences. [eval] is the platform's
  * evaluate(Java)Script seam, so the protocol lives once for both hosts.
  *
- * Chunking + per-chunk script concat transiently cost a few times the book
- * size in strings — they run on [Dispatchers.Default]; the [eval] loop stays
- * on the caller's (main) dispatcher, where evaluate(Java)Script must run.
+ * Per-chunk lifecycle: the chunk's bytes exist inside the source only until
+ * its base64 string is built, and both die the moment [eval] returns — the
+ * whole-book bytes + whole-book base64 pin the old single-encode transfer
+ * carried is gone.
  */
-internal suspend fun sendBookChunks(
-    base64: String,
+internal suspend fun streamBookChunks(
+    transfer: EpubBookTransfer,
     resumePercent: Double,
     appearance: EpubAppearance,
     eval: (String) -> Unit,
 ) {
-    val scripts = withContext(Dispatchers.Default) {
-        val chunks = base64.chunked(BOOK_CHUNK_CHARS)
-        buildList(chunks.size + 2) {
-            add(buildLoadBookBeginScript(chunks.size, resumePercent, appearance))
-            chunks.forEachIndexed { index, chunk -> add(buildLoadBookChunkScript(index, chunk)) }
-            add(buildLoadBookEndScript())
-        }
+    eval(buildLoadBookBeginScript(transfer.totalBytes, resumePercent, appearance))
+    var index = 0
+    while (true) {
+        val chunk = transfer.nextChunkBase64() ?: break
+        eval(buildLoadBookChunkScript(index++, chunk))
     }
-    scripts.forEach(eval)
+    eval(buildLoadBookEndScript())
 }
 
 /**
