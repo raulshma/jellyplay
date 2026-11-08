@@ -184,9 +184,9 @@ class SpecDerivedSearchItemsTest {
     // ── Appearance ──────────────────────────────────────────────────────
 
     @Test
-    fun `appearance theme list keeps its 20-row order with the two residuals in place`() {
+    fun `appearance theme list keeps its 21-row order with the two residuals in place`() {
         val items = AppearanceThemeSearchItems
-        assertEquals(20, items.size)
+        assertEquals(21, items.size)
         assertEquals(AppearanceRows.DateFormat.id, items.first().id)
         assertEquals(AppearanceRows.ScheduledEnd.id, items.last().id)
         assertEquals(
@@ -206,10 +206,18 @@ class SpecDerivedSearchItemsTest {
         val screenFit = items.single { it.id == AppearanceRows.ScreenFit.id }
         assertFalse(screenFit.isAdvanced)
         assertEquals(setOf(PlatformKind.ANDROID), screenFit.platforms)
+        // The TV UI scale picker (the density multiplier over the whole TV
+        // composition) rides right beside it under the same TV-only,
+        // not-advanced, Android-tagged grammar.
+        val tvUiScale = items.single { it.id == AppearanceRows.TvUiScale.id }
+        assertFalse(tvUiScale.isAdvanced)
+        assertEquals(setOf(PlatformKind.ANDROID), tvUiScale.platforms)
         assertEquals(
-            listOf(AppearanceRows.LayoutMode.id, AppearanceRows.ScreenFit.id),
-            items.filter { it.id in setOf(AppearanceRows.LayoutMode.id, AppearanceRows.ScreenFit.id) }.map { it.id },
-            "the form-factor fork pair keeps their catalog positions",
+            listOf(AppearanceRows.LayoutMode.id, AppearanceRows.ScreenFit.id, AppearanceRows.TvUiScale.id),
+            items.filter {
+                it.id in setOf(AppearanceRows.LayoutMode.id, AppearanceRows.ScreenFit.id, AppearanceRows.TvUiScale.id)
+            }.map { it.id },
+            "the form-factor fork trio keeps their catalog positions",
         )
     }
 

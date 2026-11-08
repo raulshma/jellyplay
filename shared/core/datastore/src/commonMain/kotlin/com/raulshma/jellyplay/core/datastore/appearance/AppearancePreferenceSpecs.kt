@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PressEffectStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.TvOverscan
+import com.raulshma.jellyplay.core.model.TvUiScale
 import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
 
 /**
@@ -816,6 +817,31 @@ object AppearancePreferenceSpecs {
         ),
     )
 
+    /**
+     * The TV shell's UI scale — the density multiplier over the whole TV
+     * composition (cards, rows, padding, text shrink together). The
+     * overscan calibration's sibling: a TV-only display knob, so its search
+     * entry is tagged [PreferencePlatformRule.ANDROID_ONLY] (form factor is
+     * the runtime `LocalTvMode` axis) while the row's screen-side gate is
+     * the feature layer's `RowAdmission.Tv`. The default [TvUiScale.SMALL]
+     * shrinks the stock-TV oversized layout; [TvUiScale.DEFAULT] restores it.
+     */
+    val TV_UI_SCALE: PreferenceSpec<TvUiScale> = PreferenceSpec.enumRow(
+        keyName = "tv_ui_scale",
+        default = TvUiScale.SMALL,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "tv_ui_scale",
+            // One-key family: a single screen-face key.
+            titleKey = "settings_tv_ui_scale",
+            subtitleKey = "ss_tv_ui_scale_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("ui scale", "density", "size", "tv", "too big", "zoom", "compact", "smaller", "display"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            platformRule = PreferencePlatformRule.ANDROID_ONLY,
+        ),
+    )
+
     // ------------------------------------------------------------------
     // Global display & interaction QoL (opt-in; defaults = shipped behavior)
     // ------------------------------------------------------------------
@@ -1046,6 +1072,7 @@ object AppearancePreferenceSpecs {
         HAND_MODE,
         LAYOUT_MODE,
         TV_OVERSCAN,
+        TV_UI_SCALE,
         TIME_USE_24H,
         CARD_PRESS_ANIMATIONS,
         PULL_TO_REFRESH_ENABLED,
@@ -1094,6 +1121,7 @@ object AppearancePreferenceSpecs {
         CONTRAST_LEVEL.searchEntry(),
         LAYOUT_MODE.searchEntry(),
         TV_OVERSCAN.searchEntry(),
+        TV_UI_SCALE.searchEntry(),
         BACKDROP_THEME_MUSIC_ENABLED.searchEntry(),
         DETAILS_AWARDS_BADGES_ENABLED.searchEntry(),
         ACCENT_COLOR_SWATCH.searchEntry(),

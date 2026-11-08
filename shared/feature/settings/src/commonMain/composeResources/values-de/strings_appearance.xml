@@ -217,4 +217,6 @@
     <string name="settings_promoted_rail_source_subtitle">Welche Aktionen die Querformat-/TV-Detailleiste promotet</string>
     <string name="settings_episode_overview_preview">Episoden-Synopsenvorschau</string>
     <string name="settings_episode_overview_preview_subtitle">Zeigt einen 2-Zeilen-Synopsis-Snippet auf den Episodenzeilen einer Staffel</string>
+    <string name="settings_tv_ui_scale">TV-Oberflächengröße</string>
+    <string name="settings_tv_ui_scale_subtitle">Die gesamte TV-Oberfläche verkleinern oder vergrößern</string>
 </resources>

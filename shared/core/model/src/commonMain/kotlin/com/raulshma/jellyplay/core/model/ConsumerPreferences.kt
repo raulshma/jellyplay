@@ -397,6 +397,8 @@ data class MainPreferences(
     val layoutMode: LayoutMode = LayoutMode.AUTO,
     /** The TV overscan safe-area calibration; only consumed on the TV form factor. */
     val tvOverscan: TvOverscan = TvOverscan.FIVE,
+    /** The TV shell's UI-scale density multiplier; only consumed on the TV form factor. */
+    val tvUiScale: TvUiScale = TvUiScale.SMALL,
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
     /** Which third-party app the EXTERNAL arm hands off to (chooser when unset). */
     val preferredExternalPlayer: ExternalPlayerApp = ExternalPlayerApp.SYSTEM_CHOOSER,

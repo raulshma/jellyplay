@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.TvOverscan
+import com.raulshma.jellyplay.core.model.TvUiScale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
@@ -526,6 +527,26 @@ private fun AppearanceThemeGroup(
                             label = { it.displayName },
                             isSelected = { it == preferences.tvOverscan },
                             onSelect = { viewModel.edit { scope -> scope.appearance.setTvOverscan(it) } },
+                        )
+                    },
+                )
+                // The TV UI scale (the density multiplier): the overscan
+                // calibration's sibling — same TV-only, always-visible,
+                // D-pad-picker treatment.
+                val uiScaleTitle = rowTitle(AppearanceRows.TvUiScale)
+                SettingListItem(
+                    icon = rowIcon(AppearanceRows.TvUiScale),
+                    title = uiScaleTitle,
+                    subtitle = rowSubtitle(AppearanceRows.TvUiScale),
+                    trailingText = preferences.tvUiScale.displayName,
+                    highlighted = highlightSettingId == AppearanceRows.TvUiScale.id,
+                    onClick = {
+                        activePicker.value = PickerState.List(
+                            title = uiScaleTitle,
+                            items = TvUiScale.entries,
+                            label = { it.displayName },
+                            isSelected = { it == preferences.tvUiScale },
+                            onSelect = { viewModel.edit { scope -> scope.appearance.setTvUiScale(it) } },
                         )
                     },
                 )

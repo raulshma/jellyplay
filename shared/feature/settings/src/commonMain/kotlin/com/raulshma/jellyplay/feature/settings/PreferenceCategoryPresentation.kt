@@ -476,6 +476,7 @@ private val appearanceDiffFields: List<DiffField<*>> = diffRows(
     // these are their diff rows.
     spec("settings_layout_mode", { it.appearance.layoutMode }, { v -> v.enumDisplay() })
     spec("settings_screen_fit", { it.appearance.tvOverscan }, { v -> v.enumDisplay() })
+    spec("settings_tv_ui_scale", { it.appearance.tvUiScale }, { v -> v.enumDisplay() })
     // The global interface rows (the appearance-store spec-backed pair; the
     // pull-to-refresh row resets under MISC_APP and reads in that builder).
     spec("ss_time_use_24h_title", { it.appearance.timeUse24h }, Boolean::onOff)

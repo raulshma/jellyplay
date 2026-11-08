@@ -245,4 +245,6 @@
     <string name="settings_promoted_rail_source_subtitle">Which actions the landscape/TV details rail promotes</string>
     <string name="settings_episode_overview_preview">Episode Overview Preview</string>
     <string name="settings_episode_overview_preview_subtitle">Show a 2-line synopsis snippet on season episode rows</string>
+    <string name="settings_tv_ui_scale">TV UI scale</string>
+    <string name="settings_tv_ui_scale_subtitle">Shrink or grow the whole TV interface</string>
 </resources>

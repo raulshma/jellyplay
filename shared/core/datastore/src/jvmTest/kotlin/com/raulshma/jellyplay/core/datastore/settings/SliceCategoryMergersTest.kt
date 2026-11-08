@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.model.TrackSelectionPreset
 import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
 import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
 import com.raulshma.jellyplay.core.model.TvOverscan
+import com.raulshma.jellyplay.core.model.TvUiScale
 import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import java.lang.reflect.Modifier
@@ -144,6 +145,7 @@ class SliceCategoryMergersTest {
         handMode = HandMode.LEFT,
         layoutMode = LayoutMode.PHONE,
         tvOverscan = TvOverscan.TEN,
+        tvUiScale = TvUiScale.COMPACT,
         hapticsEnabled = false,
         timeUse24h = true,
         cardPressAnimations = false,

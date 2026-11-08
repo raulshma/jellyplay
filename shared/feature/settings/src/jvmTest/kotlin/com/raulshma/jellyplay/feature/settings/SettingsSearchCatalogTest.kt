@@ -75,7 +75,7 @@ class SettingsSearchCatalogTest {
         assertEquals(6, SettingsScreenGroups.homeNextUp.items.size)
         assertEquals(5, SettingsScreenGroups.homeLayout.items.size)
         assertEquals(12, SettingsScreenGroups.homeCards.items.size)
-        assertEquals(20, SettingsScreenGroups.appearanceTheme.items.size)
+        assertEquals(21, SettingsScreenGroups.appearanceTheme.items.size)
         assertEquals(13, SettingsScreenGroups.appearanceNavigation.items.size)
         assertEquals(52, SettingsScreenGroups.appearanceLibrary.items.size)
         // The master level row lives in the hub's level group now; the

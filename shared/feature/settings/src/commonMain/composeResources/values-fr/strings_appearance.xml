@@ -217,4 +217,6 @@
     <string name="settings_promoted_rail_source_subtitle">Quelles actions le bandeau de détails paysage/TV met en avant</string>
     <string name="settings_episode_overview_preview">Aperçu de la synopsis des épisodes</string>
     <string name="settings_episode_overview_preview_subtitle">Affiche un extrait de synopsis de 2 lignes sur les rangées d’épisodes de la saison</string>
+    <string name="settings_tv_ui_scale">Échelle de l'interface TV</string>
+    <string name="settings_tv_ui_scale_subtitle">Réduire ou agrandir toute l'interface du téléviseur</string>
 </resources>

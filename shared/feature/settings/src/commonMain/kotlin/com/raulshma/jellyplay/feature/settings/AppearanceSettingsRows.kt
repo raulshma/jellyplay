@@ -150,6 +150,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tv_ui_scale
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tv_ui_scale_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overview_collapse_lines
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overview_collapse_lines_subtitle
@@ -202,6 +204,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_start_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_start_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screen_fit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_tv_ui_scale_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_share_media_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_specials_subtitle
@@ -453,6 +456,23 @@ internal object AppearanceRows {
         titleRes = Res.string.settings_screen_fit,
         subtitleRes = Res.string.settings_screen_fit_subtitle,
         searchSubtitleRes = Res.string.ss_screen_fit_subtitle,
+        gate = RowAdmission.Tv,
+    )
+
+    /**
+     * The TV shell's UI scale (the density multiplier over the whole TV
+     * composition): the overscan calibration's sibling — TV-only, always
+     * visible on TV (an oversized 1080p layout is exactly the state that
+     * makes settings hard to drive), never behind the advanced toggle.
+     * Declared [RowAdmission.Tv] so the screen's `if (isTv)` fork covers it
+     * the same way ScreenFit's is.
+     */
+    val TvUiScale = SettingsRow(
+        id = "tv_ui_scale",
+        icon = Tabler.Outline.Scale,
+        titleRes = Res.string.settings_tv_ui_scale,
+        subtitleRes = Res.string.settings_tv_ui_scale_subtitle,
+        searchSubtitleRes = Res.string.ss_tv_ui_scale_subtitle,
         gate = RowAdmission.Tv,
     )
 
@@ -1403,6 +1423,7 @@ internal val AppearanceThemeRows: List<SettingsRow> = listOf(
     AppearanceRows.LibraryViewMode,
     AppearanceRows.LayoutMode,
     AppearanceRows.ScreenFit,
+    AppearanceRows.TvUiScale,
     AppearanceRows.ThemeMusic,
     AppearanceRows.NavLabels,
     AppearanceRows.AccentColor,

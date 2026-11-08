@@ -217,4 +217,6 @@
     <string name="settings_promoted_rail_source_subtitle">Quali azioni la banda di dettagli orizzontale/TV evidenzia</string>
     <string name="settings_episode_overview_preview">Anteprima della trama dell’episodio</string>
     <string name="settings_episode_overview_preview_subtitle">Mostra uno snippet di trama di 2 righe nelle righe degli episodi della stagione</string>
+    <string name="settings_tv_ui_scale">Scala dell'interfaccia TV</string>
+    <string name="settings_tv_ui_scale_subtitle">Riduci o ingrandisci tutta l'interfaccia del televisore</string>
 </resources>

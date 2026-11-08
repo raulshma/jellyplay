@@ -217,4 +217,6 @@
     <string name="settings_promoted_rail_source_subtitle">Qué acciones destaca el carril de detalles en horizontal/TV</string>
     <string name="settings_episode_overview_preview">Vista previa de la sinopsis del episodio</string>
     <string name="settings_episode_overview_preview_subtitle">Muestra un fragmento de sinopsis de 2 líneas en las filas de episodios de la temporada</string>
+    <string name="settings_tv_ui_scale">Escala de la interfaz TV</string>
+    <string name="settings_tv_ui_scale_subtitle">Reducir o ampliar toda la interfaz del televisor</string>
 </resources>

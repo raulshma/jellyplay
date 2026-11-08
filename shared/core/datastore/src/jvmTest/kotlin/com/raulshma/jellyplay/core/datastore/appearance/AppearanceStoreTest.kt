@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.PerformanceOverride
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.TvOverscan
+import com.raulshma.jellyplay.core.model.TvUiScale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -166,6 +167,15 @@ class AppearanceStoreTest {
         assertEquals(TvOverscan.OFF, store.appearance.first().tvOverscan)
         store.setTvOverscan(TvOverscan.TEN)
         assertEquals(TvOverscan.TEN, store.appearance.first().tvOverscan)
+    }
+
+    @Test
+    fun `setTvUiScale round-trips and defaults to the shipped 85 percent`() = runTest {
+        assertEquals(TvUiScale.SMALL, store.appearance.first().tvUiScale)
+        store.setTvUiScale(TvUiScale.DEFAULT)
+        assertEquals(TvUiScale.DEFAULT, store.appearance.first().tvUiScale)
+        store.setTvUiScale(TvUiScale.COMPACT)
+        assertEquals(TvUiScale.COMPACT, store.appearance.first().tvUiScale)
     }
 
     @Test

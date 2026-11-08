@@ -13,6 +13,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.model.MainPreferences
@@ -20,6 +22,7 @@ import com.raulshma.jellyplay.core.model.PerformanceConfigResolver
 import com.raulshma.jellyplay.core.model.performanceOverrides
 import com.raulshma.jellyplay.core.model.OverscrollStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.TvUiScale
 import com.raulshma.jellyplay.core.model.wallNowMillis
 import kotlinx.coroutines.delay
 
@@ -139,7 +142,25 @@ fun JellyPlayPreferenceTheme(
             overrides = preferences.performanceOverrides(),
         )
     }
+    // The TV UI scale: density normalization over the whole composition —
+    // the single channel both activity hosts (Main + Player) share, so every
+    // dp-sized surface (cards, rows, padding, chrome) and every sp-sized text
+    // scales by the SAME factor (fontScale rides along unmultiplied: text px
+    // = sp * density * fontScale, so multiplying density alone scales text
+    // and layout together). Inert off the TV form factor and at DEFAULT —
+    // phones, tablets, and desktop never see an override.
+    val density = LocalDensity.current
+    val tvUiScale = preferences.tvUiScale
+    val scaledDensity = if (isTv && tvUiScale != TvUiScale.DEFAULT) {
+        Density(
+            density = density.density * tvUiScale.factor,
+            fontScale = density.fontScale,
+        )
+    } else {
+        density
+    }
     CompositionLocalProvider(
+        LocalDensity provides scaledDensity,
         LocalPerformanceConfig provides perfConfig,
         LocalPerformanceMode provides perfConfig.suppressAnimations,
         LocalReduceMotionEnabled provides preferences.reduceMotionEnabled,

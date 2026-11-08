@@ -248,6 +248,11 @@ class PlayerActivity : FragmentActivity(), PlayerOrientationHost {
                 JellyPlayPreferenceTheme(
                     preferences = preferences,
                     darkTheme = darkTheme,
+                    // The form-factor flag must ride along or the theme's
+                    // density normalization (the TV UI scale) stays inert
+                    // here and the player's chrome renders at 100% while the
+                    // main shell honors the user's scale setting.
+                    isTv = isTvDevice,
                 ) {
                     when (args) {
                         is PlayerActivityArgs.Video -> Box(Modifier.fillMaxSize()) {
