@@ -40,7 +40,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.AlertTriangle
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -522,7 +522,7 @@ private fun DetailScrollContent(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+                .then(if (isTv) Modifier.tvFocusGroupRestorer() else Modifier),
         ) {
             item(key = "detail_spacer", contentType = "detail_spacer") {
                 Spacer(modifier = Modifier.height(scrollState.baseBackdropHeight - 150.dp))

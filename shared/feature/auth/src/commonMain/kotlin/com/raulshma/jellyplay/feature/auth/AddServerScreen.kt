@@ -94,6 +94,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -144,7 +145,8 @@ fun AddServerScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .imePadding()
-                .padding(horizontal = contentPad),
+                .padding(horizontal = contentPad)
+                .tvFocusGroupRestorer(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
@@ -395,9 +397,9 @@ private fun ServerCountRow(
             verticalAlignment = CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
+                .focusIndicator(ShapeCache.smooth16)
                 .clip(ShapeCache.smooth16)
                 .background(MaterialTheme.colorScheme.primaryContainer)
-                .focusIndicator(ShapeCache.smooth16)
                 .clickable { expanded = !expanded }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
@@ -543,9 +545,9 @@ private fun DiscoveredServerItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusIndicator(shape)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .focusIndicator(shape)
             .clickable(onClick = onClick, enabled = !isConnecting)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = CenterVertically,

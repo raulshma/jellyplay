@@ -762,9 +762,9 @@ private fun CollapsibleSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusIndicator(headerFocusState, MaterialTheme.shapes.small)
                 .clip(MaterialTheme.shapes.small)
                 .then(headerFocusState.focusModifier)
-                .tvFocusIndicator(headerFocusState, MaterialTheme.shapes.small)
                 .clickable { expanded = !expanded }
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,

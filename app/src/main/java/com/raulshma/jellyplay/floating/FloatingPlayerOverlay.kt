@@ -175,8 +175,8 @@ private fun ControlIcon(
     Box(
         modifier = Modifier
             .size(iconSize + 8.dp)
-            .clip(androidx.compose.foundation.shape.CircleShape)
             .focusIndicator(androidx.compose.foundation.shape.CircleShape)
+            .clip(androidx.compose.foundation.shape.CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

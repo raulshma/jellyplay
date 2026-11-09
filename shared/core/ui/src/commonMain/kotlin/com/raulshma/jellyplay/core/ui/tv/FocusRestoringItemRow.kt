@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.ui.tv
 
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyItemScope
@@ -44,8 +43,7 @@ fun <T> FocusRestoringItemRow(
         horizontalArrangement = horizontalArrangement,
         contentPadding = contentPadding,
         modifier = modifier
-            .focusGroup()
-            .tvFocusRestorer(),
+            .tvFocusGroupRestorer(),
     ) {
         items(
             items = items,

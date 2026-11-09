@@ -122,6 +122,10 @@ fun PluginsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Plain group (no restorer): it only funnels the initial
+                // focusRequester to the tab row. The tab content lists are
+                // sibling groups with their own restorers — a restorer here
+                // would wrap them, which the FocusRestorer contract forbids.
                 .focusGroup()
                 .focusRequester(contentFocusRequester)
                 .padding(paddingValues),

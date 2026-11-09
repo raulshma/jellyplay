@@ -55,7 +55,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.requests.generated.resources.Res
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_approve
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_decline
@@ -152,7 +152,7 @@ fun RequestsScreen(
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .tvFocusRestorer()
+                                .tvFocusGroupRestorer()
                                 .focusRequester(listFocusRequester),
                             contentPadding = PaddingValues(
                                 start = 16.dp,

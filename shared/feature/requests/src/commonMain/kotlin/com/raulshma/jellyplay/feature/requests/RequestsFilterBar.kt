@@ -222,8 +222,8 @@ fun RequestsFilterBar(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
+                        .focusIndicator(ShapeCache.smooth8)
                         .clip(ShapeCache.smooth8)
-                        .focusIndicator()
                         .clickable { onMyRequestsToggle() }
                         .padding(horizontal = 4.dp),
                 ) {

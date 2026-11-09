@@ -59,6 +59,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicato
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -321,6 +322,7 @@ internal fun SeerrRequestPanel(
         typography = typography,
     ) {
         LazyColumn(
+                modifier = Modifier.tvFocusGroupRestorer(),
                 contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -540,8 +542,8 @@ internal fun SeerrRequestPanel(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(ShapeCache.smooth12)
                                         .focusIndicator()
+                                        .clip(ShapeCache.smooth12)
                                         .clickable {
                                             selectAllSeasons = !selectAllSeasons
                                             selectedSeasonNumbers.clear()
@@ -580,8 +582,8 @@ internal fun SeerrRequestPanel(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(ShapeCache.smooth12)
                                         .focusIndicator()
+                                        .clip(ShapeCache.smooth12)
                                         .clickable {
                                             if (selectAllSeasons) {
                                                 selectAllSeasons = false

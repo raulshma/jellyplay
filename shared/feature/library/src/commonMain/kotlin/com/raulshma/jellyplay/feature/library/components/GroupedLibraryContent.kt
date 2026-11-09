@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.library.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,7 +49,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.TvGridCacheWindow
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberInt
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 
@@ -243,8 +242,7 @@ fun GroupedLibraryContent(
             verticalArrangement = Arrangement.spacedBy(spacing),
             modifier = modifier
                 .fillMaxSize()
-                .focusGroup()
-                .tvFocusRestorer(fallbackRequester)
+                .tvFocusGroupRestorer(fallbackRequester)
                 .focusRequester(groupRequester),
         ) {
             items(count = rows.size, key = { idx -> rows[idx].key }, contentType = { idx ->

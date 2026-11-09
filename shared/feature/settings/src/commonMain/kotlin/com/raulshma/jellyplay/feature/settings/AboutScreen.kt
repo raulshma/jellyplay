@@ -40,12 +40,12 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.LaunchedEffect
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about
@@ -127,7 +127,7 @@ fun AboutScreen(
                     end = adaptiveInfo.contentPadding(isTv),
                     bottom = adaptiveInfo.bottomPadding(isTv),
                 )
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(focusRequester),
         ) {
             Spacer(Modifier.height(24.dp))

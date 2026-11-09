@@ -52,9 +52,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.livetv.components.LiveTvTabScaffold
 import com.composables.icons.tabler.outline.*
 import com.composables.icons.tabler.filled.*
@@ -124,7 +124,7 @@ fun ChannelsScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .tvFocusRestorer()
+                    .tvFocusGroupRestorer()
                     .focusRequester(focusRequester),
                 contentPadding = PaddingValues(
                     start = contentPad,
@@ -183,6 +183,7 @@ private fun ChannelCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusIndicator(ShapeCache.smooth16)
             .clip(ShapeCache.smooth16)
             .background(
                 if (isNowPlaying) {
@@ -191,7 +192,6 @@ private fun ChannelCard(
                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
                 }
             )
-            .focusIndicator()
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -289,9 +289,9 @@ private fun ChannelCard(
         Box(
             modifier = Modifier
                 .size(40.dp)
+                .focusIndicator(CircleShape)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                .focusIndicator(CircleShape)
                 .clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) {

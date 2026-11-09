@@ -101,10 +101,10 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.FocusRestoringItemRow
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowRight
 import com.composables.icons.tabler.outline.Check
@@ -451,7 +451,7 @@ private fun SeerrDetailContent(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+                .then(if (isTv) Modifier.tvFocusGroupRestorer() else Modifier),
         ) {
             item { Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp)) }
 

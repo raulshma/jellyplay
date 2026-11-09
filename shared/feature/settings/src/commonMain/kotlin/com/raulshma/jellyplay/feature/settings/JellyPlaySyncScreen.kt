@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -78,6 +80,8 @@ import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import kotlinx.datetime.toKotlinLocalDate
 import kotlinx.datetime.toKotlinLocalTime
 import com.raulshma.jellyplay.feature.settings.generated.resources.*
@@ -140,6 +144,16 @@ fun JellyPlaySyncScreen(
     val platformIntents = rememberPlatformIntents()
     val bus = LocalUserMessageBus.current
 
+    // TV focus-on-launch: the TV arm's master controls always compose, so grab
+    // the list immediately — otherwise the drawer rail captures the first
+    // D-pad press.
+    val tvListFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = tvListFocusRequester,
+        itemCount = 1,
+        tag = "jellyplay_sync_init",
+    )
+
     // Freshness on open: one pull per visit (the messages screen's idiom);
     // manual actions re-pull through the ViewModel.
     LaunchedEffect(Unit) { viewModel.refresh() }
@@ -175,7 +189,10 @@ fun JellyPlaySyncScreen(
             val tvListState = rememberLazyListState()
             LazyColumn(
                 state = tvListState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusGroupRestorer()
+                    .focusRequester(tvListFocusRequester),
                 contentPadding = PaddingValues(
                     top = contentPadding.calculateTopPadding() + 8.dp,
                     bottom = contentPadding.calculateBottomPadding() + 16.dp,

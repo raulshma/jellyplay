@@ -209,9 +209,9 @@ private fun DiscoverRowListEntry(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
             .clickable(onClick = onEdit),
     )
 }
@@ -279,10 +279,10 @@ private fun DiscoverRowTemplatesPresentation(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
+                    .tvFocusIndicator(tvFocusState, shape)
                     .clip(shape)
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
                     .then(tvFocusState.focusModifier)
-                    .tvFocusIndicator(tvFocusState, shape)
                     .clickable { onUseTemplate(template.create(title)) }
                     .padding(horizontal = 20.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -325,10 +325,10 @@ private fun AddDiscoverRowRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f))
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,

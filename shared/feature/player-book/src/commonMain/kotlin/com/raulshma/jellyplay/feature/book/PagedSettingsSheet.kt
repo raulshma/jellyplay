@@ -13,7 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,7 +66,7 @@ internal fun PagedSettingsSheet(
     onDismissRequest: () -> Unit,
 ) {
     val behavior = prefs.behaviorState()
-    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+    TvSafeSheet(onDismissRequest = onDismissRequest) {
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
         ) {

@@ -303,9 +303,9 @@ fun OnboardingToggleRow(
                 defaultScale = AnimationTokens.CardPressScale,
                 spec = MaterialTheme.motionScheme.fastSpatialSpec(),
             )
+            .focusIndicator(ShapeCache.smooth16)
             .clip(ShapeCache.smooth16)
             .background(backgroundColor)
-            .focusIndicator()
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,

@@ -26,7 +26,7 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorSt
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_arr
@@ -90,7 +90,7 @@ fun IntegrationsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(focusRequester),
             contentPadding = PaddingValues(
                 start = adaptiveInfo.contentPadding(isTv),

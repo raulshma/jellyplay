@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -418,6 +419,11 @@ internal fun PlayerControls(
     val tvBackFocusRequester = remember { FocusRequester() }
     val tvSeekbarFocusRequester = remember { FocusRequester() }
     val tvBottomButtonsFocusRequester = remember { FocusRequester() }
+    // The metadata chip row above the seek bar — the first focusable chip is
+    // the play-method pill (always present when the row renders).
+    val tvMetadataFocusRequester = remember { FocusRequester() }
+    // The ⋮ button: restored when the overflow panel is dismissed.
+    val tvMoreOptionsFocusRequester = remember { FocusRequester() }
     val tvBackFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
     LaunchedEffect(bottomLeftScrollState) {
@@ -432,7 +438,21 @@ internal fun PlayerControls(
     // anchored to TopEnd. Rendering it in-window (instead of a DropdownMenu popup)
     // keeps it in the player's immersive window so the system bars never appear.
     var showOverflow by remember { mutableStateOf(false) }
-    LaunchedEffect(showOverflow) { gestures.onOverflowMenuChange(showOverflow) }
+    // Only a DISMISS (back / tap outside) returns focus to ⋮; a row that opens
+    // a sheet hands focus to that sheet instead.
+    var restoreOverflowFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(showOverflow) {
+        gestures.onOverflowMenuChange(showOverflow)
+        if (!showOverflow && restoreOverflowFocus) {
+            restoreOverflowFocus = false
+            if (isTv) {
+                // The panel leaves composition during this frame — grab after
+                // it, or the requester is still attached to the dying node.
+                withFrameNanos { }
+                tvMoreOptionsFocusRequester.tryRequestFocus("player_more_restore")
+            }
+        }
+    }
 
     LaunchedEffect(isVisible, isTv) {
         if (isTv && isVisible) {
@@ -600,7 +620,14 @@ internal fun PlayerControls(
                         if (isTv) {
                             Modifier.focusProperties {
                                 up = tvBackFocusRequester
-                                down = tvSeekbarFocusRequester
+                                // Down lands on the metadata chips when they
+                                // render (they sit between this row and the
+                                // seek bar), the scrubber otherwise.
+                                down = if (tracks.showPlaybackMetadata) {
+                                    tvMetadataFocusRequester
+                                } else {
+                                    tvSeekbarFocusRequester
+                                }
                             }
                         } else Modifier
                     ),
@@ -729,6 +756,9 @@ internal fun PlayerControls(
                         onHdrClick = { sheets.openSheet(HdrSheetModule.sheet) },
                         mpvConfigNoticeActive = tracks.mpvConfigNoticeActive,
                         onMpvConfigNoticeClick = sheets.onMpvConfigNoticeClick,
+                        tvFocusRequester = if (isTv) tvMetadataFocusRequester else null,
+                        tvUpFocusRequester = if (isTv) tvPlayPauseFocusRequester else null,
+                        tvDownFocusRequester = if (isTv) tvSeekbarFocusRequester else null,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
@@ -754,7 +784,13 @@ internal fun PlayerControls(
                     onSeekEnd = transport.onSeekEnd,
                     onSeekPositionChange = transport.onSeekPositionChange,
                     tvFocusRequester = tvSeekbarFocusRequester,
-                    tvUpFocusRequester = tvPlayPauseFocusRequester,
+                    // Up lands on the metadata chip row when it renders; the
+                    // chips hand focus back down to this bar.
+                    tvUpFocusRequester = if (tracks.showPlaybackMetadata) {
+                        tvMetadataFocusRequester
+                    } else {
+                        tvPlayPauseFocusRequester
+                    },
                     tvDownFocusRequester = tvBottomButtonsFocusRequester,
                 )
 
@@ -887,17 +923,21 @@ internal fun PlayerControls(
                                 icon = Tabler.Outline.DotsVertical,
                                 contentDescription = stringResource(Res.string.player_video_more_options),
                                 onClick = { showOverflow = true },
-                                modifier = Modifier.then(
-                                    if (isTv) {
-                                        Modifier.focusProperties {
-                                            right = when {
-                                                isNextEpisodeVisible && tvNextEpisodeFocusRequester != null -> tvNextEpisodeFocusRequester
-                                                isSkipSegmentVisible && tvSkipSegmentFocusRequester != null -> tvSkipSegmentFocusRequester
-                                                else -> FocusRequester.Default
+                                modifier = Modifier
+                                    .then(
+                                        if (isTv) Modifier.focusRequester(tvMoreOptionsFocusRequester) else Modifier
+                                    )
+                                    .then(
+                                        if (isTv) {
+                                            Modifier.focusProperties {
+                                                right = when {
+                                                    isNextEpisodeVisible && tvNextEpisodeFocusRequester != null -> tvNextEpisodeFocusRequester
+                                                    isSkipSegmentVisible && tvSkipSegmentFocusRequester != null -> tvSkipSegmentFocusRequester
+                                                    else -> FocusRequester.Default
+                                                }
                                             }
-                                        }
-                                    } else Modifier
-                                )
+                                        } else Modifier
+                                    )
                             )
                         }
                     }
@@ -1036,7 +1076,10 @@ internal fun PlayerControls(
         }
         PlayerOverflowMenu(
             expanded = showOverflow,
-            onDismiss = { showOverflow = false },
+            onDismiss = {
+                showOverflow = false
+                restoreOverflowFocus = true
+            },
             capabilities = capabilities,
             menu = overflowActions,
             inputQuickToggles = sheets.inputQuickToggles,

@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.icons.ShortcutIconRegistry
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 /**
@@ -51,7 +52,7 @@ fun ShortcutIconGridPicker(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(vertical = 2.dp),
-        modifier = modifier.heightIn(max = 264.dp),
+        modifier = modifier.heightIn(max = 264.dp).tvFocusGroupRestorer(),
     ) {
         items(entries, key = { it.id }, contentType = { "shortcut-icon" }) { entry ->
             ShortcutIconTile(

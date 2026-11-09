@@ -97,7 +97,6 @@ import com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.CalendarTime
 import com.composables.icons.tabler.outline.ChevronRight
@@ -334,7 +333,7 @@ internal fun <T> HomeItemRow(
             enabled = edgeRefresh != null,
             isRefreshing = edgeRefresh?.inProgress == true,
             onRefresh = { edgeRefresh?.onRefresh() },
-            modifier = modifier.tvFocusRestorer(),
+            modifier = modifier,
         ) {
             HorizontalMediaScroller(
                 itemCount = items.size,

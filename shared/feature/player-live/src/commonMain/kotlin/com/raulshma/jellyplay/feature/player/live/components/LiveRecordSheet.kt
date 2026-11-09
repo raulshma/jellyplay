@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.feature.player.live.generated.resources.Res
@@ -192,7 +193,15 @@ fun LiveRecordSheet(
             }
 
             if (isTv) {
-                LazyColumn(modifier = Modifier.verticalWrapAround()) {
+                LazyColumn(
+                    modifier = Modifier
+                        // Restorer's explicit group first, wrap second: the wrap's exit
+                        // properties then bind to the lazy list's own focus group instead of
+                        // the restorer's — on the same node the outermost exit (the wrap's)
+                        // would win and kill the restore save.
+                        .tvFocusGroupRestorer()
+                        .verticalWrapAround(),
+                ) {
                     itemsIndexed(actions, key = { _, action -> action.key }, contentType = { _, _ -> "recordAction" }) { index, action ->
                         val actionFocusState = rememberTvFocusState(focusedScale = 1.02f)
                         val shape = ShapeCache.smooth8
@@ -201,6 +210,7 @@ fun LiveRecordSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 2.dp)
+                                .tvFocusIndicator(actionFocusState, shape)
                                 .clip(shape)
                                 .background(
                                     if (action.destructive) MaterialTheme.colorScheme.error.copy(alpha = 0.10f)
@@ -208,7 +218,6 @@ fun LiveRecordSheet(
                                 )
                                 .then(actionFocusState.focusModifier)
                                 .ifElse(isFirst, Modifier.focusRequester(focusRequester))
-                                .tvFocusIndicator(actionFocusState, shape)
                                 .clickable {
                                     action.onClick()
                                     onDismiss()

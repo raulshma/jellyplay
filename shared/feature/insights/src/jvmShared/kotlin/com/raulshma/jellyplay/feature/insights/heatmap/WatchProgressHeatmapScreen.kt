@@ -995,8 +995,8 @@ private fun DayDetailSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .focusIndicator(ShapeCache.smooth8)
                             .clip(ShapeCache.smooth8)
-                            .focusIndicator(ShapeCache.smooth12)
                             .clickable { onItemClick(itemId) }
                             .padding(vertical = 6.dp),
                     ) {
@@ -1102,8 +1102,8 @@ private fun DayDetailSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .focusIndicator(ShapeCache.smooth8)
                             .clip(ShapeCache.smooth8)
-                            .focusIndicator(ShapeCache.smooth12)
                             .clickable { onItemClick(itemId) }
                             .padding(vertical = 6.dp),
                     ) {

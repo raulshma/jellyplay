@@ -11,7 +11,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,6 +22,8 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.data.repository.ReaderBookmark
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmark_page
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmark_percent
@@ -45,12 +46,17 @@ internal fun BookmarksSheet(
     onDelete: (ReaderBookmark) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+    TvSafeSheet(onDismissRequest = onDismissRequest) {
         SheetTitle(text = stringResource(Res.string.book_reader_bookmarks))
         if (bookmarks.isEmpty()) {
             SheetEmptyText(text = stringResource(Res.string.book_reader_bookmarks_empty))
         } else {
-            LazyColumn(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp)
+                    .tvFocusGroupRestorer(),
+            ) {
                 items(bookmarks, key = { it.id }) { bookmark ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

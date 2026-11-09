@@ -66,8 +66,8 @@ import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.statistics.components.ActivityBarChart
 import com.raulshma.jellyplay.feature.admin.statistics.components.ComparisonCard
 import com.raulshma.jellyplay.feature.admin.statistics.components.CompletionRing
@@ -166,7 +166,7 @@ fun UserStatisticsDetailScreen(
             else -> LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .tvFocusRestorer()
+                    .tvFocusGroupRestorer()
                     .focusRequester(listFocusRequester)
                     .padding(paddingValues),
                 contentPadding = PaddingValues(

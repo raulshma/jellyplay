@@ -3,13 +3,14 @@ package com.raulshma.jellyplay.feature.book
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_toc
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_toc_empty
@@ -29,12 +30,12 @@ internal fun PdfOutlineSheet(
     onJump: (pageIndex: Int) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+    TvSafeSheet(onDismissRequest = onDismissRequest) {
         SheetTitle(text = stringResource(Res.string.book_reader_toc))
         if (nodes.isEmpty()) {
             SheetEmptyText(text = stringResource(Res.string.book_reader_toc_empty))
         } else {
-            LazyColumn(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
+            LazyColumn(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp).tvFocusGroupRestorer()) {
                 outlineRows(nodes, depth = 0) { page ->
                     onJump(page)
                 }

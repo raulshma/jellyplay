@@ -62,6 +62,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.reorder.rememberReorderableOrderedList
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.Res
@@ -175,6 +176,7 @@ private fun QueueRows(
     val mirrorCurrentIndex = reorder.items.indexOfFirst { it.id == playingItemId }
 
     LazyColumn(
+        modifier = Modifier.tvFocusGroupRestorer(),
         contentPadding = PaddingValues(vertical = 4.dp),
     ) {
         itemsIndexed(

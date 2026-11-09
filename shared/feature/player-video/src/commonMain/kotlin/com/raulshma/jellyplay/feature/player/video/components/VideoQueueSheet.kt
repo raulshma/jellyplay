@@ -34,6 +34,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.data.playback.VideoQueueItem
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_queue_clear
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_queue_move_down
@@ -99,7 +100,9 @@ internal fun VideoQueueSheet(
             Spacer(Modifier.height(8.dp))
             LazyColumn(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp),
-                modifier = Modifier.heightIn(max = 440.dp),
+                modifier = Modifier
+                    .heightIn(max = 440.dp)
+                    .tvFocusGroupRestorer(),
             ) {
                 itemsIndexed(
                     queue,

@@ -21,7 +21,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 
 @Composable
 fun NewsletterContent(
@@ -51,7 +51,7 @@ fun NewsletterContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .tvFocusRestorer()
+            .tvFocusGroupRestorer()
             .focusRequester(listFocusRequester),
         contentPadding = contentPadding,
     ) {

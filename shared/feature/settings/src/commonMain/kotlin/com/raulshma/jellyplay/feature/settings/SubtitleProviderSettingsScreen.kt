@@ -40,7 +40,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_subtitles
@@ -117,7 +117,7 @@ fun SubtitleProviderSettingsScreen(
                 .fillMaxWidth()
                 .padding(innerPadding)
                 .imePadding()
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(focusRequester),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 start = 8.dp, end = 8.dp, bottom = 32.dp,

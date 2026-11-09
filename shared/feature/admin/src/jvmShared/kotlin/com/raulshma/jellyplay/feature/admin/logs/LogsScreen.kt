@@ -88,8 +88,8 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorSt
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_back
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_live_streaming_active
@@ -385,7 +385,7 @@ private fun LogFilesTab(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .tvFocusRestorer()
+                        .tvFocusGroupRestorer()
                         .focusRequester(listFocusRequester)
                         .padding(horizontal = 8.dp),
                 ) {
@@ -443,7 +443,7 @@ private fun LogFilesTab(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .tvFocusRestorer()
+                    .tvFocusGroupRestorer()
                     .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(
                     start = 16.dp,
@@ -582,7 +582,7 @@ private fun ActivityLogTab(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(listFocusRequester),
             contentPadding = PaddingValues(
                 start = 16.dp,

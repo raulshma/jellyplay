@@ -441,12 +441,12 @@ private fun RegionChip(
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .weight(1f)
+                        .focusIndicator(ShapeCache.smooth8)
                         .clip(ShapeCache.smooth8)
                         .background(
                             if (isSelected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceVariant
                         )
-                        .focusIndicator()
                         .clickable { onSelect(code) }
                         .padding(vertical = 8.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center,

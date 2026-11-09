@@ -120,9 +120,9 @@ internal fun SettingsGroup(
                     defaultScale = 0.98f,
                     spec = MaterialTheme.motionScheme.fastSpatialSpec(),
                 )
+                .tvFocusIndicator(headerTvFocusState, ShapeCache.smooth16)
                 .clip(ShapeCache.smooth16)
                 .then(headerTvFocusState.focusModifier)
-                .tvFocusIndicator(headerTvFocusState, ShapeCache.smooth16)
                 .clickable(
                     interactionSource = headerInteractionSource,
                     indication = null,

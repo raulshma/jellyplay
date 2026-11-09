@@ -16,7 +16,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.network.api.JellyPlayUserRating
@@ -26,6 +29,8 @@ import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.localDateFromIsoTimestamp
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.shortMonthDayYear
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_ur_empty
 import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_ur_filter_dislikes
@@ -67,6 +72,15 @@ fun JellyPlayUserRatingsScreen(
     // Freshness on open: one pull per visit (the messages screen's idiom) —
     // tab selects refetch through [viewModel.selectFilter].
     LaunchedEffect(Unit) { viewModel.refresh() }
+
+    // TV focus-on-launch: focus the first rating row once the filter's data
+    // lands so D-pad input lands on content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = state.ratings.size,
+        tag = "jellyplay_user_ratings_init",
+    )
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.jellyplay_ur_title),
@@ -110,7 +124,10 @@ fun JellyPlayUserRatingsScreen(
                 )
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .tvFocusGroupRestorer()
+                        .focusRequester(listFocusRequester),
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,

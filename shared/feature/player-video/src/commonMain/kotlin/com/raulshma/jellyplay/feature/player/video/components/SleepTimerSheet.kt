@@ -105,12 +105,12 @@ internal fun SleepTimerSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .tvFocusIndicator(cancelFocusState, shape)
                                 .clip(shape)
                                 .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f))
                                 .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f), shape)
                                 .then(cancelFocusState.focusModifier)
                                 .focusRequester(focusRequester) // Focus the cancel option by default if active
-                                .tvFocusIndicator(cancelFocusState, shape)
                                 .clickable {
                                     requestCancel(
                                         confirm = cancelConfirm,

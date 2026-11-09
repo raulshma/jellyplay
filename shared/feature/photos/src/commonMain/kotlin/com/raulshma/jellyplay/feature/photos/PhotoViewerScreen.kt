@@ -8,7 +8,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -96,6 +95,7 @@ import com.raulshma.jellyplay.core.ui.image.mediaImageUrl
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.feature.photos.generated.resources.Res
@@ -1053,10 +1053,12 @@ private fun PhotoFilmstrip(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                // focusGroup gives the focusRequester a target to redirect into (the row itself
-                // has no focus node) — without it the filmstrip grab silently no-ops and the
-                // strip is unreachable on TV.
-                .focusGroup()
+                // Restorer wraps the group (before focusGroup) so the filmstrip
+                // remembers its last-focused thumbnail; the group also gives the
+                // focusRequester a target to redirect into (the row itself has no
+                // focus node) — without it the filmstrip grab silently no-ops and
+                // the strip is unreachable on TV.
+                .tvFocusGroupRestorer()
                 .focusRequester(focusRequester)
                 .onDpadKeyEvent(
                     onBack = { e ->
@@ -1124,9 +1126,9 @@ private fun OverlayIconButton(
     Box(
         modifier = modifier
             .size(44.dp)
+            .focusIndicator(CircleShape)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.15f))
-            .focusIndicator(CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1147,9 +1149,9 @@ private fun OverlayActionButton(
     Box(
         modifier = modifier
             .size(44.dp)
+            .focusIndicator(CircleShape)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.15f))
-            .focusIndicator(ShapeCache.smooth12)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

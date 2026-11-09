@@ -127,12 +127,12 @@ private fun SkipButtonOverlay(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
+                    .tvFocusIndicator(skipFocusState, ShapeCache.smoothPill)
                     .clip(ShapeCache.smoothPill)
                     .background(playerOnScrim().copy(alpha = 0.12f))
                     .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), ShapeCache.smoothPill)
                     .ifElse(isTv, Modifier.focusRequester(tvFocusRequester))
                     .then(skipFocusState.focusModifier)
-                    .tvFocusIndicator(skipFocusState, ShapeCache.smoothPill)
                     .clickable(onClick = onSkip)
                     .padding(horizontal = 24.dp, vertical = 12.dp),
             ) {

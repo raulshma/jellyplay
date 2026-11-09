@@ -89,8 +89,8 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.composables.icons.tabler.Tabler
@@ -272,7 +272,7 @@ fun SyncPlayScreen(
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .tvFocusRestorer()
+                                .tvFocusGroupRestorer()
                                 .focusRequester(listFocusRequester),
                             contentPadding = PaddingValues(contentPad),
                             verticalArrangement = Arrangement.spacedBy(spacing),

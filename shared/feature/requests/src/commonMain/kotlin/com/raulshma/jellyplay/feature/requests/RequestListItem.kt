@@ -98,8 +98,8 @@ fun RequestListItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .focusIndicator(ShapeCache.smooth16)
             .clip(ShapeCache.smooth16)
-            .focusIndicator()
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,

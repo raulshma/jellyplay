@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.formatOneDecimal
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.player.audio.AudioEffectsState
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_effects_auto_eq
@@ -97,7 +98,8 @@ internal fun AudioEffectsSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp),
+                .padding(bottom = 32.dp)
+                .tvFocusGroupRestorer(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
@@ -257,6 +259,7 @@ internal fun AudioEffectsSheet(
                 }
                 Spacer(Modifier.height(4.dp))
                 LazyRow(
+                    modifier = Modifier.tvFocusGroupRestorer(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     val reverbPresets = ReverbPreset.entries

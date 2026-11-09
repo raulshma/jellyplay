@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.CleanupActionType
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_audit_by_user
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_audit_items_removed
@@ -69,7 +70,9 @@ fun AuditHistoryTab(
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .tvFocusGroupRestorer(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

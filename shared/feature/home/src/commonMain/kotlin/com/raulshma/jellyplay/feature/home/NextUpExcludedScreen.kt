@@ -50,8 +50,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
@@ -120,7 +120,7 @@ fun NextUpExcludedScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .tvFocusRestorer()
+                    .tvFocusGroupRestorer()
                     .focusRequester(focusRequester),
                 contentPadding = PaddingValues(
                     start = adaptiveInfo.contentPadding(isTv),
@@ -255,9 +255,9 @@ private fun NextUpExcludedRow(
             Box(
                 modifier = Modifier
                     .size(32.dp)
+                    .tvFocusIndicator(restoreFocusState, ShapeCache.smooth8)
                     .clip(ShapeCache.smooth8)
                     .then(restoreFocusState.focusModifier)
-                    .tvFocusIndicator(restoreFocusState, ShapeCache.smooth8)
                     .clickable(onClick = onRestore),
                 contentAlignment = Alignment.Center,
             ) {
@@ -274,8 +274,8 @@ private fun NextUpExcludedRow(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
-            .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape),
+            .then(tvFocusState.focusModifier),
     )
 }

@@ -135,10 +135,10 @@ fun AVSyncSheet(
                 ) {
                     Box(
                         modifier = Modifier
+                            .tvFocusIndicator(resetFocus, CircleShape)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                             .then(resetFocus.focusModifier)
-                            .tvFocusIndicator(resetFocus, CircleShape)
                             .clickable(enabled = anyOffset) {
                                 audioDelayMs = 0L
                                 onAudioDelayChange(0L)
@@ -277,10 +277,10 @@ internal fun DelayStepper(
     Box(
         modifier = modifier
             .size(40.dp)
+            .tvFocusIndicator(focus, CircleShape)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             .then(focus.focusModifier)
-            .tvFocusIndicator(focus, CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

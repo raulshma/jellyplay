@@ -7,7 +7,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,7 +59,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.livetv.formatLiveTvTime
 import com.raulshma.jellyplay.feature.livetv.liveProgressFraction
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
@@ -108,8 +107,7 @@ internal fun ChannelDetailContent(
     LazyColumn(
         modifier = modifier
             .fillMaxWidth()
-            .focusGroup()
-            .tvFocusRestorer()
+            .tvFocusGroupRestorer()
             .focusRequester(focusRequester),
         contentPadding = PaddingValues(start = contentPad, end = contentPad, bottom = 64.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -183,9 +181,9 @@ private fun ChannelHeader(state: ChannelDetailUiState, onWatchLive: () -> Unit) 
         // Watch Live — primary play action.
         Row(
             modifier = Modifier
+                .focusIndicator(ShapeCache.smooth28)
                 .clip(ShapeCache.smooth28)
                 .background(MaterialTheme.colorScheme.primary)
-                .focusIndicator(ShapeCache.smooth28)
                 .clickable(onClick = onWatchLive)
                 .padding(horizontal = 32.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,

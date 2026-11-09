@@ -35,7 +35,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cache_cleared
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
@@ -126,7 +126,7 @@ fun PrivacyDataScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(innerPadding)
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(focusRequester),
             contentPadding = PaddingValues(
                 start = adaptiveInfo.contentPadding(isTv),

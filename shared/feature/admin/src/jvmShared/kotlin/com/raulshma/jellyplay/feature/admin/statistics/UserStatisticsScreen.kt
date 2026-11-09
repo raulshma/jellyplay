@@ -65,7 +65,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_completion
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_failed_load_statistics
@@ -167,7 +167,7 @@ fun UserStatisticsScreen(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .tvFocusRestorer()
+                        .tvFocusGroupRestorer()
                         .focusRequester(listFocusRequester),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
                         start = 8.dp,

@@ -48,9 +48,9 @@ import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 import com.raulshma.jellyplay.core.ui.components.rememberSimpleCollectionStatus
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.tv.ifElse
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.library.components.ErrorAwareStatusIndicator
 import com.raulshma.jellyplay.feature.library.components.GlassPill
 import com.raulshma.jellyplay.feature.library.components.LibraryActionChipRow
@@ -280,8 +280,11 @@ internal fun LibraryHeaderSection(
                             onDown = { firstFilterChipFocus.tryRequestFocus("lib_header_nav") },
                         )
                         .openDrawerOnLeftExit()
+                        // Plain group: onEnter/onExit are single-slot with outermost-wins, so
+                        // the drawer exit and the restorer must own DIFFERENT focus targets —
+                        // on the same node the drawer exit would win and kill the restore.
                         .focusGroup()
-                        .tvFocusRestorer(),
+                        .tvFocusGroupRestorer(),
                 ) {
                     item {
                         GlassPill(

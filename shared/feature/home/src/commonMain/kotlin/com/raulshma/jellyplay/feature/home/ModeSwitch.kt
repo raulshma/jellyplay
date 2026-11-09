@@ -215,11 +215,11 @@ fun ModeSwitch(
         modifier = modifier
             .width(width)
             .height(height)
+            .tvFocusIndicator(tvFocusState, CircleShape)
             .clip(CircleShape)
             .background(trackBgColor)
             .shadow(elevation = 1.dp, shape = CircleShape)
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, CircleShape)
             // a11y: a bare .clickable with no role/state announces this
             // Video/Music switch as an unlabeled button. toggleable with
             // Role.Switch (announces as a switch + on/off state)

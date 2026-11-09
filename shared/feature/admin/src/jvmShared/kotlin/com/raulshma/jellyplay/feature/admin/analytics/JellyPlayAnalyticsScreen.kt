@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.admin.analytics
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +33,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +60,8 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.jellyPlayItemTypeIcon
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_load_more
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_loading_dots
@@ -116,6 +119,15 @@ fun JellyPlayAnalyticsScreen(
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
 
+    // TV focus-on-launch: the dashboard list exists once the overview lands
+    // (empty/gated states are plain text, so focus falls back to the drawer).
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (state.overview != null) 1 else 0,
+        tag = "jellyplay_analytics_init",
+    )
+
     LifecycleStartEffect(Unit) {
         viewModel.start()
         onStopOrDispose { viewModel.stop() }
@@ -129,8 +141,8 @@ fun JellyPlayAnalyticsScreen(
             Box(
                 modifier = Modifier
                     .padding(4.dp)
-                    .clip(CircleShape)
                     .focusIndicator(CircleShape)
+                    .clip(CircleShape)
                     .clickable(onClick = { viewModel.refresh() }),
             ) {
                 Icon(
@@ -176,6 +188,7 @@ fun JellyPlayAnalyticsScreen(
                     onSelectDays = viewModel::selectDays,
                     onSelectUser = viewModel::selectUser,
                     onLoadMore = viewModel::loadMoreSessions,
+                    focusRequester = listFocusRequester,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -190,6 +203,7 @@ private fun AnalyticsContent(
     onSelectDays: (Int) -> Unit,
     onSelectUser: (String?) -> Unit,
     onLoadMore: () -> Unit,
+    focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     val overview = state.overview ?: return
@@ -202,7 +216,9 @@ private fun AnalyticsContent(
     val userNameById = overview.perUser.associate { it.userId to it.userName }
 
     LazyColumn(
-        modifier = modifier.focusGroup(),
+        modifier = modifier
+            .tvFocusGroupRestorer()
+            .focusRequester(focusRequester),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -321,6 +337,7 @@ private fun DaysRangeChips(
             val selected = days == selectedDays
             Box(
                 modifier = Modifier
+                    .focusIndicator(ShapeCache.smoothPill)
                     .clip(ShapeCache.smoothPill)
                     .background(
                         if (selected) {
@@ -329,7 +346,6 @@ private fun DaysRangeChips(
                             MaterialTheme.colorScheme.surfaceContainerHigh
                         },
                     )
-                    .focusIndicator(ShapeCache.smoothPill)
                     .clickable { onSelect(days) }
                     .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
@@ -472,6 +488,7 @@ private fun UserRows(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .focusIndicator(ShapeCache.smooth8)
                     .clip(ShapeCache.smooth8)
                     .background(
                         if (selected) {
@@ -480,7 +497,6 @@ private fun UserRows(
                             MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f)
                         },
                     )
-                    .focusIndicator(ShapeCache.smooth8)
                     .clickable { onSelectUser(if (selected) null else user.userId) }
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -608,9 +624,9 @@ private fun SessionsHeader(
         Box {
             Row(
                 modifier = Modifier
+                    .focusIndicator(ShapeCache.smoothPill)
                     .clip(ShapeCache.smoothPill)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .focusIndicator(ShapeCache.smoothPill)
                     .clickable { menuOpen = true }
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,

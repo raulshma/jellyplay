@@ -516,9 +516,9 @@ private fun TvDrawerRow(
         modifier = modifier
             .fillMaxWidth()
             .scale(rowScale)
+            .focusIndicator(ShapeCache.smooth28)
             .clip(ShapeCache.smooth28)
             .background(backgroundColor)
-            .focusIndicator(ShapeCache.smooth28)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

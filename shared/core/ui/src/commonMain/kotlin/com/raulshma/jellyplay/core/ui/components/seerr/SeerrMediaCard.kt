@@ -181,9 +181,9 @@ fun SeerrMediaCard(
                             .align(Alignment.BottomEnd)
                             .padding(end = 4.dp, bottom = 4.dp)
                             .then(requestBtnFocusState.focusModifier)
+                            .tvFocusIndicator(requestBtnFocusState, ShapeCache.smooth8)
                             .clip(ShapeCache.smooth8)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
-                            .tvFocusIndicator(requestBtnFocusState, ShapeCache.smooth8),
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
                     ) {
                         Icon(
                             Tabler.Outline.Plus,

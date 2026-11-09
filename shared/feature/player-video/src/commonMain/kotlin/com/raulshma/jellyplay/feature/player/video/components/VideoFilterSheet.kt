@@ -114,9 +114,9 @@ fun VideoFilterSheet(
             val pillShape = ShapeCache.smoothPill
             Box(
                 modifier = Modifier
+                    .tvFocusIndicator(resetAllFocusState, pillShape)
                     .clip(pillShape)
                     .then(resetAllFocusState.focusModifier)
-                    .tvFocusIndicator(resetAllFocusState, pillShape)
                     .clickable {
                         brightness = 0f
                         contrast = 1f
@@ -302,9 +302,9 @@ private fun FilterSlider(
                 val shape = ShapeCache.smoothPill
                 Box(
                     modifier = Modifier
+                        .tvFocusIndicator(resetFocusState, shape)
                         .clip(shape)
                         .then(resetFocusState.focusModifier)
-                        .tvFocusIndicator(resetFocusState, shape)
                         .clickable(onClick = onReset)
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {

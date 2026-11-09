@@ -644,7 +644,17 @@ fun VideoPlayerScreen(
     // While the controls are visible this composes nothing: the play button's
     // grab owns focus, exactly as before.
     if (isTv) {
-        val overlayClaimsFocus = isCinemaIntroVisible || isNextEpisodeVisible || isSkipSegmentVisible
+        // The playback error dialog is a modal recovery surface: it must own
+        // focus while up (its Retry/engine actions grab it on appearance), and
+        // the layer's re-assert would otherwise steal it right back — the
+        // dialog used to be unreachable from a remote.
+        val playbackErrorVisible =
+            uiState.showPlaybackErrorDialog && uiState.playerError != null
+        val overlayClaimsFocus =
+            isCinemaIntroVisible ||
+                isNextEpisodeVisible ||
+                isSkipSegmentVisible ||
+                playbackErrorVisible
         PlayerTvFocusGrabEffect(
             focusRequester = tvPlayerFocusRequester,
             // The cast branch composes the companion dashboard instead of the

@@ -260,9 +260,9 @@ private fun PinnedSectionRow(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
-            .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape),
+            .then(tvFocusState.focusModifier),
     )
 }
 
@@ -335,13 +335,13 @@ private fun AddPinnedSectionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
             .background(highlightColor.value)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f))
             .focusRequester(focusRequester)
             .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -447,10 +447,10 @@ private fun PinnedTypePicker(onSelect: (PinnedSectionType) -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .tvFocusIndicator(tvFocusState, shape)
                     .clip(shape)
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
                     .then(tvFocusState.focusModifier)
-                    .tvFocusIndicator(tvFocusState, shape)
                     .clickable { onSelect(type) }
                     .padding(horizontal = 20.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -557,13 +557,13 @@ private fun PinnedOptionBrowser(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 2.dp)
+                            .tvFocusIndicator(tvFocusState, shape)
                             .clip(shape)
                             .background(
                                 if (isPinned) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
                             )
                             .then(tvFocusState.focusModifier)
-                            .tvFocusIndicator(tvFocusState, shape)
                             .clickable(enabled = !isPinned) { onSelect(option) }
                             .padding(horizontal = 20.dp, vertical = 14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,

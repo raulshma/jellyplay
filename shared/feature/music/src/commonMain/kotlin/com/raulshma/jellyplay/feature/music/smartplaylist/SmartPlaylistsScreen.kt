@@ -46,7 +46,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -101,7 +101,7 @@ fun SmartPlaylistsScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(listFocusRequester),
             contentPadding = PaddingValues(
                 start = adaptiveInfo.contentPadding(isTv),

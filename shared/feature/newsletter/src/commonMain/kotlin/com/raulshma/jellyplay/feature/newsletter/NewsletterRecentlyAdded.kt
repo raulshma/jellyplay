@@ -88,8 +88,8 @@ fun NewsletterMediaCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
+                .focusIndicator(ShapeCache.smooth12)
                 .clip(ShapeCache.smooth12)
-                .focusIndicator(ShapeCache.smooth16)
                 .clickable(onClick = onClick),
         ) {
             MediaImage(

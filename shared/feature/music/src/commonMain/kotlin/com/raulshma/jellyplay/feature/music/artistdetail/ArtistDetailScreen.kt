@@ -76,8 +76,8 @@ import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -261,7 +261,7 @@ private fun ArtistDetailContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = 250.dp)
-                    .tvFocusRestorer(),
+                    .tvFocusGroupRestorer(),
                 contentPadding = WindowInsets.navigationBars.asPaddingValues(),
             ) {
                 item {

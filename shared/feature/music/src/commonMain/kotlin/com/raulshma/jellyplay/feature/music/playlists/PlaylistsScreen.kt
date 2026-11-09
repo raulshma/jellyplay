@@ -85,8 +85,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -167,7 +167,7 @@ fun PlaylistsScreen(
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .tvFocusRestorer()
+                                .tvFocusGroupRestorer()
                                 .focusRequester(listFocusRequester),
                             contentPadding = PaddingValues(
                                 start = contentPad,

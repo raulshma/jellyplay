@@ -36,6 +36,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -231,7 +232,8 @@ fun SeriesDownloadSheet(
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
+                .tvFocusGroupRestorer(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             seasons.forEach { season ->

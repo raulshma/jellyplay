@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -384,7 +385,7 @@ internal fun HomePresenceChipRow(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier.fillMaxWidth().tvFocusGroupRestorer(),
         ) {
             items(chips, key = { it.sessionId }, contentType = { "presenceChip" }) { chip -> entry(chip) }
         }
@@ -437,9 +438,9 @@ private fun HomePresenceChipEntry(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier
+                    .focusIndicator()
                     .clip(ShapeCache.smooth12)
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
-                    .focusIndicator()
                     .clickable(onClick = { onJoinClick(chip) })
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {

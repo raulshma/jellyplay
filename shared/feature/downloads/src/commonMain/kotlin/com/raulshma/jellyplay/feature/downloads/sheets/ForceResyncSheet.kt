@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndica
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.episodeContextLine
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.downloads.ForceResyncCandidate
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
@@ -232,7 +233,8 @@ internal fun ForceResyncSheet(
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 360.dp),
+                                .heightIn(max = 360.dp)
+                                .tvFocusGroupRestorer(),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             itemsIndexed(candidates, key = { _, candidate -> candidate.id }) { _, candidate ->

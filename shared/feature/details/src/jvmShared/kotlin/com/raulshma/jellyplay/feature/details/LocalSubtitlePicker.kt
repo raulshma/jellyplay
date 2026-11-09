@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.model.LocalSubtitleOption
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_local_subtitle_default_badge
@@ -85,7 +86,10 @@ internal fun LocalSubtitlePicker(
             onDismissRequest = { sheetOpen = false },
             title = stringResource(Res.string.detail_local_subtitles),
         ) {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LazyColumn(
+                modifier = Modifier.tvFocusGroupRestorer(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 // "Off" entry — deselects (index = null).
                 item(key = "local_sub_off", contentType = "localSubOption") {
                     LocalSubtitleOptionRow(

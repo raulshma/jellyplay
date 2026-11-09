@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,6 +40,10 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_review_rating
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_reviews
@@ -60,6 +67,17 @@ fun ReviewsScreen(
 
     val state = viewModel.uiState.collectAsStateWithLifecycle()
 
+    // TV focus-on-launch: the cards are the screen's only content, so grab the
+    // list once reviews land. On TV the cards are focus targets too — without
+    // one the list cannot be D-pad-scrolled and the screen strands focus.
+    val reviews = (state.value as? ReviewsUiState.Success)?.reviews.orEmpty()
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = reviews.size,
+        tag = "reviews_init",
+    )
+
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.detail_section_reviews),
         onBack = onBack,
@@ -77,7 +95,10 @@ fun ReviewsScreen(
                 val isTv = LocalTvMode.current
                 val contentPad = adaptiveInfo.contentPadding(isTv)
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .tvFocusGroupRestorer()
+                        .focusRequester(listFocusRequester),
                     contentPadding = PaddingValues(
                         start = contentPad,
                         end = contentPad,
@@ -91,7 +112,21 @@ fun ReviewsScreen(
                         key = { index -> current.reviews[index].id.ifEmpty { "review_$index" } },
                         contentType = { "review" },
                     ) { index ->
-                        TmdbReviewCard(review = current.reviews[index])
+                        // Informational cards are still focus targets on TV:
+                        // the focus ring lets a long review list be scrolled
+                        // to the end with the D-pad.
+                        val reviewFocusState = rememberTvFocusState(focusedScale = 1.01f)
+                        TmdbReviewCard(
+                            review = current.reviews[index],
+                            modifier = if (isTv) {
+                                Modifier
+                                    .then(reviewFocusState.focusModifier)
+                                    .tvFocusIndicator(reviewFocusState, ShapeCache.smooth16)
+                                    .focusable()
+                            } else {
+                                Modifier
+                            },
+                        )
                     }
                 }
             }
@@ -111,13 +146,16 @@ private fun tmdbAvatarUrl(avatarPath: String?): String? =
  * One TMDB review card — the shared vocabulary of the detail body's preview
  * section and this screen (the split; the card body moved here verbatim from
  * the former detail-local `ReviewsSection` so the two surfaces cannot drift).
- * Informational only: no click. [contentMaxLines] caps the review body — the
- * detail preview passes the former 6-line cap; the full screen renders whole.
+ * Informational only: no click. [modifier] lets the full screen add a TV
+ * focus target so long lists stay D-pad scrollable. [contentMaxLines] caps the
+ * review body — the detail preview passes the former 6-line cap; the full
+ * screen renders whole.
  */
 @Composable
 internal fun TmdbReviewCard(
     review: TmdbReview,
     contentMaxLines: Int = Int.MAX_VALUE,
+    modifier: Modifier = Modifier,
 ) {
     // Display name falls back username-first: TMDB often ships an
     // empty author_details.name for casual reviewers.
@@ -126,7 +164,7 @@ internal fun TmdbReviewCard(
         ?: review.author
     val avatarUrl = remember(review.id) { tmdbAvatarUrl(review.authorDetails.avatarPath) }
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.surfaceContainer)

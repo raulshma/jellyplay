@@ -86,8 +86,8 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
 import com.raulshma.jellyplay.core.ui.generated.resources.core_search
@@ -267,7 +267,7 @@ fun ShortcutsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .imePadding()
-                .tvFocusRestorer(),
+                .tvFocusGroupRestorer(),
             contentPadding = PaddingValues(bottom = bottomPadding),
             verticalArrangement = Arrangement.spacedBy(itemSpacing),
         ) {
@@ -421,7 +421,7 @@ private fun ShortcutFilterRow(
 ) {
     val isLight = LocalIsLightTheme.current
     LazyRow(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().tvFocusGroupRestorer(),
         contentPadding = PaddingValues(horizontal = horizontalPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.feature.player.live.generated.resources.Res
@@ -96,7 +97,15 @@ fun LiveStreamOptionSheet(
             Spacer(Modifier.height(20.dp))
 
             if (isTv) {
-                LazyColumn(modifier = Modifier.verticalWrapAround()) {
+                LazyColumn(
+                    modifier = Modifier
+                        // Restorer's explicit group first, wrap second: the wrap's exit
+                        // properties then bind to the lazy list's own focus group instead of
+                        // the restorer's — on the same node the outermost exit (the wrap's)
+                        // would win and kill the restore save.
+                        .tvFocusGroupRestorer()
+                        .verticalWrapAround(),
+                ) {
                     items(LiveStreamOption.entries, key = { it.name }) { option ->
                         val isSelected = option == currentOption
                         val isFirstOrSelected = isSelected ||
@@ -107,6 +116,7 @@ fun LiveStreamOptionSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 2.dp)
+                                .tvFocusIndicator(optionFocusState, shape)
                                 .clip(shape)
                                 .background(
                                     if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
@@ -114,7 +124,6 @@ fun LiveStreamOptionSheet(
                                 )
                                 .then(optionFocusState.focusModifier)
                                 .ifElse(isFirstOrSelected, Modifier.focusRequester(focusRequester))
-                                .tvFocusIndicator(optionFocusState, shape)
                                 .clickable { onSelect(option); onDismiss() }
                                 .padding(horizontal = 20.dp, vertical = 14.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,

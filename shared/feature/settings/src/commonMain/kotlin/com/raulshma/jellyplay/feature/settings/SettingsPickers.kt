@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -204,13 +205,13 @@ private fun ChipOptionRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
             .background(
                 if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
             )
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -300,7 +301,7 @@ internal fun <T> SettingsListPickerSheet(
             if (visibleItems.isEmpty()) {
                 Text(stringResource(Res.string.settings_picker_no_results), modifier = Modifier.padding(24.dp))
             }
-            LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+            LazyColumn(modifier = Modifier.weight(1f, fill = false).tvFocusGroupRestorer()) {
                 // Row key = the option value itself (options are distinct
                 // choices), so an option's identity survives filter edits
                 // instead of shifting with its index. A null option keys on
@@ -324,13 +325,13 @@ internal fun <T> SettingsListPickerSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 2.dp)
+                            .tvFocusIndicator(tvFocusState, shape)
                             .clip(shape)
                             .background(
                                 if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
                             )
                             .then(tvFocusState.focusModifier)
-                            .tvFocusIndicator(tvFocusState, shape)
                             .clickable {
                                 onSelect(item)
                                 onDismiss()

@@ -347,9 +347,9 @@ fun SyncPlayPlayerSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
+                    .tvFocusIndicator(ignoreWaitFocus, ShapeCache.smooth12)
                     .clip(ShapeCache.smooth12)
                     .then(ignoreWaitFocus.focusModifier)
-                    .tvFocusIndicator(ignoreWaitFocus, ShapeCache.smooth12)
                     .clickable { onIgnoreWaitChange(!ignoreWait) }
                     .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,

@@ -37,7 +37,6 @@ import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
 import com.raulshma.jellyplay.core.ui.generated.resources.core_retry
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_could_not_load
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_preparing_digest

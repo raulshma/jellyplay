@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.ui.tv
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -101,6 +102,9 @@ fun rememberRowColumn(initial: RowColumn = RowColumn(-1, -1)) =
  * enter/exit hooks of every focus group inside it. Never place one above
  * disparate sibling groups (e.g. a screen's content slot) — give each group its
  * own restorer instead.
+ *
+ * Most callers want [tvFocusGroupRestorer], which applies this modifier and the
+ * group in the correct order.
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
@@ -113,6 +117,34 @@ fun Modifier.tvFocusRestorer(fallback: FocusRequester? = null): Modifier {
         this.focusRestorer()
     }
 }
+
+/**
+ * The default container primitive: a [focusGroup] whose last-focused child is restored on TV
+ * D-pad re-entry.
+ *
+ * The group applies on every platform (most callers previously hand-wrote an unconditional
+ * `focusGroup()`, and dropping it off-TV changed desktop traversal); only the restore is
+ * TV-gated via [tvFocusRestorer].
+ *
+ * Applies [tvFocusRestorer] BEFORE [focusGroup] because Compose attaches focus properties to the
+ * next inner focus target. With the reverse order the restorer's save/restore hooks attach to the
+ * group's items instead of the group, so re-entry starts from the first item instead of the
+ * last-focused one. Prefer this over hand-writing `tvFocusRestorer(fallback).focusGroup()`.
+ *
+ * Use raw [tvFocusRestorer] only when the group is supplied separately — e.g.
+ * [TvFocusableItemRow]'s explicit on-enter grab, or the player controls' `focusProperties`
+ * chains, which must stay outside the group so they keep applying to descendant controls.
+ *
+ * A second `focusProperties` chain targeting the same group (an exit handler, a wrap-around)
+ * must attach to a DIFFERENT focus target — onEnter/onExit are single-slot properties where the
+ * outermost aggregator wins, so a competing exit on this node silently disables the restore.
+ * Wrap the competing properties in their own plain [focusGroup], or place them after this
+ * modifier so they bind to the lazy list's inner group instead.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+fun Modifier.tvFocusGroupRestorer(fallback: FocusRequester? = null): Modifier =
+    if (LocalTvMode.current) tvFocusRestorer(fallback).focusGroup() else this.focusGroup()
 
 @Composable
 fun rememberInitialFocus(): FocusRequester {

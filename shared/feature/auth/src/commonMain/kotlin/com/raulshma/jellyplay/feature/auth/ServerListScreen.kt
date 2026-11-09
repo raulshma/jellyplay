@@ -81,8 +81,8 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorSt
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -154,7 +154,7 @@ fun ServerListScreen(
                     if (isTv) firstItemFocusRequester.tryRequestFocus("server_first")
                 }
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().tvFocusRestorer(),
+                    modifier = Modifier.fillMaxSize().tvFocusGroupRestorer(),
                     contentPadding = PaddingValues(
                         start = contentPad,
                         end = contentPad,

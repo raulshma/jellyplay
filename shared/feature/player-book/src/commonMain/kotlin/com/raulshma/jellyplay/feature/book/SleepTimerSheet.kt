@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,7 +38,7 @@ internal fun SleepTimerSheet(
     onCancel: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+    TvSafeSheet(onDismissRequest = onDismissRequest) {
         SheetTitle(text = stringResource(Res.string.book_reader_sleep_timer))
         if (state.running) {
             Row(

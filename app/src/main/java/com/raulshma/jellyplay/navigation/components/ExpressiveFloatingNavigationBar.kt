@@ -221,8 +221,8 @@ fun ExpressiveFloatingNavigationBar(
                         Box(
                             modifier = Modifier
                                 .size(42.dp)
-                                .background(searchBg, CircleShape)
                                 .focusIndicator(CircleShape)
+                                .background(searchBg, CircleShape)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null,
@@ -241,8 +241,8 @@ fun ExpressiveFloatingNavigationBar(
                         Box(
                             modifier = Modifier
                                 .size(42.dp)
-                                .background(moreBg, CircleShape)
                                 .focusIndicator(CircleShape)
+                                .background(moreBg, CircleShape)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null,

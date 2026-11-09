@@ -45,6 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -74,6 +76,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.matchesPickerQuery
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.icons.ShortcutIconRegistry
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.shortcuts.ShortcutCategory
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.Res
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_action_badge
@@ -153,6 +157,16 @@ fun ShortcutsCustomizeScreen(
     var draft by remember { mutableStateOf<EditorDraft?>(null) }
     var confirmReset by rememberSaveable { mutableStateOf(false) }
 
+    // TV focus-on-launch: the editor always has content (preview + rows), so
+    // grab the list on first composition — otherwise the drawer rail captures
+    // the first D-pad press.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = 1,
+        tag = "shortcuts_customize_init",
+    )
+
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.shortcuts_customize_title),
         onBack = onBack,
@@ -186,7 +200,10 @@ fun ShortcutsCustomizeScreen(
             val pinCd = stringResource(chrome.pinToggleLabelRes)
 
             LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvFocusGroupRestorer()
+                    .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
@@ -1019,7 +1036,7 @@ private fun ShortcutTargetPicker(
         )
         return
     }
-    LazyColumn(modifier = modifier.fillMaxWidth().heightIn(max = 220.dp)) {
+    LazyColumn(modifier = modifier.fillMaxWidth().heightIn(max = 220.dp).tvFocusGroupRestorer()) {
         visibleByCategory.forEach { (category, items) ->
             item(key = "cat:" + category.name, contentType = "categoryHeader") {
                 Text(

@@ -255,10 +255,13 @@ private fun QuickActionButton(
 
     Column(
         modifier = modifier
+            // Focus indicator first: its elevation shadow must be drawn behind
+            // the opaque fill and outside the clip, otherwise the glow is
+            // clipped to the tile and painted over the fill as an inset rect.
+            .focusIndicator(ShapeCache.smooth16)
             .clip(ShapeCache.smooth16)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .focusIndicator(ShapeCache.smooth16)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

@@ -39,6 +39,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_cancel
@@ -112,7 +113,7 @@ internal fun LyricsSearchSheet(
             if (searchResults.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 400.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 400.dp).tvFocusGroupRestorer(),
                 ) {
                     items(searchResults.size, key = { it }, contentType = { "searchResult" }) { index ->
                         val track = searchResults[index]

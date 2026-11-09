@@ -355,9 +355,9 @@ private fun ActionRow(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
             .clickable(onClick = onClick),
     )
 }
@@ -425,9 +425,9 @@ private fun PresetRow(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
             .clickable(onClick = onClick),
     )
 }
@@ -567,10 +567,10 @@ private fun PresetActionSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 2.dp)
+                            .tvFocusIndicator(tvFocusState, shape)
                             .clip(shape)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
                             .then(tvFocusState.focusModifier)
-                            .tvFocusIndicator(tvFocusState, shape)
                             .clickable {
                                 when (title) {
                                     "Load" -> onLoad()

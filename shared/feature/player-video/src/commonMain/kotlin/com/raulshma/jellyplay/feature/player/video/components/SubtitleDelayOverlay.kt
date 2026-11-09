@@ -344,10 +344,10 @@ private fun RepeatableButton(
     Box(
         modifier = modifier
             .size(56.dp)
+            .tvFocusIndicator(focus, CircleShape)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
             .then(focus.focusModifier)
-            .tvFocusIndicator(focus, CircleShape)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusable()
             .onKeyEvent { event ->
@@ -417,10 +417,10 @@ private fun SyncButton(
     val highlight = MaterialTheme.colorScheme.primary
     Box(
         modifier = modifier
+            .tvFocusIndicator(focus, RoundedCornerShape(10.dp))
             .clip(RoundedCornerShape(10.dp))
             .background(if (captured) highlight.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.10f))
             .then(focus.focusModifier)
-            .tvFocusIndicator(focus, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,

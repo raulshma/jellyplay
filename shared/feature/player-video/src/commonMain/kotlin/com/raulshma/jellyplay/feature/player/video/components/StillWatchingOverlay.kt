@@ -183,9 +183,9 @@ fun StillWatchingOverlay(
                         border = BorderStroke(1.dp, playerOnScrim().copy(alpha = 0.2f)),
                         modifier = Modifier
                             .weight(1f)
+                            .tvFocusIndicator(stopFocusState, ShapeCache.smoothPill)
                             .clip(ShapeCache.smoothPill)
                             .then(stopFocusState.focusModifier)
-                            .tvFocusIndicator(stopFocusState, ShapeCache.smoothPill)
                             .clickable(onClick = onStop),
                     ) {
                         Text(
@@ -202,10 +202,10 @@ fun StillWatchingOverlay(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
                             .weight(1f)
+                            .tvFocusIndicator(continueFocusState, ShapeCache.smoothPill)
                             .clip(ShapeCache.smoothPill)
                             .ifElse(isTv, Modifier.focusRequester(tvContinueFocusRequester))
                             .then(continueFocusState.focusModifier)
-                            .tvFocusIndicator(continueFocusState, ShapeCache.smoothPill)
                             .clickable(onClick = onContinue),
                     ) {
                         Text(

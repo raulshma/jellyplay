@@ -28,7 +28,7 @@ import com.raulshma.jellyplay.core.ui.model.labelResource
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import org.jetbrains.compose.resources.PluralStringResource
@@ -111,7 +111,7 @@ internal fun SettingsBrowsePane(
                     .fillMaxSize()
                     .imePadding()
                     .then(Modifier
-                        .tvFocusRestorer()
+                        .tvFocusGroupRestorer()
                         .focusRequester(listFocusRequester)
                         .onDpadKeyEvent(
                             onBack = { e ->

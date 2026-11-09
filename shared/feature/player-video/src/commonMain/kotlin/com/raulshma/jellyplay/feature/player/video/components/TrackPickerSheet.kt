@@ -129,9 +129,9 @@ internal fun androidx.compose.foundation.layout.ColumnScope.TrackPickerSection(
                     val resetFocusState = rememberTvFocusState(focusedScale = 1.04f)
                     Row(
                         modifier = Modifier
+                            .tvFocusIndicator(resetFocusState, CircleShape)
                             .clip(CircleShape)
                             .then(resetFocusState.focusModifier)
-                            .tvFocusIndicator(resetFocusState, CircleShape)
                             .clickable {
                                 resetAction()
                                 onPickDismiss()

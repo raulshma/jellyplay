@@ -195,12 +195,12 @@ fun NextEpisodeOverlay(
                         Box(
                             modifier = Modifier
                                 .size(52.dp)
+                                .tvFocusIndicator(playFocusState, CircleShape)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                                 .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
                                 .ifElse(isTv, Modifier.focusRequester(tvPlayNextFocusRequester))
                                 .then(playFocusState.focusModifier)
-                                .tvFocusIndicator(playFocusState, CircleShape)
                                 .clickable(
                                     enabled = !isLoading,
                                     onClick = {
@@ -237,10 +237,10 @@ fun NextEpisodeOverlay(
                                 .align(Alignment.TopEnd)
                                 .padding(10.dp)
                                 .size(28.dp)
+                                .tvFocusIndicator(closeFocusState, CircleShape)
                                 .clip(CircleShape)
                                 .background(playerOnScrim().copy(alpha = 0.12f))
                                 .then(closeFocusState.focusModifier)
-                                .tvFocusIndicator(closeFocusState, CircleShape)
                                 .clickable(onClick = {
                                     dismissed = true
                                     onCancel()

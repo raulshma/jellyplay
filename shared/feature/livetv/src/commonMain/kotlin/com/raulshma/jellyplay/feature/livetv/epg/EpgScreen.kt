@@ -71,6 +71,7 @@ import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.feature.livetv.isAiringAt
@@ -244,7 +245,9 @@ private fun EpgGrid(
 
         LazyColumn(
             state = lazyListState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .tvFocusGroupRestorer(),
             contentPadding = PaddingValues(bottom = bottomPadding),
         ) {
             // ── Sticky time-header row ──
@@ -641,8 +644,8 @@ private fun ProgramCell(
                 Spacer(Modifier.height(2.dp))
                 Row(
                     modifier = Modifier
-                        .clip(CircleShape)
                         .focusIndicator(CircleShape)
+                        .clip(CircleShape)
                         .clickable(onClick = onRecordClick)
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,

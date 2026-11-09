@@ -8,7 +8,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,7 +57,7 @@ import com.raulshma.jellyplay.core.ui.components.NowPlayingBarHeights
 import com.raulshma.jellyplay.core.ui.components.NowPlayingBars
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberNowPlayingBarHeights
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.buildItemFillImageUrl
@@ -134,8 +133,7 @@ internal fun ActiveDevicesRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
-                .focusGroup()
-                .tvFocusRestorer(),
+                .tvFocusGroupRestorer(),
         ) {
             items(sessions, key = { it.id }) { session ->
                 ActiveDeviceCard(

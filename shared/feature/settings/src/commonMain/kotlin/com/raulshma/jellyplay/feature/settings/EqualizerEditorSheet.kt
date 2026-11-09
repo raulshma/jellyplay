@@ -27,6 +27,7 @@ import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_apply
@@ -72,7 +73,7 @@ internal fun EqualizerEditorSheet(
                     max = with(LocalDensity.current) {
                         LocalWindowInfo.current.containerSize.height.toDp() * 0.5f
                     },
-                ),
+                ).tvFocusGroupRestorer(),
             ) {
                 items(EqualizerSettings.BAND_FREQUENCIES.size, key = { it }, contentType = { "band" }) { i ->
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {

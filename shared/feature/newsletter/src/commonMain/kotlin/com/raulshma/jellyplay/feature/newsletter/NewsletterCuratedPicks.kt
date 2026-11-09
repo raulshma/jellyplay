@@ -85,8 +85,8 @@ fun NewsletterCuratedPicks(
             )
             Row(
                 modifier = Modifier
+                    .focusIndicator(ShapeCache.smooth8)
                     .clip(ShapeCache.smooth8)
-                    .focusIndicator(ShapeCache.smooth16)
                     .clickable(onClick = onViewAllClick)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,

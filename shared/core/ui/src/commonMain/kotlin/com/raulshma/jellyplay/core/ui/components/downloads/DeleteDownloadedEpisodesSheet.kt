@@ -59,6 +59,7 @@ import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 
 /**
  * Multi-select delete sheet for a downloaded series. A header, a select-all
@@ -210,7 +211,8 @@ fun DeleteDownloadedEpisodesSheet(
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
+                .tvFocusGroupRestorer(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             seasons.forEach { season ->

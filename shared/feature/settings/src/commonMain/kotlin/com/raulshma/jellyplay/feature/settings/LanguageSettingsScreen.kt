@@ -48,6 +48,7 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.formatHexColor
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -799,10 +800,10 @@ private fun SubtitleCustomColorRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -848,7 +849,7 @@ private fun SubtitleColorSheetList(
             max = with(LocalDensity.current) {
                 LocalWindowInfo.current.containerSize.height.toDp() * 0.35f
             },
-        ),
+        ).tvFocusGroupRestorer(),
     ) {
         itemsIndexed(SubtitleColor.entries, key = { _, color -> color.name }, contentType = { _, _ -> "color" }) { index, color ->
             val selected = color == selectedColor && customArgb == null
@@ -858,13 +859,13 @@ private fun SubtitleColorSheetList(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
+                    .tvFocusIndicator(tvFocusState, shape)
                     .clip(shape)
                     .background(
                         if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                     )
                     .then(tvFocusState.focusModifier)
-                    .tvFocusIndicator(tvFocusState, shape)
                     .clickable { onSelect(color) }
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,

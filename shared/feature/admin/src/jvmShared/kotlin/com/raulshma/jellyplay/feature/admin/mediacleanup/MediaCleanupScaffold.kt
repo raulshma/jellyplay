@@ -71,8 +71,8 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.components.AuditHistoryTab
 import com.raulshma.jellyplay.feature.admin.filterSelectedForDeletion
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
@@ -385,8 +385,8 @@ private fun ScanResultsTab(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .clip(ShapeCache.smooth12)
                         .focusIndicator()
+                        .clip(ShapeCache.smooth12)
                         .clickable(onClick = onSelectAll),
                 ) {
                     Checkbox(
@@ -474,7 +474,7 @@ private fun ScanResultsTab(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .tvFocusRestorer()
+                    .tvFocusGroupRestorer()
                     .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(
                     start = 16.dp,

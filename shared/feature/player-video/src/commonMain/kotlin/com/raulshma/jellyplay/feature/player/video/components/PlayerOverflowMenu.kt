@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -23,12 +24,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -83,12 +86,16 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_video_filters
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_video_filters_on
 
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.feature.player.video.AbRepeatState
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 
@@ -244,6 +251,9 @@ internal fun BoxScope.PlayerOverflowMenu(
     inputQuickToggles: List<PlayerOverflowMenuInputToggle> = emptyList(),
 ) {
     if (!expanded) return
+    // BACK closes the panel. The screen's ladder has no overflow arm, so
+    // without this BACK would hide the chrome and leave the panel floating.
+    JellyPlayBackHandler(enabled = true) { onDismiss() }
     val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
     val sleepTimerDisplayText = if (sleepTimerEndOfEpisode) "End of episode" else formatDuration(sleepTimerRemainingMs)
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
@@ -253,6 +263,19 @@ internal fun BoxScope.PlayerOverflowMenu(
     var showGesturesSubmenu by remember { mutableStateOf(false) }
 
     val isTv = LocalTvMode.current
+
+    // D-pad entry: without an explicit grab the panel opens with focus still
+    // on the ⋮ button behind it. The first row isn't placed on the open
+    // frame, so retry across a few.
+    val firstItemFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (isTv) {
+            for (attempt in 1..3) {
+                withFrameNanos { }
+                if (firstItemFocusRequester.tryRequestFocus("player_overflow_first")) break
+            }
+        }
+    }
 
     val dialogueBoostFocusRequester = remember { FocusRequester() }
     val nightModeFocusRequester = remember { FocusRequester() }
@@ -328,6 +351,9 @@ internal fun BoxScope.PlayerOverflowMenu(
     Box(
         Modifier
             .matchParentSize()
+            // Tap-to-dismiss only: a focusable full-size node here would be a
+            // D-pad stop that covers the whole screen.
+            .focusProperties { canFocus = false }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -345,6 +371,13 @@ internal fun BoxScope.PlayerOverflowMenu(
         Column(
             modifier = Modifier
                 .verticalScroll(rememberScrollState())
+                // Keep Up/Down inside the panel: cycling at the edges beats
+                // letting focus escape onto chrome hidden behind it.
+                .verticalWrapAround()
+                // Plain scrollable Column has no focus target of its own, so the wrap's exit
+                // properties would bind to the first leaf row only — give the wrap a group to
+                // bind to, or Up/Down would escape the panel from every other row.
+                .focusGroup()
                 .padding(vertical = 8.dp),
         ) {
             // Single "Subtitles" entry opens the unified subtitle hub (tracks /
@@ -354,6 +387,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 icon = Tabler.Outline.Subtitles,
                 label = stringResource(Res.string.player_video_subtitles),
                 onClick = menu.onSubtitleHubClick,
+                focusRequesterModifier = Modifier.focusRequester(firstItemFocusRequester),
             )
 
             // Input-binding quick toggles: grouped behind one
@@ -431,6 +465,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                                     )
                                 }
                             },
+                            modifier = Modifier.tvMenuRowFocusChrome(),
                         )
                     }
                 } else {
@@ -475,6 +510,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                                     )
                                 }
                             },
+                            modifier = Modifier.tvMenuRowFocusChrome(),
                         )
                     }
                 } else {
@@ -542,6 +578,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                                     )
                                 }
                             },
+                            modifier = Modifier.tvMenuRowFocusChrome(),
                         )
                     }
                 } else {
@@ -585,6 +622,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                                     )
                                 }
                             },
+                            modifier = Modifier.tvMenuRowFocusChrome(),
                         )
                     }
                 } else {
@@ -750,6 +788,20 @@ internal fun BoxScope.PlayerOverflowMenu(
 }
 
 @Composable
+private fun Modifier.tvMenuRowFocusChrome(): Modifier {
+    if (!LocalTvMode.current) return this
+    return this
+        // Rows span the panel's width: sideways D-pad has nowhere to go, and
+        // letting the search escape would land focus on chrome hidden behind
+        // the panel.
+        .focusProperties {
+            left = FocusRequester.Cancel
+            right = FocusRequester.Cancel
+        }
+        .focusIndicator(ShapeCache.smooth12)
+}
+
+@Composable
 private fun OverflowMenuItem(
     icon: ImageVector,
     label: String,
@@ -758,6 +810,8 @@ private fun OverflowMenuItem(
     enabled: Boolean = true,
     checked: Boolean? = null,
     modifier: Modifier = Modifier,
+    /** Attach the panel's first-item requester to exactly one row. */
+    focusRequesterModifier: Modifier = Modifier,
 ) {
     val effectiveTint = if (tint != Color.Unspecified) tint else MaterialTheme.colorScheme.onSurface
     DropdownMenuItem(
@@ -792,6 +846,8 @@ private fun OverflowMenuItem(
         } else {
             null
         },
-        modifier = modifier,
+        modifier = modifier
+            .then(focusRequesterModifier)
+            .tvMenuRowFocusChrome(),
     )
 }

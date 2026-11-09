@@ -91,6 +91,13 @@ fun QualityPickerOptions(
     isTv: Boolean,
     tvFocusRequester: FocusRequester,
     enabled: Boolean = true,
+    /**
+     * TV only: keep the rows in their own [LazyColumn] (standalone sheet).
+     * Pass `false` when embedding this section in a parent lazy list — a lazy
+     * list nested in another lazy list item (or in a `verticalScroll` column)
+     * is measured with infinite height and crashes.
+     */
+    tvLazyRows: Boolean = true,
 ) {
     if (!enabled) {
         Text(
@@ -102,17 +109,26 @@ fun QualityPickerOptions(
         return
     }
     if (isTv) {
-        LazyColumn(modifier = Modifier.verticalWrapAround()) {
-            items(StreamingQuality.entries, key = { it.name }) { quality ->
-                val isSelected = quality == currentQuality
-                val isFirstOrSelected = isSelected || (currentQuality !in StreamingQuality.entries && quality == StreamingQuality.AUTO)
-                TvFocusableOptionRow(
-                    selected = isSelected,
-                    onClick = { onSelect(quality) },
-                    focusRequesterModifier = Modifier.ifElse(isFirstOrSelected, Modifier.focusRequester(tvFocusRequester)),
-                    trailingCheck = true,
-                ) {
-                    TvOptionRowLabel(text = quality.displayName, selected = isSelected)
+        if (tvLazyRows) {
+            LazyColumn(modifier = Modifier.verticalWrapAround()) {
+                items(StreamingQuality.entries, key = { it.name }) { quality ->
+                    QualityTvOptionRow(
+                        quality = quality,
+                        currentQuality = currentQuality,
+                        onSelect = onSelect,
+                        tvFocusRequester = tvFocusRequester,
+                    )
+                }
+            }
+        } else {
+            Column {
+                StreamingQuality.entries.forEach { quality ->
+                    QualityTvOptionRow(
+                        quality = quality,
+                        currentQuality = currentQuality,
+                        onSelect = onSelect,
+                        tvFocusRequester = tvFocusRequester,
+                    )
                 }
             }
         }
@@ -157,6 +173,35 @@ fun QualityPickerOptions(
         enabled = adaptiveBitrateEnabled,
         onToggle = onToggleAdaptiveBitrate,
     )
+}
+
+/**
+ * One TV quality row. Kept out of [QualityPickerOptions] so the standalone
+ * sheet (own [LazyColumn]) and the combined playback-options sheet (parent
+ * lazy list, [QualityPickerOptions]' `tvLazyRows = false`) render identical
+ * rows.
+ */
+@Composable
+private fun QualityTvOptionRow(
+    quality: StreamingQuality,
+    currentQuality: StreamingQuality,
+    onSelect: (StreamingQuality) -> Unit,
+    tvFocusRequester: FocusRequester,
+) {
+    val isSelected = quality == currentQuality
+    val isFirstOrSelected = isSelected ||
+        (currentQuality !in StreamingQuality.entries && quality == StreamingQuality.AUTO)
+    TvFocusableOptionRow(
+        selected = isSelected,
+        onClick = { onSelect(quality) },
+        focusRequesterModifier = Modifier.ifElse(
+            isFirstOrSelected,
+            Modifier.focusRequester(tvFocusRequester),
+        ),
+        trailingCheck = true,
+    ) {
+        TvOptionRowLabel(text = quality.displayName, selected = isSelected)
+    }
 }
 
 @Composable

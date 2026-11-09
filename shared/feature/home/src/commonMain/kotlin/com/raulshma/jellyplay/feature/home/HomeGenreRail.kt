@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.navigation.Route
 
 /**
@@ -111,7 +112,7 @@ internal fun HomeGenreRail(
     LazyRow(
         contentPadding = PaddingValues(horizontal = contentPad),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier,
+        modifier = modifier.tvFocusGroupRestorer(),
     ) {
         items(genres, key = { it.id }, contentType = { "genreChip" }) { genre ->
             GlassFilterChip(

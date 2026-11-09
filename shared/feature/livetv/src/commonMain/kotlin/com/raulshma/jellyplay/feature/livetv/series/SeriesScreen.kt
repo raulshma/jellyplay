@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,7 +46,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.livetv.components.LiveTvTabScaffold
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_close
@@ -87,8 +86,7 @@ fun SeriesScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .focusGroup()
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(focusRequester),
             contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
             verticalArrangement = Arrangement.spacedBy(spacing),
@@ -122,9 +120,9 @@ private fun SeriesTimerCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = contentPad, vertical = 4.dp)
+            .focusIndicator(ShapeCache.smooth12)
             .clip(ShapeCache.smooth12)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .focusIndicator(ShapeCache.smooth12)
             .clickable(onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -28,6 +28,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.music.components.RecentlyPlayedSection
 import com.raulshma.jellyplay.feature.music.components.ArtistsSection
 import com.raulshma.jellyplay.feature.music.components.MusicHomeQuickLinks
@@ -213,7 +214,9 @@ fun MusicHomeScreen(
 
                     LazyColumn(
                         state = rememberLazyListState(),
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusGroupRestorer(),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                         contentPadding = PaddingValues(
                             bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv)

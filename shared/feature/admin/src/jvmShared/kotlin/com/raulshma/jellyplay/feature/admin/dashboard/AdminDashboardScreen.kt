@@ -236,8 +236,8 @@ fun AdminDashboardScreen(
             Box(
                 modifier = Modifier
                     .padding(4.dp)
-                    .clip(CircleShape)
                     .focusIndicator(CircleShape)
+                    .clip(CircleShape)
                     .clickable(onClick = { viewModel.loadDashboard() }),
             ) {
                 Icon(

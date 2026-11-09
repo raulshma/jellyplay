@@ -22,9 +22,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -47,6 +52,10 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
+import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.feature.player.video.PlatformTranscodeReason
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiR
 import com.raulshma.jellyplay.core.ui.generated.resources.transcode_reasons_title
@@ -84,6 +93,21 @@ fun PlaybackErrorOverlay(
 ) {
     val alternativeEngines = PlayerType.entries.filter {
         it != PlayerType.EXTERNAL && it != currentPlayerType
+    }
+    val isTv = LocalTvMode.current
+    // TV: land initial focus on the primary recovery action — Retry when the
+    // error is recoverable, otherwise the first switch-engine action (the
+    // overlay's whole point is to get the user unstuck). Without this the
+    // player surface keeps focus and its D-pad arms eat every key press, so
+    // the dialog is unreachable with a remote. Mirrors the live player's
+    // error-banner retry grab.
+    val primaryActionFocus = remember { FocusRequester() }
+    // Last action in the dialog, for the Up-at-the-top wrap. A plain Column is
+    // not a focus target, so a container-level exit handler never runs here —
+    // the wrap lives on the first/last actions themselves.
+    val lastActionFocus = remember { FocusRequester() }
+    if (isTv) {
+        RequestOrRestoreFocus(primaryActionFocus, debugKey = "tv_playback_error")
     }
 
     Box(
@@ -165,7 +189,13 @@ fun PlaybackErrorOverlay(
                     Spacer(Modifier.height(20.dp))
                     OutlinedButton(
                         onClick = onRetry,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .playbackErrorActionFocus(
+                                shape = ShapeCache.smooth12,
+                                wrapUpTo = lastActionFocus,
+                            )
+                            .ifElse(isTv, Modifier.focusRequester(primaryActionFocus)),
                         shape = ShapeCache.smooth12,
                     ) {
                         Text(stringResource(Res.string.player_video_retry_on, currentPlayerType.displayName))
@@ -179,10 +209,23 @@ fun PlaybackErrorOverlay(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
-                alternativeEngines.forEach { engine ->
+                alternativeEngines.forEachIndexed { index, engine ->
                     TextButton(
                         onClick = { onRetryWithEngine(engine) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .playbackErrorActionFocus(
+                                shape = ShapeCache.smooth12,
+                                // Fatal errors have no Retry row, so the
+                                // first switch-engine action is the top edge.
+                                wrapUpTo = if (!retryable && index == 0) lastActionFocus else null,
+                            )
+                            // Fatal (non-retryable) errors land on the first
+                            // switch-engine action instead — there is no Retry.
+                            .ifElse(
+                                isTv && !retryable && index == 0,
+                                Modifier.focusRequester(primaryActionFocus),
+                            ),
                         shape = ShapeCache.smooth12,
                         colors = ButtonDefaults.filledTonalButtonColors(),
                     ) {
@@ -193,7 +236,20 @@ fun PlaybackErrorOverlay(
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .playbackErrorActionFocus(
+                            shape = ShapeCache.smooth12,
+                            // Dismiss is the bottom edge; Up only wraps when
+                            // it is also the top edge (no Retry, no engines).
+                            wrapUpTo = if (!retryable && alternativeEngines.isEmpty()) lastActionFocus else null,
+                            wrapDownTo = primaryActionFocus,
+                        )
+                        .ifElse(
+                            isTv && !retryable && alternativeEngines.isEmpty(),
+                            Modifier.focusRequester(primaryActionFocus),
+                        )
+                        .ifElse(isTv, Modifier.focusRequester(lastActionFocus)),
                     shape = ShapeCache.smooth12,
                 ) {
                     Text(stringResource(Res.string.player_video_dismiss))
@@ -201,6 +257,41 @@ fun PlaybackErrorOverlay(
             }
         }
     }
+}
+
+/**
+ * TV D-pad actions are full-width rows: sideways has nowhere to go, so cancel
+ * the left/right focus search — otherwise it escapes to the player surface
+ * behind the scrim. [focusIndicator] paints the same focus ring the rest of
+ * the player chrome uses so the selected action is visible from the couch.
+ *
+ * [wrapUpTo]/[wrapDownTo] are the dialog's cyclic edges: the actions are laid
+ * out directly in a plain Column (not a focusable group), so a container-level
+ * exit handler never fires. Setting the directional properties on the
+ * first/last action itself keeps Up/Down inside the dialog instead of
+ * escaping to the player surface and its seek arms.
+ */
+@Composable
+private fun Modifier.playbackErrorActionFocus(
+    shape: Shape,
+    wrapUpTo: FocusRequester? = null,
+    wrapDownTo: FocusRequester? = null,
+): Modifier {
+    val isTv = LocalTvMode.current
+    return this
+        .then(
+            if (isTv) {
+                Modifier.focusProperties {
+                    left = FocusRequester.Cancel
+                    right = FocusRequester.Cancel
+                    if (wrapUpTo != null) up = wrapUpTo
+                    if (wrapDownTo != null) down = wrapDownTo
+                }
+            } else {
+                Modifier
+            },
+        )
+        .focusIndicator(shape)
 }
 
 /** Backwards-compatible alias for the previous [PlaybackErrorDialog] name. */

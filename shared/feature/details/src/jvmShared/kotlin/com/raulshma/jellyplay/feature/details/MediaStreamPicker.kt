@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_audio_channels_format
@@ -335,6 +336,7 @@ internal fun MediaInfoSection(
                 title = if (activePicker == StreamPickerType.AUDIO) stringResource(Res.string.detail_select_audio) else stringResource(Res.string.detail_select_subtitle),
             ) {
                     LazyColumn(
+                        modifier = Modifier.tvFocusGroupRestorer(),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         items(options, key = { "${activePicker}_${it.index}_${it.label}" }, contentType = { "streamOption" }) { option ->
@@ -499,7 +501,10 @@ internal fun LocalMediaInfoSection(
                 onDismissRequest = { subtitleSheetOpen = false },
                 title = stringResource(Res.string.detail_local_subtitles),
             ) {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyColumn(
+                    modifier = Modifier.tvFocusGroupRestorer(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     item(key = "local_sub_off", contentType = "localSubOption") {
                         LocalSubtitleOptionRow(
                             label = subtitleOff,
