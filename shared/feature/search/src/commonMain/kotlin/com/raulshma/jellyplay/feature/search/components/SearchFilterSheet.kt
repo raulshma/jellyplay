@@ -28,8 +28,10 @@ import com.raulshma.jellyplay.feature.search.generated.resources.search_filters_
  * per-dimension sheets; the shared apply fold preserves them from
  * [currentFilters] so applying here never resets them). Section shape pins to
  * what this sheet always looked like: 20 genre chips, flat (non-collapsible)
- * years/tags/rating, no from/to year slider, no body scroll, no TV sheet
- * chrome title. Structure, draft state and the apply/reset folds live once in
+ * years/tags/rating, a scrollable sections body with the Apply action pinned
+ * below (long genre/tag lists must stay reachable), no from/to year slider,
+ * no TV sheet chrome title. Structure, draft state and the apply/reset folds
+ * live once in
  * core/ui — see [MediaFilterSheetSectionsTest] for the pinned algebra.
  */
 @Composable
@@ -61,7 +63,7 @@ fun SearchFilterSheet(
         ),
         genres = genres,
         availableTags = availableTags,
-        contentScrollable = false,
+        contentScrollable = true,
         onApply = onApply,
         onDismiss = onDismiss,
     )

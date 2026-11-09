@@ -60,6 +60,7 @@ fun TvSafeSheet(
             onDismissRequest = onDismissRequest,
             title = title,
             modifier = modifier,
+            scrollable = scrollable,
             content = content,
         )
     } else {
@@ -79,6 +80,7 @@ private fun TvSheetDialog(
     onDismissRequest: () -> Unit,
     title: String?,
     modifier: Modifier = Modifier,
+    scrollable: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val initialFocus = remember { FocusRequester() }
@@ -124,9 +126,19 @@ private fun TvSheetDialog(
                     // focus target) so requesting initialFocus redirects into the first focusable
                     // child, matching the TvFocusable* container contract. Same modifier order:
                     // focusGroup first, requester last.
+                    val scrollState = rememberScrollState()
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(
+                                if (scrollable) {
+                                    Modifier
+                                        .weight(1f, fill = false)
+                                        .verticalScroll(scrollState)
+                                } else {
+                                    Modifier
+                                },
+                            )
                             .focusGroup()
                             .focusRequester(initialFocus),
                         content = content,
