@@ -34,7 +34,7 @@ RESULTS="$REPO_ROOT/tools/e2e/.results/device-pip"
 PKG="com.raulshma.jellyplay.dev"                 # phone flavor + debug suffix
 MAIN_ACT="$PKG/com.raulshma.jellyplay.MainActivity"
 PLAYER_ACT="$PKG/com.raulshma.jellyplay.PlayerActivity"
-APK="$REPO_ROOT/app/build/outputs/apk/phone/debug/app-phone-arm64-v8a-debug.apk"
+APK="$REPO_ROOT/app/build/outputs/apk/phoneStore/debug/app-phone-store-arm64-v8a-debug.apk"
 USERNAME="harness"
 PASSWORD="harness-e2e-pass"
 CLIP_NAME="Harness Pip Clip"                     # display name w/o year
@@ -162,15 +162,15 @@ $ADB shell "settings put secure selected_autofill_service null"
 
 # ── 1. build + install ─────────────────────────────────────────────────────
 if [ "${SKIP_INSTALL:-0}" != "1" ]; then
-  if (cd "$REPO_ROOT" && ./gradlew :app:assemblePhoneDebug --console=plain -q >/dev/null 2>&1); then
-    pass "gradlew :app:assemblePhoneDebug"
+  if (cd "$REPO_ROOT" && ./gradlew :app:assemblePhoneStoreDebug --console=plain -q >/dev/null 2>&1); then
+    pass "gradlew :app:assemblePhoneStoreDebug"
   else
-    fail "gradlew :app:assemblePhoneDebug"; exit 1
+    fail "gradlew :app:assemblePhoneStoreDebug"; exit 1
   fi
   if $ADB install -r "$APK" >/dev/null 2>&1; then
-    pass "adb install -r phone-debug arm64 APK"
+    pass "adb install -r phone store-debug arm64 APK"
   else
-    fail "adb install -r phone-debug arm64 APK"; exit 1
+    fail "adb install -r phone store-debug arm64 APK"; exit 1
   fi
 fi
 

@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Owns the post-update What's New prompt behind a small seam (the twin of
- * [UpdateCoordinator] for the release-notes feed): one [state] flow the shell
+ * [AppUpdateCoordinator] for the release-notes feed): one [state] flow the shell
  * renders, plus the dismiss command the sheet issues. The seen-version stamp,
  * the show-once policy, and the offline-first content lookup are private to
  * this module; the pure policy lives in [WhatsNewDecision].
@@ -54,7 +54,7 @@ class WhatsNewCoordinator(
 
     /**
      * Launch-time hook, called once session restore completes (the same
-     * callback that drives [UpdateCoordinator.onSessionRestored]).
+     * callback that drives [AppUpdateCoordinator.onSessionRestored]).
      */
     fun onSessionRestored() {
         commandScope.launch {

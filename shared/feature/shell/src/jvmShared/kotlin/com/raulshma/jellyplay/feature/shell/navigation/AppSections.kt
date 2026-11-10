@@ -104,6 +104,7 @@ fun EntryProviderScope<NavKey>.appSections(
         onLogout = host.settings.onLogout,
         onSetupWizard = { navigator.navigate(Route.Onboarding) },
         onCheckForUpdates = host.settings.onCheckForUpdates,
+        selfUpdateSupported = host.settings.selfUpdateSupported,
     )
     adminSection(
         navigator = navigator,

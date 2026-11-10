@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Phone-flavor overlay: Android Auto / Android Automotive media-app
-     declaration. Kept out of src/main so the TV flavor doesn't advertise
-     car capability to Play (the head unit would list an app that has no
-     business there). The descriptor itself lives at
-     src/phone/res/xml/automotive_app_desc.xml. -->
+     declaration, carried by BOTH phone distributions (store AND fdroid —
+     decided 2026-11-10 during the F-Droid validation; see ADR notes in
+     docs/fdroid/README.md §3). Kept out of src/main so the TV flavor
+     doesn't advertise car capability to Play (the head unit would list an
+     app that has no business there). The descriptor itself lives at
+     src/phone/res/xml/automotive_app_desc.xml.
+
+     The gms.car meta-data NAME is an inert string, not a dependency: no GMS
+     artifact rides it (verify-apk.sh check 2 proves the fdroid dex is
+     gms-free) and Android Auto head units list the app's media service only
+     when it is declared. jellyfin-android ships the same marker on F-Droid.
+     tools/fdroid/verify-apk.sh check 1b allowlists exactly this marker. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>

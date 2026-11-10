@@ -1,9 +1,6 @@
 package com.raulshma.jellyplay.feature.book
 
 import androidx.compose.ui.graphics.ImageBitmap
-import com.github.junrar.Archive
-import com.github.junrar.rarfile.FileHeader
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
@@ -120,11 +117,17 @@ class ComicArchiveDocument private constructor(
         /**
          * Opens [path] as a comic archive; null when neither container yields
          * images. Zip is tried first and RAR only on failure or an image-less
-         * zip — sniffing beats extension trust.
+         * zip — sniffing beats extension trust. [rarEntryReaderFactory]
+         * supplies the platform RAR back-end; null (unbound — fdroid) means
+         * RAR is unsupported on this distribution and only zip opens.
          */
-        fun open(path: Path, imageExtensions: Set<String> = IMAGE_EXTENSIONS): ComicArchiveDocument? {
+        fun open(
+            path: Path,
+            imageExtensions: Set<String> = IMAGE_EXTENSIONS,
+            rarEntryReaderFactory: RarEntryReaderFactory? = null,
+        ): ComicArchiveDocument? {
             openZip(path, imageExtensions)?.let { return it }
-            return openRar(path, imageExtensions)
+            return openRar(path, imageExtensions, rarEntryReaderFactory)
         }
 
         private fun openZip(path: Path, imageExtensions: Set<String>): ComicArchiveDocument? = runCatching {
@@ -143,14 +146,18 @@ class ComicArchiveDocument private constructor(
         }.getOrNull()
 
         /**
-         * RAR (CBR) back-end: junrar extracts one page at a time into memory —
-         * never the whole archive upfront.
-         *
-         * Licensing: junrar ships under the UnRAR license — free to use for
-         * decompression only; it must never be used to (re)create RAR archives.
+         * RAR (CBR) back-end: the bound factory's reader extracts one page at
+         * a time into memory — never the whole archive upfront. A null factory
+         * (fdroid binds none — see [RarEntryReaderFactory]) or an archive the
+         * back-end cannot open yields null, the same cannot-open contract as
+         * the zip path.
          */
-        private fun openRar(path: Path, imageExtensions: Set<String>): ComicArchiveDocument? {
-            val reader = JunrarRarEntryReader.open(path.toFile()) ?: return null
+        private fun openRar(
+            path: Path,
+            imageExtensions: Set<String>,
+            rarEntryReaderFactory: RarEntryReaderFactory?,
+        ): ComicArchiveDocument? {
+            val reader = rarEntryReaderFactory?.open(path.toFile()) ?: return null
             val names = pageNames(reader.entryNames, imageExtensions)
             if (names.isEmpty()) {
                 runCatching { reader.close() }
@@ -185,12 +192,16 @@ private class ZipPageSource(
 }
 
 /**
- * Seam over junrar so the filter/sort/dispatch logic stays unit-testable
- * without a real .rar fixture. junrar ships under the UnRAR license — free to
- * use for decompression only; it must never be used to (re)create RAR
- * archives.
+ * Seam over the platform RAR back-end so the filter/sort/dispatch logic stays
+ * unit-testable without a real .rar fixture. Public so hosts can implement it
+ * beside their binding: the store line ships the junrar adapter
+ * (app/src/store, JunrarRarEntryReader) and the desktop host its own twin —
+ * no binding at all (fdroid) means RAR comics are unsupported there, because
+ * junrar ships under the UnRAR license — free to use for decompression only;
+ * it must never be used to (re)create RAR archives — which is non-free for
+ * F-Droid.
  */
-internal interface RarEntryReader : AutoCloseable {
+public interface RarEntryReader : AutoCloseable {
     /** All non-directory entry header names, archive order. */
     val entryNames: List<String>
 
@@ -201,46 +212,16 @@ internal interface RarEntryReader : AutoCloseable {
 }
 
 /**
- * junrar adapter. junrar's [Archive] is not thread-safe, so extractions are
- * single-flighted the same way the PDF back-ends serialize renders.
+ * Supplies the platform RAR back-end for [ComicArchiveDocument.open]. A fun
+ * interface so each host binds its own reader via a lambda/companion — a null
+ * or unbound factory means RAR is unsupported on the current distribution
+ * (the fdroid line binds nothing: junrar's UnRAR license — free to use for
+ * decompression only; it must never be used to (re)create RAR archives — is
+ * non-free there; that license note travels with every binding).
  */
-internal class JunrarRarEntryReader private constructor(
-    private val archive: Archive,
-    private val headersByName: Map<String, FileHeader>,
-) : RarEntryReader {
-
-    override val entryNames: List<String> get() = headersByName.keys.toList()
-
-    override fun readEntry(headerName: String): ByteArray? {
-        val header = headersByName[headerName] ?: return null
-        return synchronized(archive) {
-            runCatching {
-                ByteArrayOutputStream().use { out ->
-                    archive.extractFile(header, out)
-                    out.toByteArray()
-                }
-            }.getOrNull()
-        }
-    }
-
-    override fun close() {
-        runCatching { archive.close() }
-    }
-
-    companion object {
-        fun open(file: File): JunrarRarEntryReader? = runCatching {
-            val archive = Archive(file)
-            // RAR permits duplicate entry names (updated files stored twice) —
-            // keep the first header per name instead of silently overwriting.
-            val headers = LinkedHashMap<String, FileHeader>()
-            archive.fileHeaders
-                .filter { !it.isDirectory }
-                .forEach { headers.putIfAbsent(headerName(it), it) }
-            JunrarRarEntryReader(archive, headers)
-        }.getOrNull()
-
-        private fun headerName(header: FileHeader): String = header.fileName
-    }
+public fun interface RarEntryReaderFactory {
+    /** Opens [file] as a RAR archive; null when it can't be opened (corrupt / not RAR). */
+    fun open(file: File): RarEntryReader?
 }
 
 private class RarPageSource(

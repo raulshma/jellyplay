@@ -113,8 +113,8 @@ ledger tracks *where the migration stands*.
 
 ```bash
 ./gradlew :apps:desktop:run                    # desktop app (libmpv required)
-./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest
-./gradlew :app:verifyPhoneDebugComposeResources
+./gradlew :app:testPhoneStoreDebugUnitTest :app:testTvStoreDebugUnitTest
+./gradlew :app:verifyPhoneStoreDebugComposeResources
 # Every shared module's jvmTest + desktop tests (the CI matrix):
 ./gradlew $(find shared -name build.gradle.kts -not -path '*/build/*' \
   | sed 's|/build.gradle.kts||' | tr '/' ':' | sed 's|^|:|; s|$|:jvmTest|') \

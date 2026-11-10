@@ -62,7 +62,10 @@ class ShellInfra(
     val remoteNavigationBridgeLazy: Lazy<RemoteNavigationBridge>,
     val remoteControlReceiverLazy: Lazy<RemoteControlReceiver>,
     val sessionCoordinatorLazy: Lazy<SessionCoordinator>,
-    val updateCoordinatorLazy: Lazy<UpdateCoordinator>,
+    // The self-update seam is flavor-bound (store: the GitHub-release
+    // UpdateCoordinator; fdroid: a permanently-idle noop) — consumers type
+    // against AppUpdateCoordinator.
+    val updateCoordinatorLazy: Lazy<AppUpdateCoordinator>,
     val syncPlayOpenCoordinatorLazy: Lazy<SyncPlayOpenCoordinator>,
     val whatsNewCoordinatorLazy: Lazy<WhatsNewCoordinator>,
     // Cold-start session restoration: the player-video controller single —

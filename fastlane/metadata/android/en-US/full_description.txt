@@ -1,0 +1,41 @@
+JellyPlay is a polished client for your own Jellyfin media server. Browse and play your movies, shows, music, photos, books and comics on your phone, with a TV-optimized app and desktop builds available too. Your media stays on hardware you control: JellyPlay only talks to the Jellyfin server you sign in to.
+
+REQUIREMENTS
+
+You need your own Jellyfin server (version 10.9 or newer) with media already in its library. JellyPlay is a client only — it streams from your Jellyfin server, it does not host media. Multiple servers and multiple accounts per server are supported.
+
+FEATURES
+
+- Movies and shows with rich metadata, watch-state sync and subtitle support, including styled ASS/SSA subtitles
+- Three swappable playback engines (mpv, VLC, ffmpeg) for tricky codecs and formats
+- Music with album art and synced lyrics
+- Photos, live TV, books and comics (CBZ)
+- Offline downloads for playback without a network
+- Syncplay-style co-watching and multi-server support
+- Dynamic color themes that follow your server's artwork
+
+OPTIONAL NETWORK SERVICES
+
+JellyPlay works entirely against your own server. The following third-party services are contacted only when you use the matching feature; none are required:
+
+- TMDB (api.themoviedb.org — free API): movie/show artwork and info enrichment, plus YouTube trailer links. Used when browsing or enriching library items. JellyPlay ships a hardcoded community TMDB API key (the same key other open-source Jellyfin clients use).
+- LRCLIB (lrclib.net): synced lyrics lookup for music. Used when you open lyrics.
+- Wyzie (sub.wyzie.io): subtitle file search. Used from the subtitle search screen.
+- OpenSubtitles (api.opensubtitles.com): subtitle search and download. Ships the same registered consumer API key the official Jellyfin OpenSubtitles plugin uses; you sign in with your own opensubtitles.com account.
+- GitHub (api.github.com/repos/raulshma/jellyplay/releases): read-only "What's New" release notes feed. No analytics, no crash reporting, no advertising SDKs.
+- Your own infrastructure: the Jellyfin server(s) you configure, plus optional Jellyseerr/Overseerr and Radarr/Sonarr hosts you configure with your own API keys.
+- UnifiedPush notifications are delivered by whichever distributor app you have installed (for example ntfy); no endpoint is hardcoded.
+- DLNA/UPnP renderers are discovered on your local network via SSDP multicast when you use "play on device".
+
+NETWORK NOTE
+
+Cleartext HTTP is permitted so JellyPlay can talk to self-hosted Jellyfin servers over plain HTTP on your local network. If your server is reachable from the internet, use HTTPS.
+
+DIFFERENCES VS THE PLAY/GITHUB BUILDS
+
+The F-Droid build is the same app minus the proprietary conveniences: no Google Cast, no in-app self-updater (updates come from F-Droid), Google's downloadable fonts replaced by bundled OFL-licensed fonts, and RAR comic archives are not read (CBZ is unaffected). The read-only "What's New" feed is kept.
+
+LICENSE
+
+JellyPlay is free software under the GNU GPL v3 (GPL-3.0-only).
+Source code: https://github.com/raulshma/jellyplay

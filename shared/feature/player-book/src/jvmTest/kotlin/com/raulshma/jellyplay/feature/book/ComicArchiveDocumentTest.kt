@@ -84,9 +84,63 @@ class ComicArchiveDocumentTest {
     }
 
     // The junrar (true RAR) positive path has no test here — it needs a real
-    // .rar fixture, which we don't ship. junrar calls are isolated behind
-    // RarEntryReader; the pure filter/sort core is pinned in
-    // pageNamesFiltersAndSortsRarEntries below.
+    // .rar fixture, which we don't ship. junrar calls are isolated behind the
+    // RarEntryReaderFactory seam; the pure filter/sort core is pinned in
+    // pageNamesFiltersAndSortsRarEntries below, and the seam wiring itself is
+    // pinned with a fake factory below (a real adapter ships per distribution:
+    // store binds junrar, desktop its twin, fdroid none).
+
+    /** Fake RAR back-end: fixed entry names, in-memory bytes, open bookkeeping. */
+    private class FakeRarEntryReader(
+        override val entryNames: List<String>,
+    ) : RarEntryReader {
+        var closed = false
+        override fun readEntry(headerName: String): ByteArray = headerName.toByteArray()
+        override fun close() {
+            closed = true
+        }
+    }
+
+    @Test
+    fun openDrivesTheRarPipelineThroughTheBoundFactory() {
+        val reader = FakeRarEntryReader(
+            listOf("10.jpg", "notes.txt", "2.jpg", "cover.png"),
+        )
+        var openedWith: File? = null
+        val factory = RarEntryReaderFactory { file ->
+            openedWith = file
+            reader
+        }
+        // Neither zip nor zip-with-images — the rar arm is the only path left.
+        val cbr = File.createTempFile("comic-test", ".cbr")
+        cbr.deleteOnExit()
+        cbr.writeBytes(byteArrayOf(0, 1, 2, 3, 4, 5, 6, 7))
+
+        val doc = ComicArchiveDocument.open(cbr.absolutePath.toPath(), rarEntryReaderFactory = factory)
+
+        // The rar arm ran through the factory (the pager's page list is the
+        // fake reader's entries, filter + natural-sorted). Page-bytes decode
+        // is pinned elsewhere — fake reader bytes are not valid images.
+        assertNotNull(doc)
+        assertEquals(cbr, openedWith)
+        try {
+            assertEquals(listOf("2.jpg", "10.jpg", "cover.png"), doc.pageEntryNames)
+        } finally {
+            doc.close()
+            assertTrue(reader.closed)
+        }
+    }
+
+    @Test
+    fun openWithoutAFactoryTreatsRarAsUnsupported() {
+        // Same container as the factory test above, no factory bound — the
+        // fdroid shape: the zip arm misses, the rar arm yields null.
+        val cbr = File.createTempFile("comic-test", ".cbr")
+        cbr.deleteOnExit()
+        cbr.writeBytes(byteArrayOf(0, 1, 2, 3, 4, 5, 6, 7))
+
+        assertNull(ComicArchiveDocument.open(cbr.absolutePath.toPath()))
+    }
 
     @Test
     fun openReturnsNullForGarbageCbrWithoutCrashing() {

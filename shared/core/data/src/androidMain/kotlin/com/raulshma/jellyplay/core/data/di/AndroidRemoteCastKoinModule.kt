@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.di
 
 import android.content.Context
 import com.raulshma.jellyplay.core.data.cast.CastManager
-import com.raulshma.jellyplay.core.data.cast.GoogleCastStrategy
+import com.raulshma.jellyplay.core.data.cast.GoogleCastIntegration
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.core.data.playback.AudioRemoteControlSurface
@@ -21,7 +21,12 @@ import org.koin.dsl.module
 /**
  * The remote-control / cast helper-graph family of the androidCoreDataModule
  * split (see [androidCoreDataModule] for the construction-owner rules).
- * Binding bodies moved verbatim from the pre-split single-module layout.
+ * Binding bodies moved verbatim from the pre-split single-module layout —
+ * except the GMS cast family: GoogleCastStrategy and GoogleCastIntegration
+ * are store-only (bound in the app's store DistributionPlatform module, so
+ * Play services never reach the fdroid classpath), and [CastManager] takes
+ * the integration via getOrNull with the GoogleCastIntegration.Unavailable
+ * fdroid fallback.
  */
 internal fun androidRemoteCastModule(context: Context): Module = module {
     // ── Remote-control / cast helper graph ──────────────────────────────
@@ -69,7 +74,11 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
         )
     }
 
-    single { GoogleCastStrategy(appContext = context) }
+    // No GoogleCastStrategy/GoogleCastIntegration binding here: the GMS cast
+    // stack is store-only (the bindings live in the app's store Distribution
+    // Platform module), so core:data must compile — and this graph resolve —
+    // without Play services on the classpath. getOrNull resolves null on
+    // fdroid and the manager binds GoogleCastIntegration.Unavailable.
     single {
         DlnaCastStrategy(
             appContext = context,
@@ -90,7 +99,7 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
     single {
         CastManager(
             context = context,
-            googleCastStrategy = get(),
+            googleCastIntegration = getOrNull<GoogleCastIntegration>() ?: GoogleCastIntegration.Unavailable,
             dlnaCastStrategy = get(),
             jellyfinRemotePlayCastStrategy = get(),
             syncPlayCastStore = get(),

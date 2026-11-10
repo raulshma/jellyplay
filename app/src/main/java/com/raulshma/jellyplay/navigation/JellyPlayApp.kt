@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.isTv
+import com.raulshma.jellyplay.distribution.DistributionPlatform
 import com.raulshma.jellyplay.feature.onboarding.OnboardingScreen
 import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
 import com.raulshma.jellyplay.feature.shell.navigation.SignedOutAuthHost
@@ -155,10 +156,11 @@ internal fun JellyPlayApp(
 
         // In-app self-update sheet. Rendered at the root so it overlays every
         // screen (auth, onboarding, main). Stays hidden while Idle; the launch-time
-        // check in UpdateCoordinator flips it to UpdateAvailable when a newer
-        // build exists. Keep this after the `when` so the sheet sits above all
-        // content.
-        UpdateSheetOverlay(infra.updateCoordinatorLazy.value)
+        // check (store) flips it to UpdateAvailable when a newer build exists.
+        // The overlay itself is flavor-bound (DistributionPlatform): store
+        // renders the real sheet, fdroid is a no-op. Keep this after the `when`
+        // so the sheet sits above all content.
+        DistributionPlatform.UpdateSheetOverlay(infra.updateCoordinatorLazy.value)
 
         // Post-update What's New sheet — same root placement, but the overlay
         // itself defers to the update sheet above (never stacks on it). Deep

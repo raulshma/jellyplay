@@ -14,6 +14,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * The GMS discovery/session strategy (MediaRouter routes + CastContext
+ * session/state listeners). Store-source-set resident: the file moved out of
+ * core:data so the fdroid variant never sees Play services on its classpath.
+ * Same package as the core:data cast types it implements ([CastStrategy]) and
+ * consumes ([CastDevice], [withCastDiskReadsPermitted] — both stay in
+ * core:data, which is an app dependency, so same-package resolution works
+ * unchanged).
+ */
 class GoogleCastStrategy(
     private val appContext: Context,
 ) : CastStrategy {

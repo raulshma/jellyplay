@@ -46,6 +46,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
     onLogout: (Boolean) -> Unit,
     onSetupWizard: () -> Unit = {},
     onCheckForUpdates: () -> Unit = {},
+    selfUpdateSupported: Boolean = true,
 ) {
     entry<Route.Settings> {
         // Build the facade once per (navigator, host actions) lifetime so the
@@ -327,6 +328,10 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onBack = { navigator.goBack() },
             onLicensesClick = { navigator.navigate(Route.Licenses) },
             onCheckForUpdates = onCheckForUpdates,
+            // False on fdroid: the update rows (auto-check / auto-download
+            // toggles, manual check, dismiss period) are hidden — updates come
+            // from the F-Droid client there.
+            selfUpdateSupported = selfUpdateSupported,
         )
     }
 

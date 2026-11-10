@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.feature.details.desktopDetailsPlatformModule
 import com.raulshma.jellyplay.feature.music.feedback.desktopMusicMessageBusModule
 import com.raulshma.jellyplay.feature.settings.di.desktopSettingsPlatformModule
 import com.raulshma.jellyplay.feature.auth.di.desktopAuthPlatformModule
+import com.raulshma.jellyplay.feature.book.RarEntryReaderFactory
 import com.raulshma.jellyplay.feature.book.di.desktopBookPlayerModule
 import com.raulshma.jellyplay.feature.photos.di.desktopPhotoExportModule
 import com.raulshma.jellyplay.feature.player.video.di.desktopPlayerVideoModule
@@ -86,6 +87,11 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     ),
     desktopDetailsPlatformModule(paths.dataDirNio),
     desktopAuthPlatformModule,
+    // The desktop RAR-comics back-end (junrar) feeding the shared book
+    // reader's distribution seam: DesktopBookDocumentOpener resolves this
+    // factory via getOrNull — null in hosts that bind none (fdroid's app
+    // line; junrar's UnRAR license is non-free there).
+    module { single<RarEntryReaderFactory> { DesktopJunrarRarEntryReader.FACTORY } },
     // core:ui's UserMessageBus module — core, not feature, so it stays
     // inline (the shell's UserMessageHost collects this bus).
     coreUiMessageModule,

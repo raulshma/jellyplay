@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- F-Droid builds never self-install APKs; the GitHub-release updater is
+         store-only, so the permission must not appear in the merged manifest
+         (F-Droid rejects apps REQUESTing install packages unless the upload
+         is the source of the install). -->
+    <uses-permission
+        android:name="android.permission.REQUEST_INSTALL_PACKAGES"
+        tools:node="remove" />
+
+</manifest>

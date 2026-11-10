@@ -109,9 +109,10 @@
              flavor overlay (src/phone/AndroidManifest.xml) so the TV flavor
              doesn't advertise car capability. -->
 
-        <meta-data
-            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
-            android:value="com.raulshma.jellyplay.cast.JellyPlayCastOptionsProvider" />
+        <!-- The GMS cast OPTIONS_PROVIDER meta-data lives in the store flavor
+             overlay (src/store/AndroidManifest.xml): GMS cast is store-only,
+             and the fdroid merged manifest must carry no com.google.android.gms
+             identifiers. -->
 
         <service
             android:name=".floating.FloatingPlayerService"
@@ -223,7 +224,12 @@
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
-        <receiver android:name="androidx.mediarouter.media.MediaTransferReceiver" />
+        <!-- The AndroidX MediaRouter transfer receiver moved to the store
+             flavor overlay (src/store/AndroidManifest.xml): it only exists to
+             route GMS cast sessions, the mediarouter artifact is store-only,
+             and a main-manifest reference here made the fdroid merged
+             manifest point at a class missing from the fdroid classpath
+             (lint MissingClass). -->
 
         <receiver
             android:name="com.raulshma.jellyplay.core.notification.receiver.NotificationActionReceiver"

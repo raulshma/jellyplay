@@ -1,5 +1,5 @@
 # Baseline-profile generation lane: the consumer plugin's
-# saveInSrc fallback tree (app/src/phoneRelease/generated/baselineProfiles) has
+# saveInSrc fallback tree (app/src/phoneStoreRelease/generated/baselineProfiles) has
 # never been populated — every non-CI release build (local assembles,
 # sideloads, macrobenchmarks against local APKs) therefore ships with ZERO
 # baseline/startup rules, typically 20-30% worse cold-start TTID. The release
@@ -56,13 +56,13 @@ jobs:
         # APK is gated behind this property), and the x86_64 ciPixel8 GMD has
         # no arm64 ABI to install — without the flag the task dies with
         # "No matching Apks found for ciPixel8" (both Oct-2026 dispatches).
-        run: ./gradlew :app:generatePhoneReleaseBaselineProfile -PbuildUniversal=true --stacktrace
+        run: ./gradlew :app:generatePhoneStoreReleaseBaselineProfile -PbuildUniversal=true --stacktrace
 
       # Same both-artifacts-must-exist gate the release lane applies — a
       # partial/empty write must fail here, not land as a "refreshed" commit.
       - name: Verify Baseline Profile Artifacts
         run: |
-          profile_dir="app/src/phoneRelease/generated/baselineProfiles"
+          profile_dir="app/src/phoneStoreRelease/generated/baselineProfiles"
           missing=()
           for f in "$profile_dir/baseline-prof.txt" "$profile_dir/startup-prof.txt"; do
             [ -s "$f" ] || missing+=("$f")
@@ -76,7 +76,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add app/src/phoneRelease/generated/baselineProfiles/
+          git add app/src/phoneStoreRelease/generated/baselineProfiles/
           if git diff --cached --quiet; then
             echo "Generated profiles are identical to the committed ones — nothing to commit."
           else

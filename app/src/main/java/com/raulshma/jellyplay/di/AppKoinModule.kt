@@ -41,9 +41,9 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.floating.FloatingPlayerState
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerReports
 import com.raulshma.jellyplay.shell.AppLockState
+import com.raulshma.jellyplay.shell.AppUpdateCoordinator
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
-import com.raulshma.jellyplay.shell.UpdateCoordinator
 import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import com.raulshma.jellyplay.startup.AppStartupPrewarms
 import com.raulshma.jellyplay.startup.CacheMaintenanceInitializer
@@ -112,13 +112,11 @@ fun androidAppModule(context: Context): Module = module {
             libraryFeed = get(),
         )
     }
-    single {
-        UpdateCoordinator(
-            appUpdateRepository = get(),
-            apkInstallBuilder = get(),
-            experimentalStore = get(),
-        )
-    }
+    // NOTE: the shell's self-update coordinator (UpdateCoordinator) is bound
+    // by the DISTRIBUTION flavor module — DistributionPlatform.koinModules
+    // (store binds the GitHub-release coordinator + its core:data update
+    // bindings; fdroid binds a permanently-idle noop). Not here.
+
     single {
         WhatsNewCoordinator(
             whatsNewRepository = get(),
@@ -188,14 +186,16 @@ fun androidAppModule(context: Context): Module = module {
             autoDownloadScheduler = lazy { get<AutoDownloadScheduler>() },
             notificationScheduler = lazy { get<NotificationScheduler>() },
             downloadRecoveryInitializer = lazy { get<DownloadRecoveryInitializer>() },
-            appUpdateRepository = lazy { get<AppUpdateRepository>() },
+            // Nullable: bound by the store distribution module only — fdroid
+            // has no download path, the sweep resolves to null there.
+            appUpdateRepository = lazy { getOrNull<AppUpdateRepository>() },
             eventsSessionController = lazy { get<JellyPlayEventsSessionController>() },
             liveResyncConnector = lazy { get<JellyPlayLiveResyncConnector>() },
             downloadSummarySurface = lazy { get<DownloadSummarySurface>() },
             okHttpClient = lazy { get<OkHttpClient>() },
             authRepository = lazy { get<AuthRepository>() },
             sessionCoordinator = lazy { get<SessionCoordinator>() },
-            updateCoordinator = lazy { get<UpdateCoordinator>() },
+            updateCoordinator = lazy { get<AppUpdateCoordinator>() },
             whatsNewCoordinator = lazy { get<WhatsNewCoordinator>() },
             syncPlayOpenCoordinator = lazy { get<SyncPlayOpenCoordinator>() },
         )

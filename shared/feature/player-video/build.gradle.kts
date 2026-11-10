@@ -125,15 +125,16 @@ kotlin {
             // shared:core:data androidMain since the cutover) and
             // the UserMessageBus (:shared:core:ui androidMain). The jvm
             // target NEVER sees this edge.
-            // media3 engine stack (ExoPlayer engine + cast + session +
-            // cache + extractors + FFmpeg extension decoder).
+            // media3 engine stack (ExoPlayer engine + session + cache +
+            // extractors + FFmpeg extension decoder). cast is absent: no
+            // source here uses media3-cast, and the GMS cast stack is
+            // store-only (app/src/store) so the fdroid line compiles GMS-free.
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.ui)
             implementation(libs.media3.session)
             implementation(libs.media3.exoplayer.hls)
             implementation(libs.media3.exoplayer.dash)
             implementation(libs.media3.extractor)
-            implementation(libs.media3.cast)
             implementation(libs.media3.datasource)
             implementation(libs.media3.datasource.okhttp)
             // StandaloneDatabaseProvider backs the video SimpleCache's index
@@ -149,8 +150,9 @@ kotlin {
             // default HW_PREFERRED decoder mode), so no engine wiring is
             // needed.
             implementation(libs.media3.ffmpeg.decoder)
-            implementation(libs.play.services.cast.framework)
-            implementation(libs.mediarouter)
+            // (play-services-cast.framework + mediarouter dropped: nothing in
+            // this module's source referenced them — the app's store source
+            // set owns the GMS cast stack now.)
             implementation(libs.okhttp)
             implementation(libs.libmpv)
             // libass wired into Media3's renderer pipeline — full ASS/SSA

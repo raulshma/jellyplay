@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- fdroid-only resource keeps. The bundled theme TTFs (designsystem
+     res/font/) are the GMS-free theming path: installBundledFonts() wires
+     them into ThemeFontRegistry at startup, but the R.font constants inline
+     at compile time, so the resource shrinker's dex tracing sees no field
+     references and would strip every one (check 3 of
+     tools/fdroid/verify-apk.sh fails). tools:keep is the documented way to
+     pin them. The store line deliberately has no keep — its GMS
+     downloadable-fonts provider path needs no binaries, so the shrinker
+     strips the ~2 MB there (see tools/font/README.md). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@font/*" />

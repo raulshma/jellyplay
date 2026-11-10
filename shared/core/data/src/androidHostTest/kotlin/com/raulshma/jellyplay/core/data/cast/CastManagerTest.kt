@@ -78,7 +78,9 @@ class CastManagerTest {
     private val dlnaDevices = MutableStateFlow<List<CastDevice>>(emptyList())
     private val jellyfinDevices = MutableStateFlow<List<CastDevice>>(emptyList())
 
-    private val googleCastStrategy: GoogleCastStrategy = mockk(relaxUnitFun = true)
+    // The google-path strategy rides the CastStrategy interface now (the GMS
+    // classes live behind the integration seam and never reach this test).
+    private val googleStrategy: CastStrategy = mockk(relaxUnitFun = true)
     private val dlnaCastStrategy: DlnaCastStrategy = mockk(relaxUnitFun = true)
     private val jellyfinCastStrategy: JellyfinRemotePlayCastStrategy = mockk(relaxUnitFun = true)
     private val syncPlayCastStore: SyncPlayCastStore = mockk()
@@ -88,10 +90,10 @@ class CastManagerTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        every { googleCastStrategy.isAvailable } returns googleAvailable
-        every { googleCastStrategy.isConnected } returns googleConnected
-        every { googleCastStrategy.isConnecting } returns MutableStateFlow(false)
-        every { googleCastStrategy.discoveredDevices } returns googleDevices
+        every { googleStrategy.isAvailable } returns googleAvailable
+        every { googleStrategy.isConnected } returns googleConnected
+        every { googleStrategy.isConnecting } returns MutableStateFlow(false)
+        every { googleStrategy.discoveredDevices } returns googleDevices
         every { dlnaCastStrategy.isAvailable } returns dlnaAvailable
         every { dlnaCastStrategy.isConnected } returns dlnaConnected
         every { dlnaCastStrategy.isConnecting } returns MutableStateFlow(false)
@@ -111,7 +113,11 @@ class CastManagerTest {
 
     private fun manager() = CastManager(
         context = context,
-        googleCastStrategy = googleCastStrategy,
+        // Fake integration wrapping the mocked strategy: the manager registers
+        // it under STRATEGY_GOOGLE and every discovery/connect/release verify
+        // below lands on the strategy exactly as the GMS production path did.
+        // ensureCastPlayer returns null (no CastPlayer under Robolectric).
+        googleCastIntegration = fakeGoogleIntegration(googleStrategy),
         dlnaCastStrategy = dlnaCastStrategy,
         jellyfinRemotePlayCastStrategy = jellyfinCastStrategy,
         syncPlayCastStore = syncPlayCastStore,
@@ -119,6 +125,20 @@ class CastManagerTest {
     )
 
     private fun idleMain() = shadowOf(Looper.getMainLooper()).idle()
+
+    /** Stand-in for the store-only GMS integration: null strategy degrades; non-null registers. */
+    private fun fakeGoogleIntegration(strategy: CastStrategy?): GoogleCastIntegration =
+        object : GoogleCastIntegration {
+            override val strategy: CastStrategy? = strategy
+            override fun preinit(context: Context): Boolean = false
+            override fun ensureSessionListener(context: Context, events: GoogleCastIntegration.SessionEvents) = Unit
+            override fun ensureCastPlayer(
+                context: Context,
+                playerListener: Player.Listener,
+                onSessionUnavailable: () -> Unit,
+            ): Player? = null
+            override fun release() = Unit
+        }
 
     private fun dlnaDevice() = CastDevice(
         id = "uuid-1",
@@ -222,7 +242,7 @@ class CastManagerTest {
         manager.connect(context, dlnaDevice())
 
         assertEquals(CastManager.STRATEGY_DLNA, manager.currentStrategyName)
-        verify(exactly = 1) { googleCastStrategy.stopDiscovery() }
+        verify(exactly = 1) { googleStrategy.stopDiscovery() }
         verify(exactly = 1) { dlnaCastStrategy.connect(context, dlnaDevice()) }
     }
 
@@ -234,7 +254,7 @@ class CastManagerTest {
         manager.connect(context, googleDevice)
 
         assertEquals(CastManager.STRATEGY_GOOGLE, manager.currentStrategyName)
-        verify(exactly = 1) { googleCastStrategy.connect(context, googleDevice) }
+        verify(exactly = 1) { googleStrategy.connect(context, googleDevice) }
     }
 
     @Test
@@ -354,12 +374,12 @@ class CastManagerTest {
         val manager = manager()
 
         manager.startDiscovery(context)
-        verify(exactly = 1) { googleCastStrategy.startDiscovery(context) }
+        verify(exactly = 1) { googleStrategy.startDiscovery(context) }
         verify(exactly = 1) { dlnaCastStrategy.startDiscovery(context) }
         verify(exactly = 1) { jellyfinCastStrategy.startDiscovery(context) }
 
         manager.stopDiscovery()
-        verify(exactly = 1) { googleCastStrategy.stopDiscovery() }
+        verify(exactly = 1) { googleStrategy.stopDiscovery() }
         verify(exactly = 1) { dlnaCastStrategy.stopDiscovery() }
         verify(exactly = 1) { jellyfinCastStrategy.stopDiscovery() }
     }
@@ -373,7 +393,7 @@ class CastManagerTest {
 
         manager.releaseConsumer()
 
-        verify(exactly = 1) { googleCastStrategy.release() }
+        verify(exactly = 1) { googleStrategy.release() }
         verify(exactly = 1) { dlnaCastStrategy.release() }
         verify(exactly = 1) { jellyfinCastStrategy.release() }
         assertFalse(manager.isBackgroundCasting)
@@ -385,10 +405,10 @@ class CastManagerTest {
 
         manager.softRelease()
 
-        verify(exactly = 1) { googleCastStrategy.stopDiscovery() }
+        verify(exactly = 1) { googleStrategy.stopDiscovery() }
         verify(exactly = 1) { dlnaCastStrategy.stopDiscovery() }
         verify(exactly = 1) { jellyfinCastStrategy.stopDiscovery() }
-        verify(exactly = 0) { googleCastStrategy.release() }
+        verify(exactly = 0) { googleStrategy.release() }
         verify(exactly = 0) { dlnaCastStrategy.release() }
     }
 

@@ -9,8 +9,15 @@ import okio.Path
  * Desktop book opener: CBZ → the shared ZipFile pager, PDF → the PDFBox
  * back-end. Every open failure collapses to `null` — the opener's
  * cannot-open contract.
+ *
+ * [rarEntryReaderFactory] is the host-supplied RAR back-end (apps/desktop
+ * binds its own junrar twin — same UnRAR license note as the store adapter:
+ * free to use for decompression only). Null means RAR comics are unsupported
+ * in this host.
  */
-class DesktopBookDocumentOpener : BookDocumentOpener {
+class DesktopBookDocumentOpener(
+    private val rarEntryReaderFactory: RarEntryReaderFactory?,
+) : BookDocumentOpener {
 
     override suspend fun open(path: Path, format: BookFormat): BookDocument? =
         withContext(Dispatchers.IO) {
@@ -19,7 +26,11 @@ class DesktopBookDocumentOpener : BookDocumentOpener {
             val desktopImageExtensions = ComicArchiveDocument.IMAGE_EXTENSIONS - "webp"
             when (format) {
                 BookFormat.CBZ, BookFormat.CBR ->
-                    ComicArchiveDocument.open(path, desktopImageExtensions)
+                    ComicArchiveDocument.open(
+                        path,
+                        desktopImageExtensions,
+                        rarEntryReaderFactory = rarEntryReaderFactory,
+                    )
                 BookFormat.PDF -> DesktopPdfDocument.open(path.toFile())
                 BookFormat.EPUB -> null // reflowable — resolved by the epub reader upstream
             }

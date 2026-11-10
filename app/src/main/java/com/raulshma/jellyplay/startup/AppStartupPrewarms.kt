@@ -21,9 +21,9 @@ import com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectL
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.shell.AppUpdateCoordinator
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
-import com.raulshma.jellyplay.shell.UpdateCoordinator
 import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
@@ -171,8 +171,10 @@ class AppStartupPrewarms(
     private val downloadRecoveryInitializer: Lazy<DownloadRecoveryInitializer>,
     // Lazy defers construction of AppUpdateRepository (which pulls GitHub +
     // OkHttp) off the cold-start path. cleanupDownloadedUpdate is a cheap file
-    // delete, but construction is the cost worth deferring.
-    private val appUpdateRepository: Lazy<AppUpdateRepository>,
+    // delete, but construction is the cost worth deferring. Nullable: the
+    // repository is bound by the STORE distribution module only — fdroid has
+    // no self-update download path, so the sweep is skipped there (null).
+    private val appUpdateRepository: Lazy<AppUpdateRepository?>,
     // The de-eagered core:data session machinery (formerly createdAtStart
     // Koin singles whose construction pulled AuthRepositoryImpl → Room +
     // migrations + the WebSocket client onto main inside startKoin, and the
@@ -201,7 +203,7 @@ class AppStartupPrewarms(
     private val okHttpClient: Lazy<OkHttpClient>,
     private val authRepository: Lazy<AuthRepository>,
     private val sessionCoordinator: Lazy<SessionCoordinator>,
-    private val updateCoordinator: Lazy<UpdateCoordinator>,
+    private val updateCoordinator: Lazy<AppUpdateCoordinator>,
     private val whatsNewCoordinator: Lazy<WhatsNewCoordinator>,
     private val syncPlayOpenCoordinator: Lazy<SyncPlayOpenCoordinator>,
 ) {
@@ -395,9 +397,10 @@ class AppStartupPrewarms(
         // Sweep any APK left by a prior self-update. A successful install
         // restarts the process (so this runs in the new version) and leaves the
         // old APK orphaned; a cancelled/failed install also leaves it behind.
-        // Safe at startup: onCreate precedes any new download.
+        // Safe at startup: onCreate precedes any new download. Skipped when the
+        // flavor binds no repository (fdroid — see the parameter comment).
         applicationScope.launch(ioDispatcher) {
-            runCatching { appUpdateRepository.value.cleanupDownloadedUpdate() }
+            runCatching { appUpdateRepository.value?.cleanupDownloadedUpdate() }
         }
     }
 }

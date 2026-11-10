@@ -1,5 +1,7 @@
+import java.util.Properties
 import java.util.zip.ZipFile
 
+import com.android.build.api.variant.HasUnitTestBuilder
 import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.provider.MapProperty
 
@@ -11,6 +13,63 @@ plugins {
     alias(libs.plugins.aboutLibraries)
 }
 
+// ---------------------------------------------------------------------------
+// Version resolution (F-Droid preparation). The canonical source is
+// version.properties at the repo root:
+//   jellyplay.versionName=0.11.9
+//   jellyplay.versionCode=11090
+// The versionCode scheme is major*100_000 + minor*1_000 + patch*10 —
+// 0.11.9 → 11090 — leaving room for a per-ABI suffix: F-Droid expects one
+// APK per ABI whose versionCode is the base plus a small abiIndex (map
+// below), which is exactly what `-PabiFilter=<abi>` produces. CI's
+// `-PversionCode=${{ github.run_number }}` (low hundreds) still wins over
+// the file, so the CI code space stays unchanged; the file only backs local
+// and F-Droid-style builds. The plain file read at configuration time is
+// configuration-cache-safe: Gradle tracks files the build logic reads
+// during configuration as build configuration inputs.
+// ---------------------------------------------------------------------------
+val versionProperties = Properties().apply {
+    val f = rootProject.file("version.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+// Per-ABI versionCode suffix, added on top of the version.properties base
+// when `-PabiFilter` narrows a build to one ABI. armeabi-v7a keeps 0
+// (reserved — no lane builds it today), arm64-v8a is the default split (1),
+// x86_64 the emulator/second device ABI (2).
+val abiVersionIndexes = mapOf(
+    "armeabi-v7a" to 0,
+    "arm64-v8a" to 1,
+    "x86_64" to 2,
+)
+
+// `-PabiFilter=<abi>`: F-Droid per-ABI build mode. Restricts the ABI split
+// to exactly one ABI (splits block below — which also constrains what the
+// packaged APK carries), disables the universal APK, and — when no explicit
+// -PversionCode is also passed — bumps the versionCode by the abiIndex so
+// each per-ABI APK carries a distinct, F-Droid-aligned code. Validated
+// eagerly: an unknown ABI fails configuration with the supported list
+// instead of dying mid-packaging.
+val abiFilter = providers.gradleProperty("abiFilter").orNull?.trim().takeUnless { it.isNullOrEmpty() }
+if (abiFilter != null && abiFilter !in abiVersionIndexes) {
+    throw GradleException(
+        "Unsupported -PabiFilter='$abiFilter'. Supported ABIs: ${abiVersionIndexes.keys.joinToString()}"
+    )
+}
+
+// versionName: -PversionName → version.properties → "0.0.1".
+val resolvedVersionName = (project.findProperty("versionName") as? String)?.takeIf { it.isNotBlank() }
+    ?: versionProperties.getProperty("jellyplay.versionName")
+    ?: "0.0.1"
+
+// versionCode: -PversionCode → version.properties (+ abiIndex under
+// -PabiFilter, only when no explicit code is passed) → 1.
+val resolvedVersionCode = (project.findProperty("versionCode") as? String)?.toIntOrNull()
+    ?: versionProperties.getProperty("jellyplay.versionCode")?.toIntOrNull()?.let { base ->
+        base + (abiFilter?.let { abiVersionIndexes.getValue(it) } ?: 0)
+    }
+    ?: 1
+
 android {
     namespace = "com.raulshma.jellyplay"
     compileSdk = 37
@@ -19,12 +78,18 @@ android {
         applicationId = "com.raulshma.jellyplay"
         minSdk = 28
         targetSdk = 37
-        versionCode = (project.findProperty("versionCode") as? String)?.toInt() ?: 1
-        versionName = project.findProperty("versionName") as? String ?: "0.0.1"
+        versionCode = resolvedVersionCode
+        versionName = resolvedVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        manifestPlaceholders["versionName"] = versionName ?: "0.0.1"
+        manifestPlaceholders["versionName"] = resolvedVersionName
+
+        // NOTE: -PabiFilter intentionally does NOT mirror into ndk.abiFilters:
+        // AGP rejects a build where an ndk abiFilter names an ABI that is
+        // also in splits.abi.include ("Conflicting configuration"), and the
+        // splits restriction in the abi block below already makes each
+        // packaged APK carry exactly one ABI's native libs.
     }
 
     // AGP 9 replacement for the legacy defaultConfig.resourceConfigurations.
@@ -32,7 +97,14 @@ android {
         localeFilters += listOf("en", "de", "es", "fr", "it", "pt", "ja", "ko", "zh")
     }
 
-    flavorDimensions += "platform"
+    // Two orthogonal flavor dimensions:
+    //   platform:     phone | tv       (device family)
+    //   distribution: store | fdroid   (release channel)
+    // Variant names concatenate in dimension order: phoneStoreRelease,
+    // phoneFdroidDebug, tvStoreRelease, ... The fdroid channel targets the
+    // phone app only (F-Droid's submission is the phone build), so the
+    // tv × fdroid combination is disabled in androidComponents below.
+    flavorDimensions += listOf("platform", "distribution")
     productFlavors {
         create("phone") {
             dimension = "platform"
@@ -41,36 +113,77 @@ android {
             dimension = "platform"
             applicationIdSuffix = ".tv"
         }
+        create("store") {
+            dimension = "distribution"
+        }
+        create("fdroid") {
+            dimension = "distribution"
+        }
+    }
+
+    // Disable tv × fdroid at the variant level: with this filter the tasks
+    // (assembleTvFdroidRelease etc.) simply do not exist, which IS the guard
+    // — requesting one fails with AGP's "task not found" instead of doubling
+    // the CI build matrix for a combination nobody ships.
+    androidComponents {
+        beforeVariants { builder ->
+            val flavors = builder.productFlavors
+            if (("platform" to "tv") in flavors && ("distribution" to "fdroid") in flavors) {
+                builder.enable = false
+            }
+            // androidx.baselineprofile 1.5.0 disables unit tests on release
+            // variants AND on its own profiling-only extended build types
+            // (nonMinifiedRelease/benchmark — a config-time optimization; no
+            // lane runs those unit tests). AGP 9.5's
+            // generate<Variant>ComposePreviewRunfiles task REQUIRES unit
+            // tests and throws at task creation — which fails any
+            // :app:tasks listing (the only lane that realizes those tasks).
+            // Re-enable everywhere the plugin disabled them: the tasks merely
+            // exist again, nothing runs them. Registered after the plugin's
+            // own callback, so this wins. Drop when the plugin stops
+            // disabling or AGP relaxes the preview requirement.
+            (builder as? HasUnitTestBuilder)
+                ?.takeIf { it.enableUnitTest == false }
+                ?.let { it.enableUnitTest = true }
+        }
     }
 
     // ABI splits are property-gated, not task-name-
     // sniffed: gradle.startParameter.taskNames is configuration-cache-hostile
-    // and matches any invocation containing "debug" (testPhoneDebugUnitTest
+    // and matches any invocation containing "debug" (testPhoneStoreDebugUnitTest
     // never packages an APK but would still pay the extra-ABI configuration).
     splits {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a")
-            // Builds default to arm64-only — the device fleet is
-            // physical phones, and extra ABIs cost three dex+package passes.
-            // The emulator ABIs (x86_64 for
-            // modern images; x86 for the 32-bit-only Android TV system images,
-            // API 30 and older) are opt-in via a comma-separated property.
-            // Named extraAbis because splits.abi is variant-agnostic: it
-            // widens every variant, debug and release alike (no CI lane
-            // passes it — codeql's assembleDebug is compile-analysis only,
-            // kmp-build's androidTest/verify lanes never install on an
-            // emulator, and the device e2e pass installs the arm64 split):
-            //   ./gradlew assemblePhoneDebug -PextraAbis=x86_64,x86
-            // Empty/unset/blank entries parse to "arm64 only".
-            providers.gradleProperty("extraAbis")
-                .map { raw ->
-                    raw.split(',').map(String::trim).filter { it.isNotBlank() }.distinct()
-                }
-                .orElse(emptyList())
-                .get()
-                .forEach { include(it) }
+            if (abiFilter != null) {
+                // -PabiFilter=<abi>: the F-Droid per-ABI lane builds exactly
+                // one split APK — no universal, no other ABIs — with
+                // versionCode = version.properties base + abiIndex, matching
+                // F-Droid's VercodeOperation expectations.
+                include(abiFilter)
+            } else {
+                include("arm64-v8a")
+                // Builds default to arm64-only — the device fleet is
+                // physical phones, and extra ABIs cost three dex+package passes.
+                // The emulator ABIs (x86_64 for
+                // modern images; x86 for the 32-bit-only Android TV system images,
+                // API 30 and older) are opt-in via a comma-separated property.
+                // Named extraAbis because splits.abi is variant-agnostic: it
+                // widens every variant, debug and release alike (no CI lane
+                // passes it — codeql's assembleDebug is compile-analysis only,
+                // kmp-build's androidTest/verify lanes never install on an
+                // emulator, and the device e2e pass installs the arm64 split):
+                //   ./gradlew assemblePhoneStoreDebug -PextraAbis=x86_64,x86
+                // Empty/unset/blank entries parse to "arm64 only".
+                providers.gradleProperty("extraAbis")
+                    .map { raw ->
+                        raw.split(',').map(String::trim).filter { it.isNotBlank() }.distinct()
+                    }
+                    .orElse(emptyList())
+                    .get()
+                    .forEach { include(it) }
+            }
             // The universal APK (all 4 ABIs of every native player
             // stack, ~3-4x the arm64 payload) is a sideload-only convenience
             // and does not build by default. The release lane opts back in
@@ -78,9 +191,12 @@ android {
             // profile generate step — which assembles and installs release
             // APKs on the x86_64 ciPixel8 GMD — and the assemble step), so
             // release artifacts keep it; every other build skips it.
-            isUniversalApk = providers.gradleProperty("buildUniversal")
-                .map(String::toBoolean)
-                .getOrElse(false)
+            // -PabiFilter always forces it off: F-Droid wants exactly one
+            // APK per invocation.
+            isUniversalApk = abiFilter == null &&
+                providers.gradleProperty("buildUniversal")
+                    .map(String::toBoolean)
+                    .getOrElse(false)
         }
     }
 
@@ -174,7 +290,7 @@ android {
 // AboutLibraries — collect the full runtime dependency graph (this is the only
 // module that aggregates every :core:* and :feature:* project) and export the
 // SPDX license metadata into assets. Parsed at runtime by :shared:feature:settings.
-// phoneRelease is the canonical list; the TV flavor adds no new dependencies.
+// phoneStoreRelease is the canonical list; the TV flavor adds no new dependencies.
 aboutLibraries {
     collect { includePlatform = false }
     export {
@@ -186,6 +302,30 @@ aboutLibraries {
 
 // The exported asset regenerates on demand (./gradlew :app:exportLibraryDefinitions)
 // rather than on every preBuild — it only changes when the dependency graph does.
+// aboutlibraries.json is gitignored and generated on demand; release builds
+// (including F-Droid's clean-clone builds, which never see a prior developer
+// run) need it present at asset-merge time, so the export task is wired into
+// the release asset-merge chain — PER VARIANT: AboutLibraries registers one
+// filtered export task per variant, and every merge task name embeds its full
+// variant name (mergePhoneFdroidReleaseAssets → PhoneFdroidRelease), so the
+// wiring is a mechanical rename. Each merge reads the export of ITS variant's
+// dependency graph, which is what keeps the store-only dependencies (junrar,
+// the GMS cast stack — storeImplementation-only) out of the FDROID license
+// list; the store variants' assets still declare them. Debug builds keep the
+// on-demand behavior.
+tasks.matching { it.name.matches(Regex("merge.*ReleaseAssets")) }.configureEach {
+    dependsOn("exportLibraryDefinitions" + name.removePrefix("merge").removeSuffix("Assets"))
+}
+
+// The export lands in src/main/assets, which every OTHER variant's merge —
+// debug ones included, e.g. mergeTvStoreDebugAssets under
+// :app:testTvStoreDebugUnitTest — also reads as a source dir. Co-schedule any
+// merge with any export in one invocation and Gradle 9 fails the build as an
+// implicit-dependency violation, so every merge declares ordering after every
+// export (release merges additionally depend on their own, above).
+tasks.matching { it.name.matches(Regex("merge.*Assets")) }.configureEach {
+    mustRunAfter(tasks.matching { it.name.startsWith("exportLibraryDefinitions") })
+}
 
 // ---------------------------------------------------------------------------
 // Compose-resources APK guard. The launch-blocking crash it prevents: the
@@ -195,7 +335,7 @@ aboutLibraries {
 // `androidResources { enable = true }`. No compile gate can
 // see it — the accessors compile fine, the MissingResourceException only
 // fires on the first string read at runtime — so this task opens the BUILT
-// phoneDebug APK as a zip instead and asserts, for every resource-carrying
+// phoneStoreDebug APK as a zip instead and asserts, for every resource-carrying
 // shared module, that its assets/composeResources/<packageOfResClass>/
 // directory exists with at least one .cvr entry per locale:
 //   * the module list is derived from the source tree at EXECUTION time
@@ -207,7 +347,7 @@ aboutLibraries {
 //     `packageOfResClass` — captured from the evaluated Gradle model (see the
 //     capture block below the task), which is exactly the directory name
 //     compose-resources creates under assets/composeResources/ in the APK
-//     (verified against the real phoneDebug artifact: e.g. shared/feature/home
+//     (verified against the real phoneStoreDebug artifact: e.g. shared/feature/home
 //     → com.raulshma.jellyplay.feature.home.generated.resources/values-de/
 //     strings.commonMain.cvr — note the legacy import paths, NOT the
 //     kotlin.android namespace). The convention plugin derives
@@ -219,11 +359,11 @@ aboutLibraries {
 //     -zh) and the derivation yields
 //     216 .cvr entries = 24 modules × 9 locales.
 // Always re-runs (the zip scan is cheap): a cached "PASS" would defeat the
-// point of a guard. TV flavor ships the same merged assets graph; the phone
+// point of a guard. TV flavor ships the same merged assets graph; the phoneStore
 // artifact is the guard's assertion surface.
 // ---------------------------------------------------------------------------
-abstract class VerifyPhoneDebugComposeResourcesTask : DefaultTask() {
-    /** Directory :app:assemblePhoneDebug writes the per-ABI split APKs into. */
+abstract class VerifyPhoneStoreDebugComposeResourcesTask : DefaultTask() {
+    /** Directory :app:assemblePhoneStoreDebug writes the per-ABI split APKs into. */
     @get:Internal
     abstract val apkDir: DirectoryProperty
 
@@ -244,7 +384,7 @@ abstract class VerifyPhoneDebugComposeResourcesTask : DefaultTask() {
         val root = repoRoot.get().asFile
         val sharedRoot = root.resolve("shared")
         if (!sharedRoot.isDirectory) {
-            throw GradleException("verifyPhoneDebugComposeResources: shared/ tree not found under $root")
+            throw GradleException("verifyPhoneStoreDebugComposeResources: shared/ tree not found under $root")
         }
 
         // 1. Expected modules + locale sets, derived NOW from the source tree.
@@ -257,7 +397,7 @@ abstract class VerifyPhoneDebugComposeResourcesTask : DefaultTask() {
                 val modulePath = "shared/${group.name}/${module.name}"
                 val namespace = resPackages.get()[modulePath]
                     ?: throw GradleException(
-                        "verifyPhoneDebugComposeResources: $modulePath carries " +
+                        "verifyPhoneStoreDebugComposeResources: $modulePath carries " +
                             "composeResources but no configured compose.resources.packageOfResClass " +
                             "was captured for it — the module must apply jellyplay.kmp.library.compose " +
                             "(or set packageOfResClass) so the guard can know its " +
@@ -272,7 +412,7 @@ abstract class VerifyPhoneDebugComposeResourcesTask : DefaultTask() {
         expected.sortBy { it.first }
         if (expected.isEmpty()) {
             throw GradleException(
-                "verifyPhoneDebugComposeResources: no shared/*/* module carries " +
+                "verifyPhoneStoreDebugComposeResources: no shared/*/* module carries " +
                     "commonMain/composeResources — guard input vanished?"
             )
         }
@@ -282,14 +422,14 @@ abstract class VerifyPhoneDebugComposeResourcesTask : DefaultTask() {
         val apks = apkDirFile.listFiles { f -> f.isFile && f.name.endsWith(".apk") }.orEmpty()
         if (apks.isEmpty()) {
             throw GradleException(
-                "verifyPhoneDebugComposeResources: no APK found in $apkDirFile — " +
-                    "run :app:assemblePhoneDebug first"
+                "verifyPhoneStoreDebugComposeResources: no APK found in $apkDirFile — " +
+                    "run :app:assemblePhoneStoreDebug first"
             )
         }
 
         val localePairs = expected.sumOf { it.third.size }
         logger.lifecycle(
-            "verifyPhoneDebugComposeResources: ${expected.size} resource-carrying shared modules, " +
+            "verifyPhoneStoreDebugComposeResources: ${expected.size} resource-carrying shared modules, " +
                 "$localePairs expected module/locale pairs (baseline: 24 modules x 9 locales = 216)"
         )
 
@@ -322,23 +462,23 @@ abstract class VerifyPhoneDebugComposeResourcesTask : DefaultTask() {
         // 4. Fail loudly, naming the first missing module/locale (then all of them).
         if (failures.isNotEmpty()) {
             throw GradleException(
-                "verifyPhoneDebugComposeResources FAILED — first missing module/locale:\n  ${failures.first()}\n" +
+                "verifyPhoneStoreDebugComposeResources FAILED — first missing module/locale:\n  ${failures.first()}\n" +
                     "  all ${failures.size} gap(s):\n  " + failures.joinToString("\n  ")
             )
         }
         logger.lifecycle(
-            "verifyPhoneDebugComposeResources: OK — every expected .cvr asset is packaged " +
-                "in ${apks.size} phoneDebug APK(s)"
+            "verifyPhoneStoreDebugComposeResources: OK — every expected .cvr asset is packaged " +
+                "in ${apks.size} phoneStoreDebug APK(s)"
         )
     }
 }
 
-val verifyPhoneDebugComposeResources = tasks.register<VerifyPhoneDebugComposeResourcesTask>("verifyPhoneDebugComposeResources") {
+val verifyPhoneStoreDebugComposeResources = tasks.register<VerifyPhoneStoreDebugComposeResourcesTask>("verifyPhoneStoreDebugComposeResources") {
     group = "verification"
-    description = "Asserts the phoneDebug APK packages every " +
+    description = "Asserts the phoneStoreDebug APK packages every " +
         "resource-carrying shared module's compose-resources .cvr assets for every locale."
-    dependsOn("assemblePhoneDebug")
-    apkDir.set(layout.buildDirectory.dir("outputs/apk/phone/debug"))
+    dependsOn("assemblePhoneStoreDebug")
+    apkDir.set(layout.buildDirectory.dir("outputs/apk/phoneStore/debug"))
     repoRoot.set(rootProject.layout.projectDirectory)
     outputs.upToDateWhen { false }
 }
@@ -361,27 +501,27 @@ gradle.projectsEvaluated {
         }.getOrNull()?.takeIf { it.isNotBlank() } ?: continue
         captured[project.path.removePrefix(":").replace(':', '/')] = resPackage
     }
-    verifyPhoneDebugComposeResources.configure { resPackages.putAll(captured) }
+    verifyPhoneStoreDebugComposeResources.configure { resPackages.putAll(captured) }
 }
 
 // Baseline Profile consumers. The androidx.baselineprofile 1.5.x plugin
 // resolves producers per variant: dependencies are the merge of the `main`,
 // flavor, build type and variant entries below. The global `baselineProfile`
 // configuration cannot hold both producers — it extends into every variant
-// and would run each generator against both flavors — so the phone flavor
+// and would run each generator against both flavors — so the phoneStore variant
 // names its own producer module instead. TV has none: AGP cannot run TV
 // images on Gradle Managed Devices, so the tv flavor ships without
 // generated profiles.
-// - phone → :baselineprofile (phone applicationId, ciPixel8 GMD)
+// - phoneStore → :baselineprofile (phone applicationId, ciPixel8 GMD)
 baselineProfile {
-    // Generated profiles are written into the flavor source sets
+    // Generated profiles are written into the variant source sets
     // (src/<variant>Release/generated/baselineProfiles) so they can be
     // committed and regenerate on demand, like aboutlibraries.json. Builds
     // not preceded by a generate step pick up the committed files instead of
     // producing profile-less APKs.
     saveInSrc = true
     variants {
-        create("phone") {
+        create("phoneStore") {
             from(project(":baselineprofile"))
         }
     }
@@ -465,7 +605,26 @@ dependencies {
     // artifact the shared feature modules use).
     implementation(libs.koin.compose.viewmodel)
 
-    implementation(libs.play.services.cast.framework)
+    // GMS cast is store-only: fdroid builds must not see play-services (or
+    // the junrar UnRAR license) on their classpath, so these ride the store
+    // FLAVOR configuration — the store source set binds GoogleCastStrategy /
+    // GoogleCastIntegrationImpl (core:data's cast seam) and the junrar RAR
+    // adapter, while fdroid binds the no-op fallbacks. The single-flavor
+    // `store` configuration covers every store variant (phone AND tv — tv
+    // has no fdroid variant at all, the tv × fdroid combination is disabled
+    // in androidComponents). String-based add(): the Kotlin DSL generates no
+    // accessor for flavor configurations under two flavor dimensions.
+    // mediarouter is explicit because the store cast code
+    // (DistributionPlatform's hidden route button, GoogleCastStrategy)
+    // references androidx.mediarouter directly — it used to arrive only
+    // transitively via cast-framework.
+    add("storeImplementation", libs.play.services.cast.framework)
+    // media3-cast rides the store configuration too: GoogleCastIntegrationImpl
+    // constructs the media3 CastPlayer directly (core:data dropped the dep
+    // with the cast seam — nothing in its sources references it anymore).
+    add("storeImplementation", libs.media3.cast)
+    add("storeImplementation", libs.mediarouter)
+    add("storeImplementation", libs.junrar)
 
     // Required by the media3-ffmpeg-decoder native extension (pulled in via
     // shared:feature:player-video). Must also be enabled at the app dex
@@ -503,12 +662,13 @@ dependencies {
 
     // LeakCanary self-installs its watcher via a startup ContentProvider and
     // auto-reports retained Activities/Fragments/ViewModels/Services. Debug
-    // builds only (phoneDebug + tvDebug); runtime tweaks live in
+    // builds only (phoneStoreDebug/phoneFdroidDebug + tvStoreDebug); runtime
+    // tweaks live in
     // app/src/debug .../DebugLeakCanary.kt next to installDebugStrictMode().
     debugImplementation(libs.leakcanary.android)
 
-    // Baseline profile producers are wired per flavor in the `baselineProfile`
-    // extension block above (:baselineprofile for phone only — tv ships
+    // Baseline profile producers are wired per variant in the `baselineProfile`
+    // extension block above (:baselineprofile for phoneStore only — tv ships
     // without generated profiles) instead of a global `baselineProfile`
-    // configuration entry, which cannot disambiguate the two flavors.
+    // configuration entry, which cannot disambiguate the flavors.
 }

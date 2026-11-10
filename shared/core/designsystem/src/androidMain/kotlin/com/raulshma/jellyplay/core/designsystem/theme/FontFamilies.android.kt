@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
+import com.raulshma.jellyplay.core.designsystem.theme.ThemeFontRegistry.FamilyKey
 import com.raulshma.jellyplay.shared.core.designsystem.R
 
 private val fontProvider = GoogleFont.Provider(
@@ -17,38 +18,39 @@ private fun googleFont(name: String): FontFamily = FontFamily(
 )
 
 // GMS fonts are resolved on demand from the Google Fonts provider; Android
-// bundles no font binaries. The @Composable getters mirror the expect
-// declarations (the jvm actual loads bundled resources through the
-// composable `org.jetbrains.compose.resources.Font` API).
+// bundles no font binaries. Bundled overrides installed via ThemeFontRegistry
+// take precedence when present (fdroid flavor, GMS-free devices). The
+// @Composable getters mirror the expect declarations (the jvm actual loads
+// bundled resources through the composable `org.jetbrains.compose.resources.Font` API).
 internal actual val displayFontFamily: FontFamily
-    @Composable get() = googleFont("Space Grotesk")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.DISPLAY) ?: googleFont("Space Grotesk")
 
 internal actual val bodyFontFamily: FontFamily
-    @Composable get() = googleFont("Roboto Flex")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.BODY) ?: googleFont("Roboto Flex")
 
 internal actual val synthwaveDisplayFontFamily: FontFamily
-    @Composable get() = googleFont("Orbitron")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.SYNTHWAVE_DISPLAY) ?: googleFont("Orbitron")
 
 internal actual val synthwaveBodyFontFamily: FontFamily
-    @Composable get() = googleFont("Share Tech Mono")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.SYNTHWAVE_BODY) ?: googleFont("Share Tech Mono")
 
 internal actual val soothingFontFamily: FontFamily
-    @Composable get() = googleFont("Nunito Sans")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.SOOTHING) ?: googleFont("Nunito Sans")
 
 internal actual val monochromeDisplayFontFamily: FontFamily
-    @Composable get() = googleFont("DotGothic16")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.MONOCHROME_DISPLAY) ?: googleFont("DotGothic16")
 
 internal actual val monochromeBodyFontFamily: FontFamily
-    @Composable get() = googleFont("Space Grotesk")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.MONOCHROME_BODY) ?: googleFont("Space Grotesk")
 
 internal actual val auroraFontFamily: FontFamily
-    @Composable get() = googleFont("Manrope")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.AURORA) ?: googleFont("Manrope")
 
 internal actual val sakuraFontFamily: FontFamily
-    @Composable get() = googleFont("Quicksand")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.SAKURA) ?: googleFont("Quicksand")
 
 internal actual val vectorPopFontFamily: FontFamily
-    @Composable get() = googleFont("Poppins")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.VECTOR_POP) ?: googleFont("Poppins")
 
 internal actual val vividFontFamily: FontFamily
-    @Composable get() = googleFont("Outfit")
+    @Composable get() = ThemeFontRegistry.overrideFor(FamilyKey.VIVID) ?: googleFont("Outfit")

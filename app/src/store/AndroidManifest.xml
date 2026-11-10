@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Google Play services Cast: store-only. The fdroid build has no GMS
+         cast at all and its merged manifest must carry no
+         com.google.android.gms identifiers, so the cast options-provider
+         declaration moved here out of src/main (the provider class itself,
+         JellyPlayCastOptionsProvider, lives in src/store/java for the same
+         reason). -->
+    <meta-data
+        android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+        android:value="com.raulshma.jellyplay.cast.JellyPlayCastOptionsProvider" />
+
+    <!-- AndroidX MediaRouter's system-routes transfer receiver: cast is
+         store-only, so the receiver declaration follows the cast meta-data
+         out of src/main (mediarouter is a store-line dependency; declaring
+         it in src/main gave the fdroid merged manifest a class reference
+         the fdroid classpath cannot resolve). -->
+    <application>
+
+        <receiver android:name="androidx.mediarouter.media.MediaTransferReceiver" />
+
+    </application>
+
+</manifest>

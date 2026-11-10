@@ -40,7 +40,10 @@ fun desktopBookPlayerModule(dataDir: okio.Path): Module = module {
             cacheRoot = dataDir,
         )
     }
-    single<BookDocumentOpener> { DesktopBookDocumentOpener() }
+    // The RAR back-end is host-supplied: getOrNull resolves the desktop
+    // module's junrar binding (apps/desktop), or null in hosts that bind none
+    // (RAR comics unsupported there).
+    single<BookDocumentOpener> { DesktopBookDocumentOpener(rarEntryReaderFactory = getOrNull()) }
     // Read-aloud: Windows speaks through SAPI (ISpVoice via the jna-platform
     // COM bridge); every other desktop OS keeps the Noop engine (reports
     // UNAVAILABLE — the reader degrades to a caption + hidden controls).

@@ -198,7 +198,7 @@ jobs:
         # The legacy :feature:player:video androidTest set moved to
         # :app (AGP KMP library plugins expose no androidTest compilation —
         # syncplay relocation precedent); compile-gate it here.
-        run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+        run: ./gradlew :app:assemblePhoneStoreDebugAndroidTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Shell tests (Koin registration guard + packaging asset suites)
         # :apps:desktop:test hosts the Koin-registration ratchet
@@ -216,11 +216,11 @@ jobs:
     # .cvr assets (fixed by androidResources { enable = true } in every shared
     # module) had no automated check because no gate ever opened the built
     # APK. The
-    # :app:verifyPhoneDebugComposeResources task closes that: it derives the
-    # resource-carrying shared modules and their locale sets from the source
-    # tree at execution time and asserts every assets/composeResources/
+    # :app:verifyPhoneStoreDebugComposeResources task closes that: it derives
+    # the resource-carrying shared modules and their locale sets from the
+    # source tree at execution time and asserts every assets/composeResources/
     # <packageOfResClass>/ prefix carries a .cvr entry per locale in the
-    # built phoneDebug APK (baseline: 216 = 24 modules x 9 locales).
+    # built phoneStoreDebug APK (baseline: 216 = 24 modules x 9 locales).
     # No explicit Android SDK setup is needed: hosted ubuntu runners ship the
     # SDK (same reliance as release.yml and codeql.yml).
     runs-on: ubuntu-latest
@@ -271,11 +271,28 @@ jobs:
         # are NOT part of the derived shared-module scan above: which modules
         # own an androidHostTest source set is not derivable from
         # settings.gradle.kts.)
-        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest :shared:feature:player-video:testAndroidHostTest :shared:feature:syncplay:testAndroidHostTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+        run: ./gradlew :app:testPhoneStoreDebugUnitTest :app:testTvStoreDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest :shared:feature:player-video:testAndroidHostTest :shared:feature:syncplay:testAndroidHostTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Compose-resources APK guard
-        # dependsOn assemblePhoneDebug — the guard opens the built APKs.
-        run: ./gradlew :app:verifyPhoneDebugComposeResources --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+        # dependsOn assemblePhoneStoreDebug — the guard opens the built APKs.
+        run: ./gradlew :app:verifyPhoneStoreDebugComposeResources --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+
+      - name: F-Droid flavor smoke build (GMS-free assertions)
+        # Assembles the fdroid distribution flavor for the phone (exactly one
+        # arm64-v8a APK, no universal; versionCode = version.properties base +
+        # the arm64 abiIndex = 11090 + 1) and runs tools/fdroid/verify-apk.sh
+        # against it (see tools/fdroid/README.md for the policy each check
+        # protects). Strict on purpose — no escape hatch: until the
+        # cast/updater/fonts seams land, the GMS manifest/dex checks are
+        # EXPECTED to fail (the tree still carries GMS cast code), and once
+        # they land any regression fails this step loudly. The step's
+        # mechanical value regardless of seam state: the flavor+abiFilter
+        # build path stays green and the verify script keeps tracking the
+        # shipped artifact format.
+        run: |
+          ./gradlew :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+          code=$(grep -oP '(?<=^jellyplay\.versionCode=)\d+' version.properties)
+          tools/fdroid/verify-apk.sh --expect-version-code $((code+1)) app/build/outputs/apk/phoneFdroid/release/*arm64-v8a*.apk
 
   desktop-package:
     #  release engineering: packaging dry-run per OS. Proves the

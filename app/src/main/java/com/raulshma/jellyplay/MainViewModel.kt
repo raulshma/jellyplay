@@ -23,9 +23,9 @@ import com.raulshma.jellyplay.feature.shell.ShellSessionController
 import com.raulshma.jellyplay.feature.shell.displayMessageText
 import com.raulshma.jellyplay.navigation.ShellGateModel
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.shell.AppUpdateCoordinator
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
-import com.raulshma.jellyplay.shell.UpdateCoordinator
 import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -69,7 +69,7 @@ class MainViewModel(
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: UserMessageBus,
     private val sessionCoordinator: SessionCoordinator,
-    private val updateCoordinator: UpdateCoordinator,
+    private val updateCoordinator: AppUpdateCoordinator,
     private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator,
     private val whatsNewCoordinator: WhatsNewCoordinator,
 ) : JellyPlayViewModel(), ShellGateModel {

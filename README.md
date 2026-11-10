@@ -607,19 +607,24 @@ Client-side architecture, sync semantics and the wire contract are documented in
 ### Build Commands
 
 ```bash
-# Debug builds (phone and TV)
-./gradlew assemblePhoneDebug
-./gradlew assembleTvDebug
+# Debug builds (phone and TV, Play/store distribution line)
+./gradlew assemblePhoneStoreDebug
+./gradlew assembleTvStoreDebug
 
-# Release builds
-./gradlew assemblePhoneRelease
-./gradlew assembleTvRelease
+# Release builds (store line; ships arm64-v8a + universal APKs)
+./gradlew assemblePhoneStoreRelease
+./gradlew assembleTvStoreRelease
+
+# F-Droid distribution line (GMS-free; tv is disabled there; per-ABI
+# versionCode via -PabiFilter — see tools/fdroid/README.md)
+./gradlew assemblePhoneFdroidDebug
+./gradlew :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a
 
 # Desktop (JVM; Windows tested, macOS/Linux build-from-source and untested)
 ./gradlew :apps:desktop:run
 ```
 
-The project uses product flavors — `phone` (standard mobile) and `tv` (Android TV with Leanback launcher). Release builds ship `arm64-v8a` and universal APKs; debug builds additionally produce `x86_64` and `x86` APKs for emulators and legacy Android TV system images.
+The project uses two product-flavor dimensions — `platform` (`phone`, standard mobile, or `tv`, Android TV with Leanback launcher) × `distribution` (`store`, the Play/GMS line, or `fdroid`, the GMS-free F-Droid line; tv×fdroid is disabled). Store release builds ship `arm64-v8a` and universal APKs; debug builds additionally produce `x86_64` and `x86` APKs for emulators and legacy Android TV system images. F-Droid release builds are per-ABI with an abiIndex-bumped versionCode (see `tools/fdroid/README.md`).
 
 <details>
 <summary><strong>Desktop playback: bundled libmpv (Windows)</strong></summary>
@@ -665,8 +670,8 @@ dialog instead of a silent black screen.
 
 | Target          | Command                            | Notes                                                                                       |
 | :-------------- | :--------------------------------- | :------------------------------------------------------------------------------------------ |
-| Android phone   | `./gradlew :app:installPhoneDebug` | Needs a device/emulator connected via adb, or run the `app` config from Android Studio      |
-| Android TV      | `./gradlew :app:installTvDebug`    | Same, on a TV device/emulator                                                               |
+| Android phone   | `./gradlew :app:installPhoneStoreDebug` | Needs a device/emulator connected via adb, or run the `app` config from Android Studio      |
+| Android TV      | `./gradlew :app:installTvStoreDebug`    | Same, on a TV device/emulator                                                               |
 | Windows desktop | `./gradlew :apps:desktop:run`      | First run fetches a pinned `libmpv-2.dll` — needs 7-Zip on PATH (see [Building](#building)) |
 
 ### Tests & verification
@@ -676,7 +681,7 @@ dialog instead of a silent black screen.
 ./gradlew :shared:core:data:jvmTest
 
 # Android unit tests (flavor-aware)
-./gradlew :app:testPhoneDebugUnitTest
+./gradlew :app:testPhoneStoreDebugUnitTest
 
 # Desktop unit tests (includes the Koin-registration guard)
 ./gradlew :apps:desktop:test
