@@ -114,9 +114,20 @@ internal suspend fun transferBookIfDue(
             streamBookChunks(transfer, resumePercent, appearance, eval)
         }
     }.onFailure {
-        runCatching { eval(buildLoadBookAbortScript()) }
+        evalAbortScriptBestEffort(eval)
         onFailBoot()
     }
+}
+
+/**
+ * Best-effort abort-script eval, extracted from [transferBookIfDue]'s suspend
+ * body: [eval] is a plain JS-bridge call with no suspension point, so the
+ * stdlib `runCatching` here cannot swallow a cancellation — keeping it in a
+ * non-suspend fun keeps BareRunCatchingRatchetTest's census honest (the
+ * baseline counts only sites that can actually mask structured cancellation).
+ */
+private fun evalAbortScriptBestEffort(eval: (String) -> Unit) {
+    runCatching { eval(buildLoadBookAbortScript()) }
 }
 
 /**
