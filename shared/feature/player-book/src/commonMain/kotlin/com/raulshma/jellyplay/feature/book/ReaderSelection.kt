@@ -22,7 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,6 +47,7 @@ import com.composables.icons.tabler.outline.Underline
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_annotations
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_annotations_empty
@@ -228,12 +229,12 @@ internal fun AnnotationsSheet(
     onExport: (asJson: Boolean) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+    TvSafeSheet(onDismissRequest = onDismissRequest) {
         SheetTitle(text = stringResource(Res.string.book_reader_annotations))
         if (annotations.isEmpty()) {
             SheetEmptyText(text = stringResource(Res.string.book_reader_annotations_empty))
         } else {
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
+            LazyColumn(modifier = Modifier.fillMaxWidth().tvFocusGroupRestorer()) {
                 items(annotations.asReversed(), key = { it.id }) { annotation ->
                     AnnotationRow(
                         annotation = annotation,

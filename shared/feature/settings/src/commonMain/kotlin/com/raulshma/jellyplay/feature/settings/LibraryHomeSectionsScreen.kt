@@ -49,8 +49,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_no_libraries
@@ -89,7 +89,7 @@ fun LibraryHomeSectionsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(innerPadding)
-                .tvFocusRestorer(),
+                .tvFocusGroupRestorer(),
             contentPadding = PaddingValues(
                 start = adaptiveInfo.contentPadding(isTv),
                 end = adaptiveInfo.contentPadding(isTv),
@@ -186,9 +186,9 @@ private fun LibrarySectionRow(
             ),
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusIndicator(tvFocusState, shape)
                 .clip(shape)
                 .then(tvFocusState.focusModifier)
-                .tvFocusIndicator(tvFocusState, shape)
                 .clickable(onClick = onToggleExpand),
         )
 
@@ -228,10 +228,10 @@ private fun SubSectionToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.03f))
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
             .clickable { onCheckedChange(!checked) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

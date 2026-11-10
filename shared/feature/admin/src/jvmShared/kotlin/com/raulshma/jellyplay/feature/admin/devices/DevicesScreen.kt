@@ -72,8 +72,8 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorSt
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_cancel
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_custom_name
@@ -234,7 +234,7 @@ fun DevicesScreen(
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .tvFocusRestorer()
+                                    .tvFocusGroupRestorer()
                                     .focusRequester(listFocusRequester),
                                 contentPadding = PaddingValues(
                                     start = 16.dp,
@@ -259,7 +259,12 @@ fun DevicesScreen(
                                     }
                                     itemsIndexed(
                                         items = devices,
-                                        key = { index, device -> "${userName}_${index}_${device.id}" },
+                                        // Key on the device's own id (unique
+                                        // within a user's group; the userName
+                                        // prefix keeps cross-group ids apart) —
+                                        // an index fold would shift every
+                                        // following key on removal.
+                                        key = { _, device -> "${userName}_${device.id}" },
                                         contentType = { _, _ -> "deviceItem" },
                                     ) { _, device ->
                                         DeviceItem(

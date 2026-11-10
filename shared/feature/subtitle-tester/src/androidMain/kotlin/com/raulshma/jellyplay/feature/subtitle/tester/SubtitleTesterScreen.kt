@@ -38,7 +38,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleControls
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import com.raulshma.jellyplay.feature.subtitle.tester.components.PreviewTile
@@ -158,7 +158,7 @@ fun SubtitleTesterScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .tvFocusRestorer()
+                    .tvFocusGroupRestorer()
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

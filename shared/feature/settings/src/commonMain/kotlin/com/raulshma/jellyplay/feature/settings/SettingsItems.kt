@@ -462,8 +462,8 @@ internal fun HiddenSettingsHint(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusIndicator(ShapeCache.smooth16)
             .clip(ShapeCache.smooth16)
-            .focusIndicator()
             .clickable(onClick = onShowAdvanced)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.Center,

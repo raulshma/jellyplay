@@ -21,11 +21,15 @@ app/src/main/assets/aboutlibraries.json
 #    lua51) + the appResources packaging copies it mirrors there.
 #  - tools/font/*.ttf: original (pre-subset) font inputs dropped beside
 #    subset_subfont.py — multi-MB, re-obtainable (sha256 in its README).
+#  - tools/font/ui-original/: fetch_ui_fonts.py's fetched upstream UI font
+#    downloads (variable originals + static copies) at the pinned commit —
+#    re-obtainable via the script, output sha256s in its README.
 #  - tools/e2e state dirs: Jellyfin docker volumes, books-probe fixture
 #    state (per-run images, databases, logs), device-pass evidence drops
 #    (uiautomator dumps + screencaps under .results/).
 tools/mpv/
 tools/font/*.ttf
+tools/font/ui-original/
 tools/e2e/.state/
 tools/e2e/books-probe/.state*/
 tools/e2e/.results/

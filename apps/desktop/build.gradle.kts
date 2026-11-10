@@ -64,6 +64,13 @@ dependencies {
     implementation(project(":shared:feature:player-live"))
     implementation(project(":shared:feature:player-audio"))
     implementation(project(":shared:feature:player-book"))
+    // The desktop RAR-comics back-end (DesktopJunrarRarEntryReader) behind
+    // the shared RarEntryReaderFactory seam. junrar ships under the UnRAR
+    // license — free to use for decompression only; it must never be used
+    // to (re)create RAR archives — which is fine for this JVM host but keeps
+    // the dependency out of the shared module (fdroid compiles player-book
+    // too).
+    implementation(libs.junrar)
     implementation(project(":shared:feature:player-video"))
     // Shared shell graph (shared appSections): one entryProvider behind both
     // shells — DesktopAppRoot supplies the desktop ShellHostHooks and the

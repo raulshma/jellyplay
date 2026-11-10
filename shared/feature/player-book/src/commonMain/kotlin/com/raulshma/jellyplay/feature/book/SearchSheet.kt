@@ -6,10 +6,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,7 +58,7 @@ internal fun SearchSheet(
     onResultTap: (EpubSearchResult) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+    TvSafeSheet(onDismissRequest = onDismissRequest) {
         SheetTitle(text = stringResource(Res.string.book_reader_search))
         var query by remember { mutableStateOf("") }
         OutlinedTextField(
@@ -90,7 +91,7 @@ internal fun SearchSheet(
             is ReaderSearchState.Results -> if (state.rows.isEmpty()) {
                 SheetEmptyText(text = stringResource(Res.string.book_reader_search_no_results))
             } else {
-                LazyColumn(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
+                LazyColumn(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp).tvFocusGroupRestorer()) {
                     items(state.rows, key = { it.cfi }) { row ->
                         TextButton(
                             onClick = { onResultTap(row) },

@@ -69,7 +69,6 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.composables.icons.tabler.Tabler
@@ -117,9 +116,12 @@ internal fun EpisodePickerSheet(
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    // Raw restorer, no explicit group: the lazy list's own focus group is the
+                    // target, so Down from the seasons row stays a plain exit into the episode
+                    // list. An explicit tvFocusGroupRestorer would push a second group between
+                    // restorer and items and let a nested exit handler cancel that Down.
                     modifier = Modifier
-                        .tvFocusRestorer()
-                        .tvFocusExitHandler(),
+                        .tvFocusRestorer(),
                 ) {
                     items(seasons, key = { it.id }, contentType = { "season" }) { season ->
                         val isSelected = season.id == currentSeasonId
@@ -139,9 +141,9 @@ internal fun EpisodePickerSheet(
 
                         Surface(
                             modifier = Modifier
+                                .tvFocusIndicator(seasonFocusState, shape)
                                 .clip(shape)
                                 .then(seasonFocusState.focusModifier)
-                                .tvFocusIndicator(seasonFocusState, shape)
                                 .ifElse(season.id == currentSeasonId || (currentSeasonId == null && season.id == seasons.firstOrNull()?.id), Modifier.focusRequester(seasonFocusRequester))
                                 .clickable { onSeasonSelect(season.id) },
                             color = containerColor,
@@ -251,13 +253,13 @@ private fun EpisodeRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp)
+            .tvFocusIndicator(focusState, shape)
             .clip(shape)
             .background(
                 if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                 else Color.Transparent
             )
             .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

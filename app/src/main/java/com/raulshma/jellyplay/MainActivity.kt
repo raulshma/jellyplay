@@ -6,17 +6,12 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.view.View
 import android.graphics.Color
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.runtime.getValue
@@ -30,14 +25,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.core.view.WindowCompat
-import com.raulshma.jellyplay.core.data.cast.withCastDiskReadsPermitted
-import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.distribution.DistributionPlatform
 import com.raulshma.jellyplay.core.ui.util.LocalNetworkAccess
 import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
@@ -115,11 +109,12 @@ class MainActivity : FragmentActivity() {
     }
 
     // Flipped by the cast-init coroutine kicked off in onCreate just before
-    // setContent: whether the one-time CastContext initialization
-    // succeeded. Held as plain mutableStateOf — NOT remember-cached at the
-    // read site — so the hidden media-route button in setContent composes the
-    // moment it flips true (a frame or two after the first composition), and
-    // its setUpMediaRouteButton resolves the cached CastContext instead of
+    // setContent: whether the distribution's cast pre-init succeeded
+    // (store: the one-time GMS CastContext warm; fdroid: always false).
+    // Held as plain mutableStateOf — NOT remember-cached at the read site —
+    // so the hidden media-route button in setContent composes the moment it
+    // flips true (a frame or two after the first composition), and its
+    // setUpMediaRouteButton resolves the cached CastContext instead of
     // re-triggering the Dynamite dex load.
     private var castPreinitialized by mutableStateOf(false)
 
@@ -196,8 +191,9 @@ class MainActivity : FragmentActivity() {
                     dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
             },
         )
-        // The one-time CastContext initialization (Dynamite dex load +
-        // hasSystemFeature binder call) runs in the coroutine kicked off just
+        // The distribution cast pre-init (the one-time GMS CastContext warm —
+        // Dynamite dex load + hasSystemFeature binder call — on store; an
+        // always-false no-op on fdroid) runs in the coroutine kicked off just
         // before setContent below — NOT synchronously before it — so neither
         // cost lands in TTID (the splash cannot release until onCreate + the
         // first composition finish). Every later getSharedInstance caller
@@ -283,27 +279,15 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // The CastContext init, kicked off here so it runs CONCURRENTLY
-        // with setContent instead of serially before it — onCreate (and thus
-        // TTID) does not pay the Dynamite dex load + hasSystemFeature binder
-        // call. Still on Main (getSharedInstance is main-thread-only, the API
-        // has no off-thread variant), but on Dispatchers.Main — NOT
-        // Main.immediate, which would execute this body inline inside onCreate
-        // itself (there are no suspension points before the CastContext call)
-        // and reproduce the serial cost — the posted task interleaves with
-        // the first composed frames, and castPreinitialized flips the hidden
-        // 1dp route button in one or two frames. The dex reads stay wrapped in
-        // withCastDiskReadsPermitted: the StrictMode permit is thread-scoped
-        // and the coroutine still runs on Main, so debug builds keep
-        // permitting exactly those third-party reads (release installs no
-        // policy either way).
+        // The cast pre-init (GMS CastContext warm on store; always-false on
+        // fdroid — the full timing story lives in GoogleCastIntegrationImpl /
+        // DistributionPlatform.HiddenCastRouteButton), kicked off here so it
+        // runs CONCURRENTLY with setContent instead of serially before it —
+        // onCreate (and thus TTID) never pays the initialization cost, and
+        // castPreinitialized flips the hidden route button in one or two
+        // frames.
         lifecycleScope.launch(Dispatchers.Main) {
-            castPreinitialized = packageManager.hasSystemFeature("com.google.android.gms.cast") &&
-                runCatchingRethrowingCancellation {
-                    withCastDiskReadsPermitted {
-                        com.google.android.gms.cast.framework.CastContext.getSharedInstance(this@MainActivity)
-                    }
-                }.isSuccess
+            castPreinitialized = DistributionPlatform.preinitCast(this@MainActivity)
         }
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -311,34 +295,17 @@ class MainActivity : FragmentActivity() {
             // collected here so the gate below recomposes on every change.
             val pinUnlocked by appLockState.unlocked.collectAsStateWithLifecycle()
 
-            // Hidden Cast media-route button, composed only once the onCreate
-            // cast-init coroutine (kicked off just before setContent)
-            // reports success — so setUpMediaRouteButton resolves the cached
-            // singleton and does no dex I/O. Reading castPreinitialized
-            // directly (no remember {}) subscribes this call site, so the
-            // button appears on the recomposition that lands the flip, a
-            // frame or two after the first composition. When Cast is
-            // unavailable (or not yet initialized) the branch is skipped
-            // outright — nothing references the invisible button.
+            // Hidden Cast media-route button (store builds; DistributionPlatform
+            // renders nothing on fdroid), composed only once the onCreate
+            // cast-init coroutine (kicked off just before setContent) reports
+            // success. The gate reads castPreinitialized HERE — not inside the
+            // platform — so this call site keeps subscribing to the field and
+            // recomposes the moment it flips: the button appears on the
+            // recomposition that lands the flip, a frame or two after the
+            // first composition. When Cast is unavailable (or not yet
+            // initialized) the branch is skipped outright.
             if (castPreinitialized) {
-                Box(
-                    modifier = Modifier
-                        .size(1.dp)
-                ) {
-                    androidx.compose.ui.viewinterop.AndroidView(
-                        factory = { ctx ->
-                            try {
-                                androidx.mediarouter.app.MediaRouteButton(ctx).also {
-                                    it.visibility = View.INVISIBLE
-                                    com.google.android.gms.cast.framework.CastButtonFactory.setUpMediaRouteButton(ctx, it)
-                                }
-                            } catch (_: Exception) {
-                                View(ctx)
-                            }
-                        },
-                        modifier = Modifier.size(1.dp),
-                    )
-                }
+                DistributionPlatform.HiddenCastRouteButton()
             }
 
             val hasLockEnabled by remember {

@@ -22,9 +22,9 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
 import com.raulshma.jellyplay.deeplink.IncomingIntentRequest
+import com.raulshma.jellyplay.shell.AppUpdateCoordinator
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
-import com.raulshma.jellyplay.shell.UpdateCoordinator
 import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -94,7 +94,7 @@ class MainViewModelTest {
     private val offlineModeManager: OfflineModeManager = mockk(relaxed = true)
     private val userMessageBus: UserMessageBus = mockk(relaxed = true)
     private val sessionCoordinator: SessionCoordinator = mockk(relaxed = true)
-    private val updateCoordinator: UpdateCoordinator = mockk(relaxed = true)
+    private val updateCoordinator: AppUpdateCoordinator = mockk(relaxed = true)
     private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator = mockk(relaxed = true)
     private val whatsNewCoordinator: WhatsNewCoordinator = mockk(relaxed = true)
 

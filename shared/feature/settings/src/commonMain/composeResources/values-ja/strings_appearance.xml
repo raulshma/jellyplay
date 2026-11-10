@@ -217,4 +217,6 @@
     <string name="settings_promoted_rail_source_subtitle">横向き/TVの詳細レールが優先表示する操作</string>
     <string name="settings_episode_overview_preview">エピソードあらすじのプレビュー</string>
     <string name="settings_episode_overview_preview_subtitle">シーズンのエピソード行に2行のあらすじを表示します</string>
+    <string name="settings_tv_ui_scale">TV UIスケール</string>
+    <string name="settings_tv_ui_scale_subtitle">TV画面全体の表示サイズを変更します</string>
 </resources>

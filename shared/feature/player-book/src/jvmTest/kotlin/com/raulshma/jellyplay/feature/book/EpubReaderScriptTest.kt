@@ -8,12 +8,14 @@ import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationColor
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationSpec
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationStyle
 import com.raulshma.jellyplay.feature.book.epub.EpubAppearance
+import com.raulshma.jellyplay.feature.book.epub.EpubBookTransfer
 import com.raulshma.jellyplay.feature.book.epub.buildAddAnnotationScript
 import com.raulshma.jellyplay.feature.book.epub.buildApplyAnnotationsScript
 import com.raulshma.jellyplay.feature.book.epub.buildClearSelectionScript
 import com.raulshma.jellyplay.feature.book.epub.buildGoToCfiScript
 import com.raulshma.jellyplay.feature.book.epub.EvaluatingEpubReaderHandle
 import com.raulshma.jellyplay.feature.book.epub.buildGoToScript
+import com.raulshma.jellyplay.feature.book.epub.buildLoadBookAbortScript
 import com.raulshma.jellyplay.feature.book.epub.buildLoadBookBeginScript
 import com.raulshma.jellyplay.feature.book.epub.buildNextScript
 import com.raulshma.jellyplay.feature.book.epub.buildPrevScript
@@ -28,7 +30,7 @@ import com.raulshma.jellyplay.feature.book.epub.buildSetLineHeightScript
 import com.raulshma.jellyplay.feature.book.epub.buildSetMarginsScript
 import com.raulshma.jellyplay.feature.book.epub.buildSpeechContextScript
 import com.raulshma.jellyplay.feature.book.epub.pushAppearanceScripts
-import com.raulshma.jellyplay.feature.book.epub.sendBookChunks
+import com.raulshma.jellyplay.feature.book.epub.streamBookChunks
 import com.raulshma.jellyplay.feature.book.epub.toJsonArg
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -143,14 +145,14 @@ class EpubReaderScriptTest {
     }
 
     @Test
-    fun `loadBookBegin script carries the appearance as one JSON string arg`() {
+    fun `loadBookBegin script carries the total bytes header and the appearance as one JSON string arg`() {
         val script = buildLoadBookBeginScript(
-            chunkCount = 2,
+            totalBytes = 2250000L,
             resumePercent = 0.5,
             appearance = EpubAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 18),
         )
         assertEquals(
-            "window.jellyPlayReader.loadBookBegin(2, 0.5, " +
+            "window.jellyPlayReader.loadBookBegin(2250000, 0.5, " +
                 "\"{\\\"theme\\\":\\\"sepia\\\",\\\"fontSize\\\":18,\\\"flow\\\":\\\"paginated\\\"}\")",
             script,
         )
@@ -304,23 +306,36 @@ class EpubReaderScriptTest {
     }
 
     @Test
-    fun `chunked book transfer rides the appearance on the begin frame`() = runTest {
+    fun `streamed book transfer rides the appearance on the begin frame and indexes the chunks`() = runTest {
         val scripts = mutableListOf<String>()
-        sendBookChunks(
-            base64 = "QUJD", // "ABC" — a single chunk
+        val transfer = object : EpubBookTransfer {
+            override val totalBytes: Long = 6L // "ABCDEF" — two standalone base64 chunks here
+            private var next = 0
+            override suspend fun nextChunkBase64(): String? =
+                listOf("QUJD", "REVG").getOrNull(next++)
+            override fun close() = Unit
+        }
+        streamBookChunks(
+            transfer = transfer,
             resumePercent = 0.25,
             appearance = EpubAppearance(theme = ReaderTheme.DARK, fontSizePx = 17),
         ) { scripts.add(it) }
 
         assertEquals(
             listOf(
-                "window.jellyPlayReader.loadBookBegin(1, 0.25, " +
+                "window.jellyPlayReader.loadBookBegin(6, 0.25, " +
                     "\"{\\\"theme\\\":\\\"dark\\\",\\\"fontSize\\\":17,\\\"flow\\\":\\\"paginated\\\"}\")",
                 "window.jellyPlayReader.loadBookChunk(0, \"QUJD\")",
+                "window.jellyPlayReader.loadBookChunk(1, \"REVG\")",
                 buildLoadBookEndScript(),
             ),
             scripts,
         )
+    }
+
+    @Test
+    fun `abort script targets the readerjs assembly reset`() {
+        assertEquals("window.jellyPlayReader.loadBookAbort()", buildLoadBookAbortScript())
     }
 
     /**

@@ -39,7 +39,7 @@ import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import org.jetbrains.compose.resources.stringResource
@@ -79,7 +79,7 @@ fun LicensesScreen(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .tvFocusRestorer()
+                        .tvFocusGroupRestorer()
                         .focusRequester(focusRequester),
                     contentPadding = PaddingValues(
                         start = adaptiveInfo.contentPadding(isTv),
@@ -123,8 +123,8 @@ private fun LicenseRow(
     val rowModifier = if (isTv) {
         Modifier
             .fillMaxWidth()
+            .focusIndicator(ShapeCache.smooth8)
             .clip(ShapeCache.smooth8)
-            .focusIndicator()
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     } else {

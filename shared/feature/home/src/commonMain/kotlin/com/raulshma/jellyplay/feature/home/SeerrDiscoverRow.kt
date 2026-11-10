@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,7 +20,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.components.seerr.SeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.seerr.SeerrMediaCard
@@ -98,8 +97,7 @@ internal fun SeerrDiscoverRow(
             state = rowState,
             modifier = Modifier
                 .fillMaxWidth()
-                .focusGroup()
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .then(if (clippingEnabled) Modifier.clipToBounds() else Modifier)
                 // Stay transparent over the ambient backdrop (matches the media
                 // rows); otherwise paint the flat background colour.

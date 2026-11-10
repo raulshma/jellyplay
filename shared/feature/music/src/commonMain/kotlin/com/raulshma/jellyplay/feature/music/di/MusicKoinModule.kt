@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.feature.music.browse.MusicBrowseViewModel
 import com.raulshma.jellyplay.feature.music.genres.GenreDetailViewModel
 import com.raulshma.jellyplay.feature.music.genres.GenresViewModel
 import com.raulshma.jellyplay.feature.music.moodplaylist.MoodPlaylistsViewModel
+import com.raulshma.jellyplay.feature.music.musichome.MusicHomeSectionsCache
 import com.raulshma.jellyplay.feature.music.musichome.MusicHomeViewModel
 import com.raulshma.jellyplay.feature.music.playlists.PlaylistDetailViewModel
 import com.raulshma.jellyplay.feature.music.playlists.PlaylistsViewModel
@@ -49,6 +50,16 @@ import org.koin.dsl.module
 val musicModule: Module = module {
     includes(platformMusicModule())
 
+    // Process-lifetime single: the section aggregate outlives any one music
+    // home ViewModel instance (the fresh-entry fast path), so it registers
+    // its own identity-transition reclaim (see MusicHomeSectionsCache).
+    single {
+        MusicHomeSectionsCache(
+            sessionIdentity = get(),
+            sessionCaches = get(),
+        )
+    }
+
     viewModel {
         MusicHomeViewModel(
             userDataChanges = get(),
@@ -61,6 +72,7 @@ val musicModule: Module = module {
             homeDiscoveryStore = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
+            sectionsCache = get(),
         )
     }
     viewModel {

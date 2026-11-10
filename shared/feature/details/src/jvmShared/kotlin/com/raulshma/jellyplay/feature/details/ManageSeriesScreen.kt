@@ -71,8 +71,8 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorSt
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.util.formatFileSize
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cancel
@@ -235,7 +235,7 @@ private fun ManageSeriesContent(
         state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .tvFocusRestorer()
+            .tvFocusGroupRestorer()
             .focusRequester(focusRequester),
         contentPadding = PaddingValues(
             start = contentPad,

@@ -274,7 +274,8 @@ class MediaFilterSheetTexts(
  *  - the two section-shape knobs the hosts historically differed on:
  *    [genreLimit] (24 vs 20 chips), [collapsibleSections] (library collapses
  *    years/tags/rating, search renders them flat), [contentScrollable]
- *    (library scrolls its body, search relies on the sheet) and
+ *    (both scroll their sections between the pinned header and Apply
+ *    action) and
  *    [customYearRange] (library's from/to slider — a feature-module
  *    composable, slotted in so its strings stay feature-local).
  *
@@ -323,7 +324,6 @@ fun MediaFilterSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (contentScrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
@@ -375,244 +375,254 @@ fun MediaFilterSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Sections, in canonical (enum) order, filtered by the caller's set.
-            // Every rendered section is preceded by a 20dp gap except the first
-            // one (the header's 24dp gap is the first separator); a section whose
-            // source list is empty renders nothing and stays "not rendered" so
-            // the next section takes the gap instead (the historical behavior of
-            // both sheets' conditional genre/tag blocks).
-            var renderedAnySection = false
-            var availabilityRendered = false
-            FilterSection.entries.forEach { section ->
-                if (section !in sections) return@forEach
+            // The sections own the only scrollable region: the header stays
+            // pinned above and the Apply action stays pinned below, so a long
+            // genre/tag list can never push the primary action off-screen.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .then(if (contentScrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+            ) {
+                // ── Sections, in canonical (enum) order, filtered by the caller's set.
+                // Every rendered section is preceded by a 20dp gap except the first
+                // one (the header's 24dp gap is the first separator); a section whose
+                // source list is empty renders nothing and stays "not rendered" so
+                // the next section takes the gap instead (the historical behavior of
+                // both sheets' conditional genre/tag blocks).
+                var renderedAnySection = false
+                var availabilityRendered = false
+                FilterSection.entries.forEach { section ->
+                    if (section !in sections) return@forEach
 
-                when (section) {
-                    FilterSection.SORT -> {
-                        if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
-                        SectionLabel(texts.sortBy)
-                        ButtonGroup(
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        ) {
-                            SortOption.entries.forEach { option ->
-                                customItem({
-                                    ToggleButton(
-                                        checked = option == draft.sortBy,
-                                        onCheckedChange = {
-                                            if (it) draft = draft.withSortBy(option)
-                                        },
-                                        colors = ToggleButtonDefaults.toggleButtonColors(
-                                            containerColor = glassBg,
-                                            contentColor = contentColor,
-                                            checkedContainerColor = MaterialTheme.colorScheme.primary,
-                                            checkedContentColor = MaterialTheme.colorScheme.onPrimary,
-                                        ),
-                                    ) {
-                                        Text(
-                                            text = option.displayName,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (option == draft.sortBy) FontWeight.Bold else FontWeight.Normal,
-                                        )
-                                    }
-                                }) {}
-                            }
-                        }
-                        renderedAnySection = true
-                    }
-
-                    FilterSection.MEDIA_TYPE -> {
-                        if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
-                        SectionLabel(texts.mediaType)
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            filterableMediaTypes.forEach { mediaType ->
-                                GlassFilterChip(
-                                    label = mediaType.mediaTypeDisplayNamePlural(),
-                                    selected = mediaType in draft.mediaTypes,
-                                    onClick = { draft = draft.withMediaTypeToggled(mediaType) },
-                                )
-                            }
-                        }
-                        renderedAnySection = true
-                    }
-
-                    FilterSection.PLAYED_STATUS -> {
-                        if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
-                        SectionLabel(texts.status)
-                        ButtonGroup(
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        ) {
-                            PlayedStatus.entries.forEach { status ->
-                                customItem({
-                                    ToggleButton(
-                                        checked = status == draft.playedStatus,
-                                        onCheckedChange = {
-                                            if (it) draft = draft.withPlayedStatus(status)
-                                        },
-                                        colors = ToggleButtonDefaults.toggleButtonColors(
-                                            containerColor = glassBg,
-                                            contentColor = contentColor,
-                                            checkedContainerColor = MaterialTheme.colorScheme.primary,
-                                            checkedContentColor = MaterialTheme.colorScheme.onPrimary,
-                                        ),
-                                    ) {
-                                        Text(
-                                            text = status.displayName,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (status == draft.playedStatus) FontWeight.Bold else FontWeight.Normal,
-                                        )
-                                    }
-                                }) {}
-                            }
-                        }
-                        // ── Resumable (In Progress) + Downloaded toggles ──
-                        // A single chip that restricts the grid to items with a
-                        // playback position (Jellyfin ItemFilter.IsResumable),
-                        // plus the downloaded pin that swaps the browse list to
-                        // the local offline store. They render as one block with
-                        // the status group — the library sheet's historical
-                        // grouping (12dp gap, no section label).
-                        if (FilterSection.AVAILABILITY in sections) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            AvailabilityChips(
-                                draft = draft,
-                                glassBg = glassBg,
-                                resumableLabel = texts.resumable,
-                                downloadedLabel = texts.downloaded,
-                                hasSubtitlesLabel = texts.hasSubtitles,
-                                hasTrailerLabel = texts.hasTrailer,
-                                onDraftChange = { draft = it },
-                            )
-                            availabilityRendered = true
-                        }
-                        renderedAnySection = true
-                    }
-
-                    FilterSection.AVAILABILITY -> {
-                        // Only reached by a hypothetical caller that renders the
-                        // toggles without the status group.
-                        if (!availabilityRendered) {
+                    when (section) {
+                        FilterSection.SORT -> {
                             if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
-                            AvailabilityChips(
-                                draft = draft,
-                                glassBg = glassBg,
-                                resumableLabel = texts.resumable,
-                                downloadedLabel = texts.downloaded,
-                                hasSubtitlesLabel = texts.hasSubtitles,
-                                hasTrailerLabel = texts.hasTrailer,
-                                onDraftChange = { draft = it },
-                            )
+                            SectionLabel(texts.sortBy)
+                            ButtonGroup(
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            ) {
+                                SortOption.entries.forEach { option ->
+                                    customItem({
+                                        ToggleButton(
+                                            checked = option == draft.sortBy,
+                                            onCheckedChange = {
+                                                if (it) draft = draft.withSortBy(option)
+                                            },
+                                            colors = ToggleButtonDefaults.toggleButtonColors(
+                                                containerColor = glassBg,
+                                                contentColor = contentColor,
+                                                checkedContainerColor = MaterialTheme.colorScheme.primary,
+                                                checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+                                            ),
+                                        ) {
+                                            Text(
+                                                text = option.displayName,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = if (option == draft.sortBy) FontWeight.Bold else FontWeight.Normal,
+                                            )
+                                        }
+                                    }) {}
+                                }
+                            }
                             renderedAnySection = true
                         }
-                    }
 
-                    FilterSection.GENRES -> if (genres.isNotEmpty()) {
-                        if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
-                        SectionLabel(texts.genres)
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            genres.take(genreLimit).forEach { genre ->
-                                GlassFilterChip(
-                                    label = genre.name,
-                                    selected = genre.name in draft.genres,
-                                    onClick = { draft = draft.withGenreToggled(genre.name) },
-                                )
-                            }
-                        }
-                        renderedAnySection = true
-                    }
-
-                    FilterSection.YEARS -> {
-                        if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
-                        FilterSheetSection(
-                            title = texts.years,
-                            collapsible = FilterSection.YEARS in collapsibleSections,
-                            collapseContentDescription = texts.collapseContentDescription,
-                            expandContentDescription = texts.expandContentDescription,
-                        ) {
+                        FilterSection.MEDIA_TYPE -> {
+                            if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
+                            SectionLabel(texts.mediaType)
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                GlassFilterChip(
-                                    label = texts.anyLabel,
-                                    selected = draft.years.isEmpty(),
-                                    onClick = { draft = draft.withYears(emptySet()) },
-                                )
-                                yearPresets.forEach { preset ->
-                                    val selection = yearPresetSelection(preset, draft.years)
+                                filterableMediaTypes.forEach { mediaType ->
                                     GlassFilterChip(
-                                        label = preset.label,
-                                        selected = selection == YearPresetSelection.Full,
-                                        onClick = {
-                                            draft = draft.withYears(toggleYearPreset(preset, draft.years))
-                                        },
+                                        label = mediaType.mediaTypeDisplayNamePlural(),
+                                        selected = mediaType in draft.mediaTypes,
+                                        onClick = { draft = draft.withMediaTypeToggled(mediaType) },
                                     )
                                 }
                             }
-                            if (customYearRange != null) {
-                                Box(modifier = Modifier.padding(top = 8.dp)) {
-                                    customYearRange(draft.years) { range ->
-                                        draft = draft.withYears(range.toSet())
+                            renderedAnySection = true
+                        }
+
+                        FilterSection.PLAYED_STATUS -> {
+                            if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
+                            SectionLabel(texts.status)
+                            ButtonGroup(
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            ) {
+                                PlayedStatus.entries.forEach { status ->
+                                    customItem({
+                                        ToggleButton(
+                                            checked = status == draft.playedStatus,
+                                            onCheckedChange = {
+                                                if (it) draft = draft.withPlayedStatus(status)
+                                            },
+                                            colors = ToggleButtonDefaults.toggleButtonColors(
+                                                containerColor = glassBg,
+                                                contentColor = contentColor,
+                                                checkedContainerColor = MaterialTheme.colorScheme.primary,
+                                                checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+                                            ),
+                                        ) {
+                                            Text(
+                                                text = status.displayName,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = if (status == draft.playedStatus) FontWeight.Bold else FontWeight.Normal,
+                                            )
+                                        }
+                                    }) {}
+                                }
+                            }
+                            // ── Resumable (In Progress) + Downloaded toggles ──
+                            // A single chip that restricts the grid to items with a
+                            // playback position (Jellyfin ItemFilter.IsResumable),
+                            // plus the downloaded pin that swaps the browse list to
+                            // the local offline store. They render as one block with
+                            // the status group — the library sheet's historical
+                            // grouping (12dp gap, no section label).
+                            if (FilterSection.AVAILABILITY in sections) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                AvailabilityChips(
+                                    draft = draft,
+                                    glassBg = glassBg,
+                                    resumableLabel = texts.resumable,
+                                    downloadedLabel = texts.downloaded,
+                                    hasSubtitlesLabel = texts.hasSubtitles,
+                                    hasTrailerLabel = texts.hasTrailer,
+                                    onDraftChange = { draft = it },
+                                )
+                                availabilityRendered = true
+                            }
+                            renderedAnySection = true
+                        }
+
+                        FilterSection.AVAILABILITY -> {
+                            // Only reached by a hypothetical caller that renders the
+                            // toggles without the status group.
+                            if (!availabilityRendered) {
+                                if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
+                                AvailabilityChips(
+                                    draft = draft,
+                                    glassBg = glassBg,
+                                    resumableLabel = texts.resumable,
+                                    downloadedLabel = texts.downloaded,
+                                    hasSubtitlesLabel = texts.hasSubtitles,
+                                    hasTrailerLabel = texts.hasTrailer,
+                                    onDraftChange = { draft = it },
+                                )
+                                renderedAnySection = true
+                            }
+                        }
+
+                        FilterSection.GENRES -> if (genres.isNotEmpty()) {
+                            if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
+                            SectionLabel(texts.genres)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                genres.take(genreLimit).forEach { genre ->
+                                    GlassFilterChip(
+                                        label = genre.name,
+                                        selected = genre.name in draft.genres,
+                                        onClick = { draft = draft.withGenreToggled(genre.name) },
+                                    )
+                                }
+                            }
+                            renderedAnySection = true
+                        }
+
+                        FilterSection.YEARS -> {
+                            if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
+                            FilterSheetSection(
+                                title = texts.years,
+                                collapsible = FilterSection.YEARS in collapsibleSections,
+                                collapseContentDescription = texts.collapseContentDescription,
+                                expandContentDescription = texts.expandContentDescription,
+                            ) {
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    GlassFilterChip(
+                                        label = texts.anyLabel,
+                                        selected = draft.years.isEmpty(),
+                                        onClick = { draft = draft.withYears(emptySet()) },
+                                    )
+                                    yearPresets.forEach { preset ->
+                                        val selection = yearPresetSelection(preset, draft.years)
+                                        GlassFilterChip(
+                                            label = preset.label,
+                                            selected = selection == YearPresetSelection.Full,
+                                            onClick = {
+                                                draft = draft.withYears(toggleYearPreset(preset, draft.years))
+                                            },
+                                        )
+                                    }
+                                }
+                                if (customYearRange != null) {
+                                    Box(modifier = Modifier.padding(top = 8.dp)) {
+                                        customYearRange(draft.years) { range ->
+                                            draft = draft.withYears(range.toSet())
+                                        }
                                     }
                                 }
                             }
+                            renderedAnySection = true
                         }
-                        renderedAnySection = true
-                    }
 
-                    FilterSection.TAGS -> if (availableTags.isNotEmpty()) {
-                        if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
-                        FilterSheetSection(
-                            title = texts.tags,
-                            collapsible = FilterSection.TAGS in collapsibleSections,
-                            collapseContentDescription = texts.collapseContentDescription,
-                            expandContentDescription = texts.expandContentDescription,
-                        ) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                        FilterSection.TAGS -> if (availableTags.isNotEmpty()) {
+                            if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
+                            FilterSheetSection(
+                                title = texts.tags,
+                                collapsible = FilterSection.TAGS in collapsibleSections,
+                                collapseContentDescription = texts.collapseContentDescription,
+                                expandContentDescription = texts.expandContentDescription,
                             ) {
-                                availableTags.take(20).forEach { tag ->
-                                    GlassFilterChip(
-                                        label = tag,
-                                        selected = tag in draft.tags,
-                                        onClick = { draft = draft.withTagToggled(tag) },
-                                    )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    availableTags.take(20).forEach { tag ->
+                                        GlassFilterChip(
+                                            label = tag,
+                                            selected = tag in draft.tags,
+                                            onClick = { draft = draft.withTagToggled(tag) },
+                                        )
+                                    }
                                 }
                             }
+                            renderedAnySection = true
                         }
-                        renderedAnySection = true
-                    }
 
-                    FilterSection.MIN_RATING -> {
-                        if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
-                        FilterSheetSection(
-                            title = texts.minRating,
-                            collapsible = FilterSection.MIN_RATING in collapsibleSections,
-                            collapseContentDescription = texts.collapseContentDescription,
-                            expandContentDescription = texts.expandContentDescription,
-                        ) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                        FilterSection.MIN_RATING -> {
+                            if (renderedAnySection) Spacer(modifier = Modifier.height(20.dp))
+                            FilterSheetSection(
+                                title = texts.minRating,
+                                collapsible = FilterSection.MIN_RATING in collapsibleSections,
+                                collapseContentDescription = texts.collapseContentDescription,
+                                expandContentDescription = texts.expandContentDescription,
                             ) {
-                                val ratingOptions = listOf(0f, 3f, 3.5f, 4f, 4.5f)
-                                ratingOptions.forEach { rating ->
-                                    GlassFilterChip(
-                                        label = if (rating == 0f) texts.anyLabel else texts.ratingLabel(rating),
-                                        selected = draft.minRating == rating,
-                                        onClick = { draft = draft.withMinRating(rating) },
-                                    )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    val ratingOptions = listOf(0f, 3f, 3.5f, 4f, 4.5f)
+                                    ratingOptions.forEach { rating ->
+                                        GlassFilterChip(
+                                            label = if (rating == 0f) texts.anyLabel else texts.ratingLabel(rating),
+                                            selected = draft.minRating == rating,
+                                            onClick = { draft = draft.withMinRating(rating) },
+                                        )
+                                    }
                                 }
                             }
+                            renderedAnySection = true
                         }
-                        renderedAnySection = true
                     }
                 }
             }
@@ -752,9 +762,9 @@ private fun CollapsibleSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusIndicator(headerFocusState, MaterialTheme.shapes.small)
                 .clip(MaterialTheme.shapes.small)
                 .then(headerFocusState.focusModifier)
-                .tvFocusIndicator(headerFocusState, MaterialTheme.shapes.small)
                 .clickable { expanded = !expanded }
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,

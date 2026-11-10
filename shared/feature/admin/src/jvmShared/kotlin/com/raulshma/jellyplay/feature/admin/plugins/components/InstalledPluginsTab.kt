@@ -14,7 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_no_plugins_installed
 
@@ -43,7 +43,7 @@ fun InstalledPluginsTab(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+            .then(if (isTv) Modifier.tvFocusGroupRestorer() else Modifier),
         contentPadding = contentPadding,
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
     ) {

@@ -217,4 +217,6 @@
     <string name="settings_promoted_rail_source_subtitle">横屏/TV 详情横栏优先显示哪些操作</string>
     <string name="settings_episode_overview_preview">剧集简介预览</string>
     <string name="settings_episode_overview_preview_subtitle">在季剧集行上显示 2 行简介摘要</string>
+    <string name="settings_tv_ui_scale">TV 界面缩放</string>
+    <string name="settings_tv_ui_scale_subtitle">缩小或放大整个电视界面</string>
 </resources>

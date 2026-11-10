@@ -1414,12 +1414,12 @@ class SettingsCatalogScreenContractTest {
                 themeMode = ThemeMode.SYSTEM,
             ),
         )
-        // The form-factor fork swaps the rows: layout_mode is
-        // touch/desktop-only, and the TV-only "Screen fit" overscan picker
-        // (always visible on TV — no advanced gate) appears in its
-        // place, so the TV count nets +1 over the touch/desktop one.
+        // The form-factor fork: layout_mode is touch/desktop-only, and the
+        // two TV-only always-visible rows (the "Screen fit" overscan picker
+        // and the UI-scale picker — no advanced gate on either) appear in
+        // its place, so the TV count nets +2 over the touch/desktop one.
         assertEquals(
-            4 + 8 + 1,
+            4 + 8 + 2,
             appearanceThemeScreenRowTotal(
                 variant = standard,
                 isDarkActive = false,
@@ -1444,22 +1444,24 @@ class SettingsCatalogScreenContractTest {
         // The declared half is exactly the advanced-flag base minus the
         // content-gated exceptions and the theme_scheduler highlight-alias —
         // the strict guard keeps them in sync. (The exception set is 7
-        // ContentGated rows + the alias. The form-factor
-        // fork is a SWAP: under the default (non-TV) flags layout_mode's
-        // All(Advanced, NotTv) admits and screen_fit's Tv drops; on TV it
-        // swaps — either way exactly one of the pair drops, so the declared
-        // half is 20 - 7 - 1 - 1 = 11 under advanced.)
+        // ContentGated rows + the alias. The form-factor fork: under the
+        // default (non-TV) flags layout_mode's All(Advanced, NotTv) admits
+        // while screen_fit's and tv_ui_scale's Tv rows both drop; on TV it
+        // inverts — layout_mode drops and the TV pair admits, so the TV
+        // half nets one more. The non-TV declared half is
+        // 21 - 7 - 1 - 2 = 11 under advanced.)
         val declared = rowTotalFor(
             SettingsScreenGroups.appearanceTheme,
             RowAdmissionFlags(showAdvanced = true),
         )
         assertEquals(
-            SettingsScreenGroups.appearanceTheme.items.size - 7 - 1 - 1,
+            SettingsScreenGroups.appearanceTheme.items.size - 7 - 1 - 2,
             declared,
         )
-        // On TV the same count: screen_fit admits and layout_mode drops.
+        // On TV only layout_mode drops: the TV pair (screen_fit +
+        // tv_ui_scale) admits, so the TV half is one over the non-TV one.
         assertEquals(
-            declared,
+            declared + 1,
             rowTotalFor(
                 SettingsScreenGroups.appearanceTheme,
                 RowAdmissionFlags(showAdvanced = true, isTv = true),

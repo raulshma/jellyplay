@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.ui.navigation.NavigationState
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
+import com.raulshma.jellyplay.distribution.DistributionPlatform
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.shell.navigation.ShellCompositionArms
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellComposition
@@ -146,6 +147,9 @@ internal fun rememberShellHostArms(
         onCheckForUpdates = remember(infra) {
             { infra.updateCoordinatorLazy.value.manualCheckForUpdate() }
         },
+        // Distribution-bound capability (store true / fdroid false) — gates the
+        // Settings → About update rows (ShellSettingsHooks.selfUpdateSupported).
+        selfUpdateSupported = DistributionPlatform.selfUpdateSupported,
         pendingSearchQuery = model.pendingSearchQuery,
         onConsumeSearchQuery = remember(model) {
             model::consumePendingSearchQuery

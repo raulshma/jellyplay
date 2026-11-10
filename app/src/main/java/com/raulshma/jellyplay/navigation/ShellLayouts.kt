@@ -448,11 +448,9 @@ internal fun PhoneContent(
                     MainNavDisplay(shellParams = shellParams)
                 }
                 if (showMiniPlayer) {
-                    val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
                     if (isExpanded) {
-                        AppMiniPlayerHost(
+                        MiniPlayerTitleHost(
                             audioPlaybackManager = audioPlaybackManager,
-                            title = audioTitle,
                             onNowPlayingClick = onNowPlayingClick,
                             onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
@@ -465,9 +463,8 @@ internal fun PhoneContent(
                                 )
                         )
                     } else {
-                        AppMiniPlayerHost(
+                        MiniPlayerTitleHost(
                             audioPlaybackManager = audioPlaybackManager,
-                            title = audioTitle,
                             onNowPlayingClick = onNowPlayingClick,
                             onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
@@ -596,6 +593,28 @@ internal fun PhoneContent(
                 }
             }
         }
+}
+
+/**
+ * Mini-player host leaf: collects the track title here so a track change
+ * recomposes only this composable, never the surrounding phone layout scope —
+ * the same leaf-collection discipline as the Play On bar's per-tick streams.
+ */
+@Composable
+private fun MiniPlayerTitleHost(
+    audioPlaybackManager: ShellAudioSurface,
+    onNowPlayingClick: () -> Unit,
+    onDismissMiniPlayer: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
+    AppMiniPlayerHost(
+        audioPlaybackManager = audioPlaybackManager,
+        title = audioTitle,
+        onNowPlayingClick = onNowPlayingClick,
+        onDismissMiniPlayer = onDismissMiniPlayer,
+        modifier = modifier,
+    )
 }
 
 /**

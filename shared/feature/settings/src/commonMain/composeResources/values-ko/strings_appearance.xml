@@ -217,4 +217,6 @@
     <string name="settings_promoted_rail_source_subtitle">가로/TV 상세 레일이 우선 표시할 동작</string>
     <string name="settings_episode_overview_preview">에피소드 개요 미리보기</string>
     <string name="settings_episode_overview_preview_subtitle">시즌 에피소드 행에 2줄 시놉시스를 표시합니다</string>
+    <string name="settings_tv_ui_scale">TV UI 배율</string>
+    <string name="settings_tv_ui_scale_subtitle">TV 화면 전체 인터페이스 크기를 조절합니다</string>
 </resources>

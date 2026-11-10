@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.*
 import com.composables.icons.tabler.outline.*
@@ -65,6 +66,7 @@ import com.raulshma.jellyplay.feature.player.audio.components.WaveformSeekBar
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import kotlinx.coroutines.flow.StateFlow
 
 /** Waveform seek bar + timestamp row — Pixel Player style. */
 @Composable
@@ -187,10 +189,24 @@ internal fun PixelTransportControls(
 /** Secondary controls row: Shuffle, Repeat, Favorite — in darker pill */
 @Composable
 internal fun PixelSecondaryControls(
-    shuffleMode: Boolean,
-    repeatMode: Int,
-    isFavorite: Boolean,
-    downloadItem: com.raulshma.jellyplay.core.model.DownloadItem?,
+    /**
+     * The queue slice (shuffle/repeat flags), passed as the flow and collected
+     * HERE (the leaf-collect idiom): a queue emission renews only this row,
+     * not the player body around it.
+     */
+    queueState: StateFlow<QueueState>,
+    /**
+     * The current track's favorite flag, passed as the flow and collected HERE
+     * (same leaf-collect idiom): a favorite flip renews only this row.
+     */
+    isFavoriteFlow: StateFlow<Boolean>,
+    /**
+     * The current track's download row, passed as the flow and collected HERE
+     * (the leaf-collect idiom): the row re-emits every ~2 s during a download,
+     * and only this controls row reads it — collecting at the screen root
+     * recomposed the whole player body per emission.
+     */
+    downloadItemFlow: StateFlow<com.raulshma.jellyplay.core.model.DownloadItem?>,
     abLoopStartMs: Long?,
     abLoopEndMs: Long?,
     showDownload: Boolean = true,
@@ -202,6 +218,11 @@ internal fun PixelSecondaryControls(
     pillSurfaceDark: Color,
     accentColor: Color,
 ) {
+    val queue by queueState.collectAsStateWithLifecycle()
+    val shuffleMode = queue.shuffleMode
+    val repeatMode = queue.repeatMode
+    val isFavorite by isFavoriteFlow.collectAsStateWithLifecycle()
+    val downloadItem by downloadItemFlow.collectAsStateWithLifecycle()
     val abLabelSetA = stringResource(Res.string.audio_ab_set_point_a)
     val abLabelSetB = stringResource(Res.string.audio_ab_set_point_b)
     val abLabelClear = stringResource(Res.string.audio_ab_clear)

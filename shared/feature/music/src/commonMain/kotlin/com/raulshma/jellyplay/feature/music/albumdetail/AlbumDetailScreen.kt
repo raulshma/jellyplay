@@ -72,8 +72,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
@@ -251,7 +251,7 @@ private fun AlbumDetailContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = 250.dp)
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(listFocusRequester),
             contentPadding = WindowInsets.navigationBars.asPaddingValues(),
         ) {

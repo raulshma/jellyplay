@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.model.SubtitleTrackMode
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lang_default
@@ -118,7 +119,7 @@ internal fun OrderedLanguagesEditorSheet(
                         max = with(LocalDensity.current) {
                             LocalWindowInfo.current.containerSize.height.toDp() * 0.35f
                         },
-                    ),
+                    ).tvFocusGroupRestorer(),
                 ) {
                     itemsIndexed(ordered, key = { _, code -> code }) { index, code ->
                         val shape = expressiveListShape(index, ordered.size)
@@ -242,7 +243,7 @@ internal fun TrackRulesEditorSheet(
                     max = with(LocalDensity.current) {
                         LocalWindowInfo.current.containerSize.height.toDp() * 0.35f
                     },
-                ),
+                ).tvFocusGroupRestorer(),
             ) {
                 itemsIndexed(rules.rules, key = { _, rule -> rule.id }) { index, rule ->
                     val shape = expressiveListShape(index, rules.rules.size)

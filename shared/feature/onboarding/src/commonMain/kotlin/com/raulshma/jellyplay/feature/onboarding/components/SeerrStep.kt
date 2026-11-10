@@ -30,6 +30,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,11 +94,39 @@ fun SeerrStep(
     actions: SeerrEditActions,
     modifier: Modifier = Modifier,
 ) {
-    var serverUrl by remember(seerrPreferences.serverUrl) { mutableStateOf(seerrPreferences.serverUrl) }
+    // The text fields seed from the store and re-seed on EXTERNAL store
+    // changes (the initial async load, a disconnect), but not on the echo of
+    // their own debounced write: it lands a typing pause after the
+    // keystrokes, and an unconditional reset on it would clobber whatever
+    // was typed in the interim. Each lastSent* tracks the value this field
+    // last dispatched, so a matching store emission is recognized as its own
+    // echo and ignored.
+    var serverUrl by remember { mutableStateOf(seerrPreferences.serverUrl) }
+    var lastSentServerUrl by remember { mutableStateOf(seerrPreferences.serverUrl) }
+    LaunchedEffect(seerrPreferences.serverUrl) {
+        if (seerrPreferences.serverUrl != lastSentServerUrl) {
+            serverUrl = seerrPreferences.serverUrl
+            lastSentServerUrl = seerrPreferences.serverUrl
+        }
+    }
     var authMethod by remember(seerrPreferences.authMethod) { mutableStateOf(seerrPreferences.authMethod) }
     var apiKey by remember { mutableStateOf("") }
-    var username by remember(seerrPreferences.username) { mutableStateOf(seerrPreferences.username) }
-    var email by remember(seerrPreferences.email) { mutableStateOf(seerrPreferences.email) }
+    var username by remember { mutableStateOf(seerrPreferences.username) }
+    var lastSentUsername by remember { mutableStateOf(seerrPreferences.username) }
+    LaunchedEffect(seerrPreferences.username) {
+        if (seerrPreferences.username != lastSentUsername) {
+            username = seerrPreferences.username
+            lastSentUsername = seerrPreferences.username
+        }
+    }
+    var email by remember { mutableStateOf(seerrPreferences.email) }
+    var lastSentEmail by remember { mutableStateOf(seerrPreferences.email) }
+    LaunchedEffect(seerrPreferences.email) {
+        if (seerrPreferences.email != lastSentEmail) {
+            email = seerrPreferences.email
+            lastSentEmail = seerrPreferences.email
+        }
+    }
     var password by remember { mutableStateOf("") }
     val isConnected = seerrPreferences.serverUrl.isNotBlank()
     val focusManager = LocalFocusManager.current
@@ -126,6 +155,7 @@ fun SeerrStep(
                 value = serverUrl,
                 onValueChange = {
                     serverUrl = it
+                    lastSentServerUrl = it.trim()
                     actions.setServerUrl(it.trim())
                 },
                 label = { Text(stringResource(Res.string.onboarding_seerr_server_url)) },
@@ -197,6 +227,7 @@ fun SeerrStep(
                         value = username,
                         onValueChange = {
                             username = it
+                            lastSentUsername = it.trim()
                             actions.setUsername(it.trim())
                         },
                         label = { Text(stringResource(Res.string.onboarding_seerr_username)) },
@@ -226,6 +257,7 @@ fun SeerrStep(
                         value = email,
                         onValueChange = {
                             email = it
+                            lastSentEmail = it.trim()
                             actions.setEmail(it.trim())
                         },
                         label = { Text(stringResource(Res.string.onboarding_seerr_email)) },
@@ -275,9 +307,12 @@ fun SeerrStep(
                         onClick = {
                             actions.disconnect()
                             serverUrl = ""
+                            lastSentServerUrl = ""
                             apiKey = ""
                             username = ""
+                            lastSentUsername = ""
                             email = ""
+                            lastSentEmail = ""
                             password = ""
                         },
                         colors = ButtonDefaults.outlinedButtonColors(
@@ -406,12 +441,12 @@ private fun RegionChip(
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .weight(1f)
+                        .focusIndicator(ShapeCache.smooth8)
                         .clip(ShapeCache.smooth8)
                         .background(
                             if (isSelected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceVariant
                         )
-                        .focusIndicator()
                         .clickable { onSelect(code) }
                         .padding(vertical = 8.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center,

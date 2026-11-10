@@ -32,7 +32,7 @@ import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_no_plugins_found
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_search_plugins
@@ -67,7 +67,7 @@ fun CatalogTab(
         modifier = modifier
             .fillMaxSize()
             .imePadding()
-            .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+            .then(if (isTv) Modifier.tvFocusGroupRestorer() else Modifier),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -94,7 +94,7 @@ fun CatalogTab(
                 )
 
                 // Status filter chips (All / Installed / Available).
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyRow(modifier = Modifier.tvFocusGroupRestorer(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(PluginStatusFilter.entries, key = { it.name }) { status ->
                         FilterChip(
                             selected = statusFilter == status,
@@ -107,7 +107,7 @@ fun CatalogTab(
                 }
 
                 // Category filter chips.
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyRow(modifier = Modifier.tvFocusGroupRestorer(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(PluginCategory.entries, key = { it.name }) { category ->
                         FilterChip(
                             selected = categoryFilter == category,

@@ -158,10 +158,10 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:generate${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}ReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" $BUILD_UNIVERSAL
+        run: ./gradlew :app:generate${{ matrix.flavor == 'phone' && 'PhoneStore' || 'TvStore' }}ReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" $BUILD_UNIVERSAL
 
       # saveInSrc writes the generated profiles into
-      # app/src/phoneRelease/generated/baselineProfiles (baseline-prof.txt /
+      # app/src/phoneStoreRelease/generated/baselineProfiles (baseline-prof.txt /
       # startup-prof.txt). The generate step can silently produce nothing
       # (emulator flake, runner regressions) and the lane would still ship a
       # profile-less release APK — so a verification step still checks BOTH
@@ -178,13 +178,13 @@ jobs:
       - name: Verify Baseline Profile Artifacts
         if: matrix.flavor == 'phone'
         run: |
-          profile_dir="app/src/phoneRelease/generated/baselineProfiles"
+          profile_dir="app/src/phoneStoreRelease/generated/baselineProfiles"
           missing=()
           for f in "$profile_dir/baseline-prof.txt" "$profile_dir/startup-prof.txt"; do
             [ -s "$f" ] || missing+=("$f")
           done
           if [ ${#missing[@]} -ne 0 ]; then
-            echo "::error::Baseline profile artifacts missing: ${missing[*]} — refusing to ship a profile-less release APK. Re-run the generate-baseline-profiles lane and commit app/src/phoneRelease/generated/baselineProfiles/."
+            echo "::error::Baseline profile artifacts missing: ${missing[*]} — refusing to ship a profile-less release APK. Re-run the generate-baseline-profiles lane and commit app/src/phoneStoreRelease/generated/baselineProfiles/."
             exit 1
           fi
           echo "Baseline profile artifacts present:"
@@ -200,7 +200,7 @@ jobs:
         # splits gating; this lane is its only consumer (the rename step's
         # known_abis list includes it), so pass the property and the published
         # artifact set stays byte-identical.
-        run: ./gradlew assemble${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}Release -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" $BUILD_UNIVERSAL
+        run: ./gradlew assemble${{ matrix.flavor == 'phone' && 'PhoneStore' || 'TvStore' }}Release -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" $BUILD_UNIVERSAL
 
       - name: Rename APK Outputs
         run: |

@@ -58,8 +58,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
@@ -202,7 +202,7 @@ fun ArrQueueScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .tvFocusRestorer()
+                            .tvFocusGroupRestorer()
                             .focusRequester(listFocusRequester),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
                             start = 16.dp,

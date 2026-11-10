@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cancel
@@ -105,7 +106,7 @@ internal fun MergeVersionsSheet(
             }
             else -> {
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().weight(1f).tvFocusGroupRestorer(),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     items(candidates, key = { it.id }, contentType = { "mergeCandidate" }) { candidate ->

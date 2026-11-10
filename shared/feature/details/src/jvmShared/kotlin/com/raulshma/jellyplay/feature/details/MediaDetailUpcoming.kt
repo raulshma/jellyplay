@@ -357,9 +357,9 @@ internal fun UpcomingEpisodeNotifyBell(
     Box(
         modifier = Modifier
             .size(32.dp)
+            .tvFocusIndicator(focusState, ShapeCache.smooth8)
             .clip(ShapeCache.smooth8)
             .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, ShapeCache.smooth8)
             .clickable {
                 confirmHaptic()
                 onClick()

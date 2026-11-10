@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,9 +22,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -44,6 +46,8 @@ import com.raulshma.jellyplay.core.ui.components.formatDurationApproxSeconds
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.jellyPlayItemTypeIcon
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_yw_days_30
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_yw_days_7
@@ -93,6 +97,15 @@ fun JellyPlayYourWatchingScreen(
     // window chips refetch through [viewModel.selectWindow].
     LaunchedEffect(Unit) { viewModel.refresh() }
 
+    // TV focus-on-launch: the window chips render even while loading, so grab
+    // them on entry instead of letting the navigation drawer capture focus.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (state.isLoading || state.analytics != null) 1 else 0,
+        tag = "jellyplay_your_watching_init",
+    )
+
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_jellyplay_yw_title),
         onBack = onBack,
@@ -115,7 +128,8 @@ fun JellyPlayYourWatchingScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(contentPadding)
-                    .focusGroup(),
+                    .tvFocusGroupRestorer()
+                    .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -186,12 +200,12 @@ private fun WindowChips(
             val selectedChip = window == selected
             Box(
                 modifier = Modifier
+                    .focusIndicator(ShapeCache.smoothPill)
                     .clip(ShapeCache.smoothPill)
                     .background(
                         if (selectedChip) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.surfaceContainerHigh,
                     )
-                    .focusIndicator(ShapeCache.smoothPill)
                     .clickable { onSelect(window) }
                     .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {

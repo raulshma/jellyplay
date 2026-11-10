@@ -119,6 +119,10 @@ fun OnboardingScreen(
                             onRight = {
                                 if (pagerState.currentPage < OnboardingStep.count - 1) {
                                     scope.launch {
+                                        // Land a pending debounced Seerr field
+                                        // write before the page turns, so the
+                                        // last keystroke isn't lost.
+                                        viewModel.seerrEditActions.flushPendingFieldWrites()
                                         pagerState.animateScrollToPage(pagerState.currentPage + 1)
                                     }
                                     true
@@ -267,8 +271,14 @@ fun OnboardingScreen(
                         OnboardingStep.COMPLETION -> {
                             CompletionStep(
                                 onStartWatching = {
-                                    viewModel.completeOnboarding()
-                                    onComplete()
+                                    scope.launch {
+                                        // Land a pending debounced Seerr field
+                                        // write before the wizard completes, so
+                                        // the last keystroke isn't lost.
+                                        viewModel.seerrEditActions.flushPendingFieldWrites()
+                                        viewModel.completeOnboarding()
+                                        onComplete()
+                                    }
                                 },
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
@@ -294,11 +304,17 @@ fun OnboardingScreen(
                         // or an accidental Skip permanently dismisses the wizard.
                         viewModel.skipOnboarding()
                         scope.launch {
+                            // Land a pending debounced Seerr field write before
+                            // the page turns, so the last keystroke isn't lost.
+                            viewModel.seerrEditActions.flushPendingFieldWrites()
                             pagerState.animateScrollToPage(OnboardingStep.count - 1)
                         }
                     },
                     onNext = {
                         scope.launch {
+                            // Land a pending debounced Seerr field write before
+                            // the page turns, so the last keystroke isn't lost.
+                            viewModel.seerrEditActions.flushPendingFieldWrites()
                             if (pagerState.currentPage < OnboardingStep.count - 1) {
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             }

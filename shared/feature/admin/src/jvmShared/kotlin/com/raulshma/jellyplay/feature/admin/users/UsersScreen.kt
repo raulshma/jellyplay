@@ -53,8 +53,8 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorSt
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.users.components.CreateUserDialog
 import com.raulshma.jellyplay.feature.admin.users.components.UserRow
 
@@ -155,7 +155,7 @@ fun UsersScreen(
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .tvFocusRestorer()
+                                    .tvFocusGroupRestorer()
                                     .focusRequester(listFocusRequester),
                                 contentPadding = PaddingValues(
                                     start = 16.dp, end = 16.dp, top = 8.dp,

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
+import com.raulshma.jellyplay.feature.player.live.data.LiveChannelListCache
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlaybackRequest
@@ -74,8 +75,11 @@ class LivePlaybackSessionTest {
     private fun TestScope.sessionScope(): CoroutineScope =
         CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(scheduler))
 
-    private fun TestScope.createSession(): LivePlaybackSession {
+    private fun TestScope.createSession(
+        channelListCache: LiveChannelListCache = LiveChannelListCache(),
+    ): LivePlaybackSession {
         every { playbackStore.playback } returns playbackFlow
+        every { playbackIdentity.serverUrl() } returns "https://srv"
         every { playbackIdentity.accessToken() } returns "tok"
         every { lastChannelStore.observeLastChannelId() } returns flowOf(null)
         every { fakeEngine.state } returns engineStateFlow
@@ -101,6 +105,7 @@ class LivePlaybackSessionTest {
             lastChannelStore = lastChannelStore,
             transcodeReasonsRenderer = TranscodeReasonsRenderer { emptyList() },
             playbackRepository = playbackRepo,
+            channelListCache = channelListCache,
         )
         scope.launch { session.events.collect { received += it } }
         return session
@@ -285,6 +290,53 @@ class LivePlaybackSessionTest {
         // gone (its single-flight belonged to the released session).
         assertEquals(1, capturedRequests.size)
         assertEquals("Channel 0", capturedRequests[0].title)
+    }
+
+    // ── Channel-list TTL memo ─────────────────────────────────────────────────
+
+    @Test
+    fun `a re-entry sharing the cache reuses the memoized channel list`() = runTest(scheduler) {
+        // Two session lifetimes over ONE cache (the Koin-single shape): the
+        // second entry rides the memo instead of refetching the capped list.
+        val cache = LiveChannelListCache()
+        stubChannels(2)
+        stubResolve()
+        val first = createSession(cache)
+        first.initialize("ch-0", null, null)
+        first.release()
+        assertEquals(1, received.filterIsInstance<LivePlaybackEvent.ChannelsCommitted>().size)
+
+        val second = createSession(cache)
+        second.initialize("ch-0", null, null)
+
+        coVerify(exactly = 1) { liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any()) }
+        val secondCommit = received.filterIsInstance<LivePlaybackEvent.ChannelsCommitted>().last()
+        assertEquals(0, secondCommit.index)
+        assertEquals("ch-0", secondCommit.channel.id)
+    }
+
+    @Test
+    fun `a failed channel load is not memoized - the next entry refetches`() = runTest(scheduler) {
+        val cache = LiveChannelListCache()
+        var failLoad = true
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } coAnswers {
+            if (failLoad) Result.failure<List<LiveTvChannel>>(RuntimeException("offline"))
+            else Result.success(channels(2))
+        }
+        stubResolve()
+        val first = createSession(cache)
+        first.initialize("ch-0", null, null)
+        assertEquals(1, received.filterIsInstance<LivePlaybackEvent.ChannelLoadFailed>().size)
+        first.release()
+
+        failLoad = false
+        val second = createSession(cache)
+        second.initialize("ch-0", null, null)
+
+        coVerify(exactly = 2) { liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any()) }
+        assertEquals(1, received.filterIsInstance<LivePlaybackEvent.ChannelsCommitted>().size)
     }
 
     // ── Transcode fallback execution ──────────────────────────────────────────

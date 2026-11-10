@@ -45,6 +45,15 @@ import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import kotlinx.coroutines.flow.Flow
 
 /**
+ * Server-side backdrop width for THUMB-mode cards. [ThumbCard] decodes at a
+ * fixed 320×180 (its ~160 dp cell at 2× density), so the resolver's 1920 px
+ * default would download ~6–12× the pixels a tile ever renders; 480 px keeps
+ * headroom for the larger cells (small poster-size pref, TV density) without
+ * over-fetching.
+ */
+private const val ThumbBackdropMaxWidth = 480
+
+/**
  * The library screen's four flat view-mode contents — the
  * [com.raulshma.jellyplay.feature.library.LibraryScreen] `when (activeMode)`
  * arms (the [com.raulshma.jellyplay.feature.library.GroupedLibraryContent]
@@ -172,7 +181,7 @@ internal fun LibraryThumbContent(
                     item = item,
                     imageUrl = remember(item, resolver) {
                         if (item.blurHashes.backdrop != null) {
-                            resolver.backdrop(item)
+                            resolver.backdrop(item, maxWidth = ThumbBackdropMaxWidth)
                         } else {
                             resolver.poster(item)
                         }

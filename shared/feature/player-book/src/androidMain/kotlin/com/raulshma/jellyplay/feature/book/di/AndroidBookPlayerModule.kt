@@ -37,7 +37,10 @@ fun androidBookPlayerModule(context: Context): Module = module {
             cacheRoot = context.cacheDir.absolutePath.toPath(),
         )
     }
-    single<BookDocumentOpener> { AndroidBookDocumentOpener() }
+    // The RAR back-end rides the distribution seam: getOrNull resolves the
+    // store-bound junrar factory, or null on fdroid (RAR comics unsupported —
+    // junrar's UnRAR license is non-free there).
+    single<BookDocumentOpener> { AndroidBookDocumentOpener(rarEntryReaderFactory = getOrNull()) }
     // Read-aloud TTS — the engine connects its service lazily on first
     // speak, so this binding stays cheap until the reader actually speaks.
     single<BookSpeechEngine> { AndroidBookSpeechEngine(context.applicationContext) }

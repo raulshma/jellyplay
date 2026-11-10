@@ -44,10 +44,10 @@ internal fun RememberPreferenceToggle(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
+            .tvFocusIndicator(focusState, CircleShape)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = if (checked) 0.10f else 0.04f))
             .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, CircleShape)
             .clickable { onToggle(!checked) }
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

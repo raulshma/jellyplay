@@ -18,6 +18,9 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_not
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_polling
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_timeout
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -64,8 +67,9 @@ class AuthViewModel(
      * Pings each saved server once and publishes per-server [ServerHealth]
      * into [serverHealth] (keyed by the server's primary address, which the
      * server list renders). A server counts as reachable when ANY of its
-     * addresses answers — primary first, then alternates — mirroring the
-     * app's address failover. Servers fan out bounded by
+     * addresses answers — the primary first, and only when it is down the
+     * alternates concurrently — mirroring the app's address failover.
+     * Servers fan out bounded by
      * [DEFAULT_FANOUT_PARALLELISM] (the MusicHomeViewModel/arrqueue
      * pattern), so one slow server does not delay the other rows' dots.
      * Safe to call repeatedly; concurrent calls are guarded by cancelling
@@ -87,10 +91,25 @@ class AuthViewModel(
                 // Monotonic elapsed read (stdlib) — latency wants the
                 // wall-clock-independent measure anyway.
                 val probeClock = TimeSource.Monotonic.markNow()
-                val addresses = listOf(server.address) + server.alternateAddresses
-                val reachable = addresses.any { address ->
-                    authRepository.probeServer(address).isSuccess
-                }
+                // Primary probed alone first (the healthy common case costs
+                // one cheap probe); only when it is down are the alternates
+                // probed concurrently, so a dead primary costs one probe
+                // window instead of one timeout per alternate — the same
+                // fan-out shape as ServerAddressRouter.reselectActiveEndpoint.
+                // Healthy iff the primary or ANY alternate answers.
+                val reachable = authRepository.probeServer(server.address).isSuccess ||
+                    run {
+                        val alternates = server.alternateAddresses
+                        if (alternates.isEmpty()) {
+                            false
+                        } else {
+                            coroutineScope {
+                                alternates.map { alternate ->
+                                    async { authRepository.probeServer(alternate).isSuccess }
+                                }.awaitAll().any { it }
+                            }
+                        }
+                    }
                 val latency = probeClock.elapsedNow().inWholeMilliseconds
                 val health = if (reachable) {
                     ServerHealth.Healthy(latencyMs = latency)

@@ -78,6 +78,8 @@ data class AppearanceScreenPreferences(
     val layoutMode: LayoutMode = LayoutMode.AUTO,
     /** The TV overscan safe-area calibration; the row only renders on TV. */
     val tvOverscan: TvOverscan = TvOverscan.FIVE,
+    /** The TV shell's UI-scale density multiplier; the row only renders on TV. */
+    val tvUiScale: TvUiScale = TvUiScale.SMALL,
     val hapticsEnabled: Boolean = true,
     val scheduledThemeStartHour: Int = 22,
     val scheduledThemeEndHour: Int = 7,

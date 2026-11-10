@@ -46,6 +46,14 @@ data class AdminDashboardState(
 class AdminDashboardViewModel(
     private val adminRepository: AdminRepository,
     /**
+     * The dashboard's live session feed seam, nullable-with-default (the
+     * plugin seams' pattern) so the direct-construction test harnesses
+     * compile. Backs the session list's WS push — a null feed (direct
+     * construction) keeps the pre-feed behavior: the REST snapshot seeds the
+     * list and pull-to-refresh / stop-session re-read it.
+     */
+    private val sessionFeed: com.raulshma.jellyplay.core.data.repository.AdminSessionFeed? = null,
+    /**
      * The JellyPlay companion-plugin seam, nullable-with-default
      * (SettingsViewModel pattern) so the direct-construction test harnesses
      * compile. Backs the Quick Actions "Transcodes" tile's gate — the tile is
@@ -193,10 +201,17 @@ class AdminDashboardViewModel(
     /** The WS-push freshness rule ([WsTaskFreshness], extracted). */
     private val wsTasksFreshness = WsTaskFreshness()
 
+    /**
+     * The session push's freshness arm — the same [WsTaskFreshness] 30s-of-
+     * silence heuristic over the session feed's push stamp.
+     */
+    private val wsSessionsFreshness = WsTaskFreshness()
+
     init {
         loadDashboard()
         observeScheduledTasks()
         observeScanLibraryTask()
+        observeSessions()
     }
 
     /**
@@ -239,7 +254,12 @@ class AdminDashboardViewModel(
                             // field — but a silent socket must not freeze it
                             // either; see [wsTasksFresh].
                             runningTasks = if (wsTasksFresh()) it.runningTasks else running,
-                            sessions = summary.sessions,
+                            // Same seeding rule as the running-task card: the
+                            // REST snapshot seeds the session list only while
+                            // session pushes are stale/absent ([wsSessionsFresh]) —
+                            // a live feed must not be rolled back by a slow REST
+                            // read.
+                            sessions = if (wsSessionsFresh()) it.sessions else summary.sessions,
                             recentActivity = summary.recentActivity,
                         )
                     }
@@ -274,18 +294,57 @@ class AdminDashboardViewModel(
      * REST response can never flicker the UI back to older data. Hidden
      * tasks are filtered out by [running], on both the REST seed and the
      * WS push.
+     *
+     * Each push passes the [RunningTasksGate] before it can publish: a push
+     * that changed nothing the running-task card renders (the common case —
+     * a running task's progress double drifting sub-percent at the 1 Hz
+     * cadence) leaves the state untouched, so the dashboard neither rebuilds
+     * its state object nor recomposes.
      */
     private fun observeScheduledTasks() {
         launch {
             adminRepository.scheduledTasks.collect { tasks ->
-                _uiState.update {
-                    it.copy(
-                        runningTasks = tasks.running(),
-                    )
+                val running = tasks.running()
+                _uiState.update { current ->
+                    if (RunningTasksGate.presentationChanged(current.runningTasks, running)) {
+                        current.copy(runningTasks = running)
+                    } else {
+                        current
+                    }
                 }
             }
         }
     }
+
+    /**
+     * Live session list from the WebSocket `Sessions` push (the full array,
+     * server cadence, over the shared socket — the feed the task list already
+     * rides). Replaces the stale-until-refresh behavior: the REST snapshot
+     * seeds ([loadDashboard], [stopSession]'s sessions-only re-read) and the
+     * feed reconciles the list as pushes land.
+     *
+     * Each push passes the [SessionsGate] before it can publish — a push that
+     * changed nothing the session card renders (a playing session's position
+     * ticks drifting, the common case) leaves the state untouched.
+     */
+    private fun observeSessions() {
+        val feed = sessionFeed ?: return
+        launch {
+            feed.sessions.collect { sessions ->
+                _uiState.update { current ->
+                    if (SessionsGate.presentationChanged(current.sessions, sessions)) {
+                        current.copy(sessions = sessions)
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+    }
+
+    /** The session feed's freshness arm (see [wsTasksFresh] for the rule). */
+    private fun wsSessionsFresh(): Boolean =
+        wsSessionsFreshness.isFresh(sessionFeed?.sessionsLastPushAtMs ?: 0L)
 
     fun restartServer() {
         launch {
@@ -338,11 +397,18 @@ class AdminDashboardViewModel(
 
     /**
      * Stops active playback on the session currently pending confirmation.
-     * Issues Jellyfin's play-state STOP command, then refreshes the dashboard
-     * so the card reflects the stopped state. Settle arm: clears on SUCCESS
-     * only — the failure arm leaves the pending session held so the dialog
-     * stays open over the "Stop failed" error. [AdminDashboardState.isStoppingSession]
-     * spans the request so a second confirm and a dismiss are refused.
+     * Issues Jellyfin's play-state STOP command, then refreshes ONLY the
+     * sessions read — the stop changed nothing else on the dashboard (system
+     * info, item counts, tasks, activity are untouched server-side), so the
+     * full summary ladder's 4–5 round trips would be spent to re-read data
+     * that did not move. A failed sessions refetch leaves the stale list on
+     * screen without an error (the next pull-to-refresh reconciles it — the
+     * stop itself succeeded and its settle arm ran).
+     *
+     * Settle arm: clears on SUCCESS only — the failure arm leaves the pending
+     * session held so the dialog stays open over the "Stop failed" error.
+     * [AdminDashboardState.isStoppingSession] spans the request so a second
+     * confirm and a dismiss are refused.
      */
     fun stopSession() {
         val session = _uiState.value.pendingStopSession.confirm(inFlight = _uiState.value.isStoppingSession) ?: return
@@ -357,7 +423,9 @@ class AdminDashboardViewModel(
                         error = null,
                     )
                 }
-                loadDashboard()
+                adminRepository.getSessions().onSuccess { sessions ->
+                    _uiState.update { it.copy(sessions = sessions) }
+                }
             } else {
                 _uiState.update {
                     it.copy(

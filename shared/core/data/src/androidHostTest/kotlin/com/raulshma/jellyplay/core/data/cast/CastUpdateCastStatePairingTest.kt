@@ -63,7 +63,11 @@ class CastUpdateCastStatePairingTest {
     private val dlnaConnected = MutableStateFlow(false)
     private val jellyfinConnected = MutableStateFlow(false)
 
-    private val googleCastStrategy: GoogleCastStrategy = mockk(relaxUnitFun = true)
+    // The google-path strategy rides the CastStrategy interface now (the GMS
+    // classes live behind the integration seam and never reach this test);
+    // the fake integration registers it under STRATEGY_GOOGLE so the
+    // local-transport else-arm behavior is identical to production.
+    private val googleStrategy: CastStrategy = mockk(relaxUnitFun = true)
     private val dlnaCastStrategy: DlnaCastStrategy = mockk(relaxUnitFun = true)
     private val jellyfinCastStrategy: JellyfinRemotePlayCastStrategy = mockk(relaxUnitFun = true)
     private val syncPlayCastStore: SyncPlayCastStore = mockk()
@@ -71,10 +75,10 @@ class CastUpdateCastStatePairingTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        every { googleCastStrategy.isAvailable } returns MutableStateFlow(true)
-        every { googleCastStrategy.isConnected } returns googleConnected
-        every { googleCastStrategy.isConnecting } returns MutableStateFlow(false)
-        every { googleCastStrategy.discoveredDevices } returns MutableStateFlow(emptyList())
+        every { googleStrategy.isAvailable } returns MutableStateFlow(true)
+        every { googleStrategy.isConnected } returns googleConnected
+        every { googleStrategy.isConnecting } returns MutableStateFlow(false)
+        every { googleStrategy.discoveredDevices } returns MutableStateFlow(emptyList())
         every { dlnaCastStrategy.isAvailable } returns MutableStateFlow(false)
         every { dlnaCastStrategy.isConnected } returns dlnaConnected
         every { dlnaCastStrategy.isConnecting } returns MutableStateFlow(false)
@@ -94,7 +98,7 @@ class CastUpdateCastStatePairingTest {
 
     private fun manager() = CastManager(
         context = context,
-        googleCastStrategy = googleCastStrategy,
+        googleCastIntegration = fakeGoogleIntegration(googleStrategy),
         dlnaCastStrategy = dlnaCastStrategy,
         jellyfinRemotePlayCastStrategy = jellyfinCastStrategy,
         syncPlayCastStore = syncPlayCastStore,
@@ -102,6 +106,20 @@ class CastUpdateCastStatePairingTest {
     )
 
     private fun idleMain() = shadowOf(Looper.getMainLooper()).idle()
+
+    /** Stand-in for the store-only GMS integration: ensureCastPlayer returns null (no player in harness). */
+    private fun fakeGoogleIntegration(strategy: CastStrategy?): GoogleCastIntegration =
+        object : GoogleCastIntegration {
+            override val strategy: CastStrategy? = strategy
+            override fun preinit(context: Context): Boolean = false
+            override fun ensureSessionListener(context: Context, events: GoogleCastIntegration.SessionEvents) = Unit
+            override fun ensureCastPlayer(
+                context: Context,
+                playerListener: Player.Listener,
+                onSessionUnavailable: () -> Unit,
+            ): Player? = null
+            override fun release() = Unit
+        }
 
     private fun loadItem(manager: CastManager) {
         manager.loadMedia(

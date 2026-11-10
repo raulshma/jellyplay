@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -49,7 +48,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.livetv.components.LiveTvTabScaffold
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialog
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
@@ -94,8 +93,7 @@ fun ProgramsScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .focusGroup()
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(focusRequester),
             contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
             verticalArrangement = Arrangement.spacedBy(spacing + 8.dp),
@@ -157,7 +155,7 @@ private fun ProgramRowSection(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
-            modifier = Modifier.tvFocusRestorer(),
+            modifier = Modifier.tvFocusGroupRestorer(),
         ) {
             items(items = row.programs, key = { it.id }, contentType = { "program" }) { program ->
                 // Memoized per-item derivations + click lambdas keep ProgramCard
@@ -189,8 +187,8 @@ private fun ProgramCard(
     Column(
         modifier = Modifier
             .width(220.dp)
-            .clip(ShapeCache.smooth12)
             .focusIndicator(ShapeCache.smooth12)
+            .clip(ShapeCache.smooth12)
             .clickable(onClick = onClick)
             .padding(4.dp),
     ) {

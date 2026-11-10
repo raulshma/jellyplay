@@ -142,9 +142,9 @@ fun SheetHeader(
                 onCheckedChange = { onClose() },
                 modifier = Modifier
                     .size(40.dp)
+                    .tvFocusIndicator(rememberTvFocusState())
                     .clip(ShapeCache.smooth12)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    .tvFocusIndicator(rememberTvFocusState()),
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
             ) {
                 Icon(
                     imageVector = Tabler.Outline.X,

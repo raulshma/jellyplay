@@ -3,14 +3,8 @@ package com.raulshma.jellyplay.core.data.cast
 import android.content.Context
 import androidx.compose.runtime.Stable
 import android.util.Log
-import androidx.media3.cast.CastPlayer
-import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import com.google.android.gms.cast.framework.CastContext
-import com.google.android.gms.cast.framework.CastSession
-import com.google.android.gms.cast.framework.SessionManagerListener
 import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
@@ -39,11 +33,10 @@ sealed class CastSessionEvent {
     data object Disconnected : CastSessionEvent()
 }
 
-@OptIn(UnstableApi::class)
 @Stable
 class CastManager(
     private val context: Context,
-    private val googleCastStrategy: GoogleCastStrategy,
+    private val googleCastIntegration: GoogleCastIntegration,
     private val dlnaCastStrategy: DlnaCastStrategy,
     private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
@@ -76,8 +69,10 @@ class CastManager(
 
     val currentStrategyName: String get() = activeStrategyName
 
-    private var castPlayer: CastPlayer? = null
-    private var sessionAvailabilityListener: SessionAvailabilityListener? = null
+    // The receiver-side cast player, created (and released) by the injected
+    // [GoogleCastIntegration] — cached here so loadMedia's external-listener
+    // bookkeeping and the transport adapter can address it without re-asking.
+    private var castPlayer: Player? = null
     private var externalListener: Player.Listener? = null
 
     private val coroutineScope =
@@ -125,60 +120,69 @@ class CastManager(
     /**
      * Single transport dispatch point. DLNA and Jellyfin own their transport;
      * every other active strategy (Google Cast, ad-hoc registrations) rides
-     * the manager-owned CastPlayer via
-     * [localCastPlayerTransport] — exactly what the old when-chain else-arms
-     * did.
+     * the manager-owned CastPlayer via [localCastPlayerTransport] — exactly
+     * what the old when-chain else-arms did. The `?:` fallback is unreachable
+     * in practice: activeStrategyName only ever names [STRATEGY_GOOGLE] with
+     * a non-null integration strategy (applyDefaultCastingStrategy degrades
+     * to DLNA when the integration is Unavailable), so the DLNA arm only
+     * covers the unregisterStrategy(fallback-name) edge on fdroid — where
+     * DLNA is then the only renderer-capable strategy anyway.
      */
     private val activeTransport: CastStrategy
         get() = when (activeStrategyName) {
             STRATEGY_DLNA -> dlnaCastStrategy
             STRATEGY_JELLYFIN -> jellyfinRemotePlayCastStrategy
-            else -> localCastPlayerTransport
+            else -> localCastPlayerTransport ?: dlnaCastStrategy
         }
 
     /**
      * Adapter driving the manager-owned CastPlayer through the [CastStrategy]
-     * transport surface, so transport dispatch has one path. Discovery /
-     * session members delegate to [googleCastStrategy] and are never routed
-     * through this adapter — the strategies map stays authoritative for those.
+     * transport surface, so transport dispatch has one path. Built only when
+     * the injected integration exposes a strategy (store); on fdroid it stays
+     * null and the transport map has no Google arm at all. Discovery /
+     * session members delegate to [googleCastIntegration.strategy] and are
+     * never routed through this adapter — the strategies map stays
+     * authoritative for those.
      */
-    private val localCastPlayerTransport: CastStrategy = object : CastStrategy by googleCastStrategy {
-        override val ownsExternalListener: Boolean = true
+    private val localCastPlayerTransport: CastStrategy? = googleCastIntegration.strategy?.let { strategy ->
+        object : CastStrategy by strategy {
+            override val ownsExternalListener: Boolean = true
 
-        override fun play() { castPlayer?.play() }
-        override fun pause() { castPlayer?.pause() }
-        override fun seekTo(positionMs: Long) { castPlayer?.seekTo(positionMs) }
-        override fun setRendererVolume(volume: Float) {
-            val player = castPlayer ?: return
-            player.volume = volume.coerceIn(0f, 1f)
-            _castVolume.value = player.volume
-        }
-        override fun loadMedia(
-            mediaItem: MediaItem,
-            startPositionMs: Long,
-            listener: Player.Listener,
-            options: CastMediaOptions,
-        ): Boolean {
-            ensureGoogleSessionListener()
-            externalListener?.let { castPlayer?.removeListener(it) }
-            val player = ensureCastPlayer()
-            if (player == null) {
-                // Nothing was attached: recording the listener would let the
-                // session-unavailable callback fire a phantom STATE_ENDED on
-                // a load that never started.
-                externalListener = null
-                return false
+            override fun play() { castPlayer?.play() }
+            override fun pause() { castPlayer?.pause() }
+            override fun seekTo(positionMs: Long) { castPlayer?.seekTo(positionMs) }
+            override fun setRendererVolume(volume: Float) {
+                val player = castPlayer ?: return
+                player.volume = volume.coerceIn(0f, 1f)
+                _castVolume.value = player.volume
             }
-            externalListener = listener
-            player.addListener(listener)
-            // Apply the user's track / quality selections to the stream URL so the
-            // receiving Chromecast requests the right variants from the server.
-            // Subtitle sidecars configured on the MediaItem
-            // are preserved as text tracks by CastPlayer.
-            player.setMediaItem(mediaItem.withCastOptions(options), startPositionMs)
-            player.prepare()
-            player.play()
-            return true
+            override fun loadMedia(
+                mediaItem: MediaItem,
+                startPositionMs: Long,
+                listener: Player.Listener,
+                options: CastMediaOptions,
+            ): Boolean {
+                ensureGoogleSessionListener()
+                externalListener?.let { castPlayer?.removeListener(it) }
+                val player = ensureCastPlayer()
+                if (player == null) {
+                    // Nothing was attached: recording the listener would let the
+                    // session-unavailable callback fire a phantom STATE_ENDED on
+                    // a load that never started.
+                    externalListener = null
+                    return false
+                }
+                externalListener = listener
+                player.addListener(listener)
+                // Apply the user's track / quality selections to the stream URL so the
+                // receiving Chromecast requests the right variants from the server.
+                // Subtitle sidecars configured on the MediaItem
+                // are preserved as text tracks by CastPlayer.
+                player.setMediaItem(mediaItem.withCastOptions(options), startPositionMs)
+                player.prepare()
+                player.play()
+                return true
+            }
         }
     }
 
@@ -320,33 +324,25 @@ class CastManager(
         }
     }
 
-    private val googleSessionListener = object : SessionManagerListener<CastSession> {
-        override fun onSessionStarted(session: CastSession, sessionId: String) {
+    /**
+     * The GMS session fan-out, expressed over the integration's
+     * [GoogleCastIntegration.SessionEvents] surface: the integration's
+     * SessionManagerListener maps started+resumed → onConnected and
+     * ended+resumeFailed → onDisconnected (it never inspects the CastSession
+     * param — exactly the old googleSessionListener semantics).
+     */
+    private val googleSessionEvents = object : GoogleCastIntegration.SessionEvents {
+        override fun onConnected() {
             _sessionEvents.tryEmit(CastSessionEvent.Connected)
         }
-        override fun onSessionEnded(session: CastSession, error: Int) {
+        override fun onDisconnected() {
             resetCastState()
             _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
         }
-        override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
-            _sessionEvents.tryEmit(CastSessionEvent.Connected)
-        }
-        override fun onSessionSuspended(session: CastSession, reason: Int) {}
-        override fun onSessionStarting(session: CastSession) {}
-        override fun onSessionEnding(session: CastSession) {}
-        override fun onSessionResumeFailed(session: CastSession, error: Int) {
-            resetCastState()
-            _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
-        }
-        override fun onSessionStartFailed(session: CastSession, error: Int) {}
-        override fun onSessionResuming(session: CastSession, sessionId: String) {}
     }
 
-    @Volatile
-    private var googleSessionListenerRegistered = false
-
     init {
-        strategies[STRATEGY_GOOGLE] = googleCastStrategy
+        googleCastIntegration.strategy?.let { strategies[STRATEGY_GOOGLE] = it }
         strategies[STRATEGY_DLNA] = dlnaCastStrategy
         strategies[STRATEGY_JELLYFIN] = jellyfinRemotePlayCastStrategy
         applyDefaultCastingStrategy()
@@ -358,14 +354,18 @@ class CastManager(
     /**
      * Seeds the initial active strategy from the [CastingStrategy] preference.
      * PREFER_DLNA selects the DLNA strategy; everything else defaults to
-     * Google Cast (the ASK variant surfaces a chooser in the UI but still
-     * needs a discovery-capable default strategy).
+     * Google Cast when the integration is available (the ASK variant surfaces
+     * a chooser in the UI but still needs a discovery-capable default
+     * strategy). On fdroid — integration Unavailable, no strategy at all — a
+     * PREFER_CAST preference degrades to DLNA, the only renderer-capable
+     * strategy left.
      */
     private fun applyDefaultCastingStrategy() {
         val pref = syncPlayCastStore.syncPlayCast.value.defaultCastingStrategy
         activeStrategyName = when (pref) {
             CastingStrategy.PREFER_DLNA -> STRATEGY_DLNA
-            CastingStrategy.PREFER_CAST, CastingStrategy.ASK -> STRATEGY_GOOGLE
+            CastingStrategy.PREFER_CAST, CastingStrategy.ASK ->
+                if (googleCastIntegration.strategy != null) STRATEGY_GOOGLE else STRATEGY_DLNA
         }
         observeStrategySession()
     }
@@ -415,7 +415,10 @@ class CastManager(
     private fun observeStrategySession() {
         tasks.cancel(STRATEGY_OBSERVER)
         val strategy = strategies[activeStrategyName]
-        if (strategy != null && strategy !== googleCastStrategy) {
+        // The Google strategy's session edges fan out through the integration
+        // listener (see googleSessionEvents), never through this observer —
+        // the identity check keeps the two paths from double-reporting.
+        if (strategy != null && strategy !== googleCastIntegration.strategy) {
             var wasConnected = strategy.isConnected.value
             tasks.replace(STRATEGY_OBSERVER) {
                 coroutineScope.launch {
@@ -459,14 +462,18 @@ class CastManager(
     val isConnecting: Boolean
         get() = activeStrategy?.isConnecting?.value == true
 
+    // The flow fallbacks read DLNA: activeStrategy is only ever null when the
+    // Google strategy is unregistered (fdroid's integration is Unavailable and
+    // seeds no google arm) — where DLNA is the only renderer-capable strategy
+    // left to report.
     val isAvailableFlow: StateFlow<Boolean>
-        get() = activeStrategy?.isAvailable ?: googleCastStrategy.isAvailable
+        get() = activeStrategy?.isAvailable ?: dlnaCastStrategy.isAvailable
 
     val isConnectedFlow: StateFlow<Boolean>
-        get() = activeStrategy?.isConnected ?: googleCastStrategy.isConnected
+        get() = activeStrategy?.isConnected ?: dlnaCastStrategy.isConnected
 
     val isConnectingFlow: StateFlow<Boolean>
-        get() = activeStrategy?.isConnecting ?: googleCastStrategy.isConnecting
+        get() = activeStrategy?.isConnecting ?: dlnaCastStrategy.isConnecting
 
     val discoveredDevices: StateFlow<List<CastDevice>>
         get() = _allDiscoveredDevices
@@ -502,35 +509,39 @@ class CastManager(
         activeTransport.seekTo(positionMs)
     }
 
+    /**
+     * Registers the GMS session fan-out through the injected integration —
+     * the CastContext lookup and listener registration live behind the seam
+     * (the integration is idempotent; Unavailable is a no-op).
+     */
     private fun ensureGoogleSessionListener() {
-        if (googleSessionListenerRegistered) return
-        try {
-            val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(context) }
-            castContext.sessionManager.addSessionManagerListener(googleSessionListener, CastSession::class.java)
-            googleSessionListenerRegistered = true
-        } catch (_: Exception) {}
+        googleCastIntegration.ensureSessionListener(context, googleSessionEvents)
     }
 
-    private fun ensureCastPlayer(): CastPlayer? {
-        if (!googleCastStrategy.isConnected.value) return null
-        if (castPlayer != null) return castPlayer
+    /**
+     * Delegates to the injected integration: the isConnected guard,
+     * CastPlayer construction (listener + SessionAvailabilityListener wiring)
+     * and the StrictMode-wrapped CastContext lookups all live behind the
+     * seam — INCLUDING the guard's ordering, which must run before the
+     * player cache so a session that dropped since the last load reports
+     * null instead of handing back the stale player (exactly the old
+     * guard-before-cache semantics; the impl consults connectivity before
+     * its own cache). This half caches non-null results — [castPlayer]
+     * mirrors the integration's player until [teardownSharedState] nulls
+     * both — and the [released] flag stays manager-owned: [acquireConsumer]
+     * flips it back so a released manager builds a fresh player on demand.
+     */
+    private fun ensureCastPlayer(): Player? {
         if (released) return null
-        try {
-            val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(context) }
-            sessionAvailabilityListener = object : SessionAvailabilityListener {
-                override fun onCastSessionAvailable() {}
-                override fun onCastSessionUnavailable() {
-                    externalListener?.onPlaybackStateChanged(Player.STATE_ENDED)
-                }
-            }
-            castPlayer = CastPlayer(castContext).apply {
-                addListener(castPlayerListener)
-                setSessionAvailabilityListener(sessionAvailabilityListener!!)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to create CastPlayer", e)
+        val player = googleCastIntegration.ensureCastPlayer(
+            context,
+            castPlayerListener,
+            onSessionUnavailable = { externalListener?.onPlaybackStateChanged(Player.STATE_ENDED) },
+        )
+        if (player != null) {
+            castPlayer = player
         }
-        return castPlayer
+        return player
     }
 
     fun loadMedia(
@@ -607,27 +618,17 @@ class CastManager(
         cancelJobs()
         castPlayer?.removeListener(castPlayerListener)
         externalListener?.let { castPlayer?.removeListener(it) }
-        castPlayer?.release()
+        // The integration owns the CastPlayer and the CastContext
+        // SessionManagerListener registration — its release tears both down
+        // so neither keeps firing on a stale CastContext after logout/re-login
+        // (without the listener removal the SessionManagerListener can fire on
+        // the wrong user's sessions, and the singleton retains a reference to
+        // a dead CastContext). Idempotent.
+        googleCastIntegration.release()
         castPlayer = null
-        sessionAvailabilityListener = null
         externalListener = null
         resetCastState()
         strategies.values.forEach { it.stopDiscovery() }
-        // Remove the CastContext.SessionManagerListener so it doesn't keep
-        // firing on a stale CastContext after logout/re-login. Without this
-        // the listener can fire on the wrong user's sessions, and the
-        // Singleton retains a reference to a dead CastContext.
-        if (googleSessionListenerRegistered) {
-            try {
-                val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(context) }
-                castContext.sessionManager.removeSessionManagerListener(
-                    googleSessionListener, CastSession::class.java,
-                )
-            } catch (_: Exception) {
-                // Cast SDK may already be torn down.
-            }
-            googleSessionListenerRegistered = false
-        }
         // Delegate to per-strategy release hooks (GoogleCastStrategy owns its
         // own session/state listeners; DLNA owns its own discovery sockets).
         strategies.values.forEach {

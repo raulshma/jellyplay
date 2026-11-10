@@ -208,8 +208,14 @@ internal fun DetailTopBar(
         TvSafeSheet(
             onDismissRequest = { showTvOptionsMenu = false },
             title = stringResource(Res.string.detail_cd_options),
+            scrollable = true,
         ) {
-            Column(modifier = Modifier.verticalWrapAround()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalWrapAround()
+                    .padding(bottom = 8.dp),
+            ) {
                 mediaOptions.forEach { option ->
                     TvOptionItem(
                         icon = option.icon,

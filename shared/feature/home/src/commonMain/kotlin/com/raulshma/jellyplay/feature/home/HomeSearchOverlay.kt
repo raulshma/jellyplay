@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Search
@@ -141,7 +142,8 @@ fun HomeSearchResultsOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     // Desktop: mouse drag scrolls the results (wheel already does).
-                    .mouseScroll(resultsListState, Orientation.Vertical),
+                    .mouseScroll(resultsListState, Orientation.Vertical)
+                    .tvFocusGroupRestorer(),
                 contentPadding = PaddingValues(vertical = 8.dp),
             ) {
                 if (!hasAnyResults && searchHistory.isNotEmpty()) {

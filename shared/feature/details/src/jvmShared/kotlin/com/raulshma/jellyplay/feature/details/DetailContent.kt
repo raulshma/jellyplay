@@ -25,12 +25,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -38,7 +40,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.AlertTriangle
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -300,7 +302,8 @@ internal fun DetailContent(
         // every book hero sources the PRIMARY (cover) art below. Large screens
         // (tablet/TV/desktop) keep the blurred cover-mode hero plus the poster
         // card; compact phones crop the cover sharp edge-to-edge and drop the
-        // poster card (DetailBodyPortrait) since the hero already shows it.
+        // poster card (the portrait hero's hideBookPoster) since the hero
+        // already shows it.
         val isBook = item?.mediaType == MediaType.BOOK
         val coverHero = when {
             !isBook -> BookCoverHero.NONE
@@ -325,16 +328,14 @@ internal fun DetailContent(
                 }
             }
         }
-        DetailBackdrop(
+        DetailBackdropHost(
             targetBackdropId = targetBackdropId,
             backdropBlurHash = if (isBook) item?.blurHashes?.primary else item?.blurHashes?.backdrop,
             getBackdropUrl = getBackdropUrl,
-            trailers = state.core.trailers,
             preferences = state.preferences,
             scrollState = scrollState,
             localBackdropPath = if (isBook) state.core.assets.posterPath else state.core.assets.backdropPath,
             coverHero = coverHero,
-            themeVideoStreamUrl = state.core.themeVideoStreamUrl,
             trailerFocusPreview = trailerFocusPreview,
         )
 
@@ -430,9 +431,17 @@ internal fun DetailContent(
 }
 
 /**
- * The scrollable detail body (spacer + backdrop-fade + body). Extracted so the
+ * The scrollable detail body (spacer + body items). Extracted so the
  * touch path can wrap it in a [PullToRefreshBox] while the TV path keeps the
  * [LazyColumn] at the top of the modifier chain (for [tvFocusRestorer]).
+ *
+ * The portrait body is VIRTUALIZED: each logical section is its own list item
+ * ([detailBodyPortraitItems]) and the compact episode list is individual items
+ * in the same list — only the viewport's sections compose on open. The
+ * expanded-width two-pane body keeps the former single-item composition (see
+ * the branch comment below). The body reads the merged content view (base +
+ * the late-enrichment leaves) so a late enrichment landing re-executes this
+ * scope — never the content root above it.
  */
 @Composable
 private fun DetailScrollContent(
@@ -451,66 +460,168 @@ private fun DetailScrollContent(
     promotedActions: List<MediaOption>,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
+    val isLandscapeBody = isExpanded && adaptiveInfo.isLandscape
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+    // The late-enrichment sub-flow: this scope re-executes on a late landing
+    // (the flattened body's admission + the seasons band fold read the merged
+    // view) while the content root above does not — the root collects the base
+    // projection, which collapses those emissions before they reach it.
+    val late by LocalDetailLateEnrichments.current.collectAsStateWithLifecycle(DetailLateEnrichments())
+    val mergedCore = remember(state.core, late) { state.core.mergedWith(late) }
+    val bodyState = remember(state, mergedCore) { state.copy(core = mergedCore) }
+    val detail = bodyState.core.detail
+
+    // Single source of truth for the body's horizontal inset so text, chips,
+    // and the poster/action row all share the same left edge.
+    val bodyContentPad = adaptiveInfo.contentPadding(isTv)
+
+    // The single shared entrance animation drives every FadingItem /
+    // StaggeredDetailSection in the body — one driver for both layout branches.
+    val staggerStep = state.preferences.staggerStyle.step
+    val entranceProgress = rememberDetailEntranceProgress(staggerStep)
+
+    // The flattened portrait body's admission (the registry's module rows,
+    // re-sorted into the enum's declaration order + the user's stored section
+    // permutation), computed only for a loaded item.
+    val admittedSections = if (detail != null) {
+        remember(bodyState) {
+            DetailSectionRegistry.admittedSections(
+                state = bodyState,
+                detail = detail,
+                showActionButtons = true,
+                showMediaInfo = true,
+                sectionOrder = bodyState.preferences.sectionOrder,
+            )
+        }
+    } else {
+        emptyList()
+    }
+
+    // The flattened portrait body's seasons band (the hoisted tab selection +
+    // the selected season's display episodes), computed only when the seasons
+    // slot is admitted — the band's items hang directly off the list.
+    val seasonsBand = if (!isLandscapeBody && item != null && detail != null &&
+        admittedSections.contains(DetailSectionKind.SEASONS)
     ) {
-        item { Spacer(modifier = Modifier.height(scrollState.baseBackdropHeight - 150.dp)) }
+        rememberDetailSeasonsBand(
+            state = bodyState,
+            callbacks = callbacks,
+            item = item,
+            isLocalOrigin = state.core.origin?.isLocal == true,
+            persistedSeasonId = state.persistedSeasonId,
+        )
+    } else {
+        null
+    }
 
-        item {
-            val gradientEndPx = with(LocalDensity.current) { 150.dp.toPx() }
-            // Read the colour here (the item's own scope) so colour-animation
-            // frames rebuild the brush without recomposing anything above, and
-            // scroll-offset frames — which don't touch the colour — rebuild
-            // nothing at all.
-            val fadeColor by scrollState.backgroundColorState
-            val fadeBrush = remember(fadeColor, gradientEndPx) {
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        fadeColor.copy(alpha = 0.9f),
-                        fadeColor,
-                    ),
-                    startY = 0f,
-                    endY = gradientEndPx,
-                )
+    CompositionLocalProvider(
+        LocalDetailEntrance provides entranceProgress,
+        LocalDetailStaggerStep provides staggerStep,
+    ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isTv) Modifier.tvFocusGroupRestorer() else Modifier),
+        ) {
+            item(key = "detail_spacer", contentType = "detail_spacer") {
+                Spacer(modifier = Modifier.height(scrollState.baseBackdropHeight - 150.dp))
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .drawBehind { drawRect(fadeBrush) },
-            ) {
-                if (isExpanded && adaptiveInfo.isLandscape) {
-                    DetailBodyLandscape(
-                        state = state,
-                        callbacks = callbacks,
-                        scrollState = scrollState,
-                        contentVisible = contentVisible,
-                        contentFocusRequester = contentFocusRequester,
-                        isAudio = isAudio,
-                        isAlbum = isAlbum,
-                        isExpanded = isExpanded,
-                        item = item,
-                        promotedActions = promotedActions,
-                    )
-                } else {
-                    DetailBodyPortrait(
-                        state = state,
-                        callbacks = callbacks,
-                        scrollState = scrollState,
-                        contentVisible = contentVisible,
-                        contentFocusRequester = contentFocusRequester,
-                        isAudio = isAudio,
-                        isAlbum = isAlbum,
-                        isExpanded = isExpanded,
-                        isTv = isTv,
-                        item = item,
-                    )
+
+            if (isLandscapeBody) {
+                // The expanded-width two-pane body keeps the former single-item
+                // composition: its poster/action rail spans the body's full
+                // height and scrolls WITH the content, which one vertical list
+                // cannot reproduce per-section without pinning the rail — so
+                // the rail + body stay one item and the sections compose
+                // eagerly (their rows are virtualized horizontal LazyRows).
+                item(key = "detail_body", contentType = "detail_body") {
+                    val gradientEndPx = with(LocalDensity.current) { 150.dp.toPx() }
+                    // Read the colour here (the item's own scope) so colour-animation
+                    // frames rebuild the brush without recomposing anything above, and
+                    // scroll-offset frames — which don't touch the colour — rebuild
+                    // nothing at all.
+                    val fadeColor by scrollState.backgroundColorState
+                    val fadeBrush = remember(fadeColor, gradientEndPx) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                fadeColor.copy(alpha = 0.9f),
+                                fadeColor,
+                            ),
+                            startY = 0f,
+                            endY = gradientEndPx,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .drawBehind { drawRect(fadeBrush) },
+                    ) {
+                        DetailBodyLandscape(
+                            state = bodyState,
+                            callbacks = callbacks,
+                            scrollState = scrollState,
+                            contentVisible = contentVisible,
+                            contentFocusRequester = contentFocusRequester,
+                            isAudio = isAudio,
+                            isAlbum = isAlbum,
+                            isExpanded = isExpanded,
+                            item = item,
+                            promotedActions = promotedActions,
+                        )
+                    }
                 }
+            } else {
+                detailBodyPortraitItems(
+                    state = bodyState,
+                    callbacks = callbacks,
+                    scrollState = scrollState,
+                    contentVisible = contentVisible,
+                    contentFocusRequester = contentFocusRequester,
+                    isExpanded = isExpanded,
+                    isTv = isTv,
+                    item = item,
+                    detail = detail,
+                    bodyContentPad = bodyContentPad,
+                    admittedSections = admittedSections,
+                    seasonsBand = seasonsBand,
+                )
             }
         }
     }
+}
+
+/**
+ * The backdrop's late-read host: the merged trailer list and the theme-video
+ * clip URL are the two late-enrichment leaves the content ROOT consumes (the
+ * hero's autoplay preview). They are collected HERE — in a scope whose only
+ * content is the backdrop — so an enrichment landing re-executes this host and
+ * recomposes the backdrop, while [DetailContent]'s scaffold above (options
+ * menu, top bar, loading overlays) skips on the unchanged base projection.
+ */
+@Composable
+private fun DetailBackdropHost(
+    targetBackdropId: String,
+    backdropBlurHash: String?,
+    getBackdropUrl: (String) -> String,
+    preferences: com.raulshma.jellyplay.core.model.DetailPreferences,
+    scrollState: DetailScrollState,
+    localBackdropPath: String?,
+    coverHero: BookCoverHero,
+    trailerFocusPreview: TrailerFocusPreviewState,
+) {
+    val late by LocalDetailLateEnrichments.current.collectAsStateWithLifecycle(DetailLateEnrichments())
+    DetailBackdrop(
+        targetBackdropId = targetBackdropId,
+        backdropBlurHash = backdropBlurHash,
+        getBackdropUrl = getBackdropUrl,
+        trailers = late.trailers,
+        preferences = preferences,
+        scrollState = scrollState,
+        localBackdropPath = localBackdropPath,
+        coverHero = coverHero,
+        themeVideoStreamUrl = late.themeVideoStreamUrl,
+        trailerFocusPreview = trailerFocusPreview,
+    )
 }

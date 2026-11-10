@@ -644,7 +644,17 @@ fun VideoPlayerScreen(
     // While the controls are visible this composes nothing: the play button's
     // grab owns focus, exactly as before.
     if (isTv) {
-        val overlayClaimsFocus = isCinemaIntroVisible || isNextEpisodeVisible || isSkipSegmentVisible
+        // The playback error dialog is a modal recovery surface: it must own
+        // focus while up (its Retry/engine actions grab it on appearance), and
+        // the layer's re-assert would otherwise steal it right back — the
+        // dialog used to be unreachable from a remote.
+        val playbackErrorVisible =
+            uiState.showPlaybackErrorDialog && uiState.playerError != null
+        val overlayClaimsFocus =
+            isCinemaIntroVisible ||
+                isNextEpisodeVisible ||
+                isSkipSegmentVisible ||
+                playbackErrorVisible
         PlayerTvFocusGrabEffect(
             focusRequester = tvPlayerFocusRequester,
             // The cast branch composes the companion dashboard instead of the
@@ -1224,9 +1234,8 @@ fun VideoPlayerScreen(
             // Zero effect when the pref is off or the video fills the surface
             // (the policy folds the geometry; the FILL/CROP override modes
             // fill by construction and gate it off here).
-            val ambientVideoAspect = remember(uiState.media.mediaStreams) {
-                videoStreamAspect(uiState.media.mediaStreams)
-            }
+            val ambientStreams = uiState.media.mediaStreams
+            val ambientVideoAspect = remember(ambientStreams) { videoStreamAspect(ambientStreams) }
             AmbientBackdropLayer(
                 imageUrl = uiState.media.artworkUrl,
                 videoAspect = ambientVideoAspect,
@@ -1234,6 +1243,7 @@ fun VideoPlayerScreen(
                     uiState.uiPrefs.ambientBlurEnabled, effectiveAspectRatio(aspectRatio, detectedAspectRatio),
                     uiState.uiPrefs.ambientUnderFill,
                 ),
+                performanceTier = uiState.uiPrefs.performanceTuning.tier, // LOW drops the blur RenderEffect
             )
 
             // Platform surface seam: Android hosts the engine's
@@ -2080,60 +2090,3 @@ fun VideoPlayerScreen(
     }
 }
 
-/**
- * Cast-connected branch: the companion dashboard replaces the video surface
- * entirely. The cast slice's hot flows are collected HERE — this branch is
- * their only consumer, so the receiver's status cadence (the duration ticks
- * especially) recomposes at most this leaf, never the screen root (the
- * collection-placement law; see the root's cast-slice note).
- */
-@Composable
-private fun CastCompanionDashboardBranch(
-    viewModel: VideoPlayerViewModel,
-    title: String,
-    subtitle: String,
-    uiState: VideoPlayerUiState,
-    isPlaying: Boolean,
-    isCastConnecting: Boolean,
-    doTogglePlayPause: () -> Unit,
-    doSeekBack: () -> Unit,
-    doSeekForward: () -> Unit,
-    doSeekTo: (Long) -> Unit,
-    onToggleOrientation: () -> Unit,
-    disconnectCast: () -> Unit,
-) {
-    val cast = viewModel.sessionSlices.cast
-    val castDurationMs by cast.castDurationMs.collectAsStateWithLifecycle()
-    // Track slice — collected here (the cast dashboard is the
-    // only consumer on this branch) rather than through the residual uiState.
-    val trackState by viewModel.sessionSlices.controls.trackState.collectAsStateWithLifecycle()
-    CompanionDashboard(
-        title = title,
-        subtitle = subtitle,
-        overview = uiState.media.overview,
-        people = uiState.media.people,
-        lyricsLines = uiState.media.lyricsLines,
-        artworkUrl = uiState.media.artworkUrl,
-        isPlaying = isPlaying,
-        castPositionFlow = cast.castPositionMs,
-        castVolumeFlow = cast.castVolume,
-        durationMs = castDurationMs,
-        isConnecting = isCastConnecting,
-        audioTracks = trackState.audioTracks,
-        subtitleTracks = trackState.subtitleTracks,
-        episodes = uiState.episodes.seasonEpisodes,
-        onPlayPause = doTogglePlayPause,
-        onSeekBack = doSeekBack,
-        onSeekForward = doSeekForward,
-        onSeekTo = doSeekTo,
-        onVolumeChange = { vol -> cast.setCastVolume(vol) },
-        onDisconnect = { cast.onCastDisconnected(); disconnectCast() },
-        onSelectAudioTrack = { viewModel.onEvent(VideoPlayerUiEvent.SelectAudioTrack(it)) },
-        onSelectSubtitleTrack = { viewModel.onEvent(VideoPlayerUiEvent.SelectSubtitleTrack(it)) },
-        onPlayEpisode = { epId -> viewModel.onEvent(VideoPlayerUiEvent.PlayEpisode(epId)) },
-        personPortraitUrl = { person -> viewModel.personPortraitUrl(person) },
-        episodePosterUrl = { episode -> viewModel.posterUrl(episode, 300) },
-        onToggleOrientation = onToggleOrientation,
-        modifier = Modifier.fillMaxSize()
-    )
-}

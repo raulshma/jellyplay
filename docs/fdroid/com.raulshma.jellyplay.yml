@@ -1,0 +1,101 @@
+# Reference draft of the fdroiddata metadata for JellyPlay.
+# This file lives in the JellyPlay repo as the source of truth; it is NOT
+# submitted here. When submitting: fork https://gitlab.com/fdroid/fdroiddata,
+# branch `com.raulshma.jellyplay`, copy this file to the fdroiddata repo root,
+# fill the placeholders flagged below, and open an MR (see docs/fdroid/README.md).
+#
+# Author info verified from `git log --format='%an <%ae>'` (2026-11-09):
+# raulshma <raulshma@gmail.com>.
+Categories:
+  - Multimedia
+License: GPL-3.0-only
+# LICENSE is plain GNU GPL v3 with zero occurrences of "or later"
+# (verified by grep against the repo LICENSE file) → GPL-3.0-only, NOT GPL-3.0+.
+AuthorName: raulshma
+AuthorEmail: raulshma@gmail.com
+SourceCode: https://github.com/raulshma/jellyplay
+IssueTracker: https://github.com/raulshma/jellyplay/issues
+# Deliberately no WebSite field (linsui flags marketing sites; the GitHub repo
+# is enough).
+RepoType: git
+Repo: https://github.com/raulshma/jellyplay.git
+AutoName: JellyPlay
+
+UpdateCheckMode: Tags
+# Desktop pre-releases are tagged vX.Y.Z-alpha.N; only semver tags are releases.
+UpdateCheckRegex: ^v\d+\.\d+\.\d+$
+# Committed version.properties carries the base code (0.11.9 → 11090; scheme
+# major*100000 + minor*1000 + patch*10). Each tag yields TWO builds: base+1
+# (arm64-v8a) and base+2 (x86_64).
+VercodeOperation:
+  - '%c + 1' # arm64-v8a → e.g. 11091
+  - '%c + 2' # x86_64   → e.g. 11092
+# ORDERING INVARIANT (fdroidserver auto-update semantics, checkupdates.py):
+# a new detected version deep-copies the LAST len(VercodeOperation) Builds
+# entries and zips the SORTED computed codes onto them. Builds entries for
+# every future release must therefore be appended in this same order —
+# arm64 (+1) first, x86_64 (+2) second — or the auto-generated builds
+# silently swap their ABIs.
+UpdateCheckData: version.properties|jellyplay\.versionCode=(\d+)|.|jellyplay\.versionName=([\d.]+)
+# Plain `Version` (no format suffix): with VercodeOperation producing two codes
+# per tag there is no single per-version APK name to point at; fdroidserver
+# auto-detects the built APKs (licaon-kter's concern in the plan review).
+AutoUpdateMode: Version
+
+Builds:
+  # NOTE (mezinster's hash-pin concern): `commit:` MUST be the tag commit,
+  # i.e. the output of `git rev-parse v0.11.9` at release time — not a dev
+  # branch head. Fill BOTH entries with the same hash. The dex/manifest
+  # telemetry audit evidence is tools/fdroid/verify-apk.sh (run it on the
+  # built APKs and paste the output into the MR description).
+  - versionName: 0.11.9
+    versionCode: 11091
+    # TO-FILL after the v0.11.9 tag exists: git rev-parse v0.11.9
+    commit: TO-FILL-v0.11.9-tag-commit
+    # jellyfin-plugin-jellyplay is a real git submodule (.gitmodules:
+    # https://github.com/raulshma/jellyfin-plugin-jellyplay.git) — required.
+    submodules: true
+    # fdroidserver joins each `gradle:` entry into the task name
+    # assemble<entry>Release — here assemblePhoneFdroidRelease, which is the
+    # real Gradle task for the phone + fdroid cross-product of the two flavor
+    # dimensions (`platform` = phone/tv, `distribution` = store/fdroid; both
+    # declared in app/build.gradle.kts). The value is a task-name fragment,
+    # not a single-dimension flavor name — fdroidserver's build_local does
+    # `assemble` + ''.join(first-letter-capitalized fragments) + `Release`
+    # (verified in fdroidserver master 2026-11-10). VERIFIED locally:
+    # ./gradlew :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a builds
+    # clean and tools/fdroid/verify-apk.sh passes on the artifact.
+    gradle:
+      - phoneFdroid
+    # The distribution dimension switches seams (fonts, cast, updater, RAR)
+    # but the per-ABI packaging comes from the abiFilter Gradle property on
+    # splits.abi (app/build.gradle.kts).
+    gradleprops:
+      - abiFilter=arm64-v8a
+    # `output:` intentionally omitted: with abiFilter the split APK carries the
+    # abi suffix in its filename (app-phone-fdroid-arm64-v8a-release.apk) and
+    # fdroidserver globs build outputs automatically — same pattern LensCast
+    # used. Add an explicit `output:` only if `fdroid build` cannot find the
+    # APK (TO-CHECK on a real fdroiddata run).
+    # NDK: no ndkVersion is declared anywhere in the repo (grep 2026-11-09);
+    # release buildType sets ndk.debugSymbolLevel=SYMBOL_TABLE
+    # (app/build.gradle.kts:125) for libmpv/libvlc/libass symbolication, but
+    # packaging skips symbol extraction with a warning when no NDK is present,
+    # so the build does not require one. TO-CHECK whether the build server's
+    # NDK presence changes the APK (it would affect reproducibility, not
+    # acceptance).
+    # sudo: none expected. No jvmToolchain pin exists anywhere in the repo
+    # and the release lane already builds the signed release APKs on
+    # Temurin 17 (.github/workflows/release.yml:130), so the daemon JDK
+    # requirement is 17 — buildserver defaults (bookworm openjdk-17,
+    # trixie openjdk-21) satisfy it. Re-check once on the first real
+    # `fdroid build`.
+  - versionName: 0.11.9
+    versionCode: 11092
+    # TO-FILL after the v0.11.9 tag exists: git rev-parse v0.11.9
+    commit: TO-FILL-v0.11.9-tag-commit
+    submodules: true
+    gradle:
+      - phoneFdroid
+    gradleprops:
+      - abiFilter=x86_64

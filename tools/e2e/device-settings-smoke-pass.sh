@@ -33,12 +33,12 @@ RESULTS="$REPO_ROOT/tools/e2e/.results/device-settings-smoke"
 VARIANT="${SMOKE_VARIANT:-release}"
 if [ "$VARIANT" = "debug" ]; then
   PKG="com.raulshma.jellyplay.dev"
-  APK="$REPO_ROOT/app/build/outputs/apk/phone/debug/app-phone-arm64-v8a-debug.apk"
-  GRADLE_TASK=":app:assemblePhoneDebug"
+  APK="$REPO_ROOT/app/build/outputs/apk/phoneStore/debug/app-phone-store-arm64-v8a-debug.apk"
+  GRADLE_TASK=":app:assemblePhoneStoreDebug"
 else
   PKG="com.raulshma.jellyplay"
-  APK="$(/bin/ls -t "$REPO_ROOT"/app/build/outputs/apk/phone/release/*arm64*.apk 2>/dev/null | head -1)"
-  GRADLE_TASK=":app:assemblePhoneRelease"
+  APK="$(/bin/ls -t "$REPO_ROOT"/app/build/outputs/apk/phoneStore/release/*arm64*.apk 2>/dev/null | head -1)"
+  GRADLE_TASK=":app:assemblePhoneStoreRelease"
 fi
 mkdir -p "$RESULTS"
 

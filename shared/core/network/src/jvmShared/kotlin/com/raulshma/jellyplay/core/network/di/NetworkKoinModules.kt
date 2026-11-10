@@ -95,6 +95,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import okhttp3.Cache
 import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.logging.HttpLoggingInterceptor
@@ -392,6 +393,21 @@ private const val DOWNLOAD_CONNECT_TIMEOUT_SEC = 30L
 private const val DOWNLOAD_READ_TIMEOUT_SEC = 60L
 private const val DOWNLOAD_WRITE_TIMEOUT_SEC = 30L
 
+// Disk ceiling for the "Unlimited" cache-picker sentinel (0 MB). OkHttp's
+// Cache only evicts least-recently-used entries once the stored bytes exceed
+// the configured size, so an effectively-infinite size would let a long-lived
+// install grow the HTTP cache without bound. 256 MiB keeps the picker's
+// "Unlimited" semantics (no user-visible cap) while eviction stays effective.
+private const val UNLIMITED_HTTP_CACHE_DISK_CAP_BYTES = 256L * 1024L * 1024L
+
+// Dedicated image-fetch dispatcher sizing (installed by
+// [toImageOkHttpClient]): a Jellyfin server is a single host, so the default
+// maxRequestsPerHost = 5 would make concurrent poster-grid fetches queue
+// behind in-flight API JSON. The base client keeps that conservative default
+// for API traffic; only image loads run on the raised limits.
+private const val IMAGE_MAX_REQUESTS = 64
+private const val IMAGE_MAX_REQUESTS_PER_HOST = 16
+
 /**
  * Shared construction of the base `OkHttpClient`, replicated byte-for-byte
  * from the legacy Hilt `NetworkModule.provideOkHttpClient` (C4 zero-behavior-
@@ -462,7 +478,7 @@ internal fun baseOkHttpClient(
         .apply {
             when {
                 cacheMb == CACHE_SIZE_DISABLED -> Unit // "Disabled" — no response cache installed.
-                cacheMb == 0 -> cache(Cache(cacheDir, Long.MAX_VALUE))
+                cacheMb == 0 -> cache(Cache(cacheDir, UNLIMITED_HTTP_CACHE_DISK_CAP_BYTES))
                 else -> cache(Cache(cacheDir, cacheMb * 1024L * 1024L))
             }
         }
@@ -570,6 +586,25 @@ internal fun OkHttpClient.toStreamingOkHttpClient(): OkHttpClient {
         .readTimeout(streamingReadSec, TimeUnit.SECONDS)
         .build()
 }
+
+/**
+ * Derived client for image fetches (Coil). Installs a dedicated
+ * [Dispatcher]: a Jellyfin server is a single host, so the base client's
+ * default `maxRequestsPerHost = 5` makes poster-grid fetches queue behind
+ * in-flight API JSON on the same host budget. The raised per-host limit lives
+ * only on this derived client — the base client keeps the conservative
+ * default for API traffic. Callers layer their own divergences on top via
+ * `newBuilder()` (the Android shell drops the inherited HTTP cache so Coil's
+ * DiskCache stays the sole owner of image bytes).
+ */
+fun OkHttpClient.toImageOkHttpClient(): OkHttpClient = newBuilder()
+    .dispatcher(
+        Dispatcher().apply {
+            maxRequests = IMAGE_MAX_REQUESTS
+            maxRequestsPerHost = IMAGE_MAX_REQUESTS_PER_HOST
+        },
+    )
+    .build()
 
 /**
  * Derived client for download paths. Mirrors the per-run `newBuilder()`

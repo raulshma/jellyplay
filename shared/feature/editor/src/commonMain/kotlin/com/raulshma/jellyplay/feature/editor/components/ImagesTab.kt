@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -580,7 +581,7 @@ private fun ImageBrowseSheet(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(140.dp),
-                    modifier = Modifier.height(400.dp),
+                    modifier = Modifier.height(400.dp).tvFocusGroupRestorer(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {

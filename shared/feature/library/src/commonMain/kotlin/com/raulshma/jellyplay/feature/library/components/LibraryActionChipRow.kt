@@ -30,7 +30,7 @@ import com.composables.icons.tabler.outline.Stack2
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.library_action_size
 import com.raulshma.jellyplay.feature.library.generated.resources.library_grid_view
@@ -81,8 +81,11 @@ fun LibraryActionChipRow(
             .padding(vertical = 2.dp)
             // Same focus contract as the folder-pill/filter rows: group + restorer so D-pad
             // traversal into the row restores the last-focused chip instead of restarting.
+            // Plain group: the caller modifier's openDrawerOnLeftExit and the restorer are
+            // single-slot onExit owners — on the same node the drawer exit would win and
+            // kill the restore, so they must own different focus targets.
             .focusGroup()
-            .tvFocusRestorer(),
+            .tvFocusGroupRestorer(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 24.dp),
     ) {

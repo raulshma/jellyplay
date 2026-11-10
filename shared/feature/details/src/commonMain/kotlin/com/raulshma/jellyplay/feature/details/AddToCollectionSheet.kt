@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cancel
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_collection_create_new
@@ -89,7 +90,7 @@ fun AddToCollectionSheet(
             }
             else -> {
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().tvFocusGroupRestorer(),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     if (collections.isEmpty()) {

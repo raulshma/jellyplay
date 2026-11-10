@@ -136,7 +136,10 @@ kotlin {
             // edge; no androidMain source imports room.)
             implementation(libs.media3.session)
             implementation(libs.media3.exoplayer)
-            implementation(libs.media3.cast)
+            // (media3-cast + play-services-cast.framework dropped with the
+            // GoogleCastIntegration seam: the GMS cast stack is store-only —
+            // its CastPlayer/strategy impls live in the app's store source
+            // set — so core:data must compile GMS-free for the fdroid line.)
             implementation(libs.media3.datasource)
             implementation(libs.media3.datasource.okhttp)
             implementation(libs.media3.database)
@@ -144,7 +147,6 @@ kotlin {
             // most devices (DTS, MLP/TrueHD, EAC3...). Auto-loaded by
             // DefaultRenderersFactory via reflection.
             implementation(libs.media3.ffmpeg.decoder)
-            implementation(libs.play.services.cast.framework)
             implementation(libs.okhttp)
             implementation(libs.palette.ktx)
             implementation(libs.coil.compose)

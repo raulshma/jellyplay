@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,7 +50,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.livetv.components.LiveTvTabScaffold
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
@@ -116,8 +115,7 @@ fun RecordingsScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .focusGroup()
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(focusRequester),
             contentPadding = PaddingValues(vertical = 8.dp, horizontal = 0.dp),
         ) {
@@ -175,8 +173,8 @@ private fun RecordingCard(
 ) {
     Column(
         modifier = modifier
-            .clip(ShapeCache.smooth12)
             .focusIndicator(ShapeCache.smooth12)
+            .clip(ShapeCache.smooth12)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,

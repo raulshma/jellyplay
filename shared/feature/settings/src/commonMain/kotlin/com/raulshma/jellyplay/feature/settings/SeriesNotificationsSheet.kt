@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -99,7 +100,8 @@ internal fun SeriesNotificationsSheet(
                     state = rememberLazyListState(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(320.dp),
+                        .height(320.dp)
+                        .tvFocusGroupRestorer(),
                 ) {
                     items(
                         count = state.series.size,
@@ -209,9 +211,9 @@ private fun SeriesNotificationRow(
             Box(
                 modifier = Modifier
                     .size(32.dp)
+                    .tvFocusIndicator(removeFocusState, RoundedCornerShape(8.dp))
                     .clip(RoundedCornerShape(8.dp))
                     .then(removeFocusState.focusModifier)
-                    .tvFocusIndicator(removeFocusState, RoundedCornerShape(8.dp))
                     .clickable(onClick = onRemove),
                 contentAlignment = Alignment.Center,
             ) {
@@ -231,8 +233,8 @@ private fun SeriesNotificationRow(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(tvFocusState, shape)
             .clip(shape)
-            .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape),
+            .then(tvFocusState.focusModifier),
     )
 }

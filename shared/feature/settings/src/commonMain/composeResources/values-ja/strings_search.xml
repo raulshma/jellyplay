@@ -671,4 +671,5 @@
     <string name="ss_video_autoplay_wifi_only_subtitle">従量制接続中は次のエピソードの自動再生をスキップします</string>
     <string name="ss_video_confirm_exit_title">終了時の確認</string>
     <string name="ss_video_confirm_exit_subtitle">戻るボタンでプレーヤーを閉じる前に確認します</string>
+    <string name="ss_tv_ui_scale_subtitle">TVインターフェース全体のサイズ（コンパクト / 小 / 標準 / 大）</string>
 </resources>

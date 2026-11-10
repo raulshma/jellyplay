@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -156,7 +157,7 @@ internal fun SubtitlesTab(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().tvFocusGroupRestorer(),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 items(subtitles, key = { it.index }) { subtitle ->
@@ -452,7 +453,7 @@ private fun RemoteSubtitleSearchSheet(
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp).tvFocusGroupRestorer(),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         items(results, key = { it.id }) { subtitle ->
@@ -513,7 +514,7 @@ private fun ProviderResultsSection(
         }
     }
     LazyColumn(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp).tvFocusGroupRestorer(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         items(results, key = { it.provider to it.id }) { r ->

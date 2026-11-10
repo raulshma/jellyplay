@@ -25,7 +25,7 @@ import androidx.paging.compose.LazyPagingItems
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.defaultGridCacheWindow
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 
 /**
@@ -185,7 +185,7 @@ fun <T : Any> PagedCollectionList(
             verticalArrangement = Arrangement.spacedBy(rowSpacing),
             modifier = Modifier
                 .fillMaxSize()
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .then(
                     if (tvInitialFocusTag != null) {
                         Modifier.focusRequester(listFocusRequester)

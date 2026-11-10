@@ -1,12 +1,12 @@
 package com.raulshma.jellyplay.feature.library.components
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
@@ -29,7 +29,7 @@ import com.raulshma.jellyplay.core.ui.components.yearRangePresets
 import com.raulshma.jellyplay.core.ui.components.toggleYearPreset
 import com.raulshma.jellyplay.core.ui.components.YearPresetSelection
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.filterableMediaTypes
@@ -91,8 +91,11 @@ fun LibraryFilterChipRow(
             // the adjacent header row — geometric focus search between the stacked rows
             // is unreliable (chip focus bounds overlap vertically, and the alphabet rail
             // interleaves on the right edge, so Down could even land on the row above).
+            // Plain group: the caller modifier's openDrawerOnLeftExit and the restorer are
+            // single-slot onExit owners — on the same node the drawer exit would win and
+            // kill the restore, so they must own different focus targets.
             .focusGroup()
-            .tvFocusRestorer(),
+            .tvFocusGroupRestorer(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
     ) {

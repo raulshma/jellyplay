@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.os.Looper
+import android.os.SystemClock
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
@@ -36,7 +37,18 @@ import kotlinx.coroutines.launch
  * transport: media-button commands translate to media3 default handler
  * dispatch, which forwards to the engine's play / pause / seek / speed verbs,
  * and the engine's [EngineStateChassis] flows are folded into the resolved
- * [State] on every [invalidateState] (each flow emission triggers one).
+ * [State] on every [invalidateState]. State/buffer/play-signal emissions each
+ * trigger one immediately; the position stream is the one exception — its
+ * emissions carry only a moving playhead, so they pass through
+ * [PositionInvalidationGate] and invalidate at ~1 Hz instead of at the UI's
+ * poll cadence. Nothing on the platform consumes more: media3's own session
+ * machinery re-dispatches position info to `MediaController` clients on a
+ * periodic timer (3 s by default), and the system MediaStyle notification
+ * extrapolates the playhead from the (position, speed) snapshot it already
+ * holds, so the per-tick invalidations were pure state-resolution + binder
+ * work. Every invalidation that does run re-reads the engine's live position
+ * in [getState], so an immediately-invalidated play/pause/buffer change always
+ * carries a fresh playhead with it — the gate never starves that.
  *
  * Single-item playlist with a metadata-less placeholder item: the session
  * controller pins the visible title / artwork at the `ForwardingPlayer`
@@ -64,6 +76,17 @@ internal class MediaEngineSessionPlayer(
     private var released = false
 
     /**
+     * The position-only invalidation throttle. Main-thread-only (the position
+     * collector is this adapter's sole [PositionInvalidationGate.admit] call
+     * site), clock injected for the JVM-pinned policy tests.
+     */
+    private val positionInvalidationGate = PositionInvalidationGate(
+        minIntervalMs = POSITION_INVALIDATION_MIN_INTERVAL_MS,
+        jumpThresholdMs = POSITION_INVALIDATION_JUMP_THRESHOLD_MS,
+        nowMs = { SystemClock.elapsedRealtime() },
+    )
+
+    /**
      * The play state the session reports, refined from two directions: media
      * buttons write it directly ([handleSetPlayWhenReady]) and the engine's
      * settled-state [MediaEngine.isPlaying] mirrors refine it. Held separately
@@ -84,8 +107,10 @@ internal class MediaEngineSessionPlayer(
 
     init {
         // Re-resolve state on every engine signal. StateFlow collections fire
-        // only on real changes; the position ticker drives the advancing
-        // session progress bar (the same cadence the VOD UI polls at).
+        // only on real changes; the position stream drives the advancing
+        // session progress bar (gated to ~1 Hz below — the UI's poll cadence,
+        // 4 Hz with controls visible, is far beyond what any session consumer
+        // renders).
         listOf(
             boundEngine.playbackState,
             boundEngine.bufferedPositionMs,
@@ -94,8 +119,29 @@ internal class MediaEngineSessionPlayer(
                 flow.collect { if (!released) invalidateState() }
             }
         }
+        // The position stream: ONE collector on the engine's SHARED internal
+        // flow ([InternalPositionSource]) rather than a second, private
+        // collection of the cold public flow. Riding the shared flow means the
+        // engine instance spawns a single internally-owned
+        // [EnginePositionTicker] no matter how many in-process consumers
+        // subscribe (today: this adapter; future session-side readers join the
+        // same upstream instead of multiplying ticker wake-ups and per-tick
+        // readback work). Engines that don't implement the capability (the
+        // no-op / test doubles) fall back to the public flow unchanged.
+        //
+        // Each admitted emission re-resolves the full State — the throttle is
+        // what bounds that work to ~1 Hz for the smooth playhead. Seeks stay
+        // immediate through the gate's jump arm (a discontinuity vs the last
+        // admitted position bypasses the interval window); play/pause/buffer
+        // never touch the gate at all (their own collectors above + the
+        // handlers' done-future re-resolution below are already immediate).
+        val positionSource = (boundEngine as? InternalPositionSource)?.internalPositionFlow
+            ?: boundEngine.positionFlow
         scope.launch {
-            boundEngine.positionFlow.collect { if (!released) invalidateState() }
+            positionSource.collect { positionMs ->
+                if (released) return@collect
+                if (positionInvalidationGate.admit(positionMs)) invalidateState()
+            }
         }
         // The isPlaying mirror writes [requestedPlayWhenReady] and is wired
         // separately: only settled-state emissions refine it (see the field's
@@ -158,6 +204,17 @@ internal class MediaEngineSessionPlayer(
     // Engine calls are synchronous (the engines' own UI entry points use the
     // same verbs from the same thread); the futures only satisfy the
     // SimpleBasePlayer contract.
+    //
+    // Immediacy, by construction rather than by explicit call: every handler
+    // returns an already-done future, and SimpleBasePlayer re-resolves
+    // getState() synchronously the moment it sees that done future — so a
+    // lock-screen play / pause / seek / speed change refreshes the session
+    // state (including the live currentPositionMs read) in the same main-loop
+    // pass as the engine verb, with no throttle in between. An explicit
+    // invalidateState() here would not even land: it early-returns while a
+    // pending operation is open, which is exactly the handler's own frame.
+    // The position gate never sees these paths — it throttles only the
+    // engine's position STREAM, not transport commands.
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<Void?> {
         requestedPlayWhenReady = playWhenReady
@@ -187,6 +244,31 @@ internal class MediaEngineSessionPlayer(
     override fun handleRelease(): ListenableFuture<Void?> = Futures.immediateVoidFuture()
 
     private companion object {
+        /**
+         * The smooth-playhead invalidation cadence for the position stream
+         * (see [PositionInvalidationGate]): ~1 Hz, the rate the engine ticker
+         * itself settles at with the controls hidden, and at or above every
+         * cadence the platform consumes — media3 re-dispatches position info
+         * to controllers on a 3 s periodic timer, and the system notification
+         * extrapolates between snapshots. The former behavior invalidated at
+         * the full poll cadence (4 Hz with visible controls).
+         */
+        const val POSITION_INVALIDATION_MIN_INTERVAL_MS = 1_000L
+
+        /**
+         * A position emission at least this far from the last ADMITTED
+         * position is a seek/correction and invalidates immediately. Two
+         * times the 1 Hz step is enough margin that steady playback stays on
+         * the interval arm up to ~2x speed; at 4x the jump arm admits every
+         * other emission and past ~8x the gate matches the historical
+         * invalidate-per-emission rate — the deliberate, safe degradation
+         * direction (more invalidations, never fewer, exactly where playhead
+         * extrapolation misleads). Scaling by live speed was rejected: it
+         * would add a per-emission playbackSpeed read to the hot path (mpv's
+         * speed getter is a JNI property read).
+         */
+        const val POSITION_INVALIDATION_JUMP_THRESHOLD_MS = 2_000L
+
         /**
          * The command set a single-item, queue-less, engine-fronting
          * transport can actually honor. COMMAND_PLAY_PAUSE is the

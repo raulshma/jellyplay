@@ -8,7 +8,7 @@
 #
 # CompilationMode.None() measures whatever AOT state the installed APK carries,
 # so this lane must benchmark a CI-assembled nonMinifiedRelease APK (which merges
-# the committed saveInSrc profiles from app/src/phoneRelease) — a locally built
+# the committed saveInSrc profiles from app/src/phoneStoreRelease) — a locally built
 # release without committed profiles would produce misleading baselines.
 #
 # Manual dispatch plus a weekly schedule: numbers land in the run's uploaded

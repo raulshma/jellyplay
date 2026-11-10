@@ -65,7 +65,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_completion
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_failed_load_statistics
@@ -167,7 +167,7 @@ fun UserStatisticsScreen(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .tvFocusRestorer()
+                        .tvFocusGroupRestorer()
                         .focusRequester(listFocusRequester),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
                         start = 8.dp,
@@ -198,6 +198,13 @@ fun UserStatisticsScreen(
                         key = { it.userId },
                         contentType = { "userStat" },
                     ) { user ->
+                        // The per-user counts are fetched lazily, the first
+                        // time a row composes (the repository read is aggregate
+                        // — see the ViewModel's counts cache); a failed fetch
+                        // retries on the row's next visibility.
+                        LaunchedEffect(user.userId) {
+                            viewModel.ensureCountsLoaded(user.userId)
+                        }
                         AnimatedSectionEntrance(visible = true) {
                             UserStatisticsCard(
                                 user = user,
@@ -364,6 +371,10 @@ private fun UserStatisticsCard(
 
             Spacer(Modifier.height(12.dp))
 
+            // The count pills render the ViewModel's cached per-user counts —
+            // a row whose counts are still pending shows the zero render
+            // (identical to a zero-play row), and the fetched values fill in
+            // when the row's lazy fetch lands.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

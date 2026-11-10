@@ -70,8 +70,8 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_finished_badge
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_format_comic
@@ -177,7 +177,7 @@ private fun <T> DetailChipRow(
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
-            .tvFocusRestorer(),
+            .tvFocusGroupRestorer(),
     ) {
         items(chips, key = key, contentType = { contentType }) { chip ->
             FadingItem {

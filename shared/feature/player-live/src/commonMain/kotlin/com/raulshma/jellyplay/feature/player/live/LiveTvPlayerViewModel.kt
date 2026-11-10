@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
+import com.raulshma.jellyplay.feature.player.live.data.LiveChannelListCache
 import com.raulshma.jellyplay.feature.player.live.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_error_buffering_timeout
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_error_cancel_recording
@@ -137,6 +138,14 @@ class LiveTvPlayerViewModel(
      * constructs the VM bare.
      */
     private val mediaSessionFactory: LiveMediaSessionFactory? = null,
+    /**
+     * The channel-list TTL memo — the module's process single, shared across
+     * player entries so a re-entry inside the TTL skips the
+     * `GET /LiveTv/Channels` round trip. Bare constructions (jvmTest) get a
+     * fresh instance, whose behavior is identical to the former uncached
+     * fetch.
+     */
+    channelListCache: LiveChannelListCache = LiveChannelListCache(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LiveTvPlayerUiState())
@@ -182,6 +191,7 @@ class LiveTvPlayerViewModel(
         lastChannelStore = lastChannelStore,
         transcodeReasonsRenderer = transcodeReasonsRenderer,
         playbackRepository = playbackRepository,
+        channelListCache = channelListCache,
         mediaSessionFactory = mediaSessionFactory,
         channelImageUrl = { channelId, maxWidth, tag -> imageUrlProvider.getImageUrl(channelId, maxWidth, tag) },
     )

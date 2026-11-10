@@ -29,6 +29,7 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PressEffectStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.TvOverscan
+import com.raulshma.jellyplay.core.model.TvUiScale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -144,6 +145,7 @@ class AppearanceStore constructor(
         val HAND_MODE = stringPreferencesKey(AppearancePreferenceSpecs.HAND_MODE.keyName)
         val LAYOUT_MODE = stringPreferencesKey(AppearancePreferenceSpecs.LAYOUT_MODE.keyName)
         val TV_OVERSCAN = stringPreferencesKey(AppearancePreferenceSpecs.TV_OVERSCAN.keyName)
+        val TV_UI_SCALE = stringPreferencesKey(AppearancePreferenceSpecs.TV_UI_SCALE.keyName)
         val TIME_USE_24H = booleanPreferencesKey(AppearancePreferenceSpecs.TIME_USE_24H.keyName)
         val CARD_PRESS_ANIMATIONS = booleanPreferencesKey(AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.keyName)
         val PULL_TO_REFRESH_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.keyName)
@@ -239,6 +241,7 @@ class AppearanceStore constructor(
             handMode = AppearancePreferenceSpecs.HAND_MODE.readFrom(prefs),
             layoutMode = AppearancePreferenceSpecs.LAYOUT_MODE.readFrom(prefs),
             tvOverscan = AppearancePreferenceSpecs.TV_OVERSCAN.readFrom(prefs),
+            tvUiScale = AppearancePreferenceSpecs.TV_UI_SCALE.readFrom(prefs),
             timeUse24h = AppearancePreferenceSpecs.TIME_USE_24H.readFrom(prefs),
             cardPressAnimations = AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.readFrom(prefs),
             pullToRefreshEnabled = AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.readFrom(prefs),
@@ -471,6 +474,11 @@ class AppearanceStore constructor(
         dataStore.edit { AppearancePreferenceSpecs.TV_OVERSCAN.writeTo(it, overscan) }
     }
 
+    /** The TV shell's UI-scale density multiplier; inert off the TV form factor. */
+    suspend fun setTvUiScale(scale: TvUiScale) {
+        dataStore.edit { AppearancePreferenceSpecs.TV_UI_SCALE.writeTo(it, scale) }
+    }
+
     /** The app-wide 24-hour clock override. Default off (follow system). */
     suspend fun setTimeUse24h(enabled: Boolean) {
         dataStore.edit { AppearancePreferenceSpecs.TIME_USE_24H.writeTo(it, enabled) }
@@ -612,6 +620,7 @@ class AppearanceStore constructor(
             AppearancePreferenceSpecs.HAND_MODE.writeTo(prefs, slice.handMode)
             AppearancePreferenceSpecs.LAYOUT_MODE.writeTo(prefs, slice.layoutMode)
             AppearancePreferenceSpecs.TV_OVERSCAN.writeTo(prefs, slice.tvOverscan)
+            AppearancePreferenceSpecs.TV_UI_SCALE.writeTo(prefs, slice.tvUiScale)
             AppearancePreferenceSpecs.TIME_USE_24H.writeTo(prefs, slice.timeUse24h)
             AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.writeTo(prefs, slice.cardPressAnimations)
             AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.writeTo(prefs, slice.pullToRefreshEnabled)
@@ -708,6 +717,7 @@ data class AppearanceSlice(
     val handMode: HandMode = HandMode.RIGHT,
     val layoutMode: LayoutMode = LayoutMode.AUTO,
     val tvOverscan: TvOverscan = TvOverscan.FIVE,
+    val tvUiScale: TvUiScale = TvUiScale.SMALL,
     /** The app-wide 24-hour clock override. Default off (follow system). */
     val timeUse24h: Boolean = false,
     /** The media cards' animated press-scale. Default on. */

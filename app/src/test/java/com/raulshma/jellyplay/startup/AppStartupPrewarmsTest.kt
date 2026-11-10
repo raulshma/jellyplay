@@ -23,9 +23,9 @@ import com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectL
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.shell.AppUpdateCoordinator
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
-import com.raulshma.jellyplay.shell.UpdateCoordinator
 import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
@@ -169,7 +169,7 @@ class AppStartupPrewarmsTest {
     private val okHttpClient: OkHttpClient = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk(relaxed = true)
     private val sessionCoordinator: SessionCoordinator = mockk(relaxed = true)
-    private val updateCoordinator: UpdateCoordinator = mockk(relaxed = true)
+    private val updateCoordinator: AppUpdateCoordinator = mockk(relaxed = true)
     private val whatsNewCoordinator: WhatsNewCoordinator = mockk(relaxed = true)
     private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator = mockk(relaxed = true)
 

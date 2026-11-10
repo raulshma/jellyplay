@@ -27,12 +27,15 @@ import kotlinx.coroutines.launch
  * flow the shell renders, plus the check / download / install / dismiss
  * commands the update sheet issues. Dismissal suppression, auto-download
  * policy, and the pending-APK restore on launch are private to this module.
+ *
+ * The store flavor's binding of [AppUpdateCoordinator] — fdroid binds the
+ * noop (no GitHub download, no installer intent, no REQUEST_INSTALL_PACKAGES).
  */
 class UpdateCoordinator (
     private val appUpdateRepository: AppUpdateRepository,
     private val apkInstallBuilder: ApkInstallBuilder,
     private val experimentalStore: ExperimentalStore,
-) : ShellCoordinator() {
+) : ShellCoordinator(), AppUpdateCoordinator {
     /**
      * In-app self-update state. Observed by the update sheet so a single
      * coordinator instance drives both the launch-time auto-check and any
@@ -40,7 +43,7 @@ class UpdateCoordinator (
      * actually found or the user explicitly opens the flow.
      */
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
-    val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
+    override val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
     private var downloadJob: Job? = null
 
@@ -60,7 +63,7 @@ class UpdateCoordinator (
      * former mirror's first-value behavior (`false` until the store's current
      * value arrives, then always the persisted value).
      */
-    val selfUpdateDownloadEnabled: StateFlow<Boolean> by lazy {
+    override val selfUpdateDownloadEnabled: StateFlow<Boolean> by lazy {
         experimentalStore.experimental
             .map { it.selfUpdateDownloadEnabled }
             .stateIn(commandScope, SharingStarted.Eagerly, false)
@@ -76,7 +79,7 @@ class UpdateCoordinator (
      * cancel-then-replace restart-safety is moot: the projection is created
      * once for this coordinator's lifetime and can never be duplicated.
      */
-    fun start(scope: CoroutineScope) {
+    override fun start(scope: CoroutineScope) {
         // Reading `.value` materializes the lazy projection above and starts
         // its eager sharing, warming it with the store's current value.
         selfUpdateDownloadEnabled.value
@@ -91,7 +94,7 @@ class UpdateCoordinator (
      * silence update UI on launch — the file itself is still retained for a
      * manual check.
      */
-    fun onSessionRestored() {
+    override fun onSessionRestored() {
         commandScope.launch {
             val experimental = experimentalStore.experimental.first()
             if (experimental.selfUpdateCheckEnabled) {
@@ -135,7 +138,7 @@ class UpdateCoordinator (
      * Bypasses the auto-check preference, but still honors auto-download (an
      * available update begins streaming immediately when enabled).
      */
-    fun manualCheckForUpdate() {
+    override fun manualCheckForUpdate() {
         commandScope.launch {
             _updateState.value = UpdateState.Checking
             val experimental = experimentalStore.experimental.first()
@@ -173,7 +176,7 @@ class UpdateCoordinator (
      * step (the former optimistic local write was exactly the second writer
      * the projection removed).
      */
-    fun setSelfUpdateDownloadEnabled(enabled: Boolean) {
+    override fun setSelfUpdateDownloadEnabled(enabled: Boolean) {
         commandScope.launch { experimentalStore.setSelfUpdateDownloadEnabled(enabled) }
     }
 
@@ -182,7 +185,7 @@ class UpdateCoordinator (
      * any previously-downloaded APK + sidecar first, so this is also the path
      * used by [redownloadUpdate] to overwrite an existing file.
      */
-    fun startUpdateDownload(info: AppUpdateInfo) {
+    override fun startUpdateDownload(info: AppUpdateInfo) {
         if (info.downloadAssetUrl == null) return
         downloadJob?.cancel()
         downloadJob = commandScope.launch {
@@ -207,7 +210,7 @@ class UpdateCoordinator (
      * so the user stays on the sheet with release notes and action buttons
      * instead of resuming the download in the background.
      */
-    fun cancelDownload() {
+    override fun cancelDownload() {
         downloadJob?.cancel()
         downloadJob = null
         val state = _updateState.value
@@ -222,7 +225,7 @@ class UpdateCoordinator (
      * repository overwrites the existing file + sidecar via the normal
      * download path.
      */
-    fun redownloadUpdate() {
+    override fun redownloadUpdate() {
         val state = _updateState.value
         val info = (state as? UpdateState.Downloaded)?.info
             ?: (state as? UpdateState.UpdateAvailable)?.info
@@ -236,7 +239,7 @@ class UpdateCoordinator (
      * button the sheet renders — or null when the state holds no file (the
      * flow moved on between render and click).
      */
-    fun buildInstallIntent(): Intent? =
+    override fun buildInstallIntent(): Intent? =
         (_updateState.value as? UpdateState.Downloaded)?.file
             ?.let { apkInstallBuilder.buildInstallIntent(it) }
 
@@ -250,7 +253,7 @@ class UpdateCoordinator (
      * (if any) is retained on disk. Manual checks still surface the result
      * regardless of dismissal.
      */
-    fun dismissUpdate() {
+    override fun dismissUpdate() {
         downloadJob?.cancel()
         downloadJob = null
         val dismissedVersion = AppUpdateDecision.dismissedVersion(_updateState.value)

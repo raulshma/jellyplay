@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import kotlin.math.abs
 import com.raulshma.jellyplay.feature.home.generated.resources.syncing
@@ -139,7 +140,8 @@ internal fun SyncDetailsSheet(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 320.dp),
+                        .heightIn(max = 320.dp)
+                        .tvFocusGroupRestorer(),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(entries, key = { it.id }, contentType = { "pendingSyncEntry" }) { entry ->

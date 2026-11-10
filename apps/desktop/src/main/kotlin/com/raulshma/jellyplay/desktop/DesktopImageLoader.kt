@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.image.jellyPlayImageLoader
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
+import com.raulshma.jellyplay.core.network.di.toImageOkHttpClient
 import okhttp3.OkHttpClient
 import okio.Path
 import okio.Path.Companion.toPath
@@ -56,7 +57,14 @@ internal fun installDesktopImageLoader(koinApp: KoinApplication, configDir: Path
         jellyPlayImageLoader(
             platformContext = platformContext,
             imageClient = {
-                koinApp.koin.get<OkHttpClient>(NetworkQualifiers.streamingHttpClient)
+                // toImageOkHttpClient() swaps in the dedicated image Dispatcher
+                // (raised per-host limit — a Jellyfin server is a single host,
+                // so the shared default 5 would serialize poster grids behind
+                // in-flight API JSON). Timeouts and the inherited HTTP cache
+                // keep the streaming client's behavior.
+                koinApp.koin
+                    .get<OkHttpClient>(NetworkQualifiers.streamingHttpClient)
+                    .toImageOkHttpClient()
             },
             diskCacheDirectory = {
                 configDir.toFile().resolve(ImageCache.DIR).absolutePath.toPath()

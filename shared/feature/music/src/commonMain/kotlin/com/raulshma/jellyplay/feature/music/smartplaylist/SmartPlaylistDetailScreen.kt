@@ -35,8 +35,8 @@ import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.feature.music.components.TrackRow
@@ -102,7 +102,7 @@ fun SmartPlaylistDetailScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .tvFocusRestorer()
+                            .tvFocusGroupRestorer()
                             .focusRequester(listFocusRequester),
                         contentPadding = PaddingValues(
                             top = 8.dp,

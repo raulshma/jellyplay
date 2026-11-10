@@ -105,6 +105,26 @@ enum class TvOverscan(val displayName: String, val percent: Int) {
 }
 
 /**
+ * The TV shell's UI scale: a multiplier applied to the composition density on
+ * the TV form factor, so EVERY dp-sized surface (cards, rows, padding,
+ * chrome) and every sp-sized text shrinks together — the density-normalization
+ * lever for TVs whose stock density makes the layout read oversized
+ * (1080p panels running a 1.5x+ density are the common case). Applied once in
+ * `JellyPlayPreferenceTheme` (the single channel both activity hosts share);
+ * inert off the TV form factor. The shipped default is [SMALL] — the stock
+ * TV density renders the layout noticeably oversized at 1080p — and
+ * [DEFAULT] keeps the pre-scale behavior. Persistence is the enum NAME.
+ */
+@Immutable
+@Serializable
+enum class TvUiScale(val displayName: String, val factor: Float) {
+    COMPACT("Compact (75%)", 0.75f),
+    SMALL("Small (85%)", 0.85f),
+    DEFAULT("Default (100%)", 1f),
+    LARGE("Large (115%)", 1.15f),
+}
+
+/**
  * The detail screen's people-display density: the cast rail's item geometry
  * (media-detail header) and the Cast & Crew grid's column minimum share the
  * same three-step vocabulary. Persistence is the enum NAME.

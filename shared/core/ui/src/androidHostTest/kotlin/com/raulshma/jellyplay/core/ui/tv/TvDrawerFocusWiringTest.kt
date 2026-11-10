@@ -43,7 +43,7 @@ import org.robolectric.annotation.Config
  * production modifier chains:
  *  - DrawerSheet: onFocusChanged(auto open/close) + focusGroup
  *  - Drawer content Box: focusRequester + onFocusChanged + focusGroup + tvFocusRestorer()
- *  - Header rows: focusGroup + tvFocusRestorer()
+ *  - Header rows: tvFocusGroupRestorer()
  *  - TvFocusableGrid: focusProperties{onEnter} + focusGroup + tvFocusRestorer(fallback) + focusRequester
  *
  * Compose aggregates FocusProperties from a focus target outward with the
@@ -108,14 +108,14 @@ class TvDrawerFocusWiringTest {
             ) {
                 Column(Modifier.fillMaxSize()) {
                     // Header row A (folder pills)
-                    Row(Modifier.focusGroup().tvFocusRestorer()) {
+                    Row(Modifier.tvFocusGroupRestorer()) {
                         listOf("rowA0", "rowA1").forEach { tag ->
                             val fr = remember { FocusRequester() }.also { h.requesters[tag] = it }
                             Text(tag, Modifier.focusRequester(fr).tracked(tag, h).focusable())
                         }
                     }
                     // Header row B (filter chips)
-                    Row(Modifier.focusGroup().tvFocusRestorer()) {
+                    Row(Modifier.tvFocusGroupRestorer()) {
                         listOf("rowB0", "rowB1").forEach { tag ->
                             val fr = remember { FocusRequester() }.also { h.requesters[tag] = it }
                             Text(tag, Modifier.focusRequester(fr).tracked(tag, h).focusable())

@@ -25,7 +25,7 @@ import org.junit.runner.RunWith
  * silently regressing startup.
  *
  * Run this against a release/nonMinifiedRelease build produced with the
- * committed profiles (app/src/phoneRelease/generated) — a debug build carries
+ * committed profiles (app/src/phoneStoreRelease/generated) — a debug build carries
  * no profile and the assertion correctly rejects it.
  */
 @RunWith(AndroidJUnit4::class)

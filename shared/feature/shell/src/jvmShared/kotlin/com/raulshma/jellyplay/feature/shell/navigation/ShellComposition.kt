@@ -66,6 +66,9 @@ import kotlinx.coroutines.flow.StateFlow
  *   MainViewModel, desktop the shared [com.raulshma.jellyplay.feature.shell.ShellSessionController]).
  * @param onLogout logout (revoke=true also revokes the server session).
  * @param onCheckForUpdates the About-row update check.
+ * @param selfUpdateSupported whether this shell can self-update (Android:
+ *   distribution-bound — store true / fdroid false; desktop defaults true).
+ *   Gates the About update rows through [ShellSettingsHooks.selfUpdateSupported].
  * @param pendingSearchQuery the search prefill channel (a StateFlow on
  *   purpose — see [ShellSearchHooks]); shells without a source keep a
  *   never-armed one.
@@ -86,6 +89,7 @@ data class ShellCompositionArms(
     val onRefreshAdmin: () -> Unit,
     val onLogout: (Boolean) -> Unit,
     val onCheckForUpdates: () -> Unit,
+    val selfUpdateSupported: Boolean = true,
     val pendingSearchQuery: StateFlow<String?>,
     val onConsumeSearchQuery: () -> Unit,
 )
@@ -150,6 +154,7 @@ fun rememberShellComposition(
         settings = ShellSettingsHooks(
             onLogout = arms.onLogout,
             onCheckForUpdates = arms.onCheckForUpdates,
+            selfUpdateSupported = arms.selfUpdateSupported,
         ),
         admin = ShellAdminHooks(
             isAdmin = adminGate.isAdmin,

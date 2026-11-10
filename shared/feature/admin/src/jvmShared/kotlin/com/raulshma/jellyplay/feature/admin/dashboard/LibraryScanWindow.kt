@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
+import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.model.SessionInfo
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -87,5 +89,82 @@ internal class WsTaskFreshness(
     internal companion object {
         /** The VM's former `WS_PUSH_STALE_AFTER_MS` constant, moved with the rule. */
         const val DEFAULT_STALE_AFTER_MS = 30_000L
+    }
+}
+
+/**
+ * The WS task-push rebuild gate — pure comparison logic like
+ * [WsTaskFreshness], from [AdminDashboardViewModel]'s push collector.
+ *
+ * The server pushes the full task list at 1 Hz whether anything visible
+ * changed or not (a running task's progress double moves almost every
+ * push), so the collector asks [presentationChanged] before publishing a new
+ * dashboard state: only a change the running-task card can actually render
+ * — membership, order, state, name, or the whole-percent reading of the
+ * progress — counts. Sub-percent progress drift is invisible at the card's
+ * rendered unit (`${progress.toInt()}%` text and a bar that moves 1% of its
+ * 6 dp), and suppressing it keeps the ~1 Hz pushes from rebuilding the
+ * state (and recomposing the dashboard) for nothing. Any structural change
+ * propagates immediately.
+ */
+internal object RunningTasksGate {
+
+    /**
+     * True when the running-task card's presentation differs between [old]
+     * and [new]: same tasks in the same order with the same state, name,
+     * and whole-percent progress read as unchanged.
+     */
+    fun presentationChanged(old: List<ScheduledTaskInfo>, new: List<ScheduledTaskInfo>): Boolean {
+        if (old.size != new.size) return true
+        return old.indices.any { i ->
+            val previous = old[i]
+            val current = new[i]
+            previous.id != current.id ||
+                previous.name != current.name ||
+                previous.state != current.state ||
+                displayedProgress(previous) != displayedProgress(current)
+        }
+    }
+
+    /**
+     * The progress value the card renders: the whole-percent truncation
+     * (`${progress.toInt()}%`) — or null when the task reports none (the
+     * bar's absence is itself a presentation change).
+     */
+    private fun displayedProgress(task: ScheduledTaskInfo): Int? =
+        task.currentProgressPercentage?.toInt()
+}
+
+/**
+ * The WS session-push rebuild gate — [RunningTasksGate]'s comparison shape
+ * over the dashboard's session list, from the sessions push collector.
+ *
+ * The server pushes the full `Sessions` array on session/playstate changes of
+ * any client, so a playing session's position ticks (and the other playstate
+ * fields the session card does not render) drift push after push. The
+ * collector asks [presentationChanged] before publishing: only a change the
+ * ActiveSessionsSection card can actually render — membership, order, user,
+ * device, client, or the now-playing title — counts. Playstate drift is
+ * invisible at the card and suppressing it keeps the pushes from rebuilding
+ * the dashboard state for nothing.
+ */
+internal object SessionsGate {
+
+    /**
+     * True when the session card's presentation differs between [old] and
+     * [new]: same sessions in the same order with the same user, device,
+     * client, and now-playing title read as unchanged.
+     */
+    fun presentationChanged(old: List<SessionInfo>, new: List<SessionInfo>): Boolean {
+        if (old.size != new.size) return true
+        return old.indices.any { i ->
+            val previous = old[i]
+            val current = new[i]
+            previous.id != current.id ||
+                previous.userName != current.userName ||
+                previous.deviceName != current.deviceName ||
+                previous.client != current.client ||
+                previous.nowPlayingItem?.name != current.nowPlayingItem?.name
+        }
     }
 }

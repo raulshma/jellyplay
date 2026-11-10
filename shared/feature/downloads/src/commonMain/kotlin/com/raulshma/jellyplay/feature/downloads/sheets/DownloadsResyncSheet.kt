@@ -25,6 +25,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.components.episodeContextLine
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_close
@@ -112,7 +113,8 @@ internal fun DownloadsResyncSheet(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 360.dp),
+                            .heightIn(max = 360.dp)
+                            .tvFocusGroupRestorer(),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         itemsIndexed(updateRows, key = { _, row -> row.id }) { _, row ->

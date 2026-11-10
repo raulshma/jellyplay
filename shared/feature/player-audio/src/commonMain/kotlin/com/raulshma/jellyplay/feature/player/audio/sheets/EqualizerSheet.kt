@@ -35,6 +35,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.EqualizerPreset
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.SheetSection
@@ -85,6 +86,7 @@ internal fun EqualizerSheet(
             )
             Spacer(Modifier.height(20.dp))
             LazyRow(
+                modifier = Modifier.tvFocusGroupRestorer(),
                 contentPadding = PaddingValues(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {

@@ -11,7 +11,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
@@ -20,6 +23,8 @@ import com.raulshma.jellyplay.core.network.api.JellyPlayMessage
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_msgs_empty
 import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_msgs_title
@@ -51,6 +56,15 @@ fun JellyPlayMessagesScreen(
     // stream start, so the screen re-pulls once per visit.
     LaunchedEffect(Unit) { viewModel.refresh() }
 
+    // TV focus-on-launch: focus the first message row once the inbox lands so
+    // D-pad input lands on content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = messages.size,
+        tag = "jellyplay_messages_init",
+    )
+
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.jellyplay_msgs_title),
         onBack = onBack,
@@ -68,7 +82,10 @@ fun JellyPlayMessagesScreen(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusGroupRestorer()
+                    .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(
                     top = contentPadding.calculateTopPadding() + 8.dp,
                     bottom = contentPadding.calculateBottomPadding() + 16.dp,

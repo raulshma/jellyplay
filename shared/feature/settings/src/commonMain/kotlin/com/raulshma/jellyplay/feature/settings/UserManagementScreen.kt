@@ -50,12 +50,12 @@ import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.floatingNavClearanceDp
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import androidx.compose.foundation.shape.CircleShape
@@ -133,7 +133,7 @@ fun UserManagementScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .tvFocusRestorer()
+                            .tvFocusGroupRestorer()
                             .focusRequester(focusRequester),
                         contentPadding = PaddingValues(
                             start = contentPad,

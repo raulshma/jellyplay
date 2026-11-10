@@ -34,6 +34,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,7 +52,9 @@ import com.raulshma.jellyplay.core.ui.components.MarkdownText
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.WhatsNewTargets
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreRes
@@ -80,6 +84,15 @@ fun WhatsNewScreen(
 
     val expandedVersions = rememberExpandableReleases(viewModel.releases)
 
+    // TV focus-on-launch: focus the first release section once the archive
+    // lands so D-pad input lands on content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = viewModel.releases.size,
+        tag = "whats_new_init",
+    )
+
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_whatsnew_title),
         onBack = onBack,
@@ -97,7 +110,10 @@ fun WhatsNewScreen(
         } else {
             val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusGroupRestorer()
+                    .focusRequester(listFocusRequester),
                 contentPadding = PaddingValues(
                     start = adaptiveInfo.contentPadding(isTv) + 8.dp,
                     end = adaptiveInfo.contentPadding(isTv) + 8.dp,
@@ -181,9 +197,9 @@ private fun ReleaseSection(
                     defaultScale = 0.98f,
                     spec = MaterialTheme.motionScheme.fastSpatialSpec(),
                 )
+                .tvFocusIndicator(tvFocusState, ShapeCache.smooth16)
                 .clip(ShapeCache.smooth16)
                 .then(tvFocusState.focusModifier)
-                .tvFocusIndicator(tvFocusState, ShapeCache.smooth16)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,

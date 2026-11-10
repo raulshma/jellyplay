@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +59,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -130,6 +134,17 @@ fun DiscoverRowEditorScreen(
     }
 
     val current = draft
+
+    // TV focus-on-launch: the editor body only exists once the draft loads
+    // (new rows seed synchronously, edits after startEdit), so grab focus when
+    // the content first composes — otherwise the drawer rail captures D-pad.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (current == null) 0 else 1,
+        tag = "discover_row_editor_init",
+    )
+
     JellyPlayScreenScaffold(
         title = stringResource(
             if (rowId == null) Res.string.settings_add_discover_row else Res.string.settings_discover_row_edit,
@@ -167,7 +182,11 @@ fun DiscoverRowEditorScreen(
         val row = current.row
         LazyColumn(
             state = rememberLazyListState(),
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .tvFocusGroupRestorer()
+                .focusRequester(listFocusRequester),
             contentPadding = PaddingValues(
                 start = adaptiveInfo.contentPadding(isTv),
                 end = adaptiveInfo.contentPadding(isTv),
@@ -374,7 +393,7 @@ fun DiscoverRowEditorScreen(
                         modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
                     )
                 }
-                LazyColumn {
+                LazyColumn(modifier = Modifier.tvFocusGroupRestorer()) {
                     // Selected entries first so they stay reachable (and
                     // removable) regardless of the current search term.
                     items(selected.size, key = { "sel_${selected[it].id}" }) { index ->
@@ -664,7 +683,7 @@ private fun <T> DiscoverRowToggleSheet(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(16.dp),
             )
-            LazyColumn {
+            LazyColumn(modifier = Modifier.tvFocusGroupRestorer()) {
                 items(items.size, key = { keyFor(items[it]) }) { index ->
                     val item = items[index]
                     ListItem(

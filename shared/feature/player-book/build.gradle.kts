@@ -37,8 +37,11 @@ kotlin {
         getByName("jvmShared").dependencies {
             // Plain GET streaming for the reader cache (BookContentResolver).
             implementation(libs.okhttp)
-            // CBR (RAR) extraction — see the catalog entry's license note.
-            implementation(libs.junrar)
+            // (junrar dropped: RAR extraction went behind the public
+            // RarEntryReaderFactory seam — hosts bind their own adapter, so
+            // the UnRAR-licensed code stays out of the fdroid classpath. The
+            // store line binds app/src/store's JunrarRarEntryReader; the
+            // desktop host its own twin in apps/desktop.)
         }
         getByName("jvmTest").dependencies {
             // (kotlin("test") comes from the convention plugin.)

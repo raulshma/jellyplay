@@ -535,8 +535,18 @@ internal fun SearchScreen(
                 // De-duplicate against the library grid below so a downloaded item
                 // that also exists in the library isn't rendered twice (Home already
                 // does this for its downloaded row) — the pure fold in
-                // [dedupeOfflineAgainstLibrary].
-                val dedupedOfflineResults = remember(offlineResults, pagedResults.itemSnapshotList) {
+                // [dedupeOfflineAgainstLibrary]. Keyed on the fold's actual inputs
+                // — the offline list plus the loaded snapshot's size and refresh
+                // generation — not on the snapshot list itself: its identity
+                // changes on every load-state churn between appends, and each of
+                // those re-ran the O(loaded) id-set rebuild for an unchanged id
+                // set (count only moves on an append/refresh, and a refresh
+                // generation swap re-keys the fold even at an equal count).
+                val dedupedOfflineResults = remember(
+                    offlineResults,
+                    pagedResults.itemCount,
+                    pagedResults.loadState.refresh,
+                ) {
                     dedupeOfflineAgainstLibrary(offlineResults, pagedResults.itemSnapshotList)
                 }
                 val showOffline = dedupedOfflineResults.isNotEmpty() && queryHasText

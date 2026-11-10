@@ -125,8 +125,8 @@ fun PlayOnMiniBar(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .clip(ShapeCache.smooth16)
                             .focusIndicator(ShapeCache.smooth16)
+                            .clip(ShapeCache.smooth16)
                             .clickable(onClick = onExpand),
                     ) {
                         Icon(
@@ -245,8 +245,8 @@ private fun PlayOnIconButton(
         modifier = Modifier
             .size(36.dp)
             .scale(scale)
-            .clip(CircleShape)
             .focusIndicator(CircleShape)
+            .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
         contentAlignment = Alignment.Center,
     ) {

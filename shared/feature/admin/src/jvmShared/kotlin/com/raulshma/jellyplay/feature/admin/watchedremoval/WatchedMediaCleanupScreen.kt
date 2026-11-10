@@ -47,6 +47,7 @@ import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.model.MediaItemStub
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.admin.mediacleanup.MediaCleanupScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
@@ -129,8 +130,8 @@ private fun WatchedItemCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(ShapeCache.smooth12)
                 .focusIndicator()
+                .clip(ShapeCache.smooth12)
                 .clickable(onClick = onToggle)
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -216,7 +217,9 @@ private fun WatchedConfigurationTab(
     isScanning: Boolean,
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .tvFocusGroupRestorer(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {

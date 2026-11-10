@@ -149,9 +149,9 @@ fun PluginListItem(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
+                        .tvFocusIndicator(uninstallFocusState, CircleShape)
                         .clip(CircleShape)
                         .then(uninstallFocusState.focusModifier)
-                        .tvFocusIndicator(uninstallFocusState, CircleShape)
                         .clickable { onUninstall(plugin.id) },
                     contentAlignment = Alignment.Center,
                 ) {

@@ -305,11 +305,11 @@ internal fun PowerUserModeCard(
                 defaultScale = 0.98f,
                 spec = MaterialTheme.motionScheme.fastSpatialSpec(),
             )
+            .tvFocusIndicator(tvFocusState, ShapeCache.smooth24)
             .clip(ShapeCache.smooth24)
             .background(settingsGroupContainerColor())
             .lightModeHairlineBorder(ShapeCache.smooth24)
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, ShapeCache.smooth24)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

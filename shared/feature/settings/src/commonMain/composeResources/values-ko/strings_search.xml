@@ -671,4 +671,5 @@
     <string name="ss_video_autoplay_wifi_only_subtitle">종량제 연결에서는 다음 에피소드 자동 재생을 건너뜁니다</string>
     <string name="ss_video_confirm_exit_title">종료 확인</string>
     <string name="ss_video_confirm_exit_subtitle">뒤로 가기를 누르면 플레이어를 닫기 전에 먼저 묻습니다</string>
+    <string name="ss_tv_ui_scale_subtitle">TV 인터페이스 전체 크기 (컴팩트 / 작게 / 기본 / 크게)</string>
 </resources>

@@ -35,6 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +56,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_backups_component_database
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_backups_component_metadata
@@ -84,6 +88,21 @@ fun AdminBackupsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val backgroundColorState = rememberScreenBackgroundColorState()
+
+    // TV focus-on-launch: focus the create/backup list once it is the visible
+    // branch (the restore ladder, loading, unsupported and error states are
+    // non-list states whose focus falls back to the drawer).
+    val contentReady = state.restorePhase == RestorePhase.Idle &&
+        !state.isLoading &&
+        state.isSupported &&
+        state.error == null &&
+        !state.restoreServerUnreachable
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (contentReady) 1 else 0,
+        tag = "admin_backups_init",
+    )
 
     var showCreateDialog by remember { mutableStateOf(false) }
     // The archive awaiting its restore confirmation; held in state so it
@@ -166,6 +185,7 @@ fun AdminBackupsScreen(
                 state = state,
                 onCreate = { showCreateDialog = true },
                 onRestore = { pendingRestoreFile = it },
+                focusRequester = listFocusRequester,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -177,10 +197,13 @@ private fun BackupsContent(
     state: AdminBackupsState,
     onCreate: () -> Unit,
     onRestore: (String) -> Unit,
+    focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier,
+        modifier = modifier
+            .tvFocusGroupRestorer()
+            .focusRequester(focusRequester),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

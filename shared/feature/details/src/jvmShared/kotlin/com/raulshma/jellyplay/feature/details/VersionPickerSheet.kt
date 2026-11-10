@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.model.MediaSourceType
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_version_grouping_badge
@@ -99,7 +100,10 @@ internal fun VersionPickerSheet(
         onDismissRequest = onDismiss,
         title = stringResource(Res.string.detail_version_select),
     ) {
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyColumn(
+            modifier = Modifier.tvFocusGroupRestorer(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             items(options, key = { it.sourceId }, contentType = { "versionOption" }) { option ->
                 val optionInteractionSource = remember { MutableInteractionSource() }
                 val optionFocusState = rememberTvFocusState(focusedScale = 1.03f)

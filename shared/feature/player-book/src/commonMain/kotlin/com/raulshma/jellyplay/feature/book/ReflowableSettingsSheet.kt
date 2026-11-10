@@ -15,7 +15,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -97,7 +97,7 @@ internal fun ReflowableSettingsSheet(
     val speechRate = prefs.global.speechRate
     val speechPitch = prefs.global.speechPitch
     val autoScrollSpeedPx = prefs.global.autoScrollSpeedPxPerSec
-    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+    TvSafeSheet(onDismissRequest = onDismissRequest) {
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
         ) {

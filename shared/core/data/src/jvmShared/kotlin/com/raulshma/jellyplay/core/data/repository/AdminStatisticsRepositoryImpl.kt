@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.model.TimeSource
@@ -28,6 +27,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
@@ -131,6 +131,12 @@ class AdminStatisticsRepositoryImpl constructor(
     override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatchingRethrowingCancellation {
         // One capture for the whole page — see the store's gatedWith KDoc.
         val pluginStatusSnapshot = pluginStatus.value
+        // List rows are the AGGREGATE reads only (roster, sessions, the
+        // plugin's per-user watch time). The per-user played/unplayed counts
+        // are four round trips PER USER (a whole-roster refresh would fan out
+        // N×4 requests), so they ride [getUserPlayCounts] — fetched per user
+        // as needed and merged in ([UserPlayCounts.mergedInto]); the rows
+        // returned here carry zeros until then.
         coroutineScope {
             val usersDeferred = async { mediaInfoApiClient.getUsers().getOrThrow() }
             val sessionsDeferred = async { adminApiClient.getSessions().getOrDefault(emptyList()) }
@@ -140,23 +146,43 @@ class AdminStatisticsRepositoryImpl constructor(
             val activeUserIds = sessionsDeferred.await().map { it.userId }.toSet()
             val pluginMap = pluginDeferred.await().associateBy { it.userId }
 
-            statsSemaphore.mapConcurrent(users) { user ->
+            users.map { user ->
                 buildUserStatistics(
                     user = user,
                     isActive = activeUserIds.contains(user.id),
                     totalWatchTimeSec = pluginMap[user.id]?.totalTime ?: 0L,
+                    counts = UserPlayCounts(),
                 )
             }
         }
     }
 
+    override suspend fun getUserPlayCounts(userId: String): Result<UserPlayCounts> = runCatchingRethrowingCancellation {
+        // The list rows' lazy per-user read (see [getAllUsersWithStatistics]).
+        // Bounded by the fan-out semaphore: at most four users' four-call
+        // reads overlap, so a burst of newly-visible rows (a fast scroll) or
+        // an export's set can never flood the server.
+        statsSemaphore.withPermit {
+            fetchUserPlayCountsStrict(userId)
+        }
+    }
+
     /** Played/unplayed counters fetched concurrently for one user. */
-    private data class UserPlayCounts(
-        val moviePlayed: Int,
-        val episodePlayed: Int,
-        val songPlayed: Int,
-        val movieUnplayed: Int,
-    )
+    private suspend fun fetchUserPlayCountsStrict(userId: String): UserPlayCounts = coroutineScope {
+        // Strict per-counter reads: a failed counter fails the read so the
+        // caller can leave the row's counts pending and retry later instead
+        // of caching a zero that reads as "no plays".
+        val movieDeferred = async { mediaInfoApiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrThrow() }
+        val episodeDeferred = async { mediaInfoApiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrThrow() }
+        val songDeferred = async { mediaInfoApiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrThrow() }
+        val movieUnplayedDeferred = async { mediaInfoApiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrThrow() }
+        UserPlayCounts(
+            moviePlayed = movieDeferred.await(),
+            episodePlayed = episodeDeferred.await(),
+            songPlayed = songDeferred.await(),
+            movieUnplayed = movieUnplayedDeferred.await(),
+        )
+    }
 
     private suspend fun fetchUserPlayCounts(userId: String): UserPlayCounts = coroutineScope {
         val movieDeferred = async { mediaInfoApiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
@@ -175,9 +201,10 @@ class AdminStatisticsRepositoryImpl constructor(
      * The ONE [UserStatistics] builder for both pages — the per-user list and
      * the detail page's `statistics` field (an inline copy of this body that
      * had already drifted once: it omitted `isCurrentlyActive` and had its
-     * own verbatim completion-rate math). The completion rate
-     * (`movieTotal = unplayed + played; played/total else 0`) lives here
-     * exactly once.
+     * own verbatim completion-rate math). The count fields and the completion
+     * rate (`movieTotal = unplayed + played; played/total else 0`) live on
+     * [UserPlayCounts.mergedInto] exactly once — this builder folds the
+     * passed [counts] into the identity/watch-time fields it owns here.
      *
      *  - [isActive] is the session-derived "currently playing" flag. Only
      *    the LIST path has a session source; the detail page has never
@@ -188,38 +215,27 @@ class AdminStatisticsRepositoryImpl constructor(
      *  - [totalWatchTimeSec] is the already-resolved watch time: the list
      *    path passes the plugin's per-user total (`?: 0L`), the detail path
      *    its plugin-then-computed fallback ladder.
-     *  - [counts] lets the detail path reuse the [UserPlayCounts] it already
-     *    fetched for its type breakdown instead of re-firing the four-call
-     *    fan-out; null fetches here.
+     *  - [counts] is the already-resolved played/unplayed set: the detail
+     *    path passes the [UserPlayCounts] it fetched for its type breakdown,
+     *    the list path the zeroed default (the list never fans out per-user
+     *    counts — see [getAllUsersWithStatistics]).
      */
-    private suspend fun buildUserStatistics(
+    private fun buildUserStatistics(
         user: JellyfinUser,
         isActive: Boolean = false,
         totalWatchTimeSec: Long = 0L,
-        counts: UserPlayCounts? = null,
-    ): UserStatistics {
-        val stats = counts ?: fetchUserPlayCounts(user.id)
-        val moviePlayed = stats.moviePlayed
-        val episodePlayed = stats.episodePlayed
-        val songPlayed = stats.songPlayed
-        val movieTotal = stats.movieUnplayed + moviePlayed
-        val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
-
-        return UserStatistics(
+        counts: UserPlayCounts,
+    ): UserStatistics = counts.mergedInto(
+        UserStatistics(
             userId = user.id,
             userName = user.name,
             userAvatarTag = user.primaryImageTag,
             isAdmin = user.isAdmin,
-            totalPlayCount = moviePlayed + episodePlayed + songPlayed,
-            moviePlayCount = moviePlayed,
-            episodePlayCount = episodePlayed,
-            songPlayCount = songPlayed,
             totalWatchTimeSec = totalWatchTimeSec,
             lastSeen = user.lastActivityDate,
-            completionRate = completionRate,
             isCurrentlyActive = isActive,
         )
-    }
+    )
 
     override suspend fun getUserDetailStatistics(userId: String, page: Int, pageSize: Int): Result<UserDetailPage> = runCatchingRethrowingCancellation {
         // One capture for the whole page (every gate below reads it — the

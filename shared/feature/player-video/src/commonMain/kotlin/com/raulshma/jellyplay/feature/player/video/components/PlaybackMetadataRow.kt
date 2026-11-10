@@ -22,6 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -91,6 +94,12 @@ internal fun PlaybackMetadataRow(
     onHdrClick: (() -> Unit)? = null,
     mpvConfigNoticeActive: Boolean = false,
     onMpvConfigNoticeClick: (() -> Unit)? = null,
+    /** TV: focuses the first actionable chip (the play-method pill). */
+    tvFocusRequester: FocusRequester? = null,
+    /** TV: Up from any actionable chip. */
+    tvUpFocusRequester: FocusRequester? = null,
+    /** TV: Down from any actionable chip (the seek bar). */
+    tvDownFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     // Leaf collection (the currentPositionFlow pass-down rule): the stats
@@ -340,7 +349,17 @@ internal fun PlaybackMetadataRow(
     FlowRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 2.dp, bottom = 1.dp),
+            .padding(top = 2.dp, bottom = 1.dp)
+            // Requesting this focuses the first focusable chip; only the
+            // actionable chips (play method / HDR / sub delay / mpv notice)
+            // carry a focus target, so passive info pills never trap the D-pad.
+            .then(
+                if (tvFocusRequester != null) {
+                    Modifier.focusRequester(tvFocusRequester)
+                } else {
+                    Modifier
+                }
+            ),
         horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.Start),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
@@ -348,6 +367,8 @@ internal fun PlaybackMetadataRow(
             MetadataChip(
                 item = item,
                 onClick = item.onClick,
+                tvUpFocusRequester = tvUpFocusRequester,
+                tvDownFocusRequester = tvDownFocusRequester,
             )
         }
     }
@@ -358,20 +379,38 @@ private fun MetadataChip(
     item: MetadataItem,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    tvUpFocusRequester: FocusRequester? = null,
+    tvDownFocusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val tvFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     Box(
         modifier = modifier
+            // Focus chrome first: the glow's elevation shadow has to sit
+            // behind the opaque pill fill and outside its clip, or it reads as
+            // an inset blob painted over the chip.
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .then(if (isTv) tvFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(tvFocusState, ShapeCache.smoothPill) else Modifier)
+                } else Modifier
+            )
             .clip(ShapeCache.smoothPill)
             .background(item.containerColor)
             .border(1.dp, item.borderColor, ShapeCache.smoothPill)
             .then(
                 if (onClick != null) {
                     Modifier
-                        .then(if (isTv) tvFocusState.focusModifier else Modifier)
-                        .then(if (isTv) Modifier.tvFocusIndicator(tvFocusState, ShapeCache.smoothPill) else Modifier)
+                        .then(
+                            if (isTv && (tvUpFocusRequester != null || tvDownFocusRequester != null)) {
+                                Modifier.focusProperties {
+                                    tvUpFocusRequester?.let { up = it }
+                                    tvDownFocusRequester?.let { down = it }
+                                }
+                            } else Modifier
+                        )
                         .clickable(role = Role.Button, onClick = onClick)
                         .semantics { role = Role.Button }
                 } else Modifier

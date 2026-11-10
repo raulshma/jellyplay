@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
+import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.model.SessionInfo
+import com.raulshma.jellyplay.core.model.SessionNowPlayingItem
+import com.raulshma.jellyplay.core.model.TaskState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -9,7 +13,9 @@ import kotlin.test.assertTrue
  * Pins the extracted dashboard time machines — [LibraryScanWindow] (the scan
  * optimistic grace window) and [WsTaskFreshness] (the WS-push trust rule) —
  * with injected clocks: timestamps in → state out, no wall clock and no VM
- * (the mediacleanup `MediaCleanupScanStateHolderTest` precedent).
+ * (the mediacleanup `MediaCleanupScanStateHolderTest` precedent). The
+ * [RunningTasksGate] and [SessionsGate] comparisons ride here too (same
+ * extracted-pure-logic family, pinned without a VM).
  */
 class LibraryScanWindowTest {
 
@@ -117,5 +123,131 @@ class LibraryScanWindowTest {
     @Test
     fun `default staleness matches the VM constant`() {
         assertEquals(30_000L, WsTaskFreshness.DEFAULT_STALE_AFTER_MS)
+    }
+
+    // ── RunningTasksGate ──────────────────────────────────────────────────
+
+    private fun runningTask(
+        id: String = "task-1",
+        name: String = "Scan Media Library",
+        progress: Double? = 25.0,
+    ) = ScheduledTaskInfo(id = id, key = "RefreshLibrary", name = name, state = TaskState.RUNNING, currentProgressPercentage = progress)
+
+    @Test
+    fun `a sub-percent progress drift is not a presentation change`() {
+        val old = listOf(runningTask(progress = 33.3))
+        val new = listOf(runningTask(progress = 33.8))
+
+        // The card renders the whole-percent truncation; a drift the card
+        // cannot display must not rebuild the dashboard state.
+        assertFalse(RunningTasksGate.presentationChanged(old, new))
+    }
+
+    @Test
+    fun `a whole-percent progress move is a presentation change`() {
+        val old = listOf(runningTask(progress = 33.3))
+        val new = listOf(runningTask(progress = 34.01))
+
+        assertTrue(RunningTasksGate.presentationChanged(old, new))
+    }
+
+    @Test
+    fun `membership order state and name changes propagate immediately`() {
+        // A task joins the running list.
+        assertTrue(RunningTasksGate.presentationChanged(emptyList(), listOf(runningTask())))
+        // A task leaves.
+        assertTrue(RunningTasksGate.presentationChanged(listOf(runningTask()), emptyList()))
+        // Same size, different task.
+        assertTrue(
+            RunningTasksGate.presentationChanged(
+                listOf(runningTask(id = "a")),
+                listOf(runningTask(id = "b")),
+            ),
+        )
+        // Reordered.
+        assertTrue(
+            RunningTasksGate.presentationChanged(
+                listOf(runningTask(id = "a"), runningTask(id = "b")),
+                listOf(runningTask(id = "b"), runningTask(id = "a")),
+            ),
+        )
+        // State flip (RUNNING → CANCELLING) and a rename both render.
+        assertTrue(
+            RunningTasksGate.presentationChanged(
+                listOf(runningTask()),
+                listOf(runningTask().copy(state = TaskState.CANCELLING)),
+            ),
+        )
+        assertTrue(
+            RunningTasksGate.presentationChanged(
+                listOf(runningTask()),
+                listOf(runningTask(name = "Renamed Task")),
+            ),
+        )
+        // The progress bar's presence itself (null ↔ a value) renders.
+        assertTrue(
+            RunningTasksGate.presentationChanged(
+                listOf(runningTask(progress = null)),
+                listOf(runningTask(progress = 1.0)),
+            ),
+        )
+    }
+
+    @Test
+    fun `identical pushes are not a presentation change`() {
+        val tasks = listOf(runningTask(progress = 25.0), runningTask(id = "task-2", name = "Optimize", progress = null))
+        assertFalse(RunningTasksGate.presentationChanged(tasks, tasks))
+    }
+
+    // ── SessionsGate ──────────────────────────────────────────────────────
+
+    private fun session(
+        id: String = "s-1",
+        userName: String = "Alice",
+        deviceName: String = "Pixel",
+        client: String = "JellyPlay Android",
+        nowPlaying: String? = "Movie",
+    ) = SessionInfo(
+        id = id,
+        userName = userName,
+        deviceName = deviceName,
+        client = client,
+        nowPlayingItem = nowPlaying?.let { SessionNowPlayingItem(id = "i-1", name = it) },
+    )
+
+    @Test
+    fun `a playstate-only session drift is not a presentation change`() {
+        val old = listOf(session())
+        // The push's playstate (position ticks, pause) moved — nothing the
+        // session card renders.
+        val new = listOf(session()).map {
+            it.copy(playState = com.raulshma.jellyplay.core.model.SessionPlayState(positionTicks = 900_000_000L, isPaused = true))
+        }
+
+        assertFalse(SessionsGate.presentationChanged(old, new))
+    }
+
+    @Test
+    fun `session membership user device client and now-playing changes propagate`() {
+        val old = listOf(session())
+        // A session joins.
+        assertTrue(SessionsGate.presentationChanged(emptyList(), listOf(session())))
+        // A session ends.
+        assertTrue(SessionsGate.presentationChanged(old, emptyList()))
+        // Same size, different session.
+        assertTrue(SessionsGate.presentationChanged(old, listOf(session(id = "s-2"))))
+        // User, device, client, and the now-playing title all render.
+        assertTrue(SessionsGate.presentationChanged(old, listOf(session(userName = "Bob"))))
+        assertTrue(SessionsGate.presentationChanged(old, listOf(session(deviceName = "Tablet"))))
+        assertTrue(SessionsGate.presentationChanged(old, listOf(session(client = "JellyPlay Web"))))
+        assertTrue(SessionsGate.presentationChanged(old, listOf(session(nowPlaying = "Other Movie"))))
+        // Playback stopped on the session (now-playing → device line).
+        assertTrue(SessionsGate.presentationChanged(old, listOf(session(nowPlaying = null))))
+    }
+
+    @Test
+    fun `identical session pushes are not a presentation change`() {
+        val sessions = listOf(session(), session(id = "s-2", userName = "Bob", deviceName = "Tablet", nowPlaying = null))
+        assertFalse(SessionsGate.presentationChanged(sessions, sessions))
     }
 }

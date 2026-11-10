@@ -50,8 +50,8 @@ import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_add
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_add_repository_title
@@ -83,7 +83,7 @@ fun RepositoriesTab(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+            .then(if (isTv) Modifier.tvFocusGroupRestorer() else Modifier),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

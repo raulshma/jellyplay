@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
@@ -38,12 +39,14 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -169,417 +172,797 @@ internal fun SeasonsSection(
     // ascending playback order (same as online), so reversing to newest-first
     // is a meaningful choice.
     // ─────────────────────────────────────────────────────────────────────────
-    val seasons = presentation.seasons
-    val episodes = presentation.episodes
-    val initialSeasonIndex = SeasonStartResolver.resolveInitialSeasonIndex(
-        seasons = seasons,
+    // This section is the expanded-width (tablet/desktop/TV) renderer: the
+    // compact-width portrait body renders the same band as flattened list
+    // items instead ([detailSeasonBandItems]), where the compact vertical
+    // episode list is virtualized in the scroll list itself. The horizontal
+    // D-pad focus row below is the only episode layout this section reaches,
+    // so the layout toggle is never offered here.
+    val selection = remember(seriesItem.id) { SeasonsBandSelection() }
+    val selectedSeasonIndex = rememberSeasonSelectedIndex(
+        selection = selection,
+        seasons = presentation.seasons,
         smartPlayTarget = smartPlayTarget,
         currentSeasonId = presentation.currentSeasonId,
         persistedSeasonId = persistedSeasonId,
+        onSeasonSelected = callbacks.onSeasonSelected,
     )
-    var userSelectedSeasonId by remember(seriesItem.id) { mutableStateOf<String?>(null) }
-    val selectedSeasonIndex = remember(seasons, userSelectedSeasonId, initialSeasonIndex) {
-        if (userSelectedSeasonId != null) {
-            val userIdx = seasons.indexOfFirst { it.id == userSelectedSeasonId }
+
+    Column {
+        SeasonsSectionHeader(
+            presentation = presentation,
+            seasons = presentation.seasons,
+            selectedSeasonIndex = selectedSeasonIndex,
+            selection = selection,
+            seasonRatings = seasonRatings,
+            urls = urls,
+            callbacks = callbacks,
+            showLayoutToggle = false,
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        SeasonsEpisodesBlock(
+            presentation = presentation,
+            seasons = presentation.seasons,
+            selectedSeasonIndex = selectedSeasonIndex,
+            fetchedSeasonIds = fetchedSeasonIds,
+            urls = urls,
+            callbacks = callbacks,
+            animeMarkers = animeMarkers,
+            seasonRatings = seasonRatings,
+        )
+    }
+}
+
+/**
+ * The seasons band's hoisted tab selection: the user's pinned season id for
+ * the current series. Shared by [SeasonsSection] and the flattened band's
+ * header item ([detailSeasonBandItems]) — both keyed on the series item id via
+ * their `remember`, so navigating to another series resets the pin exactly as
+ * the former in-section state did.
+ */
+internal class SeasonsBandSelection {
+    var userSelectedSeasonId by mutableStateOf<String?>(null)
+}
+
+/**
+ * The seasons band's selected-tab resolution — the [SeasonStartResolver]
+ * initial index (smart-play resume > the user's persisted pin > the current
+ * context season > the first tab) overridden by the user's live tab selection,
+ * plus the one init effect that reports the rendered season back to the host
+ * (which drives the per-season episode fetch). Verbatim from the former
+ * in-section state; shared by [SeasonsSection] and the flattened band.
+ */
+@Composable
+internal fun rememberSeasonSelectedIndex(
+    selection: SeasonsBandSelection,
+    seasons: List<MediaItem>,
+    smartPlayTarget: DetailUiState.SmartPlayTarget?,
+    currentSeasonId: String?,
+    persistedSeasonId: String?,
+    onSeasonSelected: (String) -> Unit,
+): Int {
+    val initialSeasonIndex = SeasonStartResolver.resolveInitialSeasonIndex(
+        seasons = seasons,
+        smartPlayTarget = smartPlayTarget,
+        currentSeasonId = currentSeasonId,
+        persistedSeasonId = persistedSeasonId,
+    )
+    val selectedSeasonIndex = remember(seasons, selection.userSelectedSeasonId, initialSeasonIndex) {
+        if (selection.userSelectedSeasonId != null) {
+            val userIdx = seasons.indexOfFirst { it.id == selection.userSelectedSeasonId }
             if (userIdx >= 0) userIdx else initialSeasonIndex
         } else {
             initialSeasonIndex
         }
     }
-    // Episode sort order within a season. Persisted app-wide (see
-    // [DetailViewModel.setEpisodesDescending]) so the choice carries across
-    // every series detail screen — the previous local `remember` reset it to
-    // "newest first" on each navigation.
 
     LaunchedEffect(selectedSeasonIndex, seasons) {
         val season = seasons.getOrNull(selectedSeasonIndex)
         if (season != null) {
-            callbacks.onSeasonSelected(season.id)
+            onSeasonSelected(season.id)
         }
     }
+    return selectedSeasonIndex
+}
 
-    // Compact vertical list is mobile-only: the toggle is offered (and the list
-    // rendered) solely on compact-width, non-TV form factors. TV keeps the
-    // horizontal D-pad focus row; tablet/expanded keeps the denser horizontal
-    // overview. Resolved once here so the header toggle and the episode branch
-    // agree.
+/**
+ * The flattened seasons band's hoisted model: every fold the band's list items
+ * share, computed once in the scroll body's composable scope (the LazyColumn's
+ * item builder is not a composable context, so nothing below can `remember`).
+ * Mirrors the former single-slot section's fold-for-once discipline —
+ * [presentation] and the callback bundle are memoized on exactly their inputs.
+ */
+internal class SeasonsBandModel(
+    val presentation: SeasonsPresentation,
+    val selectedSeasonIndex: Int,
+    val selectedSeason: MediaItem?,
+    /** The selected season's display-sorted episodes; null = not fetched yet. */
+    val seasonEpisodes: List<MediaItem>?,
+    val isLoading: Boolean,
+    /** The compact vertical list is active (compact-width, non-TV, pref on). */
+    val useCompactList: Boolean,
+    /** The compact↔cards layout toggle is offered (compact-width, non-TV). */
+    val showLayoutToggle: Boolean,
+    val selection: SeasonsBandSelection,
+    val sectionCallbacks: SeasonsSectionCallbacks,
+    val urls: ArtworkUrls,
+    val animeMarkers: Map<Int, AnimeBadgeKind>,
+    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>>,
+    val fetchedSeasonIds: Set<String>,
+) {
+    val seasons: List<MediaItem> get() = presentation.seasons
+
+    /** The selected season's TMDB per-episode scores (ADR 0010); empty = no chips. */
+    val selectedSeasonRatings: Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>
+        get() = selectedSeason?.let { seasonRatings[it.id] } ?: emptyMap()
+}
+
+/**
+ * Folds the screen state into the flattened band's model, or null when the
+ * snapshot carries no seasons (the band's slot then renders its spacing only —
+ * the former section's early return). The tab selection's init effect runs
+ * here, in the scroll body's scope, exactly as it ran in the former section.
+ */
+@Composable
+internal fun rememberDetailSeasonsBand(
+    state: DetailContentState,
+    callbacks: DetailContentCallbacks,
+    item: MediaItem,
+    isLocalOrigin: Boolean,
+    persistedSeasonId: String?,
+): SeasonsBandModel? {
+    if (state.core.seasons.isEmpty()) return null
+
+    // The section's presentation (skip-specials filter + hide-thumbnails
+    // neutralization for a LOCAL origin, the downloaded-episode three-way
+    // fold, the SEASON entry filter, the current-item/current-season pair —
+    // see SeasonsPresentation) folds once here, memoized on exactly the
+    // inputs that feed it.
+    val presentation = remember(
+        state.core.seasons,
+        state.core.episodes,
+        state.preferences,
+        state.downloads.downloadedEpisodeIds,
+        state.core.assets,
+        item.id,
+        item.mediaType,
+        item.seasonId,
+        isLocalOrigin,
+    ) {
+        SeasonsPresentation.from(state, item, isLocalOrigin)
+    }
+    // The section-level callback bundle: the screen-level seasons bundle plus
+    // the episode interactions, which the screen bundles express one level up
+    // (play dispatch, item navigation, quick-action intake, per-episode
+    // delete). Remembered on exactly the screen-level bundles its lambdas
+    // capture (each of them remembered on stable keys upstream).
+    val sectionCallbacks = remember(
+        callbacks.seasons,
+        callbacks.playback,
+        callbacks.navigation,
+        callbacks.screen,
+        callbacks.download,
+    ) {
+        SeasonsSectionCallbacks(
+            onSeasonSelected = callbacks.seasons.onSeasonSelected,
+            onSeasonPinned = callbacks.seasons.onSeasonPinned,
+            onEpisodesDescendingChange = callbacks.seasons.onEpisodesDescendingChange,
+            onCompactEpisodeListChange = callbacks.seasons.onCompactEpisodeListChange,
+            onMarkSeasonPlayed = callbacks.seasons.onMarkSeasonPlayed,
+            onMarkSeasonUnplayed = callbacks.seasons.onMarkSeasonUnplayed,
+            onEpisodePlayClick = { episode ->
+                val sourceId = null
+                val startPos = episode.playbackPositionTicks ?: 0L
+                callbacks.playback.onPlayClick(episode.id, sourceId, startPos)
+            },
+            onEpisodeDetailClick = { episode ->
+                callbacks.navigation.onItemClick(episode.id)
+            },
+            onEpisodeLongPress = callbacks.screen.onMediaQuickActions,
+            onFocusedEpisodeChange = callbacks.screen.onFocusedMediaItem,
+            onEpisodeDeleteClick = { episode -> callbacks.download.onDeleteEpisode(episode.id) },
+        )
+    }
+    val selection = remember(item.id) { SeasonsBandSelection() }
+    val selectedSeasonIndex = rememberSeasonSelectedIndex(
+        selection = selection,
+        seasons = presentation.seasons,
+        smartPlayTarget = state.core.smartPlayTarget,
+        currentSeasonId = presentation.currentSeasonId,
+        persistedSeasonId = persistedSeasonId,
+        onSeasonSelected = sectionCallbacks.onSeasonSelected,
+    )
+    val selectedSeason = presentation.seasons.getOrNull(selectedSeasonIndex)
+    // The selected season's display-sorted episodes, memoized on exactly the
+    // sort's inputs so a sibling-section recomposition doesn't re-sort.
+    val seasonEpisodes = remember(selectedSeasonIndex, presentation.episodes, presentation.episodesDescending) {
+        selectedSeason?.let { presentation.episodes[it.id] }
+            ?.sortedBy { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE }
+            ?.let { sorted -> if (presentation.episodesDescending) sorted.reversed() else sorted }
+    }
+    val isFetched = selectedSeason?.id?.let { state.core.fetchedSeasonIds.contains(it) } ?: false
+    val isLoading = seasonEpisodes == null && selectedSeason != null && !isFetched
+    // Compact vertical list is mobile-only: the toggle is offered (and the
+    // flattened band emits the compact episode items) solely on compact-width,
+    // non-TV form factors. TV keeps the horizontal D-pad focus row;
+    // tablet/expanded keeps the denser horizontal overview.
     val isTv = LocalTvMode.current
     val isCompactWidth = LocalAdaptiveInfo.current.windowSizeClass ==
         com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Compact
-    val useCompactListAvailable = !isTv && isCompactWidth
-    val useCompactList = useCompactListAvailable && presentation.compactEpisodeList
+    val showLayoutToggle = !isTv && isCompactWidth
+    val useCompactList = showLayoutToggle && presentation.compactEpisodeList
 
-    Column {
-        FadingItem {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Title + the selected season's TMDB average chip (ADR 0010,
-                // plugin `ratings`): one fold over the loaded season's
-                // score-carrying episodes; absent when none carry a score.
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(Res.string.detail_section_seasons),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                    seasons.getOrNull(selectedSeasonIndex)
-                        ?.let { seasonRatings[it.id] }
-                        ?.let { seasonAverageScore(it) }
-                        ?.let { average -> TmdbScoreChip(score = average) }
+    return SeasonsBandModel(
+        presentation = presentation,
+        selectedSeasonIndex = selectedSeasonIndex,
+        selectedSeason = selectedSeason,
+        seasonEpisodes = seasonEpisodes,
+        isLoading = isLoading,
+        useCompactList = useCompactList,
+        showLayoutToggle = showLayoutToggle,
+        selection = selection,
+        sectionCallbacks = sectionCallbacks,
+        urls = callbacks.artwork.urls,
+        animeMarkers = state.core.animeMarkers,
+        seasonRatings = state.core.seasonRatings,
+        fetchedSeasonIds = state.core.fetchedSeasonIds,
+    )
+}
+
+/**
+ * The flattened seasons band's header: the seasons section's
+ * [SeasonsSectionHeader] chrome plus the trailing gap the episode rows
+ * follow, composed as ONE list item. The band's episode items are emitted by
+ * [detailSeasonBandItems] directly after it.
+ */
+@Composable
+private fun SeasonsBandHeaderItem(
+    band: SeasonsBandModel,
+) {
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        Column {
+            SeasonsSectionHeader(
+                presentation = band.presentation,
+                seasons = band.seasons,
+                selectedSeasonIndex = band.selectedSeasonIndex,
+                selection = band.selection,
+                seasonRatings = band.seasonRatings,
+                urls = band.urls,
+                callbacks = band.sectionCallbacks,
+                showLayoutToggle = band.showLayoutToggle,
+            )
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+}
+
+/**
+ * The flattened seasons band's items: the header/tabs item, then the selected
+ * season's episodes as INDIVIDUAL items in the scroll list (the compact
+ * vertical list) or the horizontal focus-row block as one item. Emits the
+ * slot's spacing only when the band is null — an admitted-but-empty slot keeps
+ * the body's vertical rhythm exactly as the former section's early return did.
+ * The compact rows' keys incorporate the season id, so a season switch is a
+ * wholesale replacement of the row items (no item animations reuse a slot
+ * across seasons) while the scroll position stays anchored.
+ */
+internal fun LazyListScope.detailSeasonBandItems(
+    band: SeasonsBandModel?,
+    scrollState: DetailScrollState,
+    /** The spacing after the band's last item (the section tail or the body tail). */
+    sectionTailSpacing: Dp,
+) {
+    if (band == null) {
+        item(key = "detail_section_SEASONS", contentType = "detail_section_SEASONS") {
+            DetailBodySectionSlot(scrollState = scrollState, bottomSpacing = sectionTailSpacing) { }
+        }
+        return
+    }
+    item(key = "detail_section_SEASONS", contentType = "detail_section_SEASONS") {
+        DetailBodySectionSlot(scrollState = scrollState, bottomSpacing = 0.dp) {
+            SeasonsBandHeaderItem(band)
+        }
+    }
+    when {
+        band.useCompactList && band.isLoading -> item(
+            key = "detail_season_loading_${band.selectedSeason?.id.orEmpty()}",
+            contentType = "detail_season_loading",
+        ) {
+            DetailBodySectionSlot(scrollState = scrollState, bottomSpacing = sectionTailSpacing) {
+                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                    SeasonLoadingSlot()
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Layout switch (compact vertical list ↔ horizontal cards).
-                    // Only offered on compact/mobile widths — TV and tablet always
-                    // use the horizontal focus row.
-                    if (useCompactListAvailable) {
-                        val layoutFocusState = rememberTvFocusState(focusedScale = 1.1f)
-                        Surface(
-                            modifier = Modifier
-                                .clip(ShapeCache.smooth16)
-                                .then(layoutFocusState.focusModifier)
-                                .then(Modifier.tvFocusIndicator(layoutFocusState, ShapeCache.smooth16))
-                                .clickable { callbacks.onCompactEpisodeListChange(!presentation.compactEpisodeList) },
-                            color = if (presentation.compactEpisodeList) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            shape = ShapeCache.smooth16,
+            }
+        }
+        band.useCompactList -> {
+            val episodes = band.seasonEpisodes
+            if (episodes != null && episodes.isNotEmpty()) {
+                episodes.forEachIndexed { episodeIndex, episode ->
+                    item(
+                        key = "detail_episode_${band.selectedSeason?.id.orEmpty()}_${episode.id}",
+                        contentType = "detail_compact_episode",
+                    ) {
+                        DetailBodySectionSlot(
+                            scrollState = scrollState,
+                            bottomSpacing = if (episodeIndex == episodes.lastIndex) {
+                                sectionTailSpacing
+                            } else {
+                                CompactEpisodeRowSpacing
+                            },
                         ) {
-                            Icon(
-                                imageVector = if (presentation.compactEpisodeList) Tabler.Outline.LayoutGrid else Tabler.Outline.List,
-                                contentDescription = stringResource(
-                                    if (presentation.compactEpisodeList) Res.string.detail_cd_switch_to_cards
-                                    else Res.string.detail_cd_switch_to_list
-                                ),
-                                modifier = Modifier.padding(8.dp),
-                            )
+                            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                                Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                                    val arms = rememberEpisodeArms(episode, band.sectionCallbacks)
+                                    CompactEpisodeRow(
+                                        episode = episode,
+                                        urls = band.urls,
+                                        isCurrentEpisode = episode.id == band.presentation.currentItemId,
+                                        onPlayClick = arms.onPlayClick,
+                                        onDetailClick = arms.onDetailClick,
+                                        onLongPress = arms.onLongPress,
+                                        hideThumbnail = band.presentation.hideEpisodeThumbnails,
+                                        isDownloaded = band.presentation.downloadedEpisodeIds?.contains(episode.id) == true,
+                                        onDeleteClick = arms.onDeleteClick,
+                                        localImagePath = band.presentation.episodeLocalImagePaths[episode.id],
+                                        animeBadge = band.animeMarkers[episode.episodeNumber ?: episode.indexNumber],
+                                        tmdbScore = band.selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
+                                        showStreamBadges = band.presentation.showStreamBadges,
+                                        showDownloadProgress = band.presentation.showDownloadProgress,
+                                        episodeOverviewPreview = band.presentation.episodeOverviewPreview,
+                                        // No shared-element scope in the flattened band —
+                                        // the thumbnail morph rode the former
+                                        // AnimatedContent's transition, which the item
+                                        // split replaces with a wholesale item swap.
+                                        sharedThumbnailModifier = Modifier,
+                                    )
+                                }
+                            }
                         }
                     }
-                    val sortFocusState = rememberTvFocusState(focusedScale = 1.1f)
+                }
+            } else {
+                item(
+                    key = "detail_season_empty_${band.selectedSeason?.id.orEmpty()}",
+                    contentType = "detail_season_empty",
+                ) {
+                    DetailBodySectionSlot(scrollState = scrollState, bottomSpacing = sectionTailSpacing) {
+                        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                            SeasonEmptySlot()
+                        }
+                    }
+                }
+            }
+        }
+        else -> item(
+            key = "detail_section_SEASONS_episodes",
+            contentType = "detail_section_SEASONS_episodes",
+        ) {
+            DetailBodySectionSlot(scrollState = scrollState, bottomSpacing = sectionTailSpacing) {
+                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                    SeasonsEpisodesBlock(
+                        presentation = band.presentation,
+                        seasons = band.seasons,
+                        selectedSeasonIndex = band.selectedSeasonIndex,
+                        fetchedSeasonIds = band.fetchedSeasonIds,
+                        urls = band.urls,
+                        callbacks = band.sectionCallbacks,
+                        animeMarkers = band.animeMarkers,
+                        seasonRatings = band.seasonRatings,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The compact episode rows' former spacedBy gap, now each row item's bottom pad. */
+private val CompactEpisodeRowSpacing = 8.dp
+
+/** The selected season's per-season fetch spinner (the former loading branch's content). */
+@Composable
+private fun SeasonLoadingSlot() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        FadingItem {
+            JellyPlayLoadingIndicator()
+        }
+    }
+}
+
+/** The episode-less season's empty state (the former else branch's content). */
+@Composable
+private fun SeasonEmptySlot() {
+    FadingItem {
+        com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
+            icon = Tabler.Outline.Movie,
+            title = stringResource(Res.string.detail_season_empty_title),
+            description = stringResource(Res.string.detail_season_empty_description),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 24.dp),
+        )
+    }
+}
+
+/**
+ * The seasons band's header chrome: the title + the selected season's TMDB
+ * average chip, the layout/sort toggles, and the season tab strip. Extracted
+ * verbatim from the former single-slot section so [SeasonsSection] and the
+ * flattened band's header item render the same controls.
+ */
+@Composable
+internal fun SeasonsSectionHeader(
+    presentation: SeasonsPresentation,
+    seasons: List<MediaItem>,
+    selectedSeasonIndex: Int,
+    selection: SeasonsBandSelection,
+    seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>>,
+    urls: ArtworkUrls,
+    callbacks: SeasonsSectionCallbacks,
+    /** The compact↔cards toggle — offered only where the compact list exists. */
+    showLayoutToggle: Boolean,
+) {
+    FadingItem {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Title + the selected season's TMDB average chip (ADR 0010,
+            // plugin `ratings`): one fold over the loaded season's
+            // score-carrying episodes; absent when none carry a score.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(Res.string.detail_section_seasons),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() },
+                )
+                seasons.getOrNull(selectedSeasonIndex)
+                    ?.let { seasonRatings[it.id] }
+                    ?.let { seasonAverageScore(it) }
+                    ?.let { average -> TmdbScoreChip(score = average) }
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Layout switch (compact vertical list ↔ horizontal cards).
+                // Only offered on compact/mobile widths — TV and tablet always
+                // use the horizontal focus row.
+                if (showLayoutToggle) {
+                    val layoutFocusState = rememberTvFocusState(focusedScale = 1.1f)
                     Surface(
                         modifier = Modifier
                             .clip(ShapeCache.smooth16)
-                            .then(sortFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
-                            .clickable { callbacks.onEpisodesDescendingChange(!presentation.episodesDescending) },
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                            .then(layoutFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(layoutFocusState, ShapeCache.smooth16))
+                            .clickable { callbacks.onCompactEpisodeListChange(!presentation.compactEpisodeList) },
+                        color = if (presentation.compactEpisodeList) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         contentColor = MaterialTheme.colorScheme.onSurface,
                         shape = ShapeCache.smooth16,
                     ) {
                         Icon(
-                            imageVector = if (presentation.episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
+                            imageVector = if (presentation.compactEpisodeList) Tabler.Outline.LayoutGrid else Tabler.Outline.List,
                             contentDescription = stringResource(
-                                if (presentation.episodesDescending) Res.string.detail_cd_sort_oldest_first
-                                else Res.string.detail_cd_sort_newest_first
+                                if (presentation.compactEpisodeList) Res.string.detail_cd_switch_to_cards
+                                else Res.string.detail_cd_switch_to_list
                             ),
                             modifier = Modifier.padding(8.dp),
                         )
                     }
                 }
+                val sortFocusState = rememberTvFocusState(focusedScale = 1.1f)
+                Surface(
+                    modifier = Modifier
+                        .clip(ShapeCache.smooth16)
+                        .then(sortFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
+                        .clickable { callbacks.onEpisodesDescendingChange(!presentation.episodesDescending) },
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shape = ShapeCache.smooth16,
+                ) {
+                    Icon(
+                        imageVector = if (presentation.episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
+                        contentDescription = stringResource(
+                            if (presentation.episodesDescending) Res.string.detail_cd_sort_oldest_first
+                            else Res.string.detail_cd_sort_newest_first
+                        ),
+                        modifier = Modifier.padding(8.dp),
+                    )
+                }
             }
         }
+    }
 
-        Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(16.dp))
 
-        TvFocusableItemRow(
-            items = seasons,
-            key = { it.id },
-            contentType = { _, _ -> "season" },
-            contentPadding = PaddingValues(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) { index, season, focusModifier ->
-                val isSelected = index == selectedSeasonIndex
-                val targetColor = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
-                val targetContentColor = if (isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface
-                val surfaceColor by animateColorAsState(
-                    targetValue = targetColor,
-                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                    label = "seasonColor",
-                )
-                val contentColor by animateColorAsState(
-                    targetValue = targetContentColor,
-                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                    label = "seasonContentColor",
-                )
-                val seasonTabFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                val seasonColors = ButtonDefaults.buttonColors(
-                    containerColor = surfaceColor,
-                    contentColor = contentColor,
-                )
-                val trailingFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                var menuExpanded by remember { mutableStateOf(false) }
-                val seasonName = season.name ?: stringResource(
-                    Res.string.detail_season_format, season.indexNumber ?: (index + 1),
-                )
-                // Compact (extra-small) split-button variant — these tabs sit in a
-                // dense horizontal row, so use the xsmall container height (shorter
-                // than the default SmallContainerHeight) and a tighter label style.
-                val containerHeight = SplitButtonDefaults.ExtraSmallContainerHeight
-                Box(
-                    modifier = focusModifier
-                        .clip(ShapeCache.smooth16)
-                        .then(seasonTabFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(seasonTabFocusState, ShapeCache.smooth16)),
-                ) {
-                    SplitButtonLayout(
-                        leadingButton = {
-                            SplitButtonDefaults.LeadingButton(
-                                onClick = {
-                                    userSelectedSeasonId = season.id
-                                    // Persist the user's tab choice. This fires
-                                    // ONLY on a real tab select — never from the
-                                    // init LaunchedEffect (which calls only
-                                    // onSeasonSelected) — so the smart-play /
-                                    // default season can't overwrite the pin.
-                                    callbacks.onSeasonPinned(season.id)
-                                },
-                                colors = seasonColors,
-                                shapes = SplitButtonDefaults.leadingButtonShapesFor(containerHeight),
-                                contentPadding = SplitButtonDefaults.leadingButtonContentPaddingFor(containerHeight),
-                            ) {
-                                // The detail_season_tabs_artwork pref: a small
-                                // season poster beside the label — only when the
-                                // season actually carries its own Primary tag
-                                // (a tagless season would 404 an untagged URL).
-                                // The tag lookup keys the resolver; keyed on the
-                                // season so a tag change re-resolves.
-                                val seasonTabImageUrl = if (presentation.showSeasonTabArtwork) {
-                                    remember(season) {
-                                        season.imageTags.primary?.let { urls.poster(season) }.orEmpty()
-                                    }
-                                } else {
-                                    ""
-                                }
-                                if (seasonTabImageUrl.isNotEmpty()) {
-                                    MediaImage(
-                                        url = seasonTabImageUrl,
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .padding(end = 6.dp)
-                                            .size(24.dp)
-                                            .clip(RoundedCornerShape(6.dp)),
-                                        contentScale = ContentScale.Crop,
-                                    )
-                                }
-                                Text(
-                                    text = seasonName,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
+    TvFocusableItemRow(
+        items = seasons,
+        key = { it.id },
+        contentType = { _, _ -> "season" },
+        contentPadding = PaddingValues(horizontal = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) { index, season, focusModifier ->
+        val isSelected = index == selectedSeasonIndex
+        val targetColor = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+        val targetContentColor = if (isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface
+        val surfaceColor by animateColorAsState(
+            targetValue = targetColor,
+            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+            label = "seasonColor",
+        )
+        val contentColor by animateColorAsState(
+            targetValue = targetContentColor,
+            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+            label = "seasonContentColor",
+        )
+        val seasonTabFocusState = rememberTvFocusState(focusedScale = 1.05f)
+        val seasonColors = ButtonDefaults.buttonColors(
+            containerColor = surfaceColor,
+            contentColor = contentColor,
+        )
+        val trailingFocusState = rememberTvFocusState(focusedScale = 1.05f)
+        var menuExpanded by remember { mutableStateOf(false) }
+        val seasonName = season.name ?: stringResource(
+            Res.string.detail_season_format, season.indexNumber ?: (index + 1),
+        )
+        // Compact (extra-small) split-button variant — these tabs sit in a
+        // dense horizontal row, so use the xsmall container height (shorter
+        // than the default SmallContainerHeight) and a tighter label style.
+        val containerHeight = SplitButtonDefaults.ExtraSmallContainerHeight
+        Box(
+            modifier = focusModifier
+                .clip(ShapeCache.smooth16)
+                .then(seasonTabFocusState.focusModifier)
+                .then(Modifier.tvFocusIndicator(seasonTabFocusState, ShapeCache.smooth16)),
+        ) {
+            SplitButtonLayout(
+                leadingButton = {
+                    SplitButtonDefaults.LeadingButton(
+                        onClick = {
+                            selection.userSelectedSeasonId = season.id
+                            // Persist the user's tab choice. This fires
+                            // ONLY on a real tab select — never from the
+                            // init LaunchedEffect (which calls only
+                            // onSeasonSelected) — so the smart-play /
+                            // default season can't overwrite the pin.
+                            callbacks.onSeasonPinned(season.id)
                         },
-                        trailingButton = {
-                            SplitButtonDefaults.TrailingButton(
-                                onClick = { menuExpanded = true },
-                                colors = seasonColors,
-                                shapes = SplitButtonDefaults.trailingButtonShapesFor(containerHeight),
-                                // Tighter than the xsmall default content padding so the
-                                // watch-state affordance sits flush against the title.
-                                contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
-                                modifier = Modifier
-                                    .then(trailingFocusState.focusModifier)
-                                    .then(Modifier.tvFocusIndicator(trailingFocusState, ShapeCache.smooth4)),
-                            ) {
-                                Icon(
-                                    imageVector = Tabler.Outline.Eye,
-                                    contentDescription = stringResource(Res.string.detail_cd_season_options),
-                                    modifier = Modifier.size(SplitButtonDefaults.ExtraSmallTrailingButtonIconSize),
-                                )
-                            }
-                        },
-                    )
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false },
+                        colors = seasonColors,
+                        shapes = SplitButtonDefaults.leadingButtonShapesFor(containerHeight),
+                        contentPadding = SplitButtonDefaults.leadingButtonContentPaddingFor(containerHeight),
                     ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.detail_mark_season_watched)) },
-                            onClick = {
-                                menuExpanded = false
-                                callbacks.onMarkSeasonPlayed(season.id)
-                            },
-                            leadingIcon = { Icon(Tabler.Outline.Eye, contentDescription = null) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.detail_mark_season_unwatched)) },
-                            onClick = {
-                                menuExpanded = false
-                                callbacks.onMarkSeasonUnplayed(season.id)
-                            },
-                            leadingIcon = { Icon(Tabler.Outline.EyeOff, contentDescription = null) },
+                        // The detail_season_tabs_artwork pref: a small
+                        // season poster beside the label — only when the
+                        // season actually carries its own Primary tag
+                        // (a tagless season would 404 an untagged URL).
+                        // The tag lookup keys the resolver; keyed on the
+                        // season so a tag change re-resolves.
+                        val seasonTabImageUrl = if (presentation.showSeasonTabArtwork) {
+                            remember(season) {
+                                season.imageTags.primary?.let { urls.poster(season) }.orEmpty()
+                            }
+                        } else {
+                            ""
+                        }
+                        if (seasonTabImageUrl.isNotEmpty()) {
+                            MediaImage(
+                                url = seasonTabImageUrl,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .padding(end = 6.dp)
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(6.dp)),
+                                contentScale = ContentScale.Crop,
+                                // The chip renders at 24 dp — decode at
+                                // 2× density instead of the 384² default
+                                // (the compact episode row's explicit-
+                                // budget precedent).
+                                size = coil3.size.Size(48, 48),
+                            )
+                        }
+                        Text(
+                            text = seasonName,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
-        val seasonEpisodes = selectedSeason?.let { episodes[it.id] }
-        // The selected season's TMDB per-episode scores (ADR 0010) — the
-        // per-episode chip lookup for both episode-row layouts. Empty =
-        // the plugin sent nothing for this season (no chips anywhere).
-        val selectedSeasonRatings = selectedSeason?.let { seasonRatings[it.id] } ?: emptyMap()
-        val isFetched = selectedSeason?.id?.let { fetchedSeasonIds.contains(it) } ?: false
-        val isLoading = seasonEpisodes == null && selectedSeason != null && !isFetched
-        // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
-        val seasonFadeIn = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-        val seasonFadeOut = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
-        // Shared-element spring for the layout-switch morph: the compact-row
-        // thumbnail and the wide-card thumbnail are the same image, so the
-        // outgoing/incoming copies glide between their bounds while the
-        // surrounding metadata crossfades.
-        val episodeThumbBoundsTransform: BoundsTransform = { _, _ ->
-            sharedElementBoundsSpec()
-        }
-
-        AnimatedContent(
-            targetState = SeasonEpisodesTargetState(
-                seasonIndex = selectedSeasonIndex,
-                isLoading = isLoading,
-                isCompact = useCompactList,
-            ),
-            transitionSpec = {
-                fadeIn(
-                    animationSpec = seasonFadeIn,
-                ) togetherWith fadeOut(
-                    animationSpec = seasonFadeOut,
+                },
+                trailingButton = {
+                    SplitButtonDefaults.TrailingButton(
+                        onClick = { menuExpanded = true },
+                        colors = seasonColors,
+                        shapes = SplitButtonDefaults.trailingButtonShapesFor(containerHeight),
+                        // Tighter than the xsmall default content padding so the
+                        // watch-state affordance sits flush against the title.
+                        contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                        modifier = Modifier
+                            .then(trailingFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(trailingFocusState, ShapeCache.smooth4)),
+                    ) {
+                        Icon(
+                            imageVector = Tabler.Outline.Eye,
+                            contentDescription = stringResource(Res.string.detail_cd_season_options),
+                            modifier = Modifier.size(SplitButtonDefaults.ExtraSmallTrailingButtonIconSize),
+                        )
+                    }
+                },
+            )
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.detail_mark_season_watched)) },
+                    onClick = {
+                        menuExpanded = false
+                        callbacks.onMarkSeasonPlayed(season.id)
+                    },
+                    leadingIcon = { Icon(Tabler.Outline.Eye, contentDescription = null) },
                 )
-            },
-            label = "seasonEpisodes",
-        ) { target ->
-            val seasonIdx = target.seasonIndex
-            val isCompact = target.isCompact
-            val sharedTransitionScope = LocalSharedTransitionScope.current
-            val animatedVisibilityScope = this
-            // Memoize the sort + reverse so a recomposition triggered by an
-            // unrelated parent state change (e.g. sibling animation) doesn't
-            // re-sort this season's episode list.
-            val currentEpisodes = remember(seasonIdx, episodes, presentation.episodesDescending) {
-                seasons.getOrNull(seasonIdx)?.let { episodes[it.id] }
-                    ?.sortedBy { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE }
-                    ?.let { sorted -> if (presentation.episodesDescending) sorted.reversed() else sorted }
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.detail_mark_season_unwatched)) },
+                    onClick = {
+                        menuExpanded = false
+                        callbacks.onMarkSeasonUnplayed(season.id)
+                    },
+                    leadingIcon = { Icon(Tabler.Outline.EyeOff, contentDescription = null) },
+                )
             }
-            val currentIsFetched = seasons.getOrNull(seasonIdx)?.id?.let { fetchedSeasonIds.contains(it) } ?: false
-            val currentIsLoading = target.isLoading || (currentEpisodes == null && seasons.getOrNull(seasonIdx) != null && !currentIsFetched)
+        }
+    }
+}
 
-            when {
-                currentIsLoading -> {
-                    Box(
+/**
+ * The seasons band's episode area for the horizontal-card layout: the selected
+ * season's D-pad focus row (or the per-season fetch spinner / the
+ * episode-less empty state), crossfading on a season switch inside the
+ * AnimatedContent. This is the expanded-width renderer's slot — the
+ * compact-width portrait body emits its compact episode rows as flattened
+ * scroll-list items instead ([detailSeasonBandItems]), so the compact branch
+ * the former single-slot section carried here is gone: it was unreachable
+ * from this renderer (its layout toggle is never offered at expanded widths),
+ * and the compact rows now virtualize in the scroll list itself.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun SeasonsEpisodesBlock(
+    presentation: SeasonsPresentation,
+    seasons: List<MediaItem>,
+    selectedSeasonIndex: Int,
+    fetchedSeasonIds: Set<String>,
+    urls: ArtworkUrls,
+    callbacks: SeasonsSectionCallbacks,
+    animeMarkers: Map<Int, AnimeBadgeKind>,
+    seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>>,
+) {
+    val episodes = presentation.episodes
+    val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
+    val seasonEpisodes = selectedSeason?.let { episodes[it.id] }
+    // The selected season's TMDB per-episode scores (ADR 0010) — the
+    // per-episode chip lookup for the episode-row layout. Empty =
+    // the plugin sent nothing for this season (no chips anywhere).
+    val selectedSeasonRatings = selectedSeason?.let { seasonRatings[it.id] } ?: emptyMap()
+    val isFetched = selectedSeason?.id?.let { fetchedSeasonIds.contains(it) } ?: false
+    val isLoading = seasonEpisodes == null && selectedSeason != null && !isFetched
+    // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
+    val seasonFadeIn = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val seasonFadeOut = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    // Shared-element spring for the layout-switch morph: the compact-row
+    // thumbnail and the wide-card thumbnail are the same image, so the
+    // outgoing/incoming copies glide between their bounds while the
+    // surrounding metadata crossfades.
+    val episodeThumbBoundsTransform: BoundsTransform = { _, _ ->
+        sharedElementBoundsSpec()
+    }
+
+    AnimatedContent(
+        targetState = SeasonEpisodesTargetState(
+            seasonIndex = selectedSeasonIndex,
+            isLoading = isLoading,
+        ),
+        transitionSpec = {
+            fadeIn(
+                animationSpec = seasonFadeIn,
+            ) togetherWith fadeOut(
+                animationSpec = seasonFadeOut,
+            )
+        },
+        label = "seasonEpisodes",
+    ) { target ->
+        val seasonIdx = target.seasonIndex
+        val sharedTransitionScope = LocalSharedTransitionScope.current
+        val animatedVisibilityScope = this
+        // Memoize the sort + reverse so a recomposition triggered by an
+        // unrelated parent state change (e.g. sibling animation) doesn't
+        // re-sort this season's episode list.
+        val currentEpisodes = remember(seasonIdx, episodes, presentation.episodesDescending) {
+            seasons.getOrNull(seasonIdx)?.let { episodes[it.id] }
+                ?.sortedBy { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE }
+                ?.let { sorted -> if (presentation.episodesDescending) sorted.reversed() else sorted }
+        }
+        val currentIsFetched = seasons.getOrNull(seasonIdx)?.id?.let { fetchedSeasonIds.contains(it) } ?: false
+        val currentIsLoading = target.isLoading || (currentEpisodes == null && seasons.getOrNull(seasonIdx) != null && !currentIsFetched)
+
+        when {
+            currentIsLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    FadingItem {
+                        JellyPlayLoadingIndicator()
+                    }
+                }
+            }
+            currentEpisodes != null && currentEpisodes.isNotEmpty() -> {
+                TvFocusableItemRow(
+                    items = currentEpisodes,
+                    key = { "episode_${it.id}" },
+                    contentType = { _, _ -> "episode" },
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    onFocusedIndexChange = { index ->
+                        currentEpisodes.getOrNull(index)?.let(callbacks.onFocusedEpisodeChange)
+                    },
+                ) { _, episode, focusModifier ->
+                    val arms = rememberEpisodeArms(episode, callbacks)
+                    EpisodeCard(
+                        episode = episode,
+                        urls = urls,
+                        isCurrentEpisode = episode.id == presentation.currentItemId,
+                        onPlayClick = arms.onPlayClick,
+                        onDetailClick = arms.onDetailClick,
+                        onLongPress = arms.onLongPress,
+                        modifier = focusModifier,
+                        hideThumbnail = presentation.hideEpisodeThumbnails,
+                        isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
+                        onDeleteClick = arms.onDeleteClick,
+                        localImagePath = presentation.episodeLocalImagePaths[episode.id],
+                        animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
+                        tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
+                        showStreamBadges = presentation.showStreamBadges,
+                        showDownloadProgress = presentation.showDownloadProgress,
+                        episodeOverviewPreview = presentation.episodeOverviewPreview,
+                        sharedThumbnailModifier = episodeThumbSharedModifier(
+                            episodeId = episode.id,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = episodeThumbBoundsTransform,
+                        ),
+                    )
+                }
+            }
+            else -> {
+                // episode-less season was a plain text line.
+                // Use the standard empty state (icon + title + description).
+                FadingItem {
+                    com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
+                        icon = Tabler.Outline.Movie,
+                        title = stringResource(Res.string.detail_season_empty_title),
+                        description = stringResource(Res.string.detail_season_empty_description),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        FadingItem {
-                            JellyPlayLoadingIndicator()
-                        }
-                    }
-                }
-                currentEpisodes != null && currentEpisodes.isNotEmpty() -> {
-                    if (isCompact) {
-                        // Plain Column (not lazy): this section is already nested
-                        // inside the screen's LazyColumn, so a same-direction
-                        // nested lazy list is disallowed. Season episode counts are
-                        // small enough that composing every row is cheap.
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            currentEpisodes.forEach { episode ->
-                                val arms = rememberEpisodeArms(episode, callbacks)
-                                CompactEpisodeRow(
-                                    episode = episode,
-                                    urls = urls,
-                                    isCurrentEpisode = episode.id == presentation.currentItemId,
-                                    onPlayClick = arms.onPlayClick,
-                                    onDetailClick = arms.onDetailClick,
-                                    onLongPress = arms.onLongPress,
-                                    hideThumbnail = presentation.hideEpisodeThumbnails,
-                                    isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
-                                    onDeleteClick = arms.onDeleteClick,
-                                    localImagePath = presentation.episodeLocalImagePaths[episode.id],
-                                    animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
-                                    tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
-                                    showStreamBadges = presentation.showStreamBadges,
-                                    showDownloadProgress = presentation.showDownloadProgress,
-                                    episodeOverviewPreview = presentation.episodeOverviewPreview,
-                                    sharedThumbnailModifier = episodeThumbSharedModifier(
-                                        episodeId = episode.id,
-                                        sharedTransitionScope = sharedTransitionScope,
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                        boundsTransform = episodeThumbBoundsTransform,
-                                    ),
-                                )
-                            }
-                        }
-                    } else {
-                        TvFocusableItemRow(
-                            items = currentEpisodes,
-                            key = { "episode_${it.id}" },
-                            contentType = { _, _ -> "episode" },
-                            contentPadding = PaddingValues(horizontal = 24.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            onFocusedIndexChange = { index ->
-                                currentEpisodes.getOrNull(index)?.let(callbacks.onFocusedEpisodeChange)
-                            },
-                        ) { _, episode, focusModifier ->
-                                val arms = rememberEpisodeArms(episode, callbacks)
-                                EpisodeCard(
-                                    episode = episode,
-                                    urls = urls,
-                                    isCurrentEpisode = episode.id == presentation.currentItemId,
-                                    onPlayClick = arms.onPlayClick,
-                                    onDetailClick = arms.onDetailClick,
-                                    onLongPress = arms.onLongPress,
-                                    modifier = focusModifier,
-                                    hideThumbnail = presentation.hideEpisodeThumbnails,
-                                    isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
-                                    onDeleteClick = arms.onDeleteClick,
-                                    localImagePath = presentation.episodeLocalImagePaths[episode.id],
-                                    animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
-                                    tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
-                                    showStreamBadges = presentation.showStreamBadges,
-                                    showDownloadProgress = presentation.showDownloadProgress,
-                                    episodeOverviewPreview = presentation.episodeOverviewPreview,
-                                    sharedThumbnailModifier = episodeThumbSharedModifier(
-                                        episodeId = episode.id,
-                                        sharedTransitionScope = sharedTransitionScope,
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                        boundsTransform = episodeThumbBoundsTransform,
-                                    ),
-                                )
-                        }
-                    }
-                }
-                else -> {
-                    // episode-less season was a plain text line.
-                    // Use the standard empty state (icon + title + description).
-                    FadingItem {
-                        com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
-                            icon = Tabler.Outline.Movie,
-                            title = stringResource(Res.string.detail_season_empty_title),
-                            description = stringResource(Res.string.detail_season_empty_description),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 24.dp),
-                        )
-                    }
+                            .padding(vertical = 24.dp),
+                    )
                 }
             }
         }
@@ -1662,7 +2045,6 @@ private fun BoxScope.EpisodeDownloadOverlay(fraction: Float) {
 private data class SeasonEpisodesTargetState(
     val seasonIndex: Int,
     val isLoading: Boolean,
-    val isCompact: Boolean,
 )
 
 /** The per-episode click arms both episode-list variants share. */

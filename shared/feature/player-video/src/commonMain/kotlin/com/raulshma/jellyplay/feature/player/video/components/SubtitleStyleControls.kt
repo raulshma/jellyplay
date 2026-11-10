@@ -302,9 +302,9 @@ fun SubtitleStyleControls(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .tvFocusIndicator(fontRowFocus, ShapeCache.smooth8)
                         .clip(ShapeCache.smooth8)
                         .then(fontRowFocus.focusModifier)
-                        .tvFocusIndicator(fontRowFocus, ShapeCache.smooth8)
                         .clickable { onPickFont() }
                         .padding(vertical = 10.dp, horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -895,6 +895,7 @@ private fun ColorChip(
     Box(
         modifier = Modifier
             .size(if (isTv) 40.dp else 34.dp)
+            .tvFocusIndicator(focusState, CircleShape)
             .clip(CircleShape)
             .background(color.copy(alpha = alpha * color.alpha))
             .then(
@@ -905,7 +906,6 @@ private fun ColorChip(
                 }
             )
             .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, CircleShape)
             .clickable(enabled = enabled, onClick = onClick),
     )
 }

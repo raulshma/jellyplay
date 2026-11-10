@@ -172,6 +172,7 @@ internal fun TvFocusableOptionRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
+            .tvFocusIndicator(focusState, shape)
             .clip(shape)
             .background(
                 if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
@@ -179,7 +180,6 @@ internal fun TvFocusableOptionRow(
             )
             .then(focusState.focusModifier)
             .then(focusRequesterModifier)
-            .tvFocusIndicator(focusState, shape)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

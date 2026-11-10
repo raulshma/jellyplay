@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import org.jetbrains.compose.resources.stringResource
@@ -86,13 +87,6 @@ internal fun PixelPlayerTopBar(
     val lyricsFocusState = rememberTvFocusState()
     val queueFocusState = rememberTvFocusState()
     val moreFocusState = rememberTvFocusState()
-
-    val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
-    val sleepTimerDisplayText = if (sleepTimerEndOfEpisode) {
-        stringResource(Res.string.audio_sleep_timer_end_of_episode)
-    } else {
-        formatDurationMs(sleepTimerRemainingMs)
-    }
 
     Row(
         modifier = Modifier
@@ -203,7 +197,13 @@ internal fun PixelPlayerTopBar(
                         colors = itemColors,
                     )
                     DropdownMenuItem(
-                        text = { Text(if (sleepTimerActive) stringResource(Res.string.audio_menu_sleep_timer_active, sleepTimerDisplayText) else stringResource(Res.string.audio_menu_sleep_timer)) },
+                        text = {
+                            if (sleepTimerActive) {
+                                SleepTimerCountdownLabel(sleepTimerRemainingFlow, sleepTimerEndOfEpisode)
+                            } else {
+                                Text(stringResource(Res.string.audio_menu_sleep_timer))
+                            }
+                        },
                         onClick = onSleepTimerClick,
                         leadingIcon = { Icon(Tabler.Outline.Stopwatch, null) },
                         colors = itemColors,
@@ -220,4 +220,31 @@ internal fun PixelPlayerTopBar(
             }
         }
     }
+}
+
+/**
+ * The sleep-timer menu row's countdown label — the flow's only reader, so the
+ * collection lives HERE instead of at the top-bar root: the DropdownMenu
+ * content composes only while the menu is open, so the per-second timer tick
+ * recomposes this label alone (root collection recomposed the whole bar every
+ * second for the timer's whole run, menu closed included). The countdown
+ * string is memoized per second (the seekbar's per-second text idiom), so a
+ * tick within the same second rebuilds nothing.
+ */
+@Composable
+private fun SleepTimerCountdownLabel(
+    sleepTimerRemainingFlow: StateFlow<Long>,
+    endOfEpisode: Boolean,
+) {
+    if (endOfEpisode) {
+        Text(stringResource(Res.string.audio_sleep_timer_end_of_episode))
+        return
+    }
+    val remainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
+    Text(
+        stringResource(
+            Res.string.audio_menu_sleep_timer_active,
+            remember(remainingMs / 1000) { formatDurationMs(remainingMs) },
+        )
+    )
 }

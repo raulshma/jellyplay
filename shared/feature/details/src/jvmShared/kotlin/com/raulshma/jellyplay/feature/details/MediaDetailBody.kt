@@ -86,7 +86,6 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_episode_play
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_hide_up_next
@@ -152,7 +151,7 @@ internal val LocalDetailStaggerStep = compositionLocalOf { DETAIL_STAGGER_STEP }
  * leave high-index sections permanently dim).
  */
 @Composable
-private fun rememberDetailEntranceProgress(staggerStep: Float = DETAIL_STAGGER_STEP): Float {
+internal fun rememberDetailEntranceProgress(staggerStep: Float = DETAIL_STAGGER_STEP): Float {
     val animatable = remember { Animatable(0f) }
     val spec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val target = 1f + DETAIL_MAX_STAGGER_INDEX * staggerStep
@@ -192,23 +191,24 @@ internal fun preferLogoTitleEnabled(preferLogos: Boolean, logoTag: String?, logo
     preferLogos && logoTag != null && logoUrl.isNotBlank()
 
 /**
- * The detail body's trunk. The former ~1,060-line inline column decomposed
- * into the section modules: [DetailSectionRegistry.admittedSections] decides
- * WHICH sections exist and in what order (each module owns its kind's
- * admission row and routes to its renderer; every [DetailSectionKind] carries
- * its own delayIndex, pinned by the admission tests). Sections whose slot
- * used to compose empty (overview without a synopsis, seasons on a movie,
- * ...) stay admitted: every slot contributes a spacedBy gap to the body
- * Column, so admission reproduces the former `visible` predicates exactly
- * and the content gates remain render-side. The family renderers themselves
- * live in MediaDetailBodySections.kt — one [StaggeredDetailSection] slot
- * each, bodies kept verbatim from the inline flow, delayIndex threaded from
- * the kind.
+ * The detail body's trunk for the EXPANDED-WIDTH two-pane layout (the portrait
+ * body is the flattened list-item composition in DetailBodyItems.kt). The
+ * former ~1,060-line inline column decomposed into the section modules:
+ * [DetailSectionRegistry.admittedSections] decides WHICH sections exist and in
+ * what order (each module owns its kind's admission row and routes to its
+ * renderer; every [DetailSectionKind] carries its own delayIndex, pinned by
+ * the admission tests). Sections whose slot used to compose empty (overview
+ * without a synopsis, seasons on a movie, ...) stay admitted: every slot
+ * contributes a spacedBy gap to the body Column, so admission reproduces the
+ * former `visible` predicates exactly and the content gates remain
+ * render-side. The family renderers themselves live in
+ * MediaDetailBodySections.kt — one [StaggeredDetailSection] slot each, bodies
+ * kept verbatim from the inline flow, delayIndex threaded from the kind.
  *
- * The single shared entrance animation is unchanged: one
- * [rememberDetailEntranceProgress] driver provided through
- * [LocalDetailEntrance], every FadingItem / StaggeredDetailSection reading it
- * and applying its stagger as pure arithmetic.
+ * The single shared entrance animation ([LocalDetailEntrance] /
+ * [LocalDetailStaggerStep]) is provided by [DetailScrollContent] — one driver
+ * above both layout branches — every FadingItem / StaggeredDetailSection
+ * reading it and applying its stagger as pure arithmetic.
  */
 @Composable
 internal fun DetailContentBody(
@@ -230,16 +230,6 @@ internal fun DetailContentBody(
     // while the poster row used adaptiveInfo.contentPadding, causing misalignment on phones).
     val bodyContentPad = adaptiveInfo.contentPadding(isTv)
 
-    // The stagger preference scales the whole cascade: the driver's target
-    // AND every section's per-index offset read the same step (the shared
-    // driver contract — a mismatched pair would leave high-index sections
-    // permanently dim).
-    val staggerStep = state.preferences.staggerStyle.step
-
-    // Single shared entrance animation drives every FadingItem / StaggeredDetailSection
-    // in the body — replaces ~33 per-element LaunchedEffect + animateFloatAsState pairs.
-    val entranceProgress = rememberDetailEntranceProgress(staggerStep)
-
     // The body's admission is the detail section registry's modules — every
     // [DetailSectionKind] is module-owned (the former hand fold retired with
     // the last module wave), re-sorted into the enum's declaration order (=
@@ -259,40 +249,35 @@ internal fun DetailContentBody(
         )
     }
 
-    CompositionLocalProvider(
-        LocalDetailEntrance provides entranceProgress,
-        LocalDetailStaggerStep provides staggerStep,
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = contentAlignment,
     ) {
-        Box(
-            modifier = modifier.fillMaxWidth(),
-            contentAlignment = contentAlignment,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 48.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 48.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-            ) {
-                admittedSections.forEach { section ->
-                    // Key each slot by its kind so a membership change on item
-                    // switch keeps per-section state anchored to its identity
-                    // (equivalent to the former distinct inline call sites).
-                    key(section) {
-                        val moduleScope = DetailSectionRenderScope(
-                            state = state,
-                            callbacks = callbacks,
-                            detail = detail,
-                            item = item,
-                            isLocalOrigin = state.core.origin?.isLocal == true,
-                            bodyContentPad = bodyContentPad,
-                            contentFocusRequester = contentFocusRequester,
-                        )
-                        // Every kind is module-owned (DetailSectionRegistryTest's
-                        // completeness pin), so the dispatch cannot miss.
-                        requireNotNull(DetailSectionRegistry.moduleFor(section)) {
-                            "no DetailSectionModule registered for $section"
-                        }.Content(moduleScope)
-                    }
+            admittedSections.forEach { section ->
+                // Key each slot by its kind so a membership change on item
+                // switch keeps per-section state anchored to its identity
+                // (equivalent to the former distinct inline call sites).
+                key(section) {
+                    val moduleScope = DetailSectionRenderScope(
+                        state = state,
+                        callbacks = callbacks,
+                        detail = detail,
+                        item = item,
+                        isLocalOrigin = state.core.origin?.isLocal == true,
+                        bodyContentPad = bodyContentPad,
+                        contentFocusRequester = contentFocusRequester,
+                    )
+                    // Every kind is module-owned (DetailSectionRegistryTest's
+                    // completeness pin), so the dispatch cannot miss.
+                    requireNotNull(DetailSectionRegistry.moduleFor(section)) {
+                        "no DetailSectionModule registered for $section"
+                    }.Content(moduleScope)
                 }
             }
         }

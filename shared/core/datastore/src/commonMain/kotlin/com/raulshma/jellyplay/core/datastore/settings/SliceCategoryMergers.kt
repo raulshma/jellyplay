@@ -77,6 +77,7 @@ internal fun AppearanceSlice.mergeWith(
         handMode = if (importAppearance) incoming.handMode else handMode,
         layoutMode = if (importAppearance) incoming.layoutMode else layoutMode,
         tvOverscan = if (importAppearance) incoming.tvOverscan else tvOverscan,
+        tvUiScale = if (importAppearance) incoming.tvUiScale else tvUiScale,
         timeUse24h = if (importAppearance) incoming.timeUse24h else timeUse24h,
         cardPressAnimations = if (importAppearance) incoming.cardPressAnimations else cardPressAnimations,
         appBackdropDim = if (importAppearance) incoming.appBackdropDim else appBackdropDim,

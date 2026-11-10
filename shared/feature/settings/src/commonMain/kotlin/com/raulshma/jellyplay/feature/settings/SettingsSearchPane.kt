@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -85,6 +86,7 @@ private fun SearchResultsColumn(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
+            .tvFocusGroupRestorer()
             .then(Modifier.onDpadKeyEvent(
                 onBack = { e ->
                     if (e.isKeyUp) { onBack() }
@@ -215,10 +217,10 @@ private fun SettingsSearchResultRow(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusIndicator(itemTvFocusState, shape)
             .clip(shape)
             .lightModeHairlineBorder(shape)
             .then(itemTvFocusState.focusModifier)
-            .tvFocusIndicator(itemTvFocusState, shape)
             .clickable(onClick = onClick),
     )
 }
@@ -396,7 +398,8 @@ internal fun SettingsSearchResultsPane(
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                    .padding(bottom = 8.dp)
+                    .tvFocusGroupRestorer(),
                 contentPadding = PaddingValues(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -446,7 +449,8 @@ internal fun SettingsSearchResultsPane(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                            .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current))
+                            .tvFocusGroupRestorer(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(vertical = 24.dp)
@@ -569,7 +573,8 @@ internal fun SettingsSearchResultsPane(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                            .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current))
+                            .tvFocusGroupRestorer(),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(vertical = 16.dp)
                     ) {

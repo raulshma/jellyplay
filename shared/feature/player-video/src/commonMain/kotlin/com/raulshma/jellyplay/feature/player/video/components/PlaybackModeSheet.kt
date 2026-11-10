@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +31,7 @@ import com.raulshma.jellyplay.core.model.DevicePerformanceTier
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
@@ -57,14 +59,20 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 /**
  * The combined playback-options panel: engine, delivery method, quality and
- * performance in ONE scrollable sheet that stays open across picks (each
- * select updates in place; only the scaffold's dismiss closes it). The engine
- * section hides while casting / in SyncPlay ([availablePlayers] empty); the
- * quality section renders its unavailable help text when the session has no
- * quality to pick; the performance section (issue #186 §5.11) is
- * [performanceAvailable]-gated — Android-only in v1, and the call site folds
- * the cast/SyncPlay hide into that flag the way the engine section's empty
- * verdict does.
+ * performance in ONE sheet that stays open across picks (each select updates
+ * in place; only the scaffold's dismiss closes it). The engine section hides
+ * while casting / in SyncPlay ([availablePlayers] empty); the quality section
+ * renders its unavailable help text when the session has no quality to pick;
+ * the performance section (issue #186 §5.11) is [performanceAvailable]-gated —
+ * Android-only in v1, and the call site folds the cast/SyncPlay hide into that
+ * flag the way the engine section's empty verdict does.
+ *
+ * Layout is platform-split on purpose: touch platforms scroll the whole body
+ * column, while TV renders ONE bounded [LazyColumn] (no outer
+ * `verticalScroll`, no nested lazy lists). A lazy list measured under an
+ * unbounded scroll column throws "Vertically scrollable component was
+ * measured with an infinity maximum height constraints" — the crash this
+ * split fixes.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -95,12 +103,15 @@ fun PlaybackModeSheet(
      */
     performanceLevel: com.raulshma.jellyplay.core.model.PerformanceLevel? = null,
 ) {
+    val tvMode = LocalTvMode.current
     PickerSheetScaffold(
         title = stringResource(Res.string.player_video_playback_options),
         icon = Tabler.Outline.Server,
-        // Three sections exceed a phone sheet — the body column scrolls
-        // (the TV rows keep their own focused LazyColumn scroll).
-        scrollable = true,
+        // Touch platforms scroll the body column (three sections exceed a
+        // phone sheet). TV must NOT: the TV body below is one bounded
+        // LazyColumn, and an outer verticalScroll would feed it infinite max
+        // height — illegal for a lazy list and the crash this fixes.
+        scrollable = !tvMode,
         onDismiss = onDismiss,
         preContent = {
             Spacer(Modifier.height(4.dp))
@@ -112,74 +123,166 @@ fun PlaybackModeSheet(
             )
         },
     ) { isTv, focusRequester ->
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-            if (availablePlayers.isNotEmpty()) {
-                SectionLabel(stringResource(Res.string.player_video_playback_options_engine_section))
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    availablePlayers.forEach { player ->
-                        val isSelected = currentEngineName != null && player.displayName == currentEngineName
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { onPlayerSelect(player) },
-                            label = {
-                                Text(
-                                    player.displayName,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                )
-                            },
-                            shape = ShapeCache.smoothPill,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                selectedLabelColor = MaterialTheme.colorScheme.primary,
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                borderColor = Color.Transparent,
-                                selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                                enabled = true,
-                                selected = isSelected,
-                            ),
-                        )
+        val qualityFocusRequester = remember { FocusRequester() }
+        val performanceFocusRequester = remember { FocusRequester() }
+        if (isTv) {
+            // One lazy list owns the whole TV body: every section is an item,
+            // never a nested LazyColumn. `weight(fill = false)` bounds it to
+            // the dialog's remaining height while letting a short sheet wrap
+            // its content.
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalWrapAround(),
+                contentPadding = PaddingValues(bottom = 12.dp),
+            ) {
+                if (availablePlayers.isNotEmpty()) {
+                    item(key = "engine") {
+                        SectionLabel(stringResource(Res.string.player_video_playback_options_engine_section))
+                        EngineChips(availablePlayers, currentEngineName, onPlayerSelect)
+                        SectionSpacer()
                     }
                 }
-                SectionSpacer()
-            }
 
-            SectionLabel(stringResource(Res.string.player_video_playback_options_delivery_section))
-            Text(
-                text = currentPlayMethod,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            if (isTv) {
-                LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                    items(PlaybackMode.entries, key = { it.name }) { mode ->
-                        val isSelected = mode == currentMode
-                        val isFirstOrSelected = isSelected ||
-                            (currentMode !in PlaybackMode.entries && mode == PlaybackMode.AUTO)
+                item(key = "delivery") {
+                    SectionLabel(stringResource(Res.string.player_video_playback_options_delivery_section))
+                    Text(
+                        text = currentPlayMethod,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                items(PlaybackMode.entries, key = { "mode-${it.name}" }) { mode ->
+                    val isSelected = mode == currentMode
+                    val isFirstOrSelected = isSelected ||
+                        (currentMode !in PlaybackMode.entries && mode == PlaybackMode.AUTO)
+                    TvFocusableOptionRow(
+                        selected = isSelected,
+                        onClick = { onSelect(mode) },
+                        focusRequesterModifier = Modifier.ifElse(isFirstOrSelected, Modifier.focusRequester(focusRequester)),
+                        trailingCheck = true,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            TvOptionRowLabel(text = mode.displayName, selected = isSelected)
+                            Text(
+                                text = modeDescription(mode),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                item(key = "quality") {
+                    SectionSpacer()
+                    SectionLabel(stringResource(Res.string.player_video_playback_options_quality_section))
+                    QualityPickerOptions(
+                        currentQuality = currentQuality,
+                        adaptiveBitrateEnabled = adaptiveBitrateEnabled,
+                        onToggleAdaptiveBitrate = onToggleAdaptiveBitrate,
+                        // Select updates in place; only the scaffold's dismiss
+                        // closes the sheet.
+                        onSelect = onQualitySelect,
+                        isTv = true,
+                        // The combined sheet's quality section is never the TV
+                        // focus landing zone (the delivery rows own the
+                        // requester); the embedded options only attach this
+                        // one. Plain rows — a nested LazyColumn here would be
+                        // an illegal lazy-in-lazy measurement.
+                        tvFocusRequester = qualityFocusRequester,
+                        enabled = qualityAvailable,
+                        tvLazyRows = false,
+                    )
+                }
+
+                // The Performance section (issue #186 §5.11): Android-only in
+                // v1, hidden while casting / in SyncPlay (the call site folds
+                // both into [performanceAvailable]). A profile pick reloads
+                // the session like a quality pick — brief rebuffer is the v1
+                // tradeoff.
+                if (performanceAvailable) {
+                    item(key = "performance-header") {
+                        SectionSpacer()
+                        SectionLabel(stringResource(Res.string.player_video_playback_options_performance_section))
+                        if (currentMode == PlaybackMode.FORCE_DIRECT_PLAY) {
+                            Text(
+                                text = stringResource(Res.string.player_video_performance_caps_limited_direct_play),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 24.dp),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
+                    items(VideoPerformanceProfile.entries, key = { "profile-${it.name}" }) { profile ->
+                        val isSelected = profile == currentPerformanceProfile
                         TvFocusableOptionRow(
                             selected = isSelected,
-                            onClick = { onSelect(mode) },
-                            focusRequesterModifier = Modifier.ifElse(isFirstOrSelected, Modifier.focusRequester(focusRequester)),
+                            onClick = { onPerformanceSelect(profile) },
+                            // Like the quality rows: this section is never the
+                            // TV focus landing zone (§5.13 — the sheet must not
+                            // steal D-pad focus from the main playback
+                            // controls); the embedded rows only attach their
+                            // own local requester.
+                            focusRequesterModifier = Modifier.ifElse(
+                                isSelected,
+                                Modifier.focusRequester(performanceFocusRequester),
+                            ),
                             trailingCheck = true,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                TvOptionRowLabel(text = mode.displayName, selected = isSelected)
+                                TvOptionRowLabel(text = profile.displayName, selected = isSelected)
                                 Text(
-                                    text = modeDescription(mode),
+                                    text = performanceDescription(profile, detectedPerformanceTier),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     }
+                    // The master LEVEL line — read-only (no in-player edit
+                    // controls; the full tuning lives in Settings →
+                    // Performance). "Level" is deliberately DISTINCT from the
+                    // "Profile" chips above (issue #186's device-tier system).
+                    performanceLevel?.let { level ->
+                        item(key = "performance-level") {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(Res.string.player_video_playback_options_level_line, performanceLevelName(level)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 24.dp),
+                            )
+                            Text(
+                                text = stringResource(Res.string.player_video_playback_options_level_caption),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 24.dp),
+                            )
+                        }
+                    }
                 }
-            } else {
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                if (availablePlayers.isNotEmpty()) {
+                    SectionLabel(stringResource(Res.string.player_video_playback_options_engine_section))
+                    EngineChips(availablePlayers, currentEngineName, onPlayerSelect)
+                    SectionSpacer()
+                }
+
+                SectionLabel(stringResource(Res.string.player_video_playback_options_delivery_section))
+                Text(
+                    text = currentPlayMethod,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                Spacer(Modifier.height(8.dp))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -210,73 +313,38 @@ fun PlaybackModeSheet(
                         )
                     }
                 }
-            }
-            SectionSpacer()
-
-            SectionLabel(stringResource(Res.string.player_video_playback_options_quality_section))
-            val qualityFocusRequester = remember { FocusRequester() }
-            QualityPickerOptions(
-                currentQuality = currentQuality,
-                adaptiveBitrateEnabled = adaptiveBitrateEnabled,
-                onToggleAdaptiveBitrate = onToggleAdaptiveBitrate,
-                // Select updates in place; only the scaffold's dismiss closes
-                // the sheet.
-                onSelect = onQualitySelect,
-                isTv = isTv,
-                // The combined sheet's quality section is never the TV focus
-                // landing zone (the delivery rows own the requester); the
-                // embedded options only attach this one.
-                tvFocusRequester = qualityFocusRequester,
-                enabled = qualityAvailable,
-            )
-
-            // The Performance section (issue #186 §5.11): Android-only in v1,
-            // hidden while casting / in SyncPlay (the call site folds both
-            // into [performanceAvailable]). A profile pick reloads the session
-            // like a quality pick — brief rebuffer is the v1 tradeoff.
-            if (performanceAvailable) {
                 SectionSpacer()
-                SectionLabel(stringResource(Res.string.player_video_playback_options_performance_section))
-                if (currentMode == PlaybackMode.FORCE_DIRECT_PLAY) {
-                    Text(
-                        text = stringResource(Res.string.player_video_performance_caps_limited_direct_play),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-                if (isTv) {
-                    val performanceFocusRequester = remember { FocusRequester() }
-                    LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                        items(VideoPerformanceProfile.entries, key = { it.name }) { profile ->
-                            val isSelected = profile == currentPerformanceProfile
-                            TvFocusableOptionRow(
-                                selected = isSelected,
-                                onClick = { onPerformanceSelect(profile) },
-                                // Like the quality rows: this section is never
-                                // the TV focus landing zone (§5.13 — the sheet
-                                // must not steal D-pad focus from the main
-                                // playback controls); the embedded rows only
-                                // attach their own local requester.
-                                focusRequesterModifier = Modifier.ifElse(
-                                    isSelected,
-                                    Modifier.focusRequester(performanceFocusRequester),
-                                ),
-                                trailingCheck = true,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    TvOptionRowLabel(text = profile.displayName, selected = isSelected)
-                                    Text(
-                                        text = performanceDescription(profile, detectedPerformanceTier),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
+
+                SectionLabel(stringResource(Res.string.player_video_playback_options_quality_section))
+                QualityPickerOptions(
+                    currentQuality = currentQuality,
+                    adaptiveBitrateEnabled = adaptiveBitrateEnabled,
+                    onToggleAdaptiveBitrate = onToggleAdaptiveBitrate,
+                    // Select updates in place; only the scaffold's dismiss
+                    // closes the sheet.
+                    onSelect = onQualitySelect,
+                    isTv = false,
+                    tvFocusRequester = qualityFocusRequester,
+                    enabled = qualityAvailable,
+                )
+
+                // The Performance section (issue #186 §5.11): Android-only in
+                // v1, hidden while casting / in SyncPlay (the call site folds
+                // both into [performanceAvailable]). A profile pick reloads
+                // the session like a quality pick — brief rebuffer is the v1
+                // tradeoff.
+                if (performanceAvailable) {
+                    SectionSpacer()
+                    SectionLabel(stringResource(Res.string.player_video_playback_options_performance_section))
+                    if (currentMode == PlaybackMode.FORCE_DIRECT_PLAY) {
+                        Text(
+                            text = stringResource(Res.string.player_video_performance_caps_limited_direct_play),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                        )
+                        Spacer(Modifier.height(8.dp))
                     }
-                } else {
                     FlowRow(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -314,28 +382,68 @@ fun PlaybackModeSheet(
                             )
                         }
                     }
-                }
-                // The master LEVEL line — read-only (no in-player edit
-                // controls; the full tuning lives in Settings →
-                // Performance). "Level" is deliberately DISTINCT from the
-                // "Profile" chips above (issue #186's device-tier system).
-                performanceLevel?.let { level ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(Res.string.player_video_playback_options_level_line, performanceLevelName(level)),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                    Text(
-                        text = stringResource(Res.string.player_video_playback_options_level_caption),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
+                    // The master LEVEL line — read-only (no in-player edit
+                    // controls; the full tuning lives in Settings →
+                    // Performance). "Level" is deliberately DISTINCT from the
+                    // "Profile" chips above (issue #186's device-tier system).
+                    performanceLevel?.let { level ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(Res.string.player_video_playback_options_level_line, performanceLevelName(level)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                        )
+                        Text(
+                            text = stringResource(Res.string.player_video_playback_options_level_caption),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+/** The engine chip row shared by the touch body and the TV lazy list. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EngineChips(
+    availablePlayers: List<PlayerType>,
+    currentEngineName: String?,
+    onPlayerSelect: (PlayerType) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        availablePlayers.forEach { player ->
+            val isSelected = currentEngineName != null && player.displayName == currentEngineName
+            FilterChip(
+                selected = isSelected,
+                onClick = { onPlayerSelect(player) },
+                label = {
+                    Text(
+                        player.displayName,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    )
+                },
+                shape = ShapeCache.smoothPill,
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    selectedLabelColor = MaterialTheme.colorScheme.primary,
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    borderColor = Color.Transparent,
+                    selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                    enabled = true,
+                    selected = isSelected,
+                ),
+            )
         }
     }
 }

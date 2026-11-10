@@ -92,12 +92,18 @@ data class ShellAdminHooks(
  * @param onLogout logout (revoke=true also revokes the server session).
  *   Android: SessionCoordinator; desktop: AuthRepository.
  * @param onCheckForUpdates the About-row update check. Android: the
- *   UpdateCoordinator's manual check; desktop: AppUpdateRepository + shell
- *   snackbar (no self-update on desktop).
+ *   flavor-bound AppUpdateCoordinator's manual check; desktop:
+ *   AppUpdateRepository + shell snackbar (no self-update on desktop).
+ * @param selfUpdateSupported whether the shell can self-update at all.
+ *   `false` on fdroid — hides the Settings → About update rows (auto-check /
+ *   auto-download toggles, the manual check row, and the dismiss-period row);
+ *   `true` (the default) everywhere self-update exists. Desktop never binds a
+ *   `false`, so its call sites compile and behave unchanged.
  */
 data class ShellSettingsHooks(
     val onLogout: (Boolean) -> Unit,
     val onCheckForUpdates: () -> Unit,
+    val selfUpdateSupported: Boolean = true,
 )
 
 /**

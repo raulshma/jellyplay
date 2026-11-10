@@ -59,8 +59,8 @@ internal fun NewsletterCardScaffold(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(aspectRatio)
-                .clip(shape)
                 .focusIndicator(focusShape)
+                .clip(shape)
                 .clickable(onClick = onClick),
         ) {
             MediaImage(

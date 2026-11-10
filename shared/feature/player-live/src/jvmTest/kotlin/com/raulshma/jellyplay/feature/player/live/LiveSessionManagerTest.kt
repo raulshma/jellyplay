@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -172,6 +173,95 @@ class LiveSessionManagerTest {
         assertEquals("src-1", resolved?.mediaSourceId)
         assertEquals("https://server/Videos/src-1/stream", resolved?.streamUrl)
         coVerify(exactly = 1) { playbackRepo.resolvePlayable(match { it.forceLiveStreamFallback }) }
+    }
+
+    @Test
+    fun `DIRECT_STREAM runs the verdict and the ladder arms concurrently and picks by the verdict`() = runTest {
+        // Concurrency pin: the verdict arm's answer body parks until the
+        // ladder arm has STARTED (its stub completes the gate), which only
+        // happens when the two resolves are a genuine fan-out — a sequential
+        // ladder would deadlock this test instead of passing it.
+        val ladderStarted = CompletableDeferred<Unit>()
+        val verdictUnparked = CompletableDeferred<Unit>()
+        coEvery {
+            playbackRepo.resolvePlayable(
+                expectedRequest(LiveStreamOption.DIRECT_STREAM, audioStreamIndex = null, subtitleStreamIndex = null),
+            )
+        } coAnswers {
+            ladderStarted.await()
+            verdictUnparked.complete(Unit)
+            serverVerdict(method = PlayMethod.DIRECT_STREAM)
+        }
+        coEvery {
+            playbackRepo.resolvePlayable(
+                expectedRequest(LiveStreamOption.DIRECT_STREAM, force = true, audioStreamIndex = null, subtitleStreamIndex = null),
+            )
+        } coAnswers {
+            ladderStarted.complete(Unit)
+            verdictUnparked.await()
+            ladderVerdict()
+        }
+
+        val resolved = manager.resolve(
+            channel = channel(),
+            audioStreamIndex = null,
+            subtitleStreamIndex = null,
+            option = LiveStreamOption.DIRECT_STREAM,
+            playerType = PlayerType.EXTERNAL,
+        )
+
+        // The trusted DIRECT_STREAM verdict rides; the speculative ladder
+        // result is discarded. Both arms crossed the seam exactly once.
+        assertEquals("https://server/verdict", resolved?.streamUrl)
+        assertEquals(PlayMethod.DIRECT_STREAM, resolved?.playMethod)
+        coVerify(exactly = 1) {
+            playbackRepo.resolvePlayable(
+                expectedRequest(LiveStreamOption.DIRECT_STREAM, audioStreamIndex = null, subtitleStreamIndex = null),
+            )
+        }
+        coVerify(exactly = 1) {
+            playbackRepo.resolvePlayable(
+                expectedRequest(LiveStreamOption.DIRECT_STREAM, force = true, audioStreamIndex = null, subtitleStreamIndex = null),
+            )
+        }
+    }
+
+    @Test
+    fun `DIRECT_STREAM verdict arm failing still picks up the in-flight ladder`() = runTest {
+        // The transcode-verdict probe override, exercised through the
+        // fan-out: the ladder arm runs to COMPLETION before the (discarded)
+        // verdict lands, so the pick never issues a second sequential
+        // resolve — it reads the already-landed ladder result.
+        val verdictStarted = CompletableDeferred<Unit>()
+        val holdVerdict = CompletableDeferred<Unit>()
+        coEvery {
+            playbackRepo.resolvePlayable(
+                expectedRequest(LiveStreamOption.DIRECT_STREAM, audioStreamIndex = null, subtitleStreamIndex = null),
+            )
+        } coAnswers {
+            verdictStarted.complete(Unit)
+            holdVerdict.await()
+            serverVerdict(method = PlayMethod.TRANSCODE)
+        }
+        coEvery {
+            playbackRepo.resolvePlayable(
+                expectedRequest(LiveStreamOption.DIRECT_STREAM, force = true, audioStreamIndex = null, subtitleStreamIndex = null),
+            )
+        } coAnswers {
+            verdictStarted.await()
+            ladderVerdict().also { holdVerdict.complete(Unit) }
+        }
+
+        val resolved = manager.resolve(
+            channel = channel(),
+            audioStreamIndex = null,
+            subtitleStreamIndex = null,
+            option = LiveStreamOption.DIRECT_STREAM,
+            playerType = PlayerType.EXTERNAL,
+        )
+
+        assertEquals(PlayMethod.DIRECT_STREAM, resolved?.playMethod)
+        assertEquals("https://server/Videos/src-1/stream", resolved?.streamUrl)
     }
 
     @Test

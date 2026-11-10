@@ -9,7 +9,11 @@ import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.OnboardingPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Onboarding-wizard preferences, projected centrally off the owning store
@@ -23,6 +27,9 @@ class OnboardingViewModel(
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
     private val editor: PreferencesEditor,
+    // The encrypted writes are synchronous; production runs them on IO.
+    // Tests pin the test dispatcher (the LogsViewModel.parseDispatcher seam).
+    private val seerrSecureWriteDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
 ) : JellyPlayViewModel() {
 
     val preferences: kotlinx.coroutines.flow.StateFlow<OnboardingPreferences> =
@@ -68,8 +75,15 @@ class OnboardingViewModel(
      * step as a single parameter so the screen doesn't wire 13 lambdas.
      */
     val seerrEditActions =
-        SeerrEditActions(scope, seerrPreferencesStore, seerrSecureCredentialsStore)
+        SeerrEditActions(scope, seerrPreferencesStore, seerrSecureCredentialsStore, seerrSecureWriteDispatcher)
 }
+
+/**
+ * Typing-pause window (ms) for the Seerr step's per-keystroke field writes —
+ * the same debounce shape as the settings discover-row editor's queries: a
+ * burst of keystrokes costs one store write, not one per character.
+ */
+private const val SEERR_FIELD_WRITE_DEBOUNCE_MS = 300L
 
 /**
  * Every Seerr write the onboarding wizard's Seerr step performs, folded into
@@ -77,27 +91,53 @@ class OnboardingViewModel(
  * members constructed once by the owning ViewModel and handed to the screen
  * as a single parameter, instead of one `onSet*` lambda per field).
  *
- * Each write is fire-and-forget on the constructing ViewModel's scope and is
- * routed to the store that owns the field: plain preferences go to
- * [SeerrPreferencesStore]; the API key and password go to
- * [SeerrSecureCredentialsStore].
+ * Click-driven writes (auth method, toggles, regions, disconnect) are
+ * fire-and-forget on the constructing ViewModel's scope. The five
+ * per-keystroke field writes are debounced to the typing-pause window:
+ * server URL / username / email are whole-file DataStore edits, and the API
+ * key / password are synchronous encrypted-file writes that would otherwise
+ * run once per character — on [Dispatchers.IO], since they block the
+ * calling thread and the scope's dispatcher is main. [flushPendingFieldWrites]
+ * lets the wizard's continue/submit paths land a pending write before
+ * navigating away.
  */
 class SeerrEditActions(
     private val scope: kotlinx.coroutines.CoroutineScope,
     private val preferencesStore: SeerrPreferencesStore,
     private val credentialsStore: SeerrSecureCredentialsStore,
+    private val secureWriteDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
 ) {
-    fun setServerUrl(url: String) = scope.launch { preferencesStore.setServerUrl(url) }
+    private var serverUrlWrite: Job? = null
+    private var usernameWrite: Job? = null
+    private var emailWrite: Job? = null
+    private var apiKeyWrite: Job? = null
+    private var passwordWrite: Job? = null
 
-    fun setApiKey(key: String) = scope.launch { credentialsStore.setApiKey(key) }
+    fun setServerUrl(url: String) {
+        serverUrlWrite = debouncedFieldWrite(serverUrlWrite) { preferencesStore.setServerUrl(url) }
+    }
+
+    fun setApiKey(key: String) {
+        apiKeyWrite = debouncedFieldWrite(apiKeyWrite) {
+            withContext(secureWriteDispatcher) { credentialsStore.setApiKey(key) }
+        }
+    }
 
     fun setAuthMethod(method: SeerrAuthMethod) = scope.launch { preferencesStore.setAuthMethod(method) }
 
-    fun setUsername(username: String) = scope.launch { preferencesStore.setUsername(username) }
+    fun setUsername(username: String) {
+        usernameWrite = debouncedFieldWrite(usernameWrite) { preferencesStore.setUsername(username) }
+    }
 
-    fun setEmail(email: String) = scope.launch { preferencesStore.setEmail(email) }
+    fun setEmail(email: String) {
+        emailWrite = debouncedFieldWrite(emailWrite) { preferencesStore.setEmail(email) }
+    }
 
-    fun setPassword(password: String) = scope.launch { credentialsStore.setPassword(password) }
+    fun setPassword(password: String) {
+        passwordWrite = debouncedFieldWrite(passwordWrite) {
+            withContext(secureWriteDispatcher) { credentialsStore.setPassword(password) }
+        }
+    }
 
     fun setEnabled(enabled: Boolean) = scope.launch { preferencesStore.setEnabled(enabled) }
 
@@ -112,5 +152,42 @@ class SeerrEditActions(
 
     fun setDiscoverRegion(region: String) = scope.launch { preferencesStore.setDiscoverRegion(region) }
 
-    fun disconnect() = scope.launch { preferencesStore.disconnect() }
+    fun disconnect() {
+        // A pending debounced field write landing after the clear would
+        // resurrect a credential the user just removed — drop them first.
+        cancelPendingFieldWrites()
+        scope.launch { preferencesStore.disconnect() }
+    }
+
+    /**
+     * Suspends until every pending debounced field write has landed. The
+     * wizard's continue/submit paths call this before navigating so the last
+     * keystroke is never left waiting out the debounce window (a no-op when
+     * nothing is pending).
+     */
+    suspend fun flushPendingFieldWrites() {
+        listOf(serverUrlWrite, usernameWrite, emailWrite, apiKeyWrite, passwordWrite)
+            .forEach { it?.join() }
+    }
+
+    private fun cancelPendingFieldWrites() {
+        serverUrlWrite?.cancel()
+        usernameWrite?.cancel()
+        emailWrite?.cancel()
+        apiKeyWrite?.cancel()
+        passwordWrite?.cancel()
+    }
+
+    /**
+     * Relaunches [block] after the typing-pause window, cancelling [previous]
+     * first — the shared debounce shape of the five per-keystroke field
+     * writes: a burst of keystrokes costs at most one store write.
+     */
+    private fun debouncedFieldWrite(previous: Job?, block: suspend () -> Unit): Job {
+        previous?.cancel()
+        return scope.launch {
+            delay(SEERR_FIELD_WRITE_DEBOUNCE_MS)
+            block()
+        }
+    }
 }

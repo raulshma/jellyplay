@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
+import com.raulshma.jellyplay.core.data.realtime.SessionsRealtimeChannel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -34,6 +35,7 @@ class AdminRepositoryImplTest {
     private val adminApiClient: AdminApiClient = mockk(relaxed = true)
     private val userApiClient: UserApiClient = mockk(relaxed = true)
     private val realtimeTasks: ScheduledTasksRealtimeChannel = mockk(relaxed = true)
+    private val realtimeSessions: SessionsRealtimeChannel = mockk(relaxed = true)
     private val engine: JellyfinApiEngine = mockk(relaxed = true)
     private val activityLogChannel: ActivityLogRealtimeChannel = mockk(relaxed = true)
     private val repository = AdminRepositoryImpl(
@@ -43,6 +45,7 @@ class AdminRepositoryImplTest {
         libraryApiClient = mockk<LibraryApiClient>(relaxed = true),
         engine = engine,
         realtimeTasks = realtimeTasks,
+        realtimeSessions = realtimeSessions,
         activityLogRealtimeChannel = activityLogChannel,
     )
 

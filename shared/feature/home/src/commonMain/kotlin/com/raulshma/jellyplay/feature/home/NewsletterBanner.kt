@@ -53,9 +53,10 @@ fun NewsletterBanner(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            // Indicator sits before the clip (unclipped glow), so its shape must match the clip.
+            .focusIndicator(ShapeCache.smooth20)
             .clip(ShapeCache.smooth20)
             .background(bannerBrush)
-            .focusIndicator()
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
@@ -94,9 +95,9 @@ fun NewsletterBanner(
             Box(
                 modifier = Modifier
                     .size(32.dp)
+                    .focusIndicator(ShapeCache.smooth8)
                     .clip(ShapeCache.smooth8)
                     .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.08f))
-                    .focusIndicator(androidx.compose.foundation.shape.CircleShape)
                     .clickable(onClick = onDismiss),
                 contentAlignment = Alignment.Center,
             ) {

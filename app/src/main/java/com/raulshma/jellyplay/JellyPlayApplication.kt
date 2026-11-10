@@ -19,6 +19,8 @@ import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.notification.di.NotificationWorkerFactory
+import com.raulshma.jellyplay.core.network.di.toImageOkHttpClient
+import com.raulshma.jellyplay.distribution.DistributionPlatform
 import com.raulshma.jellyplay.di.androidKoinModules
 import com.raulshma.jellyplay.startup.AppStartupPrewarms
 import androidx.work.Configuration
@@ -110,6 +112,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         SharedLog.setVerboseLoggingEnabled(
             (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0,
         )
+        // fdroid theme fonts must be installed BEFORE the first composition:
+        // ThemeFontRegistry is volatile install-once and the family getters
+        // read the override at composition time — anything composed before
+        // install keeps the GMS-provider fallback (or, GMS-free on fdroid,
+        // nothing). Store: a no-op (theming rides the GMS downloadable-fonts
+        // provider).
+        DistributionPlatform.installBundledFonts()
         // Koin owns construction for every module.
         // MUST run before anything resolves a
         // dependency: the lazy fields and every Activity/Service/widget entry
@@ -117,7 +126,9 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // adds no cold-start construction cost.
         // The module list itself is AndroidKoinModules.kt (the fold): the
         // shared core graph, this shell's platform actuals, and the ONE
-        // spread of sharedFeatureModules both JVM shells consume.
+        // spread of sharedFeatureModules both JVM shells consume — plus the
+        // distribution flavor's own module (store: the GMS cast/book family;
+        // fdroid: none).
         // Boot mark around the startKoin segment (module registration +
         // definition classloading): elapsed-realtime delta surfaced as the
         // same always-on "[JellyPlay][perf]" one-liner the desktop shell's
@@ -127,7 +138,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         Trace.beginSection("JellyPlay.startKoin")
         try {
             startKoin {
-                modules(androidKoinModules(this@JellyPlayApplication))
+                modules(androidKoinModules(this@JellyPlayApplication) + DistributionPlatform.koinModules(this@JellyPlayApplication))
             }
         } finally {
             Trace.endSection()
@@ -148,7 +159,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     private val imageClient by lazy {
-        okHttpClient.newBuilder()
+        // toImageOkHttpClient() swaps in the dedicated image Dispatcher
+        // (raised per-host limit — a Jellyfin server is a single host, so the
+        // base client's default 5 would serialize poster grids behind
+        // in-flight API JSON). The rest of this chain keeps this shell's
+        // divergences:
+        okHttpClient.toImageOkHttpClient()
+            .newBuilder()
             // Drop the inherited OkHttp http_cache so image bytes aren't written
             // to disk twice. The base client's cache (`cacheDir/http_cache`,
             // sized for API JSON) is shared via newBuilder(); without this Coil

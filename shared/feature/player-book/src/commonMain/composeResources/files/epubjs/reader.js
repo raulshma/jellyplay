@@ -757,12 +757,34 @@
     }
 
     function decodeAndOpen(base64) {
-        status('loading');
         var binary = atob(base64);
         var bytes = new Uint8Array(binary.length);
         for (var i = 0; i < binary.length; i++) {
             bytes[i] = binary.charCodeAt(i);
         }
+        openDecoded(bytes);
+    }
+
+    /*
+     * The chunked boot transfer: the host streams the book as standalone
+     * base64 chunks (fixed byte count per chunk, so each decodes on its own).
+     * loadBookBegin preallocates the buffer from the totalBytes header;
+     * loadBookChunk decodes one chunk straight into it at the running offset
+     * — the chunk strings are transient, no whole-book base64 ever exists
+     * here — and loadBookEnd opens only when the received count matches the
+     * header, so a dropped/duplicated/out-of-order chunk cannot half-open a
+     * corrupt book. A failed or aborted transfer discards the partial buffer
+     * (loadBookAbort, or the begin of a resend — resetting assembly is
+     * idempotent either way).
+     */
+
+    function assemblyError() {
+        assembling = null;
+        status('error');
+    }
+
+    function openDecoded(bytes) {
+        status('loading');
         openBook(bytes.buffer);
     }
 
@@ -980,35 +1002,65 @@
             }
         },
 
-        loadBookBegin: function (chunkCount, resumePercent, appearanceJson) {
+        loadBookBegin: function (totalBytes, resumePercent, appearanceJson) {
             try {
-                assembling = { parts: new Array(Number(chunkCount) || 0) };
+                var size = Number(totalBytes);
+                if (!isFinite(size) || size < 0) size = 0;
+                assembling = {
+                    bytes: new Uint8Array(size),
+                    received: 0,
+                    nextIndex: 0
+                };
                 pending.resume = Number(resumePercent) || 0;
                 applyLoadPrefs(appearanceJson);
             } catch (ignored) {
-                status('error');
+                assemblyError();
             }
         },
 
         loadBookChunk: function (index, chunk) {
-            if (assembling && index >= 0 && index < assembling.parts.length) {
-                assembling.parts[index] = String(chunk);
+            if (!assembling) return;
+            try {
+                if (index !== assembling.nextIndex) throw new Error('out of order');
+                var binary = atob(String(chunk));
+                var length = binary.length;
+                if (assembling.received + length > assembling.bytes.length) {
+                    throw new Error('overflow');
+                }
+                for (var i = 0; i < length; i++) {
+                    assembling.bytes[assembling.received + i] = binary.charCodeAt(i);
+                }
+                assembling.received += length;
+                assembling.nextIndex++;
+            } catch (ignored) {
+                // A dropped, duplicated or oversized chunk means the stream is
+                // broken — the end frame can no longer verify, so discard the
+                // partial buffer and fail instead of half-opening a corrupt
+                // book.
+                assemblyError();
             }
         },
 
         loadBookEnd: function () {
             if (!assembling) return;
-            var parts = assembling.parts;
+            var bytes = assembling.bytes;
+            var received = assembling.received;
             assembling = null;
             try {
-                if (parts.some(function (p) { return typeof p !== 'string'; })) {
+                // Completeness check against the begin frame's totalBytes
+                // header: anything short or over is a broken stream.
+                if (received !== bytes.length) {
                     status('error');
                     return;
                 }
-                decodeAndOpen(parts.join(''));
+                openDecoded(bytes);
             } catch (ignored) {
                 status('error');
             }
+        },
+
+        loadBookAbort: function () {
+            assembling = null;
         },
 
         setTheme: function (name) {

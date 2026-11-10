@@ -25,9 +25,10 @@ import okio.Path
  * Android EPUB host: a stock `android.webkit.WebView` rendering the inlined
  * reader page over `https://jellyplay.local` (an HTTPS base URL avoids
  * file:// access entirely). JS → native rides `addJavascriptInterface`
- * (parsed and re-posted onto the main thread before the event seam runs —
- * the bridge thread must never touch the WebView or Compose state);
- * appearance pushes and commands ride `evaluateJavascript`.
+ * (JSON-parsed on the bridge thread, then the typed events re-posted onto
+ * the main thread for the event seam — the bridge thread must never touch
+ * the WebView or Compose state); appearance pushes and commands ride
+ * `evaluateJavascript`.
  *
  * The boot-transfer ladder lives in [BookTransferEffects] (shared with the
  * desktop host); this host's divergent halves are the WebView eval seam and
@@ -59,13 +60,13 @@ internal actual fun rememberEpubReaderHost(
 
     // The RAW seam, bypassing the delivery receipt: boot failures must fail
     // WITHOUT latching a delivery for a page generation that never received
-    // the book (a receipt here would bar the retry's encode via shouldEncode).
+    // the book (a receipt here would bar the retry's transfer via shouldSend).
     val rawEventsRef = rememberUpdatedState(onEvent)
     fun failBoot() = rawEventsRef.value.failBoot()
 
-    // The whole ladder — receipt wiring, encode (with the failure fold into
-    // failBoot), chunked send, payload release, appearance push. The eval
-    // reads the view live so a rebuilt WebView (AndroidView recycle) gets the
+    // The whole ladder — receipt wiring, the streamed chunk transfer (with
+    // the failure fold into failBoot), appearance push. The eval reads the
+    // view live so a rebuilt WebView (AndroidView recycle) gets the
     // re-sent book, not a stale capture.
     val receivingEvents = BookTransferEffects(
         bookFile = bookFile,
@@ -75,19 +76,26 @@ internal actual fun rememberEpubReaderHost(
         delivery = delivery,
         pageLoaded = pageLoaded,
         eval = { script -> webViewRef.value?.evaluateJavascript(script, null) },
-        encodeBook = { file -> withContext(Dispatchers.IO) { EpubBookCodec.encodeBase64(file) } },
+        openTransfer = { file ->
+            withContext(Dispatchers.IO) { EpubBookCodec.openChunkedTransfer(file) }
+        },
         onFailBoot = ::failBoot,
     )
     val eventsRef = rememberUpdatedState(receivingEvents)
-    // Events re-posted onto the main thread: `addJavascriptInterface` methods
-    // run on the WebView's private JavaBridge thread, but the tap events
-    // turn around and drive the host handle (evaluateJavascript — UI-thread
-    // only) and Compose screen state. Dispatching here keeps every event
-    // on the thread the screen was written for.
+    // `addJavascriptInterface` methods run on the WebView's private JavaBridge
+    // thread. Parsing happens right there — off main, where the large toc /
+    // searchResults payloads used to be JSON-parsed inside the posted
+    // runnable — and only the TYPED events re-post onto the main thread:
+    // the tap events turn around and drive the host handle
+    // (evaluateJavascript — UI-thread only) and Compose screen state, so
+    // the seam itself stays on the thread the screen was written for.
+    // Parsing on the single bridge thread keeps the event order the page
+    // posted them in (a Default-pool parse could reorder).
     val bridge = remember {
         val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
         EpubAndroidBridge { raw ->
-            mainHandler.post { EpubEventParser.parse(raw).forEach(eventsRef.value::onEvent) }
+            val events = EpubEventParser.parse(raw)
+            mainHandler.post { events.forEach(eventsRef.value::onEvent) }
         }
     }
 

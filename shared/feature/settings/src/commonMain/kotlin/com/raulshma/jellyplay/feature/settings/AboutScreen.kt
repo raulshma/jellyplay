@@ -40,12 +40,12 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.LaunchedEffect
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about
@@ -92,6 +92,9 @@ fun AboutScreen(
     onBack: () -> Unit,
     onLicensesClick: () -> Unit,
     onCheckForUpdates: () -> Unit,
+    // Default true so any other caller keeps today's surface; fdroid passes
+    // false (ShellSettingsHooks.selfUpdateSupported) to hide the update rows.
+    selfUpdateSupported: Boolean = true,
     viewModel: AboutViewModel = koinViewModel(),
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -127,7 +130,7 @@ fun AboutScreen(
                     end = adaptiveInfo.contentPadding(isTv),
                     bottom = adaptiveInfo.bottomPadding(isTv),
                 )
-                .tvFocusRestorer()
+                .tvFocusGroupRestorer()
                 .focusRequester(focusRequester),
         ) {
             Spacer(Modifier.height(24.dp))
@@ -276,60 +279,66 @@ fun AboutScreen(
                         },
                     )
                 }
-                SettingToggleItem(
-                    icon = Tabler.Outline.Refresh,
-                    title = stringResource(Res.string.settings_check_updates_automatically),
-                    subtitle = stringResource(Res.string.settings_check_updates_subtitle),
-                    checked = viewModel.selfUpdateCheckEnabled,
-                    onCheckedChange = { viewModel.updateSelfUpdateCheckPref(it) },
-                )
-                SettingToggleItem(
-                    icon = Tabler.Outline.Download,
-                    title = stringResource(Res.string.settings_download_updates_automatically),
-                    subtitle = stringResource(Res.string.settings_download_updates_subtitle),
-                    checked = viewModel.selfUpdateDownloadEnabled,
-                    enabled = viewModel.selfUpdateCheckEnabled,
-                    onCheckedChange = { viewModel.updateSelfUpdateDownloadPref(it) },
-                )
-                if (viewModel.selfUpdateCheckEnabled) {
-                    SettingListItem(
+                // Self-update surface — hidden entirely when the distribution
+                // line cannot self-update (fdroid: updates come from the
+                // F-Droid client). Inside it, the dismiss-period row keeps the
+                // existing selfUpdateCheckEnabled gating.
+                if (selfUpdateSupported) {
+                    SettingToggleItem(
                         icon = Tabler.Outline.Refresh,
-                        title = stringResource(Res.string.settings_check_for_updates),
-                        subtitle = "",
-                        onClick = {
-                            // Result (update available or "up to date" with
-                            // release notes) is shown in the app-wide update
-                            // sheet driven by the app shell's UpdateCoordinator,
-                            // not inline here — avoids the stale "(v)" status
-                            // that drifted from a local copy of the version
-                            // string.
-                            onCheckForUpdates()
-                        },
+                        title = stringResource(Res.string.settings_check_updates_automatically),
+                        subtitle = stringResource(Res.string.settings_check_updates_subtitle),
+                        checked = viewModel.selfUpdateCheckEnabled,
+                        onCheckedChange = { viewModel.updateSelfUpdateCheckPref(it) },
                     )
-                    val dismissTitle = stringResource(Res.string.settings_update_dismiss_title)
-                    val dismissSubtitle = stringResource(Res.string.settings_update_dismiss_subtitle)
-                    val dismissPeriodLabels = mapOf(
-                        UpdateDismissPeriod.HOURS_12 to stringResource(Res.string.settings_update_dismiss_12_hours),
-                        UpdateDismissPeriod.HOURS_24 to stringResource(Res.string.settings_update_dismiss_24_hours),
-                        UpdateDismissPeriod.DAYS_3 to stringResource(Res.string.settings_update_dismiss_3_days),
-                        UpdateDismissPeriod.WEEK_1 to stringResource(Res.string.settings_update_dismiss_1_week),
-                        UpdateDismissPeriod.NEVER to stringResource(Res.string.settings_update_dismiss_never),
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Download,
+                        title = stringResource(Res.string.settings_download_updates_automatically),
+                        subtitle = stringResource(Res.string.settings_download_updates_subtitle),
+                        checked = viewModel.selfUpdateDownloadEnabled,
+                        enabled = viewModel.selfUpdateCheckEnabled,
+                        onCheckedChange = { viewModel.updateSelfUpdateDownloadPref(it) },
                     )
-                    SettingListItem(
-                        icon = Tabler.Outline.Clock,
-                        title = dismissTitle,
-                        subtitle = dismissSubtitle,
-                        trailingText = dismissPeriodLabels.getValue(viewModel.updateDismissPeriod),
-                        onClick = {
-                            activePicker = PickerState.List(
-                                title = dismissTitle,
-                                items = UpdateDismissPeriod.entries.toList(),
-                                label = { period -> dismissPeriodLabels.getValue(period) },
-                                isSelected = { it == viewModel.updateDismissPeriod },
-                                onSelect = { viewModel.updateDismissPeriodPref(it) },
-                            )
-                        },
-                    )
+                    if (viewModel.selfUpdateCheckEnabled) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Refresh,
+                            title = stringResource(Res.string.settings_check_for_updates),
+                            subtitle = "",
+                            onClick = {
+                                // Result (update available or "up to date" with
+                                // release notes) is shown in the app-wide update
+                                // sheet driven by the app shell's update
+                                // coordinator, not inline here — avoids the
+                                // stale "(v)" status that drifted from a local
+                                // copy of the version string.
+                                onCheckForUpdates()
+                            },
+                        )
+                        val dismissTitle = stringResource(Res.string.settings_update_dismiss_title)
+                        val dismissSubtitle = stringResource(Res.string.settings_update_dismiss_subtitle)
+                        val dismissPeriodLabels = mapOf(
+                            UpdateDismissPeriod.HOURS_12 to stringResource(Res.string.settings_update_dismiss_12_hours),
+                            UpdateDismissPeriod.HOURS_24 to stringResource(Res.string.settings_update_dismiss_24_hours),
+                            UpdateDismissPeriod.DAYS_3 to stringResource(Res.string.settings_update_dismiss_3_days),
+                            UpdateDismissPeriod.WEEK_1 to stringResource(Res.string.settings_update_dismiss_1_week),
+                            UpdateDismissPeriod.NEVER to stringResource(Res.string.settings_update_dismiss_never),
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Clock,
+                            title = dismissTitle,
+                            subtitle = dismissSubtitle,
+                            trailingText = dismissPeriodLabels.getValue(viewModel.updateDismissPeriod),
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = dismissTitle,
+                                    items = UpdateDismissPeriod.entries.toList(),
+                                    label = { period -> dismissPeriodLabels.getValue(period) },
+                                    isSelected = { it == viewModel.updateDismissPeriod },
+                                    onSelect = { viewModel.updateDismissPeriodPref(it) },
+                                )
+                            },
+                        )
+                    }
                 }
             }
 

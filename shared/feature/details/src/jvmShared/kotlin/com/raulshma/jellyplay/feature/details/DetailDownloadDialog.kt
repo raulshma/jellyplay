@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_available_storage
@@ -256,7 +257,7 @@ internal fun DownloadPickerSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             LazyColumn(
-                                modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).tvFocusGroupRestorer(),
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 items(

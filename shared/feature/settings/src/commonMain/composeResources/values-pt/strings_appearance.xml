@@ -217,4 +217,6 @@
     <string name="settings_promoted_rail_source_subtitle">Quais ações a trilha de detalhes paisagem/TV destaca</string>
     <string name="settings_episode_overview_preview">Prévia da sinopse do episódio</string>
     <string name="settings_episode_overview_preview_subtitle">Mostra um trecho de sinopse de 2 linhas nas fileiras de episódios da temporada</string>
+    <string name="settings_tv_ui_scale">Escala da interface da TV</string>
+    <string name="settings_tv_ui_scale_subtitle">Reduzir ou ampliar toda a interface da TV</string>
 </resources>

@@ -60,7 +60,7 @@ import com.raulshma.jellyplay.core.ui.generated.resources.core_ok
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.feature.calendar.generated.resources.Res
 import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_empty_desc
@@ -197,7 +197,7 @@ fun UpcomingCalendarScreen(
                                 state = listState,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .tvFocusRestorer()
+                                    .tvFocusGroupRestorer()
                                     .focusRequester(listFocusRequester),
                                 contentPadding = PaddingValues(
                                     start = 16.dp,

@@ -178,37 +178,79 @@ class AdminStatisticsRepositoryImplTest {
     // ── Per-user statistics fan-out ─────────────────────────────────────
 
     @Test
-    fun `statistics combine play counts, sessions and completion rate without the plugin`() = runTest {
+    fun `list statistics stay aggregate-only and never fan out per-user counts`() = runTest {
         val repository = buildRepository()
         coEvery { mediaInfoApiClient.getUsers() } returns Result.success(
             listOf(JellyfinUser(id = "u1", name = "Admin", isAdmin = true), JellyfinUser(id = "u2", name = "Viewer"))
         )
         coEvery { adminApiClient.getSessions() } returns Result.success(listOf(SessionInfo(id = "s1", userId = "u1")))
-        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Movie")) } returns Result.success(6)
-        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Episode")) } returns Result.success(3)
-        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Audio")) } returns Result.success(1)
-        coEvery { mediaInfoApiClient.getUserUnplayedItemCount("u1", listOf("Movie")) } returns Result.success(2)
-        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u2", any()) } returns Result.success(0)
-        coEvery { mediaInfoApiClient.getUserUnplayedItemCount("u2", any()) } returns Result.success(0)
 
         val stats = repository.getAllUsersWithStatistics().getOrThrow().associateBy { it.userId }
 
         assertEquals(2, stats.size)
         val admin = stats.getValue("u1")
-        assertEquals(10, admin.totalPlayCount)
-        assertEquals(6, admin.moviePlayCount)
-        assertEquals(3, admin.episodePlayCount)
-        assertEquals(1, admin.songPlayCount)
-        // movieTotal = 2 unplayed + 6 played = 8 → 6/8.
-        assertEquals(0.75f, admin.completionRate)
         assertTrue(admin.isCurrentlyActive)
         assertTrue(admin.isAdmin)
         assertEquals(0L, admin.totalWatchTimeSec)
+        // The per-user played/unplayed counts ride the lazy per-user read
+        // ([getUserPlayCounts]) — the list read fans out nothing (zero count
+        // fields, no round trips); the caller merges fetched counts in
+        // ([UserPlayCounts.mergedInto]).
+        assertEquals(0, admin.totalPlayCount)
+        assertEquals(0, admin.moviePlayCount)
+        assertEquals(0, admin.episodePlayCount)
+        assertEquals(0, admin.songPlayCount)
+        assertEquals(0f, admin.completionRate)
+        coVerify(exactly = 0) { mediaInfoApiClient.getUserPlayedItemCount(any(), any()) }
+        coVerify(exactly = 0) { mediaInfoApiClient.getUserUnplayedItemCount(any(), any()) }
         // Plugin status was never refreshed → UNKNOWN → no plugin round-trip.
         coVerify(exactly = 0) { mediaInfoApiClient.getPlaybackReportingUserActivity(any()) }
 
         assertFalse(stats.getValue("u2").isCurrentlyActive)
-        assertEquals(0f, stats.getValue("u2").completionRate)
+    }
+
+    @Test
+    fun `getUserPlayCounts fetches the four counters and folds the completion rate`() = runTest {
+        val repository = buildRepository()
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Movie")) } returns Result.success(5)
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Episode")) } returns Result.success(6)
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Audio")) } returns Result.success(1)
+        coEvery { mediaInfoApiClient.getUserUnplayedItemCount("u1", listOf("Movie")) } returns Result.success(3)
+
+        val counts = repository.getUserPlayCounts("u1").getOrThrow()
+
+        assertEquals(5, counts.moviePlayed)
+        assertEquals(6, counts.episodePlayed)
+        assertEquals(1, counts.songPlayed)
+        assertEquals(3, counts.movieUnplayed)
+        // movieTotal = 3 unplayed + 5 played → 5/8.
+        assertEquals(5f / 8f, counts.completionRate)
+        // The merge fills a list row's count fields (the aggregate read's
+        // zeros) without touching its identity/watch-time fields.
+        val merged = counts.mergedInto(
+            com.raulshma.jellyplay.core.model.UserStatistics(userId = "u1", userName = "Admin", totalWatchTimeSec = 60L)
+        )
+        assertEquals(12, merged.totalPlayCount)
+        assertEquals(5, merged.moviePlayCount)
+        assertEquals(6, merged.episodePlayCount)
+        assertEquals(1, merged.songPlayCount)
+        assertEquals(60L, merged.totalWatchTimeSec)
+        assertEquals(5f / 8f, merged.completionRate)
+    }
+
+    @Test
+    fun `a failed counter fails the whole counts read so the caller can retry`() = runTest {
+        val repository = buildRepository()
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Movie")) } returns Result.success(5)
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Episode")) } returns Result.success(6)
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Audio")) } returns Result.failure(RuntimeException("down"))
+        coEvery { mediaInfoApiClient.getUserUnplayedItemCount("u1", listOf("Movie")) } returns Result.success(3)
+
+        val result = repository.getUserPlayCounts("u1")
+
+        // Strict: a zeroed success would cache a "no plays" lie — the caller
+        // leaves the row pending and retries instead.
+        assertTrue(result.isFailure)
     }
 
     @Test
@@ -220,8 +262,6 @@ class AdminStatisticsRepositoryImplTest {
             listOf(JellyfinUser(id = "u1", name = "Admin"), JellyfinUser(id = "u2", name = "Viewer"))
         )
         coEvery { adminApiClient.getSessions() } returns Result.success(emptyList())
-        coEvery { mediaInfoApiClient.getUserPlayedItemCount(any(), any()) } returns Result.success(0)
-        coEvery { mediaInfoApiClient.getUserUnplayedItemCount(any(), any()) } returns Result.success(0)
         coEvery { mediaInfoApiClient.getPlaybackReportingUserActivity(days = 30) } returns Result.success(
             listOf(PlaybackReportingActivity(userId = "u1", totalTime = 7_200L))
         )

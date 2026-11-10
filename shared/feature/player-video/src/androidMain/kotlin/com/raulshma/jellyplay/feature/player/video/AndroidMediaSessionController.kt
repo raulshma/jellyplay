@@ -26,7 +26,11 @@ import com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player
  *
  * Four entry points cover every prior call site:
  *  - [createForItem]: builds a session around a [ForwardingPlayer] that pins the
- *    caller-supplied title/artwork at the MediaSession layer. ExoPlayer's HLS
+ *    caller-supplied title/artwork at the MediaSession layer — but only when
+ *    the request actually moved: when the held session already fronts the
+ *    exact item id / title / subtitle / artwork / transport player, it is
+ *    KEPT and the build is skipped (the [MediaSessionPin] reuse fast path,
+ *    field-by-field rationale in [canReuseMediaSession]). ExoPlayer's HLS
  *    playlist parser resolves an empty MediaMetadata for Jellyfin transcode
  *    manifests (which carry no metadata), which would blank the system
  *    now-playing notification. We previously re-applied the title by mutating
@@ -69,6 +73,22 @@ internal class AndroidMediaSessionController(
     private var session: MediaSession? = null
 
     /**
+     * What the held [session] was built for — the reuse fast path's
+     * comparison base ([MediaSessionPin] + [canReuseMediaSession]). The
+     * invariant the fast path leans on: non-null iff [session] is an item
+     * session this class built and has not retired. So it is written only
+     * after a successful [activate] in [createForItem] (the bare reattach /
+     * background-cast builders never set one — a bare session carries no item
+     * pin, and the next [createForItem] must rebuild onto its transport), and
+     * it is cleared everywhere [session] is cleared — [release] and
+     * [releaseSupersededSession]. With that, `sessionPin != null` proves the
+     * held session is live and ours, and the fast path's remaining risk (the
+     * manager having displaced — and released — the held session) is covered
+     * by the `currentSession === session` check beside the pin comparison.
+     */
+    private var sessionPin: MediaSessionPin? = null
+
+    /**
      * The adapter-backed player for the current non-media3 engine (mpv /
      * libVLC — gh-178), owned here so its state collectors die with the
      * session it backs. `null` while the active engine is media3-backed
@@ -104,8 +124,36 @@ internal class AndroidMediaSessionController(
      * Build + activate a session for the current item, pinning [title] /
      * [subtitle] + the item's artwork. No-op if no underlying player is bound.
      *
-     * Same-item rebuilds (force-transcode / quality / engine-fallback reloads)
-     * reuse the outgoing session's ID (`jellyplay_video_<itemId>`), and Media3
+     * REUSE FAST PATH — the reload funnel calls this on every engine (re)bind,
+     * and most of those calls change nothing the session displays: the
+     * mini-player reclaim rebinds the SAME engine and item, the play-edge
+     * [ensureActiveForItem] re-checks an unchanged item, and every
+     * metadata-derived input (title, subtitle, artwork URL — all read from the
+     * current session state) is fed in verbatim. A rebuild for such a call is
+     * pure ceremony with real cost: releasing + re-registering the
+     * `jellyplay_video_<itemId>` id in Media3's process-wide map, re-firing
+     * every [PlaybackSessionManager] listener through
+     * [activate]/[PlaybackSessionManager.setActiveSession] (which also
+     * restarts the host service), and tearing the now-playing notification
+     * down and back up — tens of milliseconds of main-thread work and a
+     * visible notification flicker mid-reload. So when the held session
+     * already fronts the exact request — same item id, title, subtitle,
+     * artwork URL and the SAME transport [Player] instance, compared by
+     * [canReuseMediaSession] — it is kept and nothing else runs. The player
+     * identity term is what keeps this safe across the reload family: a URL
+     * swap (quality / transcode / stream-index / version reload) never reuses
+     * the live engine, so its rebind arrives with a NEW transport and takes
+     * the rebuild path; only genuinely same-transport rebinds (the reclaim,
+     * the play edge) hit the fast path. The liveness half of the guard —
+     * [PlaybackSessionManager.currentSession] must still BE the held session —
+     * covers the one state the pin cannot see: a session the manager
+     * displaced (the audio side won the slot) was released by the manager
+     * even though this class still references it, so pin equality alone would
+     * "reuse" a dead session; the check keeps [ensureActiveForItem]'s
+     * reclaim-after-displacement rebuild untouched.
+     *
+     * GENUINE rebuilds (different item, changed labels, new transport) reuse
+     * the outgoing session's ID (`jellyplay_video_<itemId>`), and Media3
      * registers session IDs in a process-wide map *at construction time*,
      * throwing `IllegalStateException: Session ID must be unique` if the old
      * session is still registered when the replacement is built. So the held
@@ -121,11 +169,30 @@ internal class AndroidMediaSessionController(
         val engine = getEngine() ?: return
         val player = resolveEnginePlayer(engine)
 
+        // The artwork read runs at pin time (not after the superseded-session
+        // release, as the build path used to) so the held and requested pins
+        // carry strings resolved the same way — the URL folds in the item's
+        // primary image tag from the detail snapshot held now, and a
+        // mid-session detail refresh can change it for the same id, so it must
+        // gate the fast path rather than ride along.
+        val artworkUrl = getImageUrl(itemId, ARTWORK_MAX_WIDTH).takeIf { it.isNotBlank() }
+        val requestedPin = MediaSessionPin(
+            itemId = itemId,
+            title = title,
+            subtitle = subtitle,
+            artworkUrl = artworkUrl,
+            player = player,
+        )
+
+        if (sessionManager.currentSession === session &&
+            canReuseMediaSession(sessionPin, requestedPin)
+        ) {
+            return
+        }
+
         releaseSupersededSession()
 
-        val artworkUri = getImageUrl(itemId, ARTWORK_MAX_WIDTH)
-            .takeIf { it.isNotBlank() }
-            ?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        val artworkUri = artworkUrl?.let { runCatching { Uri.parse(it) }.getOrNull() }
         val pinnedMetadata = MediaMetadata.Builder()
             .setTitle(title)
             .setSubtitle(subtitle)
@@ -139,6 +206,10 @@ internal class AndroidMediaSessionController(
             .setId("${SESSION_ID_PREFIX}$itemId")
             .setSessionActivity(buildPlayerSessionActivity(itemId))
             .build())
+        // Only after a successful activate — a failed build must leave the
+        // fast path's invariant (pin non-null ⇒ held session live and ours)
+        // intact; releaseSupersededSession has already cleared the old pin.
+        sessionPin = requestedPin
     }
 
     /**
@@ -192,6 +263,10 @@ internal class AndroidMediaSessionController(
     /** Tear down the active session. Idempotent. */
     override fun release() {
         releaseAttachedEnginePlayer()
+        // Cleared unconditionally (before the early return) — release() ends
+        // every path with no held session, so the reuse fast path must never
+        // see a pin here.
+        sessionPin = null
         val current = session ?: return
         if (sessionManager.currentSession === current) {
             sessionManager.clearSession(current)
@@ -225,6 +300,11 @@ internal class AndroidMediaSessionController(
      */
     private fun releaseSupersededSession() {
         val current = session ?: return
+        // Cleared with the session reference: the reuse fast path's invariant
+        // is pin non-null ⇒ held session live and ours, so a retired session's
+        // pin must never outlive the release (half-clearing would let a later
+        // call "reuse" a session that was already torn down).
+        sessionPin = null
         try { current.release() } catch (_: Exception) { }
         session = null
     }

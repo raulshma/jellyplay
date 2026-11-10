@@ -2,13 +2,16 @@ package com.raulshma.jellyplay.feature.book
 
 import com.raulshma.jellyplay.feature.book.epub.EpubReaderHandle
 import com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The read-aloud loop's live state. `spokenParagraphIndex` (the paragraph of
@@ -115,6 +118,12 @@ internal class ReaderSpeechController(
     private val onSpeakParagraph: (index: Int, cfi: String) -> Unit,
     private val onFinished: () -> Unit = {},
     private val onError: () -> Unit = {},
+    /**
+     * Where a chapter's sentence split hops off the caller (main) thread —
+     * splitting a whole chapter is real work at reader scale. Injectable so
+     * tests can pin the split synchronous; defaults to the CPU pool.
+     */
+    private val splitDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
     private val _state = MutableStateFlow(ReaderSpeechState())
@@ -128,6 +137,13 @@ internal class ReaderSpeechController(
 
     /** Bumped by every loop interruption; utterance completions must match it. */
     private var generation = 0
+
+    /**
+     * Bumped by every [start]; the async split only installs its units while
+     * it is still the newest one, so a slow split of an old chapter can never
+     * speak over a newer start.
+     */
+    private var startSequence = 0
 
     // -----------------------------------------------------------------
     // Chapter continuation state (the protocol the VM used to keep as four
@@ -214,20 +230,38 @@ internal class ReaderSpeechController(
      * itself (an empty context at book end terminates through the
      * same-chapter/percent guard in [onSpeechContext], never through an
      * infinite loop here).
+     *
+     * The sentence split hops to [splitDispatcher] — a whole chapter's split
+     * is main-thread jank at reader scale. The hop is ordered by the
+     * [startSequence] token: only the newest start installs its units (a
+     * superseded split discards itself), so ordering stays deterministic
+     * despite the async window; every loop state write stays on the caller's
+     * (main-confined) dispatcher, because the split result resumes there.
      */
     fun start(paragraphs: List<EpubSpeechParagraph>) {
         hardStopEngine()
         chapterKey = paragraphs.firstOrNull()?.cfi
-        units = paragraphs.flatMapIndexed { index, paragraph ->
-            splitSentences(paragraph.text).map { SpeechUnit(index, paragraph.cfi, it) }
-        }
+        units = emptyList()
         unitIndex = -1
-        if (units.isEmpty()) {
-            _state.value = ReaderSpeechState(active = true)
-            advanceChapter()
-            return
+        _state.value = ReaderSpeechState(active = true)
+        val seq = ++startSequence
+        scope.launch {
+            val computed = withContext(splitDispatcher) {
+                paragraphs.flatMapIndexed { index, paragraph ->
+                    splitSentences(paragraph.text).map { SpeechUnit(index, paragraph.cfi, it) }
+                }
+            }
+            if (seq != startSequence || !_state.value.active) return@launch
+            units = computed
+            // Paused mid-split: install the units (resume() speaks unit 0)
+            // but do not start speaking over a user-commanded pause.
+            if (_state.value.paused) return@launch
+            if (units.isEmpty()) {
+                advanceChapter()
+                return@launch
+            }
+            speakUnit(0)
         }
-        speakUnit(0)
     }
 
     fun pause() {

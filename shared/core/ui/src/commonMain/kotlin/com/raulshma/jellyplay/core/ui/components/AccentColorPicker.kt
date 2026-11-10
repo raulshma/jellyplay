@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.accentOptions
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
@@ -109,7 +110,7 @@ fun AccentColorPicker(
         val swatches = AccentColorSwatch.entries
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().tvFocusGroupRestorer()
         ) {
             items(count = swatches.size, key = { swatches[it].name }, contentType = { "swatch" }) { i ->
                 val swatch = swatches[i]
@@ -331,7 +332,7 @@ fun ColorStylePicker(
         val styles = ColorStyle.entries
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().tvFocusGroupRestorer()
         ) {
             items(count = styles.size, key = { styles[it].name }, contentType = { "style" }) { i ->
                 val style = styles[i]
@@ -437,7 +438,7 @@ fun VariantAccentPicker(
 
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().tvFocusGroupRestorer()
         ) {
             items(count = accents.size, key = { accents[it].id }, contentType = { "accent" }) { i ->
                 val accent = accents[i]

@@ -303,8 +303,6 @@ private fun MainHomeContent(
         }
     }
 
-    val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
-    val currentServerUsers by viewModel.currentServerUsers.collectAsStateWithLifecycle()
     var showSyncDetails by remember { mutableStateOf(false) }
     // Stabilize the user-switch lambda so HomeTopDock stays skippable on
     // recompositions that reach it (scroll, search focus). Mirrors the
@@ -862,8 +860,6 @@ private fun MainHomeContent(
                     isTv = isTv,
                     isSearchFocused = isSearchFocused,
                     headerStatus = headerStatus,
-                    pendingSyncCount = pendingSyncCount,
-                    currentServerUsers = currentServerUsers,
                     heroHasFeaturedItem = heroController.featuredItem != null,
                     heroFocusRequester = heroFocusRequester,
                     onUserSwitch = onUserSwitch,
@@ -1142,8 +1138,6 @@ private fun HomeDockArea(
     isTv: Boolean,
     isSearchFocused: Boolean,
     headerStatus: HeaderStatus,
-    pendingSyncCount: Int,
-    currentServerUsers: List<UserInfo>,
     heroHasFeaturedItem: Boolean,
     heroFocusRequester: FocusRequester,
     onUserSwitch: (String) -> Unit,
@@ -1230,21 +1224,25 @@ private fun HomeDockArea(
         }
     }
 
+    // The pending-sync count and server-user list flow straight to the leaves
+    // that render them (badge icon / user switcher inside HomeTopDockScrim) —
+    // collected there, not here, so outbox enqueue/drain ticks never recompose
+    // this orchestrator. Same isolation discipline as searchQuery below.
     HomeTopDockScrim(
         settingsSearch = viewModel::settingsSearchResults,
         homeScrollState = homeScrollState,
         isLightTheme = isLightTheme,
         searchQuery = viewModel.searchQuery,
+        pendingSyncCount = viewModel.pendingSyncCount,
+        currentServerUsers = viewModel.currentServerUsers,
         includeSettingsResults = state.showSettingsInHomeSearch,
         isTv = isTv,
         dockState = HomeDockState(
             offlineMode = state.offlineMode,
             homeMode = state.homeMode,
             headerStatus = headerStatus,
-            pendingSyncCount = pendingSyncCount,
             showClock = state.showClock,
             currentUser = state.currentUser,
-            currentServerUsers = currentServerUsers,
             isSearchFocused = isSearchFocused,
             isGoingOnline = state.isGoingOnline,
             homeHeroEnabled = state.homeHeroEnabled,
@@ -1523,6 +1521,8 @@ private fun HomeTopDockScrim(
     homeScrollState: HomeScrollState,
     isLightTheme: Boolean,
     searchQuery: StateFlow<String>,
+    pendingSyncCount: StateFlow<Int>,
+    currentServerUsers: StateFlow<List<UserInfo>>,
     includeSettingsResults: Boolean,
     isTv: Boolean,
     dockState: HomeDockState,
@@ -1617,6 +1617,8 @@ private fun HomeTopDockScrim(
         appBarIconColor = appBarIconColor,
         appBarIconColorFaded = appBarIconColorFaded,
         searchQuery = query,
+        pendingSyncCount = pendingSyncCount,
+        currentServerUsers = currentServerUsers,
         state = dockState,
         callbacks = dockCallbacks,
         searchResultsContent = { searchResultsContent(settingsResults) },
