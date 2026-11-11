@@ -88,6 +88,18 @@ android {
     // Keep the pin and the workflow env var in lockstep.
     ndkVersion = "28.2.13676358"
 
+    // AGP embeds a Google-Play "Dependency metadata" extra signing block
+    // (the dependency-info block with Maven coordinates) in signed release
+    // artifacts by default. F-Droid's scanner flags it on every APK
+    // ("found extra signing block 'Dependency metadata'") — it is a Play
+    // artifact with no function outside Play, so opt out entirely. Found
+    // by the fdroiddata MR CI's check-apk job on the v0.11.10 reference
+    // binaries; effective from the next release cut.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     defaultConfig {
         applicationId = "com.raulshma.jellyplay"
         minSdk = 28
