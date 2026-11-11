@@ -13,9 +13,13 @@ name: F-Droid release binaries
 #  * workflow_dispatch with a tag input — backfill path (e.g. building
 #    v0.11.9 binaries for the inclusion MR) and manual re-runs.
 #
-# Buildserver parity (the whole point of this lane): every choice below
-# mirrors what fdroidserver's buildserver does for `gradle: [phoneFdroid]`
-# builds — see docs/fdroid/README.md §6 for the mapping table.
+# Buildserver parity (the whole point of this lane): the build job runs in
+# a debian:trixie CONTAINER with Debian's own default-jdk-headless, because
+# the JDK BUILD is byte-relevant — kotlinc/R8 emit different dex bytes
+# under Temurin's OpenJDK 21 than under Debian's (proven on v0.11.10: two
+# stable dex variants, identical class sets and string tables, different
+# code bytes; the fdroiddata CI byte-compare failed until we matched the
+# JDK). See docs/fdroid/README.md §6 for the mapping table.
 
 on:
   release:
@@ -44,6 +48,11 @@ defaults:
 jobs:
   build-binaries:
     runs-on: ubuntu-latest
+    container:
+      # The fdroidserver buildserver basebox is debian/trixie64. trixie has
+      # no git, so the tag is cloned manually (public repos — no auth)
+      # after the toolchain step instead of using actions/checkout.
+      image: debian:trixie
     strategy:
       fail-fast: false
       matrix:
@@ -55,46 +64,51 @@ jobs:
             abi_index: 1
           - abi: x86_64
             abi_index: 2
+    env:
+      TAG_NAME: ${{ inputs.tag || github.event.release.tag_name }}
     steps:
-      - name: Resolve tag
-        id: tag
+      - name: Install buildserver toolchain
+        # Mirrors the buildserver provisioning: debian/trixie64 with
+        # default-jdk-headless (= Debian's OpenJDK 21 build — NOT a
+        # cross-vendor stand-in; see the header comment), a writable SDK
+        # root, and git for the clone. AGP auto-installs the platform and
+        # build-tools it needs once licenses are accepted, same as on the
+        # basebox.
         run: |
-          TAG="${{ inputs.tag || github.event.release.tag_name }}"
-          # Stable semver only: KMP alphas (vX.Y.Z-alpha.N) ride the same
-          # release-published event via kmp-alpha-release and must not
-          # trigger fdroid binaries.
-          if ! grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' <<<"$TAG"; then
-            echo "::error::Tag '$TAG' is not a stable vX.Y.Z release — skipping"
+          apt-get update -qq
+          apt-get install -y -qq default-jdk-headless git unzip wget >/dev/null
+          SDK=/opt/android-sdk
+          mkdir -p "$SDK/cmdline-tools"
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13158590_latest.zip -O /tmp/clt.zip
+          unzip -q /tmp/clt.zip -d /tmp/clt
+          mv /tmp/clt/cmdline-tools "$SDK/cmdline-tools/latest"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses < <(yes) > /dev/null
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "ndk;28.2.13676358" < <(yes) > /dev/null
+
+      - name: Checkout tag
+        # Manual clone: debian:trixie has no git until the step above
+        # installs it, and actions/checkout needs git for recursive
+        # submodules. Both repos are public, so no token is needed.
+        run: |
+          if ! grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' <<<"$TAG_NAME"; then
+            echo "::error::Tag '$TAG_NAME' is not a stable vX.Y.Z release — skipping"
             exit 1
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout Repository
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ steps.tag.outputs.tag }}
-          # Matches the metadata's `submodules: true` (jellyfin-plugin-jellyplay).
-          submodules: recursive
-
-      - name: Set up JDK 21
-        # The buildserver basebox is debian/trixie64 whose default-jdk is 21
-        # (provision-apt-get-install sets the highest alternative as the
-        # system default); mirror it so the Gradle daemon matches.
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: '21'
+          git clone --depth 1 --branch "$TAG_NAME" --recurse-submodules \
+            https://github.com/raulshma/jellyplay /work
+          git -C /work log -n1 --pretty='%H %s'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       # Keystore decode — the same one-liner as
       # .github/actions/setup-gmd-runner, inlined because that composite
       # action hard-requires /dev/kvm (GMD emulator prereq) which this lane
       # never needs.
       - name: Decode Keystore
+        working-directory: /work
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > jellyplay-release.jks
           chmod +x ./gradlew
@@ -103,43 +117,24 @@ jobs:
       # runs exactly these (foojay gone means no JVM toolchain auto-download,
       # matching gradlew-fdroid's installations.auto-download=false).
       - name: Apply F-Droid prebuild
+        working-directory: /work
         run: |
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
-          # Mirror the metadata prebuild (see MR !56862): R8's output ordering
-          # — and the pg-map-id hash embedded in the dex marker — varies with
-          # thread scheduling across machines, which breaks the Binaries
-          # byte-compare (found by the fdroiddata MR CI: identical class sets
-          # and string tables, shifted dex layout). One R8 thread on BOTH
-          # sides pins the ordering so the reference binaries and the
-          # buildserver build stay byte-identical.
-          printf '\nsystemProp.com.android.tools.r8.threadCount=1\n' >> gradle.properties
 
       - name: Set buildserver environment
         # SOURCE_DATE_EPOCH: fdroidserver common.py get_source_date_epoch =
         # `git log -n1 --pretty=%ct` over the build checkout. LC_ALL:
         # buildserver setup-env-vars exports C.UTF-8.
         run: |
-          echo "SOURCE_DATE_EPOCH=$(git log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
+          echo "SOURCE_DATE_EPOCH=$(git -C /work log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
           echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
-
-      - name: Install NDK 28.2.13676358
-        # KEEP IN SYNC with ndkVersion in app/build.gradle.kts. The pinned
-        # builds request exactly this version; the frozen v0.11.9 tag has no
-        # pin, but 28.2.13676358 is ALSO AGP 9.5's unpinned default, so the
-        # buildserver's auto-install resolves the same version either way.
-        # `yes` feeds stdin via process substitution — a plain
-        # `yes | sdkmanager` pipeline fails under the runner shell's
-        # pipefail when sdkmanager closes the pipe (SIGPIPE ≠ sdkmanager's
-        # exit status).
-        run: >
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
-          < <(yes) > /dev/null
 
       - name: Build phoneFdroidRelease (${{ matrix.abi }})
         # gradlew-fdroid parity: --no-daemon (org.gradle.daemon=false on the
         # buildserver) and JVM auto-provisioning off. Signing envs activate
         # the release signingConfig (app/build.gradle.kts signingConfigs).
+        working-directory: /work
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -149,8 +144,9 @@ jobs:
           :app:assemblePhoneFdroidRelease -PabiFilter=${{ matrix.abi }} --stacktrace
 
       - name: Verify and rename APK
+        working-directory: /work
         env:
-          EXPECTED_TAG: ${{ steps.tag.outputs.tag }}
+          EXPECTED_TAG: ${{ env.TAG_NAME }}
         run: |
           VERSION=$(grep -oP '(?<=^jellyplay\.versionName=)\S+' version.properties)
           BASE=$(grep -oP '(?<=^jellyplay\.versionCode=)\d+' version.properties)
@@ -175,7 +171,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fdroid-apk-${{ matrix.abi }}
-          path: jellyplay-*-fdroid-*.apk
+          path: /work/jellyplay-*-fdroid-*.apk
           retention-days: 7
           if-no-files-found: error
 
@@ -195,6 +191,8 @@ jobs:
       - name: Attach to release
         # Uploads to the existing vX.Y.Z release (published draft for the
         # release-event path; the already-published release for backfills).
+        # Same-named assets are REPLACED — a re-dispatch after a toolchain
+        # fix swaps the bytes under the identical Binaries: URLs.
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.tag || github.event.release.tag_name }}

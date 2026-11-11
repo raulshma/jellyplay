@@ -194,8 +194,8 @@ mirrors the buildserver environment point-for-point:
 
 | Buildserver (fdroidserver) | `fdroid-release.yml` |
 | --- | --- |
-| debian/trixie64, `default-jdk-headless` → daemon JDK 21 | Temurin 21 |
-| no NDK preinstalled; AGP auto-installs the requested version into writable `/opt/android-sdk/ndk` | explicit `sdkmanager "ndk;28.2.13676358"` (== the `ndkVersion` pin == AGP 9.5's unpinned default, so the pre-pin v0.11.9 tag converges too) |
+| debian/trixie64, `default-jdk-headless` → daemon JDK 21 | `debian:trixie` container, apt `default-jdk-headless` — the DEBIAN OpenJDK build, not a cross-vendor stand-in. The JDK build is byte-relevant: v0.11.10's first buildserver compare failed with identical class sets/string tables but different code bytes, and a local Debian-JDK rebuild reproduced the buildserver dex byte-for-byte (Temurin → one stable dex, Debian → another). |
+| no NDK preinstalled; AGP auto-installs the requested version into writable `/opt/android-sdk/ndk` | metadata `ndk:` field + explicit `sdkmanager "ndk;28.2.13676358"` (== the `ndkVersion` pin == AGP 9.5's unpinned default, so the pre-pin v0.11.9 tag converges too). Without an NDK, AGP logs `Unable to strip … packaging them as they are` and ships UNSTRIPPED libs — a guaranteed byte-compare miss |
 | `prebuild:` seds + `rm apps/desktop` from the metadata | identical `sed` + `rm -rf` |
 | `gradlew-fdroid`: `org.gradle.daemon=false`, JVM auto-download off | `--no-daemon -Porg.gradle.java.installations.auto-download=false`, foojay removed by the sed |
 | `SOURCE_DATE_EPOCH` = `git log -n1 --pretty=%ct` (common.py `get_source_date_epoch`) | same expression |
