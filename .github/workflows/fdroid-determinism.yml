@@ -54,34 +54,54 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Install NDK 28.2.13676358
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" > /dev/null
+        # Process substitution, not `yes |` — the runner shell sets pipefail
+        # and `yes` dies of SIGPIPE on a successful sdkmanager.
+        run: >
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+          < <(yes) > /dev/null
+
+      - name: Set buildserver environment
+        # A separate step: GITHUB_ENV writes apply to SUBSEQUENT steps only,
+        # so setting these inside "Build copy A" would build copy A without
+        # them and copy B with them — a false-mismatch machine. The epoch is
+        # commit-derived, identical from either checkout.
+        run: |
+          echo "SOURCE_DATE_EPOCH=$(git -C a log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
+          echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
 
       - name: Build copy A
         working-directory: a
+        # --no-build-cache on BOTH builds: gradle.properties enables the
+        # build cache and setup-gradle restores it, so copy B could replay
+        # copy A's cached task outputs instead of executing them — exactly
+        # the nondeterminism this job exists to catch, laundered through the
+        # cache. Dependency caches stay shared (same inputs, same versions).
         run: |
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
-          echo "SOURCE_DATE_EPOCH=$(git log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
-          echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
-          ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a --stacktrace
+          ./gradlew --no-daemon --no-build-cache -Porg.gradle.java.installations.auto-download=false :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a --stacktrace
 
       - name: Build copy B
         working-directory: b
         run: |
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
-          ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a --stacktrace
+          ./gradlew --no-daemon --no-build-cache -Porg.gradle.java.installations.auto-download=false :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a --stacktrace
 
       - name: Compare APKs
+        # No signing env in this job → AGP emits -release-unsigned.apk names.
         run: |
-          A=$(ls a/app/build/outputs/apk/phoneFdroid/release/*-arm64-v8a-release.apk)
-          B=$(ls b/app/build/outputs/apk/phoneFdroid/release/*-arm64-v8a-release.apk)
+          A=$(ls a/app/build/outputs/apk/phoneFdroid/release/*-arm64-v8a-release-unsigned.apk)
+          B=$(ls b/app/build/outputs/apk/phoneFdroid/release/*-arm64-v8a-release-unsigned.apk)
           echo "copy A: $A"; sha256sum "$A"
           echo "copy B: $B"; sha256sum "$B"
           if ! cmp -s "$A" "$B"; then
             echo "::error::Reproducibility broken: same commit, two paths, different APK bytes"
             mkdir -p nondeterminism
-            cp "$A" "$B" nondeterminism/
+            # Distinct destinations: both sources share one basename, and a
+            # same-name copy into one dir either overwrites or refuses.
+            cp "$A" nondeterminism/copy-a.apk
+            cp "$B" nondeterminism/copy-b.apk
             exit 1
           fi
           echo "PASS: byte-identical across two paths"

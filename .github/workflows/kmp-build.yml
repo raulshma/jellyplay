@@ -32,15 +32,17 @@ on:
 permissions:
   contents: read
 
-# Keyed on the HEAD BRANCH, not github.ref: pushing kmp-alpha with an open
-# PR fires BOTH the push event (ref refs/heads/kmp-alpha) and pull_request
-# synchronize (ref refs/pull/N/merge) — distinct github.ref values meant the
-# cancel-in-progress guard never matched and every commit built the full
-# matrix twice. Head-branch keying makes both events share one group; the
-# surviving run's checks attach to the commit SHA either way, so the PR still
-# reports them.
+# Keyed on the HEAD BRANCH within each event type, not github.ref: pushing
+# kmp-alpha with an open PR fires BOTH the push event (ref
+# refs/heads/kmp-alpha) and pull_request synchronize (ref refs/pull/N/merge)
+# — distinct github.ref values meant the cancel-in-progress guard never
+# matched and every commit built the full matrix twice. Branch keying within
+# an event keeps that dedup. The EVENT PREFIX keeps the two event types in
+# separate groups: a PR run must never cancel a push run, because the
+# push-only fdroid-smoke job below is now the sole runner of the F-Droid
+# R8 smoke gate — a cancelled push run would leave the commit without it.
 concurrency:
-  group: kmp-build-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: kmp-build-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 # bash on every OS: pwsh choked on the folded multi-line Gradle invocations

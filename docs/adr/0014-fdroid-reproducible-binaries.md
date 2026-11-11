@@ -44,8 +44,9 @@ deterministic).
 Enable `Binaries:` in the fdroiddata metadata from the first release:
 
 ```yaml
-Binaries:
-  - https://github.com/raulshma/jellyplay/releases/download/v%v/jellyplay-v%v-fdroid-%c.apk
+# Scalar: Binaries is TYPE_STRING in fdroidserver's metadata schema; a YAML
+# list fails the ^https?:// FieldValidator.
+Binaries: https://github.com/raulshma/jellyplay/releases/download/v%v/jellyplay-v%v-fdroid-%c.apk
 ```
 
 Supporting pieces, all in this repo:
