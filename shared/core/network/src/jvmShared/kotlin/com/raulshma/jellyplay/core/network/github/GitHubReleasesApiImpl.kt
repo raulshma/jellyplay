@@ -249,10 +249,19 @@ class GitHubReleasesApiImpl(
         /**
          * Picks the APK asset whose name matches the running [flavor] and the
          * device's most-preferred ABI. Asset names follow the CI convention
-         * `jellyplay-v<version>-<flavor>-<abi>.apk` (e.g.
-         * `jellyplay-v1.2.3-phone-arm64-v8a.apk`). Falls back to the
-         * `-universal.apk` of the same flavor when no ABI-specific build is
-         * published, and finally to any universal asset.
+         * `jellyplay-v<version>-<flavor>[-<distribution>]-<abi>.apk` (e.g.
+         * `jellyplay-v1.2.3-phone-arm64-v8a.apk`, or
+         * `jellyplay-v1.2.3-phone-store-arm64-v8a.apk` since the distribution
+         * flavor split added the optional `store` segment to the release
+         * lane's output names). Falls back to the `-universal.apk` of the
+         * same flavor when no ABI-specific build is published, and finally to
+         * any universal asset.
+         *
+         * Matching is prefix + suffix, never full equality: the optional
+         * distribution segment sits between the flavor and the ABI, and older
+         * releases (still listed on GitHub, still the target while a user
+         * skips versions) predate it. The trailing hyphen in the prefix keeps
+         * a longer flavor lookalike (`…-phoneXYZ-…`) from matching.
          *
          * Mirrors the Android ABI name (`arm64-v8a`, `x86_64`, `armeabi-v7a`)
          * that the release workflow embeds in asset names.
@@ -263,16 +272,21 @@ class GitHubReleasesApiImpl(
             flavor: String,
             supportedAbis: Array<String>,
         ): GitHubReleaseAsset? {
-            val prefix = "jellyplay-v$version-$flavor"
+            val prefix = "jellyplay-v$version-$flavor-"
             // Prefer the device's most-preferred ABI, in declaration order.
             for (abi in supportedAbis) {
-                val wanted = "$prefix-$abi.apk"
-                assets.firstOrNull { it.name.equals(wanted, ignoreCase = true) }
-                    ?.let { return it }
+                val abiSuffix = "-$abi.apk"
+                assets.firstOrNull { asset ->
+                    val name = asset.name ?: return@firstOrNull false
+                    name.startsWith(prefix, ignoreCase = true) &&
+                        name.endsWith(abiSuffix, ignoreCase = true)
+                }?.let { return it }
             }
             // Fall back to the universal build for this flavor.
-            assets.firstOrNull {
-                it.name.equals("$prefix-universal.apk", ignoreCase = true)
+            assets.firstOrNull { asset ->
+                val name = asset.name ?: return@firstOrNull false
+                name.startsWith(prefix, ignoreCase = true) &&
+                    name.endsWith("-universal.apk", ignoreCase = true)
             }?.let { return it }
             // Last resort: any universal asset (covers a flavorless publish).
             return assets.firstOrNull {

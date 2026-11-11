@@ -46,13 +46,19 @@ The versioning scheme: committed `version.properties`
    ```bash
    ./gradlew :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a
    ./gradlew :app:assemblePhoneFdroidRelease -PabiFilter=x86_64
-   tools/fdroid/verify-apk.sh app/build/outputs/apk/phone/fdroid/*release*.apk
+   tools/fdroid/verify-apk.sh app/build/outputs/apk/phoneFdroid/release/*arm64-v8a*release.apk
+   tools/fdroid/verify-apk.sh app/build/outputs/apk/phoneFdroid/release/*x86_64*release.apk
    ```
    `verify-apk.sh` proves the fdroid APK carries no cast/RAR/updater code and
    no forbidden permissions (dex + merged-manifest + permissions diff).
 4. **Tag and push** per the normal release flow (tag `vX.Y.Z`; Play/GitHub
    publish unchanged). Record `git rev-parse vX.Y.Z` — it pins the fdroid
-   `commit:` hashes.
+   `commit:` hashes. When the stable draft is published,
+   [`fdroid-release.yml`](../../.github/workflows/fdroid-release.yml)
+   automatically builds and attaches the signed fdroid binaries
+   (`jellyplay-vX.Y.Z-fdroid-<code>.apk`) to that release — **the release is
+   not done until that lane is green** (F-Droid's buildserver byte-compares
+   against these; see §6).
 5. **fdroiddata submission** (after the tag is public):
    - fork <https://gitlab.com/fdroid/fdroiddata>, branch `com.raulshma.jellyplay`;
    - copy `docs/fdroid/com.raulshma.jellyplay.yml` to the fdroiddata repo root;
@@ -141,11 +147,17 @@ The versioning scheme: committed `version.properties`
   openjdk-21) satisfy it and NO `sudo:` step is needed. (An earlier draft
   here claimed "requires JDK 21"; that was never verified and is
   contradicted by release.yml.)
-- **NDK requirement** — no `ndkVersion` is declared anywhere; the release
-  buildType sets `debugSymbolLevel = "SYMBOL_TABLE"`
-  (`app/build.gradle.kts:125`) but packaging skips symbol extraction with a
-  warning when no NDK is present. Confirm whether the build server's NDK
-  presence changes the built APK (affects reproducibility, not acceptance).
+- **NDK requirement** — RESOLVED (fdroidserver buildserver provisioning,
+  2026-11-11): the buildserver preinstalls NO NDK; AGP auto-installs the
+  requested version into its writable `/opt/android-sdk/ndk`. The repo pins
+  `ndkVersion = "28.2.13676358"` (app/build.gradle.kts) from 0.11.10 —
+  identical to AGP 9.5's unpinned default, so the v0.11.9 tag (frozen,
+  pre-pin) converges on the same version on both sides — and
+  `fdroid-release.yml` installs it explicitly. With an NDK present, release
+  packaging runs llvm-strip over the bundled AAR `.so` files for
+  `debugSymbolLevel = "SYMBOL_TABLE"` (`app/build.gradle.kts:240`); strip
+  output bytes depend on the NDK version, hence the pin + lockstep workflow
+  variable.
 - **Screenshot orientation mix** — `video_player.png` is landscape
   (2280x1080) because the source WebP is; the other four are portrait
   1080x2280. If the fdroiddata review objects, swap in `media_detail`
@@ -153,8 +165,56 @@ The versioning scheme: committed `version.properties`
 
 ## 5. Out of scope follow-ups
 
-- **Reproducible builds** — not attempted for the first MR; revisit once the
-  first build succeeds upstream.
 - **TV app on F-Droid** — the `com.raulshma.jellyplay.tv` applicationId is a
   separate package; a later MR adds it (fdroid metadata + TV screenshots) once
   the phone app is accepted.
+
+## 6. Reproducible builds (`Binaries:`)
+
+DECIDED (2026-11-11) — the fdroiddata metadata carries
+[`Binaries:`](./com.raulshma.jellyplay.yml) pointing at developer-signed
+reference binaries, from the **first** release. This is only available at
+inclusion: the default F-Droid flow signs releases with the **F-Droid key**
+and that lineage locks at first merge — switching to `Binaries:` afterwards
+would break every installed user's update chain. See
+[ADR 0014](../adr/0014-fdroid-reproducible-binaries.md) for the decision
+record.
+
+How it works: fdroidserver expands one template per build
+(`%v` → versionName, `%c` → the build's versionCode), downloads our APK,
+strips its signature via apksigcopier onto its own buildserver-built unsigned
+APK, and requires `apksigner validate` to pass — i.e. the buildserver build
+and our reference binary must be byte-identical in content. A mismatch marks
+the build FAILED: the fdroid release is blocked (GitHub/Play unaffected)
+until fixed; users are never shipped divergent bytes.
+
+The producing lane is
+[`fdroid-release.yml`](../../.github/workflows/fdroid-release.yml) and it
+mirrors the buildserver environment point-for-point:
+
+| Buildserver (fdroidserver) | `fdroid-release.yml` |
+| --- | --- |
+| debian/trixie64, `default-jdk-headless` → daemon JDK 21 | Temurin 21 |
+| no NDK preinstalled; AGP auto-installs the requested version into writable `/opt/android-sdk/ndk` | explicit `sdkmanager "ndk;28.2.13676358"` (== the `ndkVersion` pin == AGP 9.5's unpinned default, so the pre-pin v0.11.9 tag converges too) |
+| `prebuild:` seds + `rm apps/desktop` from the metadata | identical `sed` + `rm -rf` |
+| `gradlew-fdroid`: `org.gradle.daemon=false`, JVM auto-download off | `--no-daemon -Porg.gradle.java.installations.auto-download=false`, foojay removed by the sed |
+| `SOURCE_DATE_EPOCH` = `git log -n1 --pretty=%ct` (common.py `get_source_date_epoch`) | same expression |
+| `LC_ALL=C.UTF-8` (buildserver `setup-env-vars`) | same |
+
+Rules that keep the two channels disjoint:
+
+- fdroid binaries are named `jellyplay-v<version>-fdroid-<code>.apk` — the
+  store updater's matcher requires a `-phone-`/`-tv-` flavor prefix
+  (`GitHubReleasesApiImpl.selectAsset`), so it never sees them; the unit
+  test `selectAsset ignores fdroid channel binaries` pins this. The
+  corollary is load-bearing: the fdroid lane must **never** publish a
+  `-universal.apk`-suffixed file — the matcher's last-resort tier matches
+  ANY universal suffix regardless of flavor.
+- fdroid builds never pass `-PversionCode`; the code comes from
+  `version.properties` + abiIndex (11091/11092), matching the metadata's
+  `VercodeOperation`.
+- `version.properties` and the tag must agree (`v<versionName> == tag`); the
+  lane asserts it.
+- A weekly watchdog (`fdroid-determinism.yml`) builds the same commit at two
+  paths and byte-compares, so self-inflicted nondeterminism surfaces within
+  a week rather than at the buildserver.
