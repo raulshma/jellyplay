@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ServerHealth
+import com.raulshma.jellyplay.feature.shell.LaunchPhase
 import com.raulshma.jellyplay.feature.shell.RealtimeSessionController
 import com.raulshma.jellyplay.feature.shell.SessionRestore
 import com.raulshma.jellyplay.startup.CacheMaintenanceInitializer
@@ -32,11 +33,11 @@ import kotlinx.coroutines.launch
  * endpoint selection, capabilities re-posting on every socket reconnect — is
  * the shared [RealtimeSessionController], built through its `create` factory
  * per lifecycle with clientName "JellyPlay"; session restore (restore call →
- * authenticated-mirror wait → bounded timeout → splash release) is the
- * shared [SessionRestore], with this class exposing its flows verbatim.
+ * auth-flip grace wait → bounded timeout → one atomic phase write) is the
+ * shared [SessionRestore], with this class exposing its phase verbatim.
  *
  * Interface is one state triple plus start/stop commands —
- * [isRestoring], [isAuthenticated], [libraryFolders] and [serverHealth] are
+ * [phase], [libraryFolders] and [serverHealth] are
  * the flows the shell renders; [start] begins the lifecycle on the caller's
  * scope (the activity-scoped ViewModel's), [logout] /
  * [revokeServerSession] end it. Everything else stays private to this module.
@@ -70,13 +71,13 @@ class SessionCoordinator(
 
     /**
      * The shared session-restore choreography (shared/feature/shell): owns
-     * the restore call → authenticated-mirror wait → bounded timeout →
-     * splash-release sequence and the mirror collector. The flows this class
-     * exposes below are ITS state — one instance for this coordinator's
-     * lifetime, so the state the activity and the shell render from is
+     * the restore call → auth-flip grace wait → bounded timeout →
+     * one-atomic-phase-write sequence and the phase collector. The flow this
+     * class exposes below is ITS state — one instance for this coordinator's
+     * lifetime, so the phase the activity and the shell render from is
      * stable across [start] rebuilds exactly as the former hand-rolled
      * fields were. The Android-only false-edge teardown rides the shared
-     * mirror collector through `onAuthChange`.
+     * phase collector through `onAuthChange`.
      */
     private val sessionRestore by lazy {
         SessionRestore(
@@ -96,11 +97,14 @@ class SessionCoordinator(
         )
     }
 
-    /** The splash gate (MainActivity's system splash keep-on-screen read). */
-    val isRestoring: StateFlow<Boolean> get() = sessionRestore.isRestoring
-
-    /** The authenticated flag the shell renders from — the shared mirror. */
-    val isAuthenticated: StateFlow<Boolean> get() = sessionRestore.isAuthenticated
+    /**
+     * The launch phase the shell renders from — the shared gate: Restoring
+     * pins the system splash (MainActivity's keep-on-screen read and the
+     * fully-drawn report), NeedsAuth/Authenticated name the shell branch
+     * (JellyPlayApp's `when`). One value for gate and destination, so the
+     * two can never be observed inconsistently — see [LaunchPhase].
+     */
+    val phase: StateFlow<LaunchPhase> get() = sessionRestore.phase
 
     /**
      * Begins the session lifecycle on [scope]. [onSessionRestored] fires once

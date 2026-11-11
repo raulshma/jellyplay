@@ -460,6 +460,31 @@ class AudioPlaybackManagerQueueSemanticsTest {
     }
 
     @Test
+    fun skipAfterCurrentRowRemoveStillPrepares() {
+        // removingCurrentRow (the mirror flag) is EngineDispatch.prepare's
+        // mute gate: it must come DOWN after every removeFromQueue, or this
+        // skip's prepare silently no-ops — the chassis cursor advances while
+        // the engine stays parked at the stale row, and playback never moves.
+        // The release-on-success half of that guarantee is behavioural (this
+        // pin); the release-on-throw half has no forcing harness (the chassis
+        // write is in-memory state) and is pinned at the source by
+        // QueuePlaylistMirrorTest.removeFromQueue_bracketsTheChassisWriteInTryFinally.
+        val h = newHarness()
+        h.seedLive(items("a", "b", "c"), 0)
+
+        h.manager.removeFromQueue(0)
+        assertEquals(listOf("b", "c"), h.manager.queue.value.map { it.id })
+
+        h.manager.skipToNext()
+        assertEquals(1, h.manager.currentIndex.value)
+        assertEquals(
+            "prepare is unmuted after the remove — the skip must seek",
+            1,
+            h.playlist.lastSeekIndex,
+        )
+    }
+
+    @Test
     fun clearQueueParksAndUndoRestoresQueueAndCursor() {
         val h = newHarness()
         h.seedLive(items("a", "b"), 1)

@@ -79,6 +79,7 @@
     <string name="auth_remove">移除</string>
 
     <!-- User selection screen -->
+    <string name="auth_users_load_error_title">无法加载用户</string>
     <string name="auth_loading_users">正在加载用户…</string>
     <string name="auth_no_users_title">此服务器上没有用户</string>
     <string name="auth_no_users_desc">添加用户以开始</string>

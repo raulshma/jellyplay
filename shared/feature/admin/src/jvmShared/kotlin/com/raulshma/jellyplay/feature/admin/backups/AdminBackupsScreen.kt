@@ -91,12 +91,13 @@ fun AdminBackupsScreen(
 
     // TV focus-on-launch: focus the create/backup list once it is the visible
     // branch (the restore ladder, loading, unsupported and error states are
-    // non-list states whose focus falls back to the drawer).
-    val contentReady = state.restorePhase == RestorePhase.Idle &&
+    // non-list states whose focus falls back to the drawer). Complete counts
+    // as content — the success banner renders inside the list; the
+    // ServerUnreachable outcome does not (it renders the error screen).
+    val contentReady = (state.restorePhase is RestorePhase.Idle || state.restorePhase is RestorePhase.Complete) &&
         !state.isLoading &&
         state.isSupported &&
-        state.error == null &&
-        !state.restoreServerUnreachable
+        state.error == null
     val listFocusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = listFocusRequester,
@@ -160,7 +161,12 @@ fun AdminBackupsScreen(
         when {
             // The restore ladder owns the whole screen: from the 204 until the
             // session is re-established there is nothing to interact with.
-            state.restorePhase != RestorePhase.Idle -> RestoringState(
+            // The terminal outcomes (Complete / ServerUnreachable) are NOT
+            // ladder-busy — they render through the content / error arms
+            // below (legacy: the ladder arm keyed on `phase != Idle`, which
+            // the outcome variants must not trip).
+            state.restorePhase is RestorePhase.Restoring ||
+                state.restorePhase is RestorePhase.Reconnecting -> RestoringState(
                 phase = state.restorePhase,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -174,7 +180,7 @@ fun AdminBackupsScreen(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            state.error != null || state.restoreServerUnreachable -> ErrorScreen(
+            state.error != null || state.restorePhase is RestorePhase.ServerUnreachable -> ErrorScreen(
                 message = state.error
                     ?: stringResource(Res.string.admin_backups_restore_server_unreachable),
                 onRetry = { viewModel.loadBackups() },
@@ -209,7 +215,7 @@ private fun BackupsContent(
     ) {
         item(key = "create") {
             Column {
-                if (state.restoreComplete) {
+                if (state.restorePhase is RestorePhase.Complete) {
                     Text(
                         stringResource(Res.string.admin_backups_restore_complete),
                         style = MaterialTheme.typography.bodySmall,

@@ -1133,9 +1133,18 @@ class AudioPlaybackManager(
         // Remove-of-the-current-row: the chassis transition must not write
         // the player — the removeMediaItem below IS the write (media3 plays
         // the shifted-in row and its transition echo reconciles).
+        // try/finally: the flag is EngineDispatch.prepare's mute gate (see
+        // QueuePlaylistMirror.removingCurrentRow) and was previously cleared
+        // only by this epilogue — a throw from the chassis write stranded it
+        // true for the process lifetime, after which every prepare no-ops
+        // and skips / playFromQueue silently die. The finally makes the
+        // bracket exception-safe.
         queueMirror.removingCurrentRow = index == state.currentIndex.value
-        state.removeFromQueue(index)
-        queueMirror.removingCurrentRow = false
+        try {
+            state.removeFromQueue(index)
+        } finally {
+            queueMirror.removingCurrentRow = false
+        }
         val player = exoPlayer ?: return
         if (index < player.mediaItemCount) {
             player.removeMediaItem(index)

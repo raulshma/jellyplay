@@ -12,9 +12,11 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -95,6 +97,33 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.resolveSonarrSeries(123) } returns Result.success(
             ArrSeriesResolution(serverId = "sonarr-1", seriesId = 55, title = "Show", monitored = true),
         )
+    }
+
+    /**
+     * Subscribes a message sink for the one-shot [ManageSeriesViewModel.messages]
+     * assertions and returns it. MUST be called before the event that
+     * triggers the emission: both this collector and the VM's coroutine
+     * queue on the shared test dispatcher, so subscription order decides
+     * whether the Channel (replay = 0 by nature) delivers. Replaces the
+     * former `uiState.userMessage` reads, which could read the parked field
+     * at any time but replayed it on restoration — the exact behaviour the
+     * one-shot channel deletes.
+     */
+    private fun TestScope.sinkMessagesFrom(viewModel: ManageSeriesViewModel): MutableList<ManageSeriesMessage> {
+        val received = mutableListOf<ManageSeriesMessage>()
+        // Unconfined-on-test-scheduler is load-bearing: a plain backgroundScope
+        // collector rides the default StandardTestDispatcher, and in
+        // coroutines-test >= 1.9 advanceUntilIdle() stops running
+        // background-only resumptions once foreground work drains — the
+        // Channel element would sit in the buffer undelivered. (Same
+        // convention as NewsletterViewModelTest.collectSendResults /
+        // HomeViewModelEventsTest; backgroundScope still auto-cancels at
+        // test end, which is the old `recorders.forEach { it.cancel() }`
+        // teardown made structural.)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.messages.collect { received += it }
+        }
+        return received
     }
 
     // ── load() happy path ───────────────────────────────────────────────
@@ -267,6 +296,7 @@ class ManageSeriesViewModelTest {
     @Test
     fun `toggleEpisodeMonitored failure reverts optimistic flip`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, monitored = false))
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
@@ -278,16 +308,18 @@ class ManageSeriesViewModelTest {
         viewModel.onEvent(ManageSeriesUiEvent.ToggleEpisodeMonitored(eps.first()))
         advanceUntilIdle()
 
-        // Reverted back to the original monitored=false.
+        // Reverted back to the original monitored=false, with the failure
+        // surfaced as a one-shot message (the former parked userMessage).
         assertFalse(viewModel.uiState.value.episodesBySeason[1]!!.first().monitored)
-        assertNotNull(viewModel.uiState.value.userMessage)
+        assertEquals<List<ManageSeriesMessage>>(listOf(ManageSeriesMessage.Text("boom")), received)
     }
 
     // ── searchEpisode ───────────────────────────────────────────────────
 
     @Test
-    fun `searchEpisode success sets searching message and clears actionTarget`() = runTest(mainDispatcher) {
+    fun `searchEpisode success emits the searching message and clears actionTarget`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, title = "Pilot"))
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
@@ -301,13 +333,14 @@ class ManageSeriesViewModelTest {
 
         val state = viewModel.uiState.value
         assertNull(state.actionTarget)
-        assertTrue(state.userMessage!!.contains("Pilot"))
+        assertTrue((received.single() as ManageSeriesMessage.Text).text.contains("Pilot"))
         coVerify(exactly = 1) { arrRepository.searchSonarrEpisodes(123, listOf(1)) }
     }
 
     @Test
-    fun `searchEpisode failure sets error message`() = runTest(mainDispatcher) {
+    fun `searchEpisode failure emits the error message`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, title = "Pilot"))
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
@@ -319,7 +352,7 @@ class ManageSeriesViewModelTest {
         viewModel.onEvent(ManageSeriesUiEvent.SearchEpisode(eps.first()))
         advanceUntilIdle()
 
-        assertEquals("nope", viewModel.uiState.value.userMessage)
+        assertEquals<List<ManageSeriesMessage>>(listOf(ManageSeriesMessage.Text("nope")), received)
     }
 
     // ── delete flow ─────────────────────────────────────────────────────
@@ -360,6 +393,7 @@ class ManageSeriesViewModelTest {
     @Test
     fun `confirmDeleteEpisode deletes file then refreshes`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, hasFile = true, episodeFileId = 99, title = "Pilot"))
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
@@ -374,13 +408,14 @@ class ManageSeriesViewModelTest {
 
         assertNull(viewModel.uiState.value.pendingDeleteEpisode)
         assertNull(viewModel.uiState.value.actionTarget)
-        assertTrue(viewModel.uiState.value.userMessage!!.contains("Pilot"))
+        assertTrue((received.single() as ManageSeriesMessage.Text).text.contains("Pilot"))
         coVerify(exactly = 1) { arrRepository.deleteSonarrEpisodeFile(123, 99) }
     }
 
     @Test
-    fun `confirmDeleteEpisode failure sets error message`() = runTest(mainDispatcher) {
+    fun `confirmDeleteEpisode failure emits the error message`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, hasFile = true, episodeFileId = 99))
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
@@ -393,7 +428,7 @@ class ManageSeriesViewModelTest {
         viewModel.onEvent(ManageSeriesUiEvent.ConfirmDeleteEpisode)
         advanceUntilIdle()
 
-        assertEquals("denied", viewModel.uiState.value.userMessage)
+        assertEquals<List<ManageSeriesMessage>>(listOf(ManageSeriesMessage.Text("denied")), received)
     }
 
     // ── season-level actions ────────────────────────────────────────────
@@ -448,8 +483,9 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `searchSeason success sets searching message`() = runTest(mainDispatcher) {
+    fun `searchSeason success emits the searching message`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1)))
         coEvery { arrRepository.searchMonitoredSonarrSeason(123, 1) } returns Result.success(Unit)
@@ -461,7 +497,7 @@ class ManageSeriesViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.actionTarget)
-        assertTrue(viewModel.uiState.value.userMessage!!.contains("season 1"))
+        assertTrue((received.single() as ManageSeriesMessage.Text).text.contains("season 1"))
         coVerify(exactly = 1) { arrRepository.searchMonitoredSonarrSeason(123, 1) }
     }
 
@@ -504,8 +540,9 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `searchSeries success sets message`() = runTest(mainDispatcher) {
+    fun `searchSeries success emits the searching message`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1)))
         coEvery { arrRepository.searchSonarrSeries(123) } returns Result.success(Unit)
@@ -516,7 +553,7 @@ class ManageSeriesViewModelTest {
         viewModel.onEvent(ManageSeriesUiEvent.SearchSeries)
         advanceUntilIdle()
 
-        assertNotNull(viewModel.uiState.value.userMessage)
+        assertTrue((received.single() as ManageSeriesMessage.Text).text.contains("missing episodes"))
         coVerify(exactly = 1) { arrRepository.searchSonarrSeries(123) }
     }
 
@@ -545,7 +582,7 @@ class ManageSeriesViewModelTest {
         coVerify(exactly = 0) { arrRepository.getSonarrEpisodes(any()) }
     }
 
-    // ── expand toggles & message/error clearing ─────────────────────────
+    // ── expand toggles, error clearing & one-shot message semantics ─────
 
     @Test
     fun `toggleSeasonExpanded adds then removes season`() = runTest(mainDispatcher) {
@@ -557,10 +594,28 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `clearUserMessage nulls the message`() {
-        viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonExpanded(1)) // ensure state is live
-        viewModel.onEvent(ManageSeriesUiEvent.ClearUserMessage)
-        assertNull(viewModel.uiState.value.userMessage)
+    fun `messages never replay to a late collector`() = runTest(mainDispatcher) {
+        // THE migration pin: the former userMessage field rode the uiState
+        // StateFlow, so the snackbar text re-fired for every new collector
+        // (state restoration, re-subscription) until the screen's
+        // ClearUserMessage consume event cleared it — and if the consumer
+        // died before consuming, the stale message survived forever. The
+        // messages Channel delivers exactly once, never replays, and the
+        // state carries nothing to clear (the ClearUserMessage event is gone).
+        stubSeriesDetail("s1")
+        coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1, title = "Pilot")))
+        coEvery { arrRepository.searchSonarrEpisodes(123, listOf(1)) } returns Result.success(Unit)
+        val first = sinkMessagesFrom(viewModel)
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
+        advanceUntilIdle()
+        viewModel.onEvent(ManageSeriesUiEvent.SearchEpisode(ep(1, title = "Pilot")))
+        advanceUntilIdle()
+        assertEquals(1, first.size)
+
+        val late = sinkMessagesFrom(viewModel)
+        advanceUntilIdle()
+        assertTrue(late.isEmpty())
+        assertEquals(1, first.size)
     }
 
     @Test

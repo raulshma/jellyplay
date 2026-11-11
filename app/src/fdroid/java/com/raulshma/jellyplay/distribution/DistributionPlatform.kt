@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ThemeFontRegistry
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeFontRegistry.FamilyKey
 import com.raulshma.jellyplay.shell.AppUpdateCoordinator
 import com.raulshma.jellyplay.shell.NoopAppUpdateCoordinator
+import com.raulshma.jellyplay.shell.ShellSurface
 import com.raulshma.jellyplay.shared.core.designsystem.R
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -135,10 +136,14 @@ object DistributionPlatform {
     /**
      * Root overlay for the self-update sheet. Self-update is unsupported on
      * fdroid — the bound coordinator's state is permanently Idle, so this
-     * never renders anything.
+     * never renders anything. [surface] exists for signature parity with the
+     * store line (the single call site in JellyPlayApp is flavor-agnostic
+     * and passes the shell's current surface to both); with a
+     * permanently-Idle coordinator the store line's main-surface gate
+     * (AppUpdateDecision.shouldShowOverlay) is moot here.
      */
     @Composable
-    fun UpdateSheetOverlay(update: AppUpdateCoordinator) {
+    fun UpdateSheetOverlay(update: AppUpdateCoordinator, surface: ShellSurface) {
     }
 }
 

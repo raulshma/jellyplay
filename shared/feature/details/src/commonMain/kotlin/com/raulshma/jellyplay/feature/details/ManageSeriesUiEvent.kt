@@ -49,8 +49,10 @@ sealed interface ManageSeriesUiEvent {
     /** Expands/collapses one season's episode list. */
     data class ToggleSeasonExpanded(val seasonNumber: Int) : ManageSeriesUiEvent
 
-    /** Consumes the one-shot snackbar message. */
-    data object ClearUserMessage : ManageSeriesUiEvent
+    // The former ClearUserMessage consume event died with the userMessage
+    // state field it cleared: one-shot feedback now rides the VM's
+    // [ManageSeriesViewModel.messages] Channel (StateManagementConventions
+    // §2), which needs no consume dance — a channel never replays.
 
     /** Clears the error banner. */
     data object ClearError : ManageSeriesUiEvent

@@ -6,33 +6,51 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
 /**
- * Pins the shared session-restore choreography: a successful restore with a
- * persisted (server, user) pair settles the splash gate only AFTER the
- * rendered authenticated mirror has flipped (the measured splash-flash bug
- * class — the release riding the mirror write, never the host flow, never
- * the raw restore completion), the mirror wait is bounded by
- * [SessionRestore.AUTH_CONFIRMATION_TIMEOUT_MS] so a corrupted flow can't pin
- * the gate, failures settle immediately, and the mirror collector is
- * cancel-then-replaced per run (exactly one live collector, the Android-only
- * false-edge teardown riding it). Test dispatcher's virtual clock bounds the
- * timeout test; the restore/warmup seams are plain lambdas (the
- * ShellSessionControllerTest pattern). [SessionRestore.restore] itself
- * completes, so it launches as a plain test child; its mirror collector runs
- * on the unparented host scope the hosts hand it.
+ * Pins the shared session-restore choreography as a ONE-PHASE machine
+ * ([LaunchPhase]): the gate release and the destination determination are
+ * the SAME [SessionRestore.phase] write, so the former two-boolean machine's
+ * auth-flash frame — (splash down, authenticated=false) right after a
+ * successful restore — is unrepresentable. Concretely, the pins:
+ *  - a fresh gate sits in [LaunchPhase.Restoring] (splash pinned);
+ *  - a successful restore lands EXACTLY one destination — the recorded
+ *    phase-emission list is `[Restoring, Authenticated]` (or
+ *    `[Restoring, NeedsAuth]`), i.e. the FIRST non-Restoring value the shell
+ *    can observe is already the branch, with no intermediate phase;
+ *  - the 2.5 s timeout decides AND releases in that one step (virtual-time
+ *    assertions at cap-1 / cap), from the auth flow's CURRENT value;
+ *  - a deferred sign-out is a defined Authenticated → NeedsAuth transition;
+ *  - markRestoring returns the gate to Restoring;
+ *  - an auth edge during a restore pass never drops the splash (the
+ *    collector stays its hand while Restoring — the decision owns the
+ *    release), and exactly one collector survives a re-run.
+ *
+ * The old suite pinned an ORDERING between two flows (mirror flip before
+ * splash release); that ordering is meaningless when gate and destination
+ * are one value, so the emission-list assertions replace it. The
+ * restore/warmup seams stay plain lambdas (the ShellSessionControllerTest
+ * pattern); the test dispatcher's virtual clock bounds the timeout test;
+ * [SessionRestore.restore] completes, so it launches as a plain test child,
+ * its phase collector running on the unparented host scope the hosts hand
+ * it. The tests' own phase RECORDERS ride [TestScope.backgroundScope] on an
+ * [UnconfinedTestDispatcher] — the teardown the old suite performed by hand
+ * (`recorders.forEach { it.cancel() }`): backgroundScope cancels them at
+ * test end so runTest's leak check sees no active child job, and the
+ * unconfined dispatcher on the test's own scheduler delivers each phase
+ * write to the recorder inline with the write, keeping the emission-list
+ * pins exact (a backgroundScope collector on the default dispatcher would
+ * have its resumptions starved once the foreground work drains).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionRestoreTest {
@@ -74,50 +92,71 @@ class SessionRestoreTest {
     // ── release discipline ──────────────────────────────────────────────
 
     @Test
-    fun `release never precedes the authenticated mirror on successful restore`() = runTest {
+    fun `a fresh gate sits in Restoring with the destination undecided`() {
+        val fake = FakeRestore()
+        val sessionRestore = fake.sessionRestore()
+
+        // Before any pass runs: the splash reads from the phase alone, and
+        // the only representable value is the pinned splash.
+        assertEquals(LaunchPhase.Restoring, sessionRestore.phase.value)
+    }
+
+    @Test
+    fun `a successful restore lands Authenticated in one observable phase write`() = runTest {
         val fake = FakeRestore()
         // The on-device flash shape: the persisted (server, user) pair and
-        // the auth flip land DURING the restore call, so a release off the
-        // restore completion (or the host flow) could beat the rendered
-        // mirror.
+        // the auth flip land DURING the restore call.
         fake.onRestoreSession = {
             fake.server.value = testServer()
             fake.user.value = testUser()
             fake.auth.value = true
         }
         val sessionRestore = fake.sessionRestore()
-
-        // A channel of write events (NOT combine — it conflates intermediate
-        // pairs away) so the test can assert the ORDER the two exposed flows
-        // actually flipped in.
-        val events = Channel<String>(Channel.UNLIMITED)
-        val recorders = listOf(
-            launch { sessionRestore.isRestoring.collect { events.send("restoring=$it") } },
-            launch { sessionRestore.isAuthenticated.collect { events.send("auth=$it") } },
-        )
+        val phases = mutableListOf<LaunchPhase>()
+        collectPhases(sessionRestore, phases)
 
         launch { sessionRestore.restore(testScope()) }
         advanceUntilIdle()
-        recorders.forEach { it.cancel() }
-        events.close()
 
-        val order = mutableListOf<String>()
-        for (event in events) order += event
-        val releaseIndex = order.indexOf("restoring=false")
-        val mirrorIndex = order.indexOf("auth=true")
-        assertNotEquals(-1, releaseIndex, "isRestoring never released (order=$order)")
-        assertNotEquals(-1, mirrorIndex, "authenticated mirror never flipped (order=$order)")
-        assertTrue(
-            mirrorIndex < releaseIndex,
-            "splash gate released before the authenticated mirror flipped: $order",
-        )
-        assertFalse(sessionRestore.isRestoring.value)
-        // The release rode the mirror write, not the timeout cap.
+        // The first non-Restoring emission IS the destination: no
+        // intermediate frame exists between splash and branch — this exact
+        // list is the pin that kills the former (splash-down, auth=false)
+        // flash frame.
+        assertEquals(listOf(LaunchPhase.Restoring, LaunchPhase.Authenticated), phases)
+        assertEquals(LaunchPhase.Authenticated, sessionRestore.phase.value)
+        // The release rode the flow flip (already landed during
+        // restoreSession — the StateFlow wait returned immediately), not
+        // the timeout cap.
         assertEquals(0, testScheduler.currentTime)
     }
 
     @Test
-    fun `the timeout fires when the mirror never flips`() = runTest {
+    fun `a flip inside the grace window lands Authenticated before the cap`() = runTest {
+        val fake = FakeRestore()
+        // Restore succeeds with a persisted pair, but the auth flip trails
+        // the restore call (a slow adapter write) — landing 100 ms later,
+        // well inside the grace window.
+        fake.onRestoreSession = {
+            fake.server.value = testServer()
+            fake.user.value = testUser()
+        }
+        val sessionRestore = fake.sessionRestore()
+        val phases = mutableListOf<LaunchPhase>()
+        collectPhases(sessionRestore, phases)
+
+        launch { sessionRestore.restore(testScope()) }
+        launch {
+            delay(100)
+            fake.auth.value = true
+        }
+        advanceUntilIdle()
+
+        assertEquals(listOf(LaunchPhase.Restoring, LaunchPhase.Authenticated), phases)
+        assertEquals(100, testScheduler.currentTime, "the release must ride the flip, not the cap")
+    }
+
+    @Test
+    fun `the timeout decides and releases in one step when the flow never flips`() = runTest {
         val fake = FakeRestore()
         // Restore "succeeds" with a persisted pair, but the auth flow is
         // corrupted (never flips): the cap must un-block the splash.
@@ -126,107 +165,193 @@ class SessionRestoreTest {
             fake.user.value = testUser()
         }
         val sessionRestore = fake.sessionRestore()
+        val phases = mutableListOf<LaunchPhase>()
+        collectPhases(sessionRestore, phases)
         launch { sessionRestore.restore(testScope()) }
         runCurrent()
 
-        assertTrue(sessionRestore.isRestoring.value, "precondition: parked on the mirror wait")
+        assertEquals(LaunchPhase.Restoring, sessionRestore.phase.value, "precondition: parked on the grace wait")
         advanceTimeBy(SessionRestore.AUTH_CONFIRMATION_TIMEOUT_MS - 1)
-        assertTrue(
-            sessionRestore.isRestoring.value,
+        assertEquals(
+            LaunchPhase.Restoring,
+            sessionRestore.phase.value,
             "a millisecond short of the cap the splash must still hold",
         )
         // advanceTimeBy only runs tasks scheduled STRICTLY before its new
         // time — the timer lands exactly on the cap, so run it.
         advanceTimeBy(1)
         runCurrent()
-        assertFalse(sessionRestore.isRestoring.value, "the cap must release the splash")
+
+        // The decision (from the auth flow's CURRENT value, read
+        // synchronously) and the release are one write: Restoring →
+        // NeedsAuth directly, no intermediate frame.
+        assertEquals(listOf(LaunchPhase.Restoring, LaunchPhase.NeedsAuth), phases)
+        assertEquals(LaunchPhase.NeedsAuth, sessionRestore.phase.value)
         assertEquals(SessionRestore.AUTH_CONFIRMATION_TIMEOUT_MS, testScheduler.currentTime)
     }
 
     @Test
-    fun `a failed restore settles the splash without the mirror wait`() = runTest {
+    fun `a timeout release still transitions Authenticated on a later flip`() = runTest {
+        val fake = FakeRestore()
+        fake.onRestoreSession = {
+            fake.server.value = testServer()
+            fake.user.value = testUser()
+        }
+        val sessionRestore = fake.sessionRestore()
+        val phases = mutableListOf<LaunchPhase>()
+        collectPhases(sessionRestore, phases)
+        launch { sessionRestore.restore(testScope()) }
+        advanceTimeBy(SessionRestore.AUTH_CONFIRMATION_TIMEOUT_MS)
+        runCurrent()
+        assertEquals(LaunchPhase.NeedsAuth, sessionRestore.phase.value)
+
+        // The documented 2.5 s trade-off, narrowed: a flow that flips after
+        // the timeout decided does not strand the shell — the collector
+        // moves the phase to Authenticated as a DEFINED transition.
+        fake.auth.value = true
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(LaunchPhase.Restoring, LaunchPhase.NeedsAuth, LaunchPhase.Authenticated),
+            phases,
+        )
+        assertEquals(LaunchPhase.Authenticated, sessionRestore.phase.value)
+    }
+
+    @Test
+    fun `a failed restore settles NeedsAuth without waiting`() = runTest {
         val fake = FakeRestore()
         fake.restoreResult = Result.failure(IllegalStateException("no persisted session"))
         val sessionRestore = fake.sessionRestore()
+        val phases = mutableListOf<LaunchPhase>()
+        collectPhases(sessionRestore, phases)
         launch { sessionRestore.restore(testScope()) }
         advanceUntilIdle()
 
-        assertFalse(sessionRestore.isRestoring.value)
-        assertEquals(0, testScheduler.currentTime, "a failed restore must not wait on the mirror")
-        // The mirror collector still ran its initial pass off the current
+        assertEquals(listOf(LaunchPhase.Restoring, LaunchPhase.NeedsAuth), phases)
+        assertEquals(0, testScheduler.currentTime, "a failed restore must not wait on the grace window")
+        // The collector still ran its initial pass off the current
         // (signed-out) edge — the host teardown hook sees it.
         assertEquals(listOf(false), fake.authEdges)
         assertEquals(1, fake.restoreCalls.size)
     }
 
     @Test
-    fun `a successful restore without a persisted pair skips the mirror wait`() = runTest {
+    fun `a successful restore without a persisted pair settles NeedsAuth without waiting`() = runTest {
         val fake = FakeRestore()
         fake.restoreResult = Result.success(Unit)
         val sessionRestore = fake.sessionRestore()
+        val phases = mutableListOf<LaunchPhase>()
+        collectPhases(sessionRestore, phases)
         launch { sessionRestore.restore(testScope()) }
         advanceUntilIdle()
 
-        assertFalse(sessionRestore.isRestoring.value)
-        assertEquals(0, testScheduler.currentTime, "no persisted pair → no mirror wait")
+        assertEquals(listOf(LaunchPhase.Restoring, LaunchPhase.NeedsAuth), phases)
+        assertEquals(0, testScheduler.currentTime, "no persisted pair → no grace wait")
     }
 
-    // ── collector + warmup wiring ───────────────────────────────────────
+    @Test
+    fun `a deferred sign-out transitions Authenticated to NeedsAuth`() = runTest {
+        val fake = FakeRestore()
+        fake.onRestoreSession = {
+            fake.server.value = testServer()
+            fake.user.value = testUser()
+            fake.auth.value = true
+        }
+        val sessionRestore = fake.sessionRestore()
+        val phases = mutableListOf<LaunchPhase>()
+        collectPhases(sessionRestore, phases)
+        launch { sessionRestore.restore(testScope()) }
+        advanceUntilIdle()
+        assertEquals(LaunchPhase.Authenticated, sessionRestore.phase.value)
+
+        // The deferred-401 teardown shape: the repository tears the session
+        // down AFTER the gate released. The "home then bounce to login"
+        // behavior is a defined Authenticated → NeedsAuth phase transition,
+        // not a flash — and the false edge still fires the host teardown
+        // hook (stop health monitor / clear library folders).
+        fake.auth.value = false
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(LaunchPhase.Restoring, LaunchPhase.Authenticated, LaunchPhase.NeedsAuth),
+            phases,
+        )
+        assertEquals(LaunchPhase.NeedsAuth, sessionRestore.phase.value)
+        assertEquals(listOf(false, true, false), fake.authEdges)
+    }
+
+    // ── gate + collector wiring ─────────────────────────────────────────
 
     @Test
-    fun `a re-run re-raises the gate and leaves exactly one mirror collector`() = runTest {
+    fun `markRestoring returns the gate to Restoring`() = runTest {
         val fake = FakeRestore()
         fake.restoreResult = Result.failure(IllegalStateException("no persisted session"))
         val sessionRestore = fake.sessionRestore()
         launch { sessionRestore.restore(testScope()) }
         advanceUntilIdle()
-        assertFalse(sessionRestore.isRestoring.value)
+        assertEquals(LaunchPhase.NeedsAuth, sessionRestore.phase.value)
 
-        // A session signs in between runs; the mirror mirrors it.
+        // The host's synchronous gate-up (SessionCoordinator.start, before
+        // it launches the pass): the very next read sees the pinned splash
+        // with no suspension in between, and the pass's own re-raise stays
+        // an idempotent safety.
+        sessionRestore.markRestoring()
+        assertEquals(LaunchPhase.Restoring, sessionRestore.phase.value)
+    }
+
+    @Test
+    fun `a re-run re-raises the gate, stays its collector's hand while Restoring, and leaves exactly one collector`() = runTest {
+        val fake = FakeRestore()
+        fake.restoreResult = Result.failure(IllegalStateException("no persisted session"))
+        val sessionRestore = fake.sessionRestore()
+        val phases = mutableListOf<LaunchPhase>()
+        collectPhases(sessionRestore, phases)
+        launch { sessionRestore.restore(testScope()) }
+        advanceUntilIdle()
+        assertEquals(LaunchPhase.NeedsAuth, sessionRestore.phase.value)
+
+        // A session signs in between runs; the collector mirrors it into
+        // the phase.
         fake.auth.value = true
-        fake.restoreResult = Result.success(Unit)
-        fake.server.value = testServer()
-        fake.user.value = testUser()
         advanceUntilIdle()
         assertEquals(listOf(false, true), fake.authEdges)
+        assertEquals(LaunchPhase.Authenticated, sessionRestore.phase.value)
 
         // The re-run re-raises the gate for its own pass…
         val hold = CompletableDeferred<Unit>()
         fake.hold = hold
         launch { sessionRestore.restore(testScope()) }
         runCurrent()
-        assertTrue(sessionRestore.isRestoring.value, "the re-run must re-raise the splash gate")
-        hold.complete(Unit)
-        advanceUntilIdle()
-        assertFalse(sessionRestore.isRestoring.value)
+        assertEquals(LaunchPhase.Restoring, sessionRestore.phase.value, "the re-run must re-raise the splash gate")
 
-        // …and exactly ONE mirror collector survives the replace: a later
-        // edge fires the hook once (a surviving stale collector would
-        // double-fire it).
-        fake.authEdges.clear()
+        // …and an auth edge DURING the pass must not drop the splash: the
+        // collector stays its hand while Restoring (the decision below owns
+        // the release); the edge is not lost — the hook still sees it, and
+        // the decision reads the flow's current value.
         fake.auth.value = false
         advanceUntilIdle()
-        assertEquals(listOf(false), fake.authEdges)
-    }
+        assertEquals(LaunchPhase.Restoring, sessionRestore.phase.value, "an edge mid-restore must not drop the splash")
+        assertEquals(listOf(false, true, true, false), fake.authEdges)
 
-    @Test
-    fun `markRestoring raises the gate synchronously before the pass launches`() = runTest {
-        val fake = FakeRestore()
-        fake.restoreResult = Result.failure(IllegalStateException("no persisted session"))
-        val sessionRestore = fake.sessionRestore()
-        launch { sessionRestore.restore(testScope()) }
+        hold.complete(Unit)
         advanceUntilIdle()
-        assertFalse(sessionRestore.isRestoring.value)
+        assertEquals(LaunchPhase.NeedsAuth, sessionRestore.phase.value, "the decision read the flow's current value")
 
-        // The host's synchronous gate-up (SessionCoordinator.start, before it
-        // launches the pass): the very next read sees true with no suspension
-        // in between, and the pass's own re-raise stays an idempotent safety.
-        sessionRestore.markRestoring()
-        assertTrue(sessionRestore.isRestoring.value)
+        // Exactly ONE collector survives the replace: a later edge fires
+        // the hook once (a surviving stale collector would double-fire it).
+        fake.auth.value = true
+        advanceUntilIdle()
+        assertEquals(LaunchPhase.Authenticated, sessionRestore.phase.value)
+        assertEquals(
+            listOf(LaunchPhase.Restoring, LaunchPhase.NeedsAuth, LaunchPhase.Authenticated, LaunchPhase.Restoring, LaunchPhase.NeedsAuth, LaunchPhase.Authenticated),
+            phases,
+        )
+        assertEquals(listOf(false, true, true, false, true), fake.authEdges)
     }
 
     @Test
-    fun `warmup races the restore and lands before the splash releases`() = runTest {
+    fun `warmup races the restore and lands before the gate settles`() = runTest {
         val fake = FakeRestore()
         fake.onRestoreSession = {
             fake.server.value = testServer()
@@ -244,15 +369,41 @@ class SessionRestoreTest {
             currentUser = fake.user,
             warmup = { warmups++ },
         )
+        val phases = mutableListOf<LaunchPhase>()
+        collectPhases(sessionRestore, phases)
         launch { sessionRestore.restore(testScope()) }
         advanceUntilIdle()
 
-        assertFalse(sessionRestore.isRestoring.value)
+        assertEquals(LaunchPhase.Authenticated, sessionRestore.phase.value)
+        assertEquals(listOf(LaunchPhase.Restoring, LaunchPhase.Authenticated), phases)
         assertEquals(1, warmups, "the warm-up read ran once per restore pass")
         assertEquals(0, testScheduler.currentTime)
     }
 
     // ── helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * Records [SessionRestore.phase] emissions into [phases] for an
+     * emission-list pin. The teardown the old suite performed by hand
+     * (cancel the recording collectors after [advanceUntilIdle]) is carried
+     * structurally here: the collector rides [TestScope.backgroundScope], so
+     * runTest cancels it at test end instead of failing with
+     * UncompletedCoroutinesError over an active child job. The
+     * [UnconfinedTestDispatcher] on the test's own scheduler is load-bearing:
+     * it delivers each phase write to the recorder INLINE with the write
+     * (exact, ordered emission lists — the pins read like a trace), where a
+     * backgroundScope collector on the default StandardTestDispatcher would
+     * have its resumptions starved by [advanceUntilIdle] once the foreground
+     * (restore-pass) work drains.
+     */
+    private fun kotlinx.coroutines.test.TestScope.collectPhases(
+        sessionRestore: SessionRestore,
+        phases: MutableList<LaunchPhase>,
+    ) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            sessionRestore.phase.collect { phases.add(it) }
+        }
+    }
 
     /**
      * The host scope the tests hand the choreography (the

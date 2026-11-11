@@ -136,6 +136,34 @@ data class SkippedSegmentNotice(
 )
 
 /**
+ * The player's playback-error state as ONE value: non-null means the error
+ * dialog is on screen, carrying the rendered [message] and the structured
+ * [retryable] verdict (propagated from
+ * [com.raulshma.jellyplay.feature.player.video.engine.EngineError.retryable] —
+ * when `false` the error is fatal on this engine (decoder/DRM) and the dialog
+ * offers switch-engine, not same-engine retry).
+ *
+ * This replaces the former three-field error state machine (message /
+ * retryable flag / dialog flag), whose independent fields could represent a
+ * silent error (message without the dialog flag) and a blank dialog (flag
+ * without a message). Neither is representable now: there is exactly one
+ * error state and one dismissed state (`null`). Set is the session's
+ * `SessionEvent.ShowError` fold (one `PlaybackErrorUi(message, retryable)`
+ * write); dismiss is the single null write through the VM's
+ * `clearPlaybackErrorState` funnel. The item-switch rebuild
+ * (`keepAcrossItems`) deliberately does NOT carry this field — a fresh item
+ * starts clean, as the old triple's defaults did before.
+ *
+ * Pinned by PlaybackErrorUiStateTest (the session fold's two arms and the
+ * dismissal funnel) and ItemSwitchResetOrderTest (the across-item reset).
+ */
+@Immutable
+data class PlaybackErrorUi(
+    val message: String,
+    val retryable: Boolean,
+)
+
+/**
  * Session + prefs-mirror state for the video player, organized as seven stored
  * slices plus a small, deliberately flat remainder.
  *
@@ -168,11 +196,12 @@ data class SkippedSegmentNotice(
  * that `EngineConfigBuilder` reads as one group; a slice hop would add nothing.
  *
  * *Error + session-lifecycle fields — kept flat deliberately ahead of the
- * Stage B `PlaybackSession` extraction:* [playerError], [playerErrorRetryable]
- * and [showPlaybackErrorDialog] (the session's error events will land here),
- * [isInitializing] (load lifecycle), [isInSyncPlaySession] (session-membership
- * mirror read by `SegmentProjection`) and [cinemaIntroState] (pre-roll intro
- * context; its load/advance sequencing moves into the session).
+ * Stage B `PlaybackSession` extraction:* [playbackError] (the session's error
+ * events land here — the former error-dialog triple collapsed into one
+ * nullable value; see [PlaybackErrorUi]), [isInitializing] (load lifecycle),
+ * [isInSyncPlaySession] (session-membership mirror read by
+ * `SegmentProjection`) and [cinemaIntroState] (pre-roll intro context; its
+ * load/advance sequencing moves into the session).
  *
  * *High-frequency playback progress — deliberately absent:* the live
  * position / duration / stats live ONLY on the ViewModel's dedicated
@@ -260,17 +289,16 @@ data class VideoPlayerUiState(
      */
     val hasQueuedNext: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
-    val playerError: String? = null,
     /**
-     * Structured retryability verdict paired with [playerError], propagated
-     * from [com.raulshma.jellyplay.feature.player.video.engine.EngineError.retryable].
-     * When `false` the error is fatal on this engine (decoder/DRM) and the
-     * error dialog should offer switch-engine, not same-engine retry. The
-     * bare `playerError: String` is retained as the rendered message; this
-     * flag is the structured signal the legacy String channel dropped.
+     * The playback error, all of it: `null` = nothing showing; non-null = the
+     * error dialog is on screen with its message and retry verdict (see
+     * [PlaybackErrorUi] — the former three-field error state machine,
+     * collapsed so a silent error or a blank dialog is no longer
+     * representable). Written by the session's `SessionEvent.ShowError` fold;
+     * dismissed (nulled) only through the VM's `clearPlaybackErrorState`
+     * funnel, and reset by `keepAcrossItems` (not a surviving leaf).
      */
-    val playerErrorRetryable: Boolean = false,
-    val showPlaybackErrorDialog: Boolean = false,
+    val playbackError: PlaybackErrorUi? = null,
     val isScreenLocked: Boolean = false,
     val cinemaIntroState: CinemaIntroUiState? = null,
     val isMuted: Boolean = false,

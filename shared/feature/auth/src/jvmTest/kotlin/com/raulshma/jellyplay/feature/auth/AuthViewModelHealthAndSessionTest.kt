@@ -227,15 +227,37 @@ class AuthViewModelHealthAndSessionTest {
         coEvery { authRepository.removeServer("srv-1") } just Runs
         coEvery { authRepository.getUsersForServer("srv-1") } returns listOf(mockk(), mockk())
 
-        var users: List<UserInfo>? = null
-        viewModel.getUsersForServer("srv-1") { users = it }
+        var received: Result<List<UserInfo>>? = null
+        viewModel.getUsersForServer("srv-1") { received = it }
         advanceUntilIdle()
         viewModel.removeServer("srv-1")
         advanceUntilIdle()
 
-        assertEquals(2, users?.size)
+        // The callback delivers a Result now (the bare List it used to
+        // deliver had no failure channel — see the failure-path pin below).
+        assertEquals(2, received?.getOrNull()?.size)
         coVerify(exactly = 1) { authRepository.getUsersForServer("srv-1") }
         coVerify(exactly = 1) { authRepository.removeServer("srv-1") }
+    }
+
+    @Test
+    fun getUsersForServer_aThrownReadFoldsIntoAFailedResult() = runTest(testDispatcher) {
+        // THE eternal-spinner pin: the repository read is a one-shot Room
+        // query that can throw. The former bare-List callback never invoked
+        // its callback on a throw, so UserSelectionScreen's isLoading flag
+        // stranded true forever with no error arm. The Result callback must
+        // fire on EVERY outcome — the thrown path folds into a failure,
+        // which is what the screen's Error + Retry arm consumes.
+        coEvery { authRepository.getUsersForServer("srv-1") } throws
+            IllegalStateException("disk I/O error")
+
+        var received: Result<List<UserInfo>>? = null
+        viewModel.getUsersForServer("srv-1") { received = it }
+        advanceUntilIdle()
+
+        assertTrue(received != null, "the callback must fire even when the read throws")
+        assertTrue(received!!.isFailure)
+        assertEquals("disk I/O error", received!!.exceptionOrNull()?.message)
     }
 
     // ── additional QuickConnect branches ──────────────────────────────────

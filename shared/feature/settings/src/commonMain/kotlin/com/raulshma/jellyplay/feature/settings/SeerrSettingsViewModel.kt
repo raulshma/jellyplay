@@ -58,6 +58,45 @@ public sealed interface SeerrBridgeFailure {
     }
 }
 
+/**
+ * The via-server bridge's operation/pairing lifecycle — ONE machine for the
+ * whole "talk to the plugin's Seerr bridge" surface (status fetch, Quick
+ * Connect pairing, logout), replacing the four loose flags + `Job` latch
+ * whose combinations drifted (`code != null` with no flow live, a stale
+ * failure beside a fresh operation, a timed-out pairing stranding its code
+ * on screen and blocking the restart). Shape mirrors feature/auth's
+ * `QuickConnectUiState` — same domain, one vocabulary.
+ *
+ * The linked/unlinked truth is deliberately NOT here: that is the server's
+ * `bridgeStatus`, an orthogonal concern the machine only re-fetches.
+ */
+sealed interface SeerrBridgeQuickConnectPhase {
+    /** No bridge operation in flight; no failure showing. */
+    data object Idle : SeerrBridgeQuickConnectPhase
+
+    /** A status fetch is in flight (the pane's "checking" row). */
+    data object StatusFetch : SeerrBridgeQuickConnectPhase
+
+    /** Quick Connect availability check + initiate are in flight (no code yet). */
+    data object Starting : SeerrBridgeQuickConnectPhase
+
+    /** The code is on screen and the approval poll is running. */
+    data class WaitingForApproval(val code: String) : SeerrBridgeQuickConnectPhase
+
+    /** Approved — the plugin login (finalize) and the status re-fetch are in flight. */
+    data object Finalizing : SeerrBridgeQuickConnectPhase
+
+    /** The server-side unlink (logout) is in flight. */
+    data object LoggingOut : SeerrBridgeQuickConnectPhase
+
+    /**
+     * The last operation failed; [failure] renders in the pane's banner until
+     * the next operation transitions out. Restarting the pairing from here is
+     * allowed (the start guard's only non-[Idle] admission).
+     */
+    data class Failed(val failure: SeerrBridgeFailure) : SeerrBridgeQuickConnectPhase
+}
+
 class SeerrSettingsViewModel(
     private val seerrAuthenticator: SeerrAuthenticator,
     private val seerrPreferencesStore: SeerrPreferencesStore,
@@ -134,21 +173,41 @@ class SeerrSettingsViewModel(
     private val _bridgeStatus = composeState<JellyPlaySeerrStatus?>(null)
     val bridgeStatus: JellyPlaySeerrStatus? get() = _bridgeStatus.value
 
-    /** A bridge operation (status fetch, link finalize, logout) is in flight. */
-    private val _bridgeBusy = composeState(false)
-    val bridgeBusy: Boolean get() = _bridgeBusy.value
+    /**
+     * The bridge's operation/pairing machine ([SeerrBridgeQuickConnectPhase]).
+     * The four legacy flags below are its DERIVED projections, kept so the
+     * screen and the pins read the same surface as before.
+     */
+    private val _bridgePhase =
+        composeState<SeerrBridgeQuickConnectPhase>(SeerrBridgeQuickConnectPhase.Idle)
+
+    /**
+     * A bridge operation (status fetch, link finalize, logout) is in flight.
+     * Deliberately the LEGACY semantics — the pairing's Starting/Waiting arms
+     * are NOT busy (the login/logout buttons stay enabled-but-guarded during
+     * them, exactly as before the machine landed).
+     */
+    val bridgeBusy: Boolean
+        get() = when (_bridgePhase.value) {
+            is SeerrBridgeQuickConnectPhase.StatusFetch,
+            is SeerrBridgeQuickConnectPhase.Finalizing,
+            is SeerrBridgeQuickConnectPhase.LoggingOut,
+                -> true
+
+            else -> false
+        }
 
     /** Quick Connect is starting (availability check + initiate in flight). */
-    private val _bridgeQcStarting = composeState(false)
-    val bridgeQcStarting: Boolean get() = _bridgeQcStarting.value
+    val bridgeQcStarting: Boolean
+        get() = _bridgePhase.value is SeerrBridgeQuickConnectPhase.Starting
 
     /** Non-null while the bridge link flow waits for the Quick Connect approval (the code to display). */
-    private val _bridgeQcCode = composeState<String?>(null)
-    val bridgeQcCode: String? get() = _bridgeQcCode.value
+    val bridgeQcCode: String?
+        get() = (_bridgePhase.value as? SeerrBridgeQuickConnectPhase.WaitingForApproval)?.code
 
     /** The last bridge operation's failure; cleared by the next operation. */
-    private val _bridgeFailure = composeState<SeerrBridgeFailure?>(null)
-    val bridgeFailure: SeerrBridgeFailure? get() = _bridgeFailure.value
+    val bridgeFailure: SeerrBridgeFailure?
+        get() = (_bridgePhase.value as? SeerrBridgeQuickConnectPhase.Failed)?.failure
 
     /** The QC poll loop ([startBridgeQuickConnect]); cancelled on cancel/mode-exit/restart. */
     private var bridgeQuickConnectJob: Job? = null
@@ -442,7 +501,9 @@ class SeerrSettingsViewModel(
         launch { seerrPreferencesStore.setUseServerBridge(enabled) }
         if (enabled) {
             cancelBridgeQuickConnect()
-            _bridgeFailure.value = null
+            // A fresh mode entry clears a Failed banner too (the legacy
+            // `_bridgeFailure = null`).
+            _bridgePhase.value = SeerrBridgeQuickConnectPhase.Idle
             refreshBridgeStatus()
         } else {
             cancelBridgeQuickConnect()
@@ -462,23 +523,26 @@ class SeerrSettingsViewModel(
      * transport text verbatim ([SeerrBridgeFailure.Reported]) or the declared
      * [SeerrBridgeFailure.Fallback.StatusUnreachable] fallback; the previous
      * status stays (a stale link state beats a blank pane) and the failure
-     * renders in the pane's banner.
+     * renders in the pane's banner. Phase exit is [Idle] on success and
+     * [SeerrBridgeQuickConnectPhase.Failed] on failure — the finalize path
+     * relies on that landing [Idle] (it skips its own terminal write).
      */
     private suspend fun fetchBridgeStatus() {
         val client = pluginApiClient ?: return
-        _bridgeBusy.value = true
+        _bridgePhase.value = SeerrBridgeQuickConnectPhase.StatusFetch
         client.seerrStatus().fold(
             onSuccess = { status ->
                 _bridgeStatus.value = status
-                _bridgeFailure.value = null
+                _bridgePhase.value = SeerrBridgeQuickConnectPhase.Idle
             },
             onFailure = { failure ->
-                _bridgeFailure.value = failure.message?.takeIf { it.isNotBlank() }
-                    ?.let(SeerrBridgeFailure::Reported)
-                    ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.StatusUnreachable)
+                _bridgePhase.value = SeerrBridgeQuickConnectPhase.Failed(
+                    failure.message?.takeIf { it.isNotBlank() }
+                        ?.let(SeerrBridgeFailure::Reported)
+                        ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.StatusUnreachable),
+                )
             },
         )
-        _bridgeBusy.value = false
     }
 
     /**
@@ -487,67 +551,85 @@ class SeerrSettingsViewModel(
      * `JellyPlaySeerrRoutes.seerrLogin` as the finalize step: the plugin
      * authorizes the JELLYFIN Quick Connect secret server-side and SSOs into
      * Seerr with it, so the client never handles a Seerr credential. Failures
-     * land in [bridgeFailure]; success re-fetches the status (linked).
+     * land as [SeerrBridgeQuickConnectPhase.Failed]; success re-fetches the
+     * status (linked). The guard admits [Idle] and Failed only — a restart
+     * after a failure is the retry path; any live phase refuses.
      */
     fun startBridgeQuickConnect() {
         val client = pluginApiClient ?: return
         val repo = authRepository ?: return
-        if (_bridgeQcCode.value != null || _bridgeBusy.value || _bridgeQcStarting.value) return
+        when (_bridgePhase.value) {
+            is SeerrBridgeQuickConnectPhase.Idle,
+            is SeerrBridgeQuickConnectPhase.Failed,
+                -> Unit
+
+            else -> return
+        }
         cancelBridgeQuickConnect()
         bridgeQuickConnectJob = launch {
-            _bridgeFailure.value = null
-            _bridgeQcStarting.value = true
+            _bridgePhase.value = SeerrBridgeQuickConnectPhase.Starting
             val qcEnabled = repo.isQuickConnectEnabled().fold(
                 onSuccess = { it },
                 onFailure = { null },
             )
             if (qcEnabled != true) {
-                _bridgeQcStarting.value = false
-                _bridgeFailure.value = SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectDisabled)
+                _bridgePhase.value =
+                    SeerrBridgeQuickConnectPhase.Failed(SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectDisabled))
                 return@launch
             }
             val qcInfo = repo.initiateQuickConnect().fold(
                 onSuccess = { it },
                 onFailure = { failure ->
-                    _bridgeQcStarting.value = false
-                    _bridgeFailure.value = failure.message?.takeIf { it.isNotBlank() }
-                        ?.let(SeerrBridgeFailure::Reported)
-                        ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectFailed)
+                    _bridgePhase.value = SeerrBridgeQuickConnectPhase.Failed(
+                        failure.message?.takeIf { it.isNotBlank() }
+                            ?.let(SeerrBridgeFailure::Reported)
+                            ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectFailed),
+                    )
                     null
                 },
             ) ?: return@launch
-            _bridgeQcStarting.value = false
-            _bridgeQcCode.value = qcInfo.code
-            pollBridgeQuickConnect(client, repo, qcInfo.secret)
+            _bridgePhase.value = SeerrBridgeQuickConnectPhase.WaitingForApproval(qcInfo.code)
+            pollBridgeQuickConnect(client, repo, qcInfo.code, qcInfo.secret)
         }
     }
 
     /**
      * The approval poll (the AuthViewModel cadence: one poll per
-     * [QC_POLL_INTERVAL_MS], [QC_MAX_ATTEMPTS] total). On approval the code
-     * clears and the finalize runs (`JellyPlaySeerrRoutes.seerrLogin`
-     * with the secret); on exhaustion the declared timeout fallback lands.
+     * [QC_POLL_INTERVAL_MS], [QC_MAX_ATTEMPTS] total). Each tick re-arms
+     * [WaitingForApproval] first — a status fetch landing mid-poll (the
+     * retry button has no pairing guard) writes a terminal phase and would
+     * otherwise strand the machine out of the pairing while the loop runs.
+     * On approval the finalize runs (`JellyPlaySeerrRoutes.seerrLogin` with
+     * the secret) and lands Idle (via the nested status fetch) or Failed; on
+     * exhaustion the declared timeout fallback lands as Failed — which also
+     * clears the stranded code (declared v0.11.10 fix: the legacy write left
+     * `bridgeQcCode` standing, so the timed-out code stayed on screen and the
+     * start guard blocked a restart until the user found the cancel button).
      */
     private suspend fun pollBridgeQuickConnect(
         client: JellyPlaySeerrRoutes,
         repo: AuthRepository,
+        code: String,
         secret: String,
     ) {
         repeat(QC_MAX_ATTEMPTS) {
             delay(QC_POLL_INTERVAL_MS)
+            if (_bridgePhase.value !is SeerrBridgeQuickConnectPhase.WaitingForApproval) {
+                _bridgePhase.value = SeerrBridgeQuickConnectPhase.WaitingForApproval(code)
+            }
             val authenticated = repo.pollQuickConnect(secret).fold(
                 onSuccess = { it.authenticated },
                 onFailure = { failure ->
-                    _bridgeQcCode.value = null
-                    _bridgeFailure.value = failure.message?.takeIf { it.isNotBlank() }
-                        ?.let(SeerrBridgeFailure::Reported)
-                        ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectFailed)
+                    _bridgePhase.value = SeerrBridgeQuickConnectPhase.Failed(
+                        failure.message?.takeIf { it.isNotBlank() }
+                            ?.let(SeerrBridgeFailure::Reported)
+                            ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectFailed),
+                    )
                     return
                 },
             )
             if (authenticated) {
-                _bridgeQcCode.value = null
-                _bridgeBusy.value = true
+                _bridgePhase.value = SeerrBridgeQuickConnectPhase.Finalizing
                 client.seerrLogin(
                     authType = QC_AUTH_TYPE,
                     username = null,
@@ -556,50 +638,69 @@ class SeerrSettingsViewModel(
                 ).fold(
                     onSuccess = { fetchBridgeStatus() },
                     onFailure = { failure ->
-                        _bridgeFailure.value = failure.message?.takeIf { it.isNotBlank() }
-                            ?.let(SeerrBridgeFailure::Reported)
-                            ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.LoginFailed)
+                        _bridgePhase.value = SeerrBridgeQuickConnectPhase.Failed(
+                            failure.message?.takeIf { it.isNotBlank() }
+                                ?.let(SeerrBridgeFailure::Reported)
+                                ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.LoginFailed),
+                        )
                     },
                 )
-                _bridgeBusy.value = false
                 return
             }
         }
-        _bridgeFailure.value = SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectTimeout)
+        _bridgePhase.value =
+            SeerrBridgeQuickConnectPhase.Failed(SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectTimeout))
     }
 
     /**
      * Cancels an in-flight Quick Connect flow (cancel button, mode exit,
      * restart). The server-side QC request simply expires; nothing to revoke.
+     * Every phase whose writer was the just-cancelled job returns to [Idle]
+     * (including Finalizing — a dead finalize must not leave the legacy
+     * stuck-busy); a [SeerrBridgeQuickConnectPhase.Failed] banner is kept
+     * (cancel is not the failure's dismissal).
      */
     fun cancelBridgeQuickConnect() {
         bridgeQuickConnectJob?.cancel()
         bridgeQuickConnectJob = null
-        _bridgeQcCode.value = null
-        _bridgeQcStarting.value = false
+        when (_bridgePhase.value) {
+            is SeerrBridgeQuickConnectPhase.Starting,
+            is SeerrBridgeQuickConnectPhase.WaitingForApproval,
+            is SeerrBridgeQuickConnectPhase.Finalizing,
+                -> _bridgePhase.value = SeerrBridgeQuickConnectPhase.Idle
+
+            else -> Unit
+        }
     }
 
     /**
      * Unlinks the server-side Seerr session (the plugin deletes the per-user
      * cookies — the client holds no session to clear) and re-fetches the
-     * status so the pane flips to unlinked. Failures surface in
-     * [bridgeFailure]; the status re-fetch only runs on success.
+     * status so the pane flips to unlinked. Failures surface as
+     * [SeerrBridgeQuickConnectPhase.Failed]; the status re-fetch only runs on
+     * success (it lands the terminal [Idle]).
      */
     fun bridgeLogout() {
         val client = pluginApiClient ?: return
-        if (_bridgeBusy.value || _bridgeQcCode.value != null || _bridgeQcStarting.value) return
+        when (_bridgePhase.value) {
+            is SeerrBridgeQuickConnectPhase.Idle,
+            is SeerrBridgeQuickConnectPhase.Failed,
+                -> Unit
+
+            else -> return
+        }
         launch {
-            _bridgeBusy.value = true
-            _bridgeFailure.value = null
+            _bridgePhase.value = SeerrBridgeQuickConnectPhase.LoggingOut
             client.seerrLogout().fold(
                 onSuccess = { fetchBridgeStatus() },
                 onFailure = { failure ->
-                    _bridgeFailure.value = failure.message?.takeIf { it.isNotBlank() }
-                        ?.let(SeerrBridgeFailure::Reported)
-                        ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.LogoutFailed)
+                    _bridgePhase.value = SeerrBridgeQuickConnectPhase.Failed(
+                        failure.message?.takeIf { it.isNotBlank() }
+                            ?.let(SeerrBridgeFailure::Reported)
+                            ?: SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.LogoutFailed),
+                    )
                 },
             )
-            _bridgeBusy.value = false
         }
     }
 

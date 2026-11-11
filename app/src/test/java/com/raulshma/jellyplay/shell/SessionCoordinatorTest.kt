@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.feature.shell.LaunchPhase
 import com.raulshma.jellyplay.startup.CacheMaintenanceInitializer
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
 import io.mockk.coEvery
@@ -25,7 +26,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -38,9 +38,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -146,7 +143,9 @@ class SessionCoordinatorTest {
         advanceUntilIdle()
 
         assertEquals(listOf("restoreSession", "onSessionRestored"), order)
-        assertFalse(coordinator.isRestoring.value)
+        // Success without a persisted (server, user) pair: the gate settled
+        // straight into the signed-out destination.
+        assertEquals(LaunchPhase.NeedsAuth, coordinator.phase.value)
         coVerify(exactly = 1) { authRepository.restoreSession() }
     }
 
@@ -160,22 +159,23 @@ class SessionCoordinatorTest {
         advanceUntilIdle()
 
         assertEquals(1, callbacks)
-        assertFalse(coordinator.isRestoring.value)
+        assertEquals(LaunchPhase.NeedsAuth, coordinator.phase.value)
     }
 
     @Test
-    fun `isRestoring release never precedes the authenticated mirror on successful restore`() = runTest(dispatcher) {
-        // The launch "add server" flash, as measured on device: the
-        // repository's isAuthenticated flip resumed the restore coroutine a
-        // few ms BEFORE the coordinator's mirror collector ran, so the splash
-        // gate released while the shell still composed the signed-out auth
-        // host (SignedOutAuthHost) — one
-        // (isRestoring=false, isAuthenticated=false) frame flashes the
+    fun `successful restore lands Authenticated with no intermediate phase frame`() = runTest(dispatcher) {
+        // The launch "add server" flash, as measured on device — and the
+        // reason the gate is ONE phase: the repository's isAuthenticated
+        // flip resumed the former two-boolean release a few ms ahead of the
+        // rendered mirror, so the splash dropped while the shell still
+        // composed the signed-out auth host (SignedOutAuthHost) — a
+        // (isRestoring=false, isAuthenticated=false) frame flashed the
         // server list over Home. This reproduces the shape: the flip lands
-        // while restoreSession() is still running, before the mirror
-        // collector has ever been dispatched, so a confirmation read on the
-        // REPOSITORY flow returns without suspending. The release must wait
-        // on the coordinator's own mirror — the flag the shell renders from.
+        // while restoreSession() is still running. The phase machine makes
+        // that frame unrepresentable — the gate release and the destination
+        // are the SAME phase write, so the recorded emission list must go
+        // Restoring → Authenticated directly, with no intermediate value
+        // the shell could render.
         coEvery { authRepository.restoreSession() } answers {
             currentServer.value = ServerInfo(id = "server-1", name = "Server", address = "http://jellyfin.local")
             currentUser.value = UserInfo(
@@ -188,30 +188,19 @@ class SessionCoordinatorTest {
             Result.success(Unit)
         }
 
-        // A channel of write events (NOT combine — it conflates the
-        // intermediate (false, false) pair away) so the test can assert the
-        // ORDER the two exposed flows actually flipped in.
-        val events = Channel<String>(Channel.UNLIMITED)
-        val recorders = listOf(
-            launch { coordinator.isRestoring.collect { events.send("restoring=$it") } },
-            launch { coordinator.isAuthenticated.collect { events.send("auth=$it") } },
-        )
+        val phases = mutableListOf<LaunchPhase>()
+        // Cancelled before the assertions: a StateFlow collect never
+        // completes, and runTest waits out its full 60 s timeout on a still-
+        // active child job otherwise (the recorder-cancel idiom the previous
+        // version of this test used).
+        val recorder = launch { coordinator.phase.collect { phases.add(it) } }
 
         coordinator.start(lifecycleScope) { }
         advanceUntilIdle()
-        recorders.forEach { it.cancel() }
-        events.close()
+        recorder.cancel()
 
-        val order = mutableListOf<String>()
-        for (event in events) order += event
-        val releaseIndex = order.indexOf("restoring=false")
-        val mirrorIndex = order.indexOf("auth=true")
-        assertNotEquals("isRestoring never released (order=$order)", -1, releaseIndex)
-        assertNotEquals("authenticated mirror never flipped (order=$order)", -1, mirrorIndex)
-        assertTrue(
-            "splash gate released before the authenticated mirror flipped: $order",
-            mirrorIndex < releaseIndex,
-        )
+        assertEquals(listOf(LaunchPhase.Restoring, LaunchPhase.Authenticated), phases)
+        assertEquals(LaunchPhase.Authenticated, coordinator.phase.value)
     }
 
     @Test
@@ -221,18 +210,20 @@ class SessionCoordinatorTest {
         // Main.immediate — the launched restore coroutine does not run until
         // advanceUntilIdle — so the gate-up must happen synchronously inside
         // start(): a splash reading between the two would otherwise see the
-        // previous pass's false (restore()'s internal re-raise comes too late).
+        // previous pass's settled destination (restore()'s internal re-raise
+        // comes too late).
         coordinator.start(lifecycleScope) { }
         advanceUntilIdle()
-        assertFalse(coordinator.isRestoring.value)
+        assertEquals(LaunchPhase.NeedsAuth, coordinator.phase.value)
 
         coordinator.start(lifecycleScope) { }
-        assertTrue(
+        assertEquals(
             "the gate must be up when start() returns, before the launched restore can re-raise it",
-            coordinator.isRestoring.value,
+            LaunchPhase.Restoring,
+            coordinator.phase.value,
         )
         advanceUntilIdle()
-        assertFalse(coordinator.isRestoring.value)
+        assertEquals(LaunchPhase.NeedsAuth, coordinator.phase.value)
     }
 
     @Test

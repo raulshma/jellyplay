@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.feature.shell.LaunchPhase
 import com.raulshma.jellyplay.feature.shell.RealtimeSessionController
 import com.raulshma.jellyplay.feature.shell.SessionRestore
 import com.raulshma.jellyplay.feature.shell.navigation.SignedOutAuthHost
@@ -129,7 +130,6 @@ internal fun DesktopAppRoot(
     // sign-in) composes BEFORE that holder can exist — the composition-order contract on
     // rememberDesktopShellServices.
     val authRepository: AuthRepository = koinInject()
-    val isAuthenticated by authRepository.isAuthenticated.collectAsState(initial = false)
 
     //  E2E harness containment: all three `jellyplay.*.enabled` lanes
     // (session / native-dialog / flows) arm through ONE call, each lane
@@ -146,10 +146,10 @@ internal fun DesktopAppRoot(
     // persisted (server, user) pair exists, so hold on a neutral splash
     // instead of flashing the sign-in pane at every resuming session. The
     // choreography is the SHARED SessionRestore (shared/feature/shell) —
-    // restore call → authenticated-mirror wait → bounded timeout → release.
-    // The mirror wait and the 2.5 s cap keep the release from landing while
-    // this composition still shows the signed-out host. The splash rendering
-    // below stays this shell's own.
+    // restore call → auth-flip grace wait → bounded timeout → ONE atomic
+    // phase write (LaunchPhase below). Gate and destination are the same
+    // value, so the sign-in pane can never flash behind a dropped splash.
+    // The splash rendering below stays this shell's own.
     val sessionScope = rememberCoroutineScope()
     val sessionRestore = remember(authRepository) {
         SessionRestore(
@@ -159,7 +159,7 @@ internal fun DesktopAppRoot(
             currentUser = authRepository.currentUser,
         )
     }
-    val isRestoring by sessionRestore.isRestoring.collectAsState()
+    val phase by sessionRestore.phase.collectAsState()
     LaunchedEffect(sessionRestore) {
         sessionRestore.restore(sessionScope)
     }
@@ -206,8 +206,11 @@ internal fun DesktopAppRoot(
         onDispose { realtimeSession.stop() }
     }
 
-    when {
-        isRestoring -> SessionRestoreSplash()
+    // The whole branch dispatch reads the shared launch phase — one value
+    // for gate and destination (LaunchPhase), so no frame can show a
+    // dropped splash with the branch still undecided.
+    when (phase) {
+        LaunchPhase.Restoring -> SessionRestoreSplash()
         // The signed-out gate is the SHARED SignedOutAuthHost
         // (shared/feature/shell). The desktop-only chrome
         // rides the shared host's content slot: Esc / Alt+Left pop the
@@ -220,7 +223,7 @@ internal fun DesktopAppRoot(
         // configuration stays desktop-supplied: the sealed Route serializer
         // is registered as the polymorphic NavKey default (see
         // desktopNavSavedStateConfiguration in DesktopRail.kt).
-        !isAuthenticated -> {
+        LaunchPhase.NeedsAuth -> {
             //  open-with boundary: while signed out the pending link
             // queue has nowhere to route (every destination needs a session)
             // and this branch has no snackbar surface, so its events are
@@ -254,7 +257,7 @@ internal fun DesktopAppRoot(
                 },
             )
         }
-        else -> DesktopNavScaffold(
+        LaunchPhase.Authenticated -> DesktopNavScaffold(
             menuRefreshRequests = menuRefreshRequests,
             windowRef = windowRef,
             linkOpens = linkOpens,

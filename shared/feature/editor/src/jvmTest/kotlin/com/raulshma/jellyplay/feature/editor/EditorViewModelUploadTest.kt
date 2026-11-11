@@ -104,7 +104,7 @@ class EditorViewModelUploadTest {
 
         coVerify(exactly = 1) { editorRepository.setItemImage(itemId, "Primary", bytes) }
         val state = viewModel.uiState.value
-        assertNull(state.error, "Expected no error after successful upload, got: ${state.error}")
+        assertNull(state.actionError, "Expected no error after successful upload, got: ${state.actionError}")
     }
 
     @Test
@@ -126,8 +126,8 @@ class EditorViewModelUploadTest {
 
         val state = viewModel.uiState.value
         assertTrue(
-            state.error?.contains("Cannot open input stream") == true,
-            "Expected stream-open failure in uiState.error, got: ${state.error}",
+            state.actionError?.contains("Cannot open input stream") == true,
+            "Expected stream-open failure on the uiState.actionError banner channel, got: ${state.actionError}",
         )
         coVerify(exactly = 0) { editorRepository.setItemImage(any(), any(), any()) }
     }
@@ -144,6 +144,6 @@ class EditorViewModelUploadTest {
 
         // No error should be present after a successful upload.
         val state = viewModel.uiState.value
-        assertNull(state.error, "Expected no error after successful upload, got: ${state.error}")
+        assertNull(state.actionError, "Expected no error after successful upload, got: ${state.actionError}")
     }
 }

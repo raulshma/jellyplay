@@ -9,11 +9,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,7 +23,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.concurrent.atomic.AtomicInteger
 
 // This client keeps its org.json-based message routing verbatim.
 // Every emitted [WebSocketEvent] carries the `Data` payload as an
@@ -32,6 +32,31 @@ import java.util.concurrent.atomic.AtomicInteger
 // android.jar on the Android target and against the real org.json artifact
 // on the desktop target (see the module build script).
 
+/**
+ * The app-lifetime realtime socket — a THIN OkHttp adapter around the
+ * [WsConnectionMachine] decision core. Every connection-level decision
+ * (when to reconnect, on which ladder, whether an open is a reconnect)
+ * lives in the machine; this class maps OkHttp callbacks to machine events,
+ * executes the returned [WsAction]s, and owns the transport plumbing only
+ * (socket, message routing, keep-alive loop).
+ *
+ * What the machine replaced here (full inventory in
+ * [WsConnectionMachine]'s KDoc): the `reconnectAttempts` AtomicInteger
+ * (attempt index + phase selector + `disconnect()` poison value), the
+ * `hadConnectedOnce` one-shot, the `backgroundRetryDelayMs` AtomicLong, the
+ * `_isConnected` MutableStateFlow, and the five credential strings' role as
+ * a "logical session ended" null-ness sentinel.
+ *
+ * ## The clean-close fix
+ *
+ * The former `onClosed` callback flipped the connected flag and stopped
+ * keep-alive but NEVER scheduled a reconnect — a clean server-side close
+ * (server restart, idle policy, load-balancer drain) stranded
+ * remote-control/SyncPlay pushes until the next auth edge. Now
+ * `onClosedClean` re-enters the same backoff ladder as a failure. Pinned by
+ * [WsConnectionMachineTest] and by
+ * [JellyfinWebSocketClientReconnectTest]'s clean-close case.
+ */
 class JellyfinWebSocketClient(
     private val okHttpClient: OkHttpClient,
 ) {
@@ -40,37 +65,48 @@ class JellyfinWebSocketClient(
     val events: SharedFlow<WebSocketEvent> = _events.asSharedFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * The live session's credentials — connect()'s DEDUPE input and
+     * `connectInternal()`'s URL/sender source, nothing more. They no longer
+     * double as the "logical session ended" sentinel (the phase machine's
+     * `Disconnected` state is that truth now), which is why
+     * [disconnect] clears all five instead of the former three — stale
+     * `deviceName`/`clientName` were harmless only while the null-check
+     * sentinel made them unread. @Volatile: written from any thread calling
+     * [connect]/[disconnect], read from OkHttp callback threads and the
+     * keep-alive loop.
+     */
     @Volatile private var serverUrl: String? = null
     @Volatile private var token: String? = null
     @Volatile private var deviceId: String? = null
     @Volatile private var deviceName: String? = null
     @Volatile private var clientName: String? = null
-    private val reconnectAttempts = AtomicInteger(0)
+
+    /** The one connection decision core — see [WsConnectionMachine]. */
+    private val machine = WsConnectionMachine()
 
     /**
-     * The fast reconnect schedule (1s → 2s → 4s → 8s → 16s, +[0..1000]ms
-     * jitter, capped at 30s) — the module's one backoff law
-     * ([WebSocketBackoffPolicy]) with this client's jitter shape. Past
-     * [WebSocketBackoffPolicy.maxAttempts] attempts [scheduleReconnect]
-     * leaves the fast schedule for the slow background retry below.
+     * The machine's live phase, published verbatim. ADDITIVE public member:
+     * consumers keep reading [isConnected]; this exposes the richer
+     * vocabulary (`Reconnecting(attempt, nextDelayMs)`,
+     * `BackgroundRetry(nextDelayMs)`) for diagnostics and future consumers
+     * without anyone having to re-derive it from event flows.
      */
-    private val fastBackoff = WebSocketBackoffPolicy(jitterMs = WebSocketBackoffPolicy.uniformJitter())
-    private var backgroundRetryJob: Job? = null
-    private var reconnectJob: Job? = null
+    val phase: StateFlow<WsConnectionPhase> = machine.phase
 
     /**
-     * Current delay of the slow-path background retry (see
-     * [scheduleReconnect]): starts at [BACKGROUND_RETRY_INITIAL_DELAY_MS] and
-     * doubles each failed retry cycle, capped at [BACKGROUND_RETRY_MAX_DELAY_MS].
-     * Reset to the initial delay whenever a connection succeeds (`onOpen`) or
-     * `connect()` is called explicitly — a user-driven reconnect re-earns the
-     * fast schedule. Atomic like [reconnectAttempts]: read/written from OkHttp
-     * callback threads and [scope]'s IO dispatchers.
+     * Live socket connection state — a DERIVED PROJECTION of [phase]:
+     * `true` exactly while the machine sits in `Connected`. The former
+     * `_isConnected` MutableStateFlow (hand-maintained at every callback)
+     * is gone; `SharingStarted.Eagerly` keeps the projection collecting
+     * from construction so synchronous `.value` reads (e.g.
+     * ScheduledTasksRealtimeChannel's initial arm and SyncPlayManager's
+     * `first { it }`) are always correct, and the `StateFlow<Boolean>` type
+     * is unchanged for every consumer.
      */
-    private val backgroundRetryDelayMs = java.util.concurrent.atomic.AtomicLong(BACKGROUND_RETRY_INITIAL_DELAY_MS)
-
-    private val _isConnected = MutableStateFlow(false)
-    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+    val isConnected: StateFlow<Boolean> = machine.phase
+        .map { it is WsConnectionPhase.Connected }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     private val _reconnects = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
 
@@ -80,13 +116,17 @@ class JellyfinWebSocketClient(
      * retry. This is the reconnect vocabulary's single home; consumers no
      * longer re-derive the false→true edge of [isConnected] themselves.
      *
-     * **First-connect semantics:** the FIRST open after an explicit
-     * [connect]/[disconnect] pair does not emit ([hadConnectedOnce] is cleared
-     * only by [disconnect], so an explicit re-connect starts a fresh logical
-     * session). Deliberate divergence from the failure/close handlers keeping
-     * the marker set: an `onFailure`/`onClosed` followed by the automatic
-     * reconnect's `onOpen` IS an open following a previous open, so clearing
-     * it there would suppress the very emission this flow exists to deliver.
+     * **First-connect semantics:** decided by the machine's phase at open
+     * time — an open arriving while the phase is `Connecting` is the logical
+     * session's FIRST connect and does not emit; an open arriving while the
+     * phase is `Reconnecting`/`BackgroundRetry` (the automatic reconnect's
+     * open) does. An explicit [disconnect] lands the machine in
+     * `Disconnected`, so the next explicit [connect] starts a fresh logical
+     * session whose open is a first connect again. (The former
+     * `hadConnectedOnce` flag this was once gated on — cleared only by
+     * `disconnect()`, deliberately kept set across failures so the automatic
+     * reconnect's open would emit — is reproduced exactly by those two phase
+     * arms; see [WsConnectionMachine] and [WsConnectionMachineTest].)
      *
      * Per-consumer arming choices (the pre-`reconnects` edge derivations
      * differed in whether they also fired on the first connect):
@@ -108,15 +148,11 @@ class JellyfinWebSocketClient(
      */
     val reconnects: SharedFlow<Unit> = _reconnects.asSharedFlow()
 
-    /**
-     * Whether this logical session (see [connect]/[disconnect]) has ever seen
-     * an `onOpen`. Set in `onOpen` after the reconnect check; cleared ONLY by
-     * [disconnect] — see [reconnects] for why the failure/close handlers
-     * deliberately keep it. Volatile: written from OkHttp callback threads,
-     * read/cleared from any thread calling [disconnect].
-     */
-    @Volatile
-    private var hadConnectedOnce = false
+    /** Fast-lane pending retry tick (the 1s→16s schedule). See [scheduleRetry]. */
+    private var reconnectJob: Job? = null
+
+    /** Slow-lane pending retry tick (the 60s→15min background schedule). See [scheduleRetry]. */
+    private var backgroundRetryJob: Job? = null
 
     // KeepAlive engine -------------------------------------------------------
     // The server drops the socket after its idle timeout (default 60s) unless the
@@ -128,28 +164,33 @@ class JellyfinWebSocketClient(
     private var keepAliveJob: Job? = null
 
     fun connect(credentials: ConnectionCredentials) {
-        if (isConnected.value &&
+        val credentialsMatch = machine.phase.value is WsConnectionPhase.Connected &&
             serverUrl == credentials.serverAddress &&
             token == credentials.accessToken &&
             deviceId == credentials.deviceId &&
             deviceName == credentials.deviceName &&
             clientName == credentials.clientName
-        ) {
+        val requested = machine.onConnectRequested(credentialsMatch)
+        if (requested.actions.isEmpty()) {
             NetworkLog.d(TAG, "WebSocket already connected to this server, skipping connect")
             return
         }
-        disconnect()
+        apply(requested)
         serverUrl = credentials.serverAddress
         token = credentials.accessToken
         deviceId = credentials.deviceId
         deviceName = credentials.deviceName
         clientName = credentials.clientName
-        reconnectAttempts.set(0)
-        // An explicit connect re-earns the fast background-retry schedule.
-        backgroundRetryDelayMs.set(BACKGROUND_RETRY_INITIAL_DELAY_MS)
-        connectInternal()
+        apply(machine.onConnectStart())
     }
 
+    /**
+     * Opens one socket against the live credentials. Called by the machine's
+     * `OpenSocket` decisions — both the explicit connect's handshake and the
+     * retry ticks' re-open. Null-guards kept as defense-in-depth: the machine
+     * never schedules an attempt out of `Disconnected`, so they are
+     * unreachable in correct operation.
+     */
     private fun connectInternal() {
         val serverAddress = serverUrl ?: return
         val accessToken = token ?: return
@@ -161,18 +202,47 @@ class JellyfinWebSocketClient(
         NetworkLog.d(TAG, "Connecting WebSocket to ${serverAddress.trimEnd('/')}/socket")
         val request = Request.Builder().url(wsUrl).build()
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                NetworkLog.d(TAG, "WebSocket connected")
-                if (hadConnectedOnce) {
-                    _reconnects.tryEmit(Unit)
+            /**
+             * Stale-socket containment, the adapter half of the machine's
+             * no-double-schedule invariant. OkHttp delivers every callback
+             * with the specific [WebSocket] instance it belongs to, but the
+             * machine reasons about PHASES and cannot see socket instances
+             * (see [WsConnectionMachine]) — so a socket the client has
+             * already replaced or closed must be filtered HERE, by identity.
+             * Otherwise its terminal callback mis-feeds the machine: the
+             * closed socket's `onClosed` landing while the replacement's
+             * `Connecting` handshake is in flight reads as the NEW socket's
+             * clean close, starts a phantom reconnect ladder, and the
+             * replacement's open then arrives from a retry phase — emitting
+             * a `reconnects` emission the first-connect semantics forbid
+             * (exactly the duplication [JellyfinWebSocketClientReconnectTest]
+             * caught). The machine guarantees it can never double-schedule;
+             * this guard guarantees dead sockets cannot feed it at all.
+             * Together the two halves structurally retire the former
+             * cancel-replace patch in [scheduleRetry], which existed because
+             * the implicit machine accepted schedule decisions from any
+             * state — including events of sockets that were no longer the
+             * client's. Every replaced/closed socket always got an explicit
+             * `close()` from a `CloseSocket` action before the field moved
+             * on, so a dropped socket's own close handshake still completes
+             * without this listener's involvement. (`onMessage` stays
+             * unguarded, as before: a replaced socket's last buffered
+             * messages carry no machine semantics.)
+             */
+            private fun isCurrentSocket(socket: WebSocket): Boolean {
+                if (socket !== this@JellyfinWebSocketClient.webSocket) {
+                    NetworkLog.d(TAG, "Ignoring stale WebSocket event (socket replaced or closed)")
+                    return false
                 }
-                hadConnectedOnce = true
-                reconnectAttempts.set(0)
-                // A successful connection ends the failure streak — the next
-                // slow-path retry (if any) starts back at the initial delay.
-                backgroundRetryDelayMs.set(BACKGROUND_RETRY_INITIAL_DELAY_MS)
-                _isConnected.value = true
-                startKeepAlive()
+                return true
+            }
+
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (!isCurrentSocket(webSocket)) return
+                NetworkLog.d(TAG, "WebSocket connected")
+                // The machine decides first-connect vs reconnect (emit order:
+                // `reconnects` before keep-alive, mirroring the old onOpen).
+                apply(machine.onOpen())
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -182,20 +252,131 @@ class JellyfinWebSocketClient(
                 handleMessage(text)
             }
 
+            /**
+             * Peer-initiated graceful close: OkHttp delivers `onClosing` when
+             * the peer's close frame is read, and — per `RealWebSocket`'s
+             * `finishReader` (`sendOnClosed = !failed && writer == null &&
+             * receivedCloseCode != -1`) — NEVER fires `onClosed`/`onFailure`
+             * unless the application completes the handshake with
+             * [WebSocket.close], which is what releases the writer. Without
+             * this override the clean-close fix's `onClosedClean` transition
+             * is unreachable: a server restart or idle-policy close never
+             * reached the machine at all. Replying with a wire-valid 1000
+             * (echoing an abnormal peer code such as 1005 would throw in
+             * OkHttp's close validation) completes the handshake; the peer's
+             * own code and reason still reach [onClosed], because OkHttp
+             * reports `receivedCloseCode` there, not our reply's.
+             */
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                if (!isCurrentSocket(webSocket)) return
+                webSocket.close(1000, reason)
+            }
+
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (!isCurrentSocket(webSocket)) return
                 NetworkLog.w(TAG, "WebSocket failure", t)
-                _isConnected.value = false
-                stopKeepAlive()
-                webSocket.close(1000, "reconnecting after failure")
-                scheduleReconnect()
+                // CloseSocket (parity with the old in-callback close) +
+                // ladder ScheduleReconnect are the decision's actions.
+                apply(machine.onFailure())
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (!isCurrentSocket(webSocket)) return
                 NetworkLog.d(TAG, "WebSocket closed: $code $reason")
-                _isConnected.value = false
-                stopKeepAlive()
+                // THE FIX: a clean close re-enters the same ladder as a
+                // failure instead of dead-ending (the former handler only
+                // flipped the flag and stopped keep-alive — and, without an
+                // `onClosing` reply, never even ran for peer-initiated
+                // closes; see [onClosing]).
+                apply(machine.onClosedClean())
             }
         })
+    }
+
+    /**
+     * Executes a [WsDecision]'s actions in order. The single seam between
+     * the pure machine and the OkHttp/coroutine world.
+     */
+    private fun apply(decision: WsDecision) {
+        for (action in decision.actions) {
+            when (action) {
+                WsAction.CancelRetryJobs -> {
+                    reconnectJob?.cancel()
+                    reconnectJob = null
+                    backgroundRetryJob?.cancel()
+                    backgroundRetryJob = null
+                }
+                WsAction.StopKeepAlive -> stopKeepAlive()
+                WsAction.StartKeepAlive -> startKeepAlive()
+                WsAction.OpenSocket -> connectInternal()
+                WsAction.CloseSocket -> {
+                    webSocket?.close(1000, "Client disconnecting")
+                    webSocket = null
+                }
+                WsAction.EmitReconnect -> _reconnects.tryEmit(Unit)
+                is WsAction.ScheduleReconnect -> scheduleRetry(action.delayMs)
+            }
+        }
+    }
+
+    /**
+     * Launches the pending retry tick for [delayMs]. The lane is read off
+     * the phase the machine just entered — the fast schedule logs
+     * recognizable per-attempt text, the slow lane logs its own cadence.
+     * The old unconditional cancel-replace (needed because the implicit
+     * machine could schedule from any state — see
+     * [WsConnectionMachine]'s invariant section) shrinks to same-lane
+     * hygiene: the machine produces at most one pending tick, and the
+     * tick's `onRetryDue` re-validation is what keeps a disconnect-raced
+     * delay from ever opening a socket. The OTHER half the old patch used
+     * to cover — stale terminal callbacks of replaced sockets mis-feeding
+     * the machine — lives in the listener's socket-identity guard (see
+     * [connectInternal]).
+     */
+    private fun scheduleRetry(delayMs: Long) {
+        when (machine.phase.value) {
+            is WsConnectionPhase.BackgroundRetry -> {
+                NetworkLog.w(
+                    TAG,
+                    "Max reconnect attempts (${WebSocketBackoffPolicy.DEFAULT_MAX_ATTEMPTS}) " +
+                        "reached, scheduling slow background retry",
+                )
+                backgroundRetryJob?.cancel()
+                NetworkLog.d(TAG, "Background retry in ${delayMs / 1000}s")
+                backgroundRetryJob = scope.launch {
+                    delay(delayMs)
+                    fireRetryDue()
+                }
+            }
+            else -> {
+                reconnectJob?.cancel()
+                reconnectJob = scope.launch {
+                    delay(delayMs)
+                    fireRetryDue()
+                }
+            }
+        }
+    }
+
+    /**
+     * A retry tick woke: re-validate the phase via [WsConnectionMachine.onRetryDue]
+     * (a disconnect racing the delay lands `Disconnected` → Noop — no socket),
+     * log the attempt in the lane's established voice, then apply the
+     * decision.
+     */
+    private fun fireRetryDue() {
+        val phaseAtTick = machine.phase.value
+        val decision = machine.onRetryDue()
+        if (decision.actions.contains(WsAction.OpenSocket)) {
+            when (phaseAtTick) {
+                is WsConnectionPhase.Reconnecting ->
+                    NetworkLog.d(TAG, "Reconnecting WebSocket (attempt ${phaseAtTick.attempt})")
+                is WsConnectionPhase.BackgroundRetry ->
+                    NetworkLog.d(TAG, "Background WebSocket retry")
+                else -> Unit
+            }
+        }
+        apply(decision)
     }
 
     /**
@@ -235,70 +416,27 @@ class JellyfinWebSocketClient(
             keepAliveIntervalMs.set(half)
             NetworkLog.d(TAG, "ForceKeepAlive: server timeout=${timeoutMs}ms, pinging every ${half}ms")
             // Restart the loop so the new interval takes effect immediately.
-            if (_isConnected.value) startKeepAlive()
+            if (machine.phase.value is WsConnectionPhase.Connected) startKeepAlive()
         }
     }
 
-    private fun scheduleReconnect() {
-        val attempts = reconnectAttempts.incrementAndGet()
-        val fastDelayMs = fastBackoff.delayMs(attempts)
-        if (fastDelayMs == null) {
-            NetworkLog.w(TAG, "Max reconnect attempts (${fastBackoff.maxAttempts}) reached, scheduling slow background retry")
-            backgroundRetryJob?.cancel()
-            // Exponential backoff on the slow path: 60s → 2m → 4m → … → 15min
-            // cap. Each failed retry cycle (the 5 fast attempts below, then
-            // this background cycle failing again) doubles the next wait, so
-            // a permanently dead server no longer wakes every 60s forever.
-            // Additive jitter matches the fast path below; the cap applies to
-            // the total, same as the 30s cap there.
-            val baseDelayMs = backgroundRetryDelayMs.get()
-            backgroundRetryDelayMs.set((baseDelayMs * 2).coerceAtMost(BACKGROUND_RETRY_MAX_DELAY_MS))
-            val retryDelayMs = (baseDelayMs + (0..1000L).random()).coerceAtMost(BACKGROUND_RETRY_MAX_DELAY_MS)
-            NetworkLog.d(TAG, "Background retry in ${retryDelayMs / 1000}s")
-            backgroundRetryJob = scope.launch {
-                // Exits without connecting once serverUrl/token are nullified
-                // (disconnect()); the loop shape is kept so a nullify that
-                // races the delay never attempts a connect on stale creds.
-                while (serverUrl != null && token != null) {
-                    delay(retryDelayMs)
-                    if (serverUrl != null && token != null) {
-                        NetworkLog.d(TAG, "Background WebSocket retry")
-                        reconnectAttempts.set(0)
-                        connectInternal()
-                        return@launch
-                    }
-                }
-            }
-            return
-        }
-        // Cancel any in-flight reconnect attempt before scheduling a new one.
-        // Without this, a rapid connect/disconnect cycle (e.g. user toggling
-        // SyncPlay on a flaky network) could leak the deferred connectInternal()
-        // call and end up with two WebSockets racing each other.
-        reconnectJob?.cancel()
-        reconnectJob = scope.launch {
-            delay(fastDelayMs)
-            if (serverUrl != null && token != null) {
-                NetworkLog.d(TAG, "Reconnecting WebSocket (attempt $attempts)")
-                connectInternal()
-            }
-        }
-    }
-
+    /**
+     * Closes the realtime session from ANY machine state: the phase lands
+     * `Disconnected` (no poison counter — pending ticks neutralize
+     * themselves via `onRetryDue`), ALL five credentials are cleared (the
+     * machine no longer needs null-creds to mean "don't retry"; the former
+     * three-field nullify left `deviceName`/`clientName` stale), keep-alive
+     * stops, both retry jobs cancel and the socket closes. The next explicit
+     * [connect] starts a fresh logical session — its first open is a first
+     * connect, not a reconnect (see [reconnects]).
+     */
     fun disconnect() {
         serverUrl = null
         token = null
         deviceId = null
-        backgroundRetryJob?.cancel()
-        reconnectJob?.cancel()
-        reconnectAttempts.set(fastBackoff.maxAttempts + 1)
-        _isConnected.value = false
-        // The next explicit connect() starts a fresh logical session — its
-        // first open is a first connect, not a reconnect (see [reconnects]).
-        hadConnectedOnce = false
-        stopKeepAlive()
-        webSocket?.close(1000, "Client disconnecting")
-        webSocket = null
+        deviceName = null
+        clientName = null
+        apply(machine.onDisconnectRequested())
     }
 
     private fun handleMessage(text: String) {
@@ -407,11 +545,8 @@ class JellyfinWebSocketClient(
         // ForceKeepAlive can tighten this at runtime.
         private const val DEFAULT_KEEP_ALIVE_INTERVAL_MS = 30_000L
 
-        // Slow-path background retry cadence (see backgroundRetryDelayMs):
-        // initial 60s, doubling per failed cycle, capped at 15 min so a dead
-        // server degrades to at most one attempt storm per quarter hour
-        // instead of one per minute.
-        private const val BACKGROUND_RETRY_INITIAL_DELAY_MS = 60_000L
-        private const val BACKGROUND_RETRY_MAX_DELAY_MS = 900_000L
+        // The background-retry cadence constants (initial 60s, 15min cap)
+        // moved to WsConnectionMachine — they are schedule policy, not
+        // adapter plumbing.
     }
 }

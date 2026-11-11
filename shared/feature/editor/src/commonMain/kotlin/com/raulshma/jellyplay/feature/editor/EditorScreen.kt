@@ -86,6 +86,14 @@ internal fun EditorScreen(
     var showDiscardDialog by rememberSaveable(itemId) { mutableStateOf(false) }
     /** Server-side "Refresh metadata" mode sheet (toolbar action). */
     var showRefreshSheet by rememberSaveable(itemId) { mutableStateOf(false) }
+    // The save machine's one exhaustive fold: every save-phase read below
+    // (the discard dialog's Save choice, the toolbar button's enabled/
+    // spinner/label) draws from this single derivation, so an arm added to
+    // EditorSavePhase must answer here before it compiles.
+    val saving = when (uiState.savePhase) {
+        EditorSavePhase.Saving -> true
+        EditorSavePhase.Idle -> false
+    }
     JellyPlayBackHandler(enabled = uiState.isDirty && !showDiscardDialog) {
         showDiscardDialog = true
     }
@@ -111,7 +119,7 @@ internal fun EditorScreen(
             // The third "Save" choice only makes sense when the user can still
             // save (dirty + not mid-save); otherwise this collapses to a plain
             // Discard / Keep editing pair.
-            secondaryAction = if (!uiState.isSaving) {
+            secondaryAction = if (!saving) {
                 ConfirmAction(
                     text = stringResource(Res.string.editor_save),
                     tone = ConfirmTone.PRIMARY,
@@ -159,13 +167,13 @@ internal fun EditorScreen(
             val saveFocusState = rememberTvFocusState()
             FilledTonalButton(
                 onClick = { viewModel.onEvent(EditorUiEvent.SaveMetadata) },
-                enabled = uiState.isAdmin && uiState.isDirty && !uiState.isSaving,
+                enabled = uiState.isAdmin && uiState.isDirty && !saving,
                 modifier = Modifier
                     .padding(end = 8.dp)
                     .then(saveFocusState.focusModifier)
                     .tvFocusIndicator(saveFocusState, ShapeCache.smooth12),
             ) {
-                if (uiState.isSaving) {
+                if (saving) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp,
@@ -179,7 +187,7 @@ internal fun EditorScreen(
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(if (uiState.isSaving) stringResource(Res.string.editor_saving) else stringResource(Res.string.editor_save))
+                Text(if (saving) stringResource(Res.string.editor_saving) else stringResource(Res.string.editor_save))
             }
         },
     ) {
@@ -193,11 +201,15 @@ internal fun EditorScreen(
                 .focusGroup()
                 .focusRequester(contentFocusRequester),
         ) {
-            // Upload / save / delete / refresh failures all funnel into
-            // uiState.error; render it inline + dismissible so the user sees
-            // the failure instead of a silently re-enabled button. Matches the
-            // ErrorBanner convention used by sibling admin screens.
-            uiState.error?.let { errorMessage ->
+            // Every failure the editor can surface renders here: action
+            // failures (upload / save / delete / refresh / provider-download
+            // note) land in uiState.actionError and a failed load lands in
+            // loadPhase's Failed arm — bannerError is the fold that preserves
+            // the old single-error field's last-write-wins ordering. Rendered
+            // inline + dismissible so the user sees the failure instead of a
+            // silently re-enabled button. Matches the ErrorBanner convention
+            // used by sibling admin screens.
+            uiState.bannerError?.let { errorMessage ->
                 ErrorBanner(
                     message = errorMessage,
                     onDismiss = { viewModel.onEvent(EditorUiEvent.ClearError) },

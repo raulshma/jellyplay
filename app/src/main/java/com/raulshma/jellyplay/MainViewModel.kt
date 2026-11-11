@@ -44,8 +44,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * coordinators on its scope.
  *
  * The three shell coordinators are started here on [scope] and never
- * re-exported: session lifecycle state ([SessionCoordinator.isRestoring] /
- * [isAuthenticated] / [libraryFolders] / [serverHealth]), logout, update
+ * re-exported: session lifecycle state ([SessionCoordinator.phase] /
+ * [libraryFolders] / [serverHealth]), logout, update
  * checks, and SyncPlay opens are consumed through the coordinator instances
  * the composition root reads off its
  * [com.raulshma.jellyplay.shell.ShellInfra] bundle — MainActivity bundles the

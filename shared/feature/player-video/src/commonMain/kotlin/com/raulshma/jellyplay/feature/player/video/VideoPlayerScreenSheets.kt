@@ -218,7 +218,7 @@ internal fun PlayerSheetRouter(
                     playbackSpeed = uiState.playbackSpeed,
                     audioDelayMs = effectsState.audioDelayMs,
                     subtitleDelayMs = uiState.subtitleStyle.offsetMs,
-                    playerError = uiState.playerError,
+                    errorMessage = uiState.playbackError?.message,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)

@@ -17,7 +17,7 @@ import java.io.FilenameFilter
  * `Dispatchers.IO`, mirroring the Android actual's contentResolver timing; a
  * file that vanished between pick and upload throws from readBytes (the JDK
  * FileNotFoundException carries the path), which the ViewModel's
- * platform-neutral `runCatching` routes into `uiState.error` — no
+ * platform-neutral `runCatching` routes into `uiState.actionError` — no
  * desktop-specific error string needed (the "Cannot open input stream…"
  * messages pinned by EditorViewModelUploadTest are the Android actual's).
  *

@@ -21,6 +21,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.cancel
+import java.io.File
 
 /**
  * Mutable playlist window the stub [ExoPlayer] projects. Top-level (not a
@@ -490,5 +491,59 @@ class QueuePlaylistMirrorTest {
         } finally {
             f.close()
         }
+    }
+
+    // ── the removingCurrentRow bracket (source pin) ─────────────────────────
+
+    /**
+     * Source pin for the remove-of-current-row coordination's exception
+     * safety: [AudioPlaybackManager.removeFromQueue] must clear
+     * [QueuePlaylistMirror.removingCurrentRow] in a `finally`, not a bare
+     * epilogue. The flag is [EngineDispatch.prepare]'s mute gate (the flag's
+     * KDoc records the full hazard) — a throw from the chassis write while it
+     * is up would strand it true for the process lifetime, after which every
+     * prepare no-ops and skips / playFromQueue silently die.
+     *
+     * WHY A SOURCE PIN: no behavioural harness can force a chassis throw
+     * here — AudioQueueStateCore.removeFromQueue is in-memory state writes
+     * (undo stack push, StateFlow writes, a cursor write) and its engine
+     * transition is muted by the very flag under test, so no relaxed-mock
+     * configuration reaches the strand. The skip-still-prepares half of the
+     * guarantee IS behavioural — pinned by the QueueSemantics suite's
+     * skipAfterCurrentRowRemoveStillPrepares. This pin follows the
+     * ControllerOwnershipTest precedent for shape-only guards.
+     */
+    @Test
+    fun removeFromQueue_bracketsTheChassisWriteInTryFinally() {
+        var dir: File? = File(System.getProperty("user.dir")).absoluteFile
+        while (dir != null && !File(dir, "src/commonMain/kotlin").isDirectory) dir = dir.parentFile
+        assertTrue("could not locate the core:data module root from ${System.getProperty("user.dir")}", dir != null)
+        val manager = File(
+            dir!!,
+            "src/androidMain/kotlin/com/raulshma/jellyplay/core/data/playback/AudioPlaybackManager.kt",
+        )
+        assertTrue("AudioPlaybackManager.kt not found at ${manager.path}", manager.isFile)
+        val text = manager.readText(Charsets.UTF_8)
+        // The exact bracket shape: set → try { chassis write } finally { clear }.
+        assertTrue(
+            "removeFromQueue must set removingCurrentRow, run the chassis write inside " +
+                "try, and clear the flag in finally — a bare set/clear pair strands the " +
+                "prepare mute gate true on a throw (skips/playFromQueue silently die)",
+            Regex(
+                "removingCurrentRow = index == state\\.currentIndex\\.value\\s*" +
+                    "try \\{\\s*" +
+                    "state\\.removeFromQueue\\(index\\)\\s*" +
+                    "\\} finally \\{\\s*" +
+                    "queueMirror\\.removingCurrentRow = false\\s*" +
+                    "\\}",
+            ).containsMatchIn(text),
+        )
+        // And the finally clear must be the ONLY place the flag comes down —
+        // a second clear site invites the strand right back.
+        assertEquals(
+            "the finally clear must be the only removingCurrentRow = false site",
+            1,
+            Regex("removingCurrentRow = false").findAll(text).count(),
+        )
     }
 }

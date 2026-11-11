@@ -211,7 +211,7 @@ fun JellyPlaySyncScreen(
                         onSyncNow = { viewModel.syncNow() },
                     )
                 }
-                if (syncErrorBannerVisible(syncState, uiState.actionError)) {
+                if (syncErrorBannerVisible(syncState, uiState.actionPhase)) {
                     item(key = "error_banner") { ErrorBanner(text = syncState.lastError) }
                 }
                 item(key = "usage_label") { SectionLabel(
@@ -273,7 +273,7 @@ fun JellyPlaySyncScreen(
                                 onSyncEnabled = { enabled -> viewModel.setSyncEnabled(enabled) },
                                 onSyncNow = { viewModel.syncNow() },
                             )
-                            if (syncErrorBannerVisible(syncState, uiState.actionError)) {
+                            if (syncErrorBannerVisible(syncState, uiState.actionPhase)) {
                                 ErrorBanner(text = syncState.lastError)
                             }
                         }
@@ -341,12 +341,14 @@ fun JellyPlaySyncScreen(
                             uiState = uiState,
                             listState = backupListState,
                             bottomPadding = bottomPadding,
-                            onCreateSnapshot = { if (!uiState.actionInFlight) viewModel.createSnapshot() },
+                            onCreateSnapshot = {
+                                if (uiState.actionPhase !is SnapshotActionPhase.Running) viewModel.createSnapshot()
+                            },
                             onRestoreSnapshot = onRestoreSnapshot,
                             onResetNamespace = { resetConfirm.request { viewModel.resetNamespace() } },
                             onForceRepull = { viewModel.forceRepull() },
                             onExport = {
-                                if (!uiState.actionInFlight) {
+                                if (uiState.actionPhase !is SnapshotActionPhase.Running) {
                                     viewModel.exportSettings { json ->
                                         platformIntents.shareJson(exportSubject, exportChooser, json)
                                     }
@@ -740,8 +742,8 @@ private fun SyncMasterControls(
  */
 private fun syncErrorBannerVisible(
     syncState: ProfileSyncRepository.SyncState,
-    actionError: Boolean,
-): Boolean = syncState.lastError != null || actionError
+    actionPhase: SnapshotActionPhase,
+): Boolean = syncState.lastError != null || actionPhase is SnapshotActionPhase.Failed
 
 /**
  * The keys-count fold's one rendering: the singular/plural resource pair over

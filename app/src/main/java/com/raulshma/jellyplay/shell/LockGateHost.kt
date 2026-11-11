@@ -63,7 +63,16 @@ internal fun LockGateHost(
     submitScope: CoroutineScope,
 ) {
     var pinError by rememberSaveable { mutableStateOf<String?>(null) }
-    var pinVerifying by rememberSaveable { mutableStateOf(false) }
+    // Deliberately NOT saveable (v0.11.10 cohort fix): `pinVerifying` is a
+    // transient in-flight flag whose only writer runs on the caller's
+    // lifecycleScope — an activity recreation mid-verify destroys that scope
+    // with the flag still true, and the restored composition would read
+    // `pinVerifying == true` with no writer left to clear it (keypad
+    // permanently disabled until the gate is re-entered). An in-flight
+    // verification cannot survive recreation by definition; resetting to
+    // false is the honest restore. `pinError` stays saveable (it is a
+    // settled outcome the submit fold clears).
+    var pinVerifying by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Surface the rate-limit lockout to the user when present.

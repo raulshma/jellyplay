@@ -57,12 +57,16 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_remove_user
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_remove_user_message
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_remove_user_title
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_user_placeholder
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_users_load_error_title
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_retry
 import com.raulshma.jellyplay.core.ui.feedback.rememberSelectionTickHaptic
 import com.raulshma.jellyplay.core.ui.components.AddListRow
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
@@ -89,15 +93,32 @@ fun UserSelectionScreen(
     onBack: () -> Unit,
     viewModel: AuthViewModel = koinViewModel(),
 ) {
-    var users by remember { mutableStateOf<List<UserInfo>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    // ONE load machine (JellyPlayViewModel.LoadingState — the conventions-doc
+    // generic Idle/Loading/Success/Error ladder) replaces the former
+    // `users` + `isLoading` remember pair, whose flags could disagree and
+    // whose Loading arm was the ONLY outcome the failure path could reach:
+    // the old getUsersForServer callback carried a bare List with no failure
+    // channel, so a thrown repository read (a DB error behind the one-shot
+    // Room query) never invoked it and the screen spun forever — there was
+    // no error arm at all. The VM API now delivers a Result, so every
+    // failure lands here and the Error arm offers Retry (re-invokes the
+    // SAME load below) instead of the eternal spinner.
+    var loadState by remember {
+        mutableStateOf<JellyPlayViewModel.LoadingState<List<UserInfo>>>(
+            JellyPlayViewModel.LoadingState.Loading
+        )
+    }
 
-    LaunchedEffect(serverId) {
+    fun loadUsers() {
         viewModel.getUsersForServer(serverId) { result ->
-            users = result
-            isLoading = false
+            loadState = result.fold(
+                onSuccess = { JellyPlayViewModel.LoadingState.Success(it) },
+                onFailure = { JellyPlayViewModel.LoadingState.Error(it.message ?: "") },
+            )
         }
     }
+
+    LaunchedEffect(serverId) { loadUsers() }
 
     val isSynthwave = LocalIsSynthwave.current
     val backgroundColorState = rememberScreenBackgroundColorState()
@@ -121,72 +142,94 @@ fun UserSelectionScreen(
         val spacing = adaptiveInfo.itemSpacing(isTv)
 
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            when {
-                isLoading -> {
+            when (val state = loadState) {
+                is JellyPlayViewModel.LoadingState.Loading -> {
                     ScreenLoadingState(message = stringResource(Res.string.auth_loading_users))
                 }
-                users.isEmpty() -> {
+                is JellyPlayViewModel.LoadingState.Success -> {
+                    val users = state.value
+                    if (users.isEmpty()) {
+                        ScreenEmptyState(
+                            icon = Tabler.Outline.User,
+                            title = stringResource(Res.string.auth_no_users_title),
+                            description = stringResource(Res.string.auth_no_users_desc),
+                            actionLabel = stringResource(Res.string.auth_add_user),
+                            onAction = onAddUser,
+                        )
+                    } else {
+                        val firstItemFocusRequester = remember { FocusRequester() }
+                        LaunchedEffect(Unit) {
+                            if (isTv) firstItemFocusRequester.tryRequestFocus("user_first")
+                        }
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize().tvFocusGroupRestorer(),
+                            contentPadding = PaddingValues(
+                                start = contentPad,
+                                end = contentPad,
+                                top = contentPad,
+                                bottom = contentPad + Dimensions.floatingNavHeight,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(spacing),
+                        ) {
+                            itemsIndexed(users, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
+                                val visible = remember { mutableStateOf(false) }
+                                LaunchedEffect(Unit) { visible.value = true }
+                                AnimatedVisibility(
+                                    visible = visible.value,
+                                    enter = fadeIn(
+                                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
+                                    ) + slideInVertically(
+                                        initialOffsetY = { it / 10 },
+                                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                    ),
+                                ) {
+                                    UserCard(
+                                        user = user,
+                                        firstFocusModifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier,
+                                        onClick = {
+                                            viewModel.switchUser(user.id) { result ->
+                                                if (result.isSuccess) {
+                                                    onUserSelected()
+                                                }
+                                            }
+                                        },
+                                        onRemove = { viewModel.removeUser(user.id) },
+                                    )
+                                }
+                            }
+
+                            // TV has no FAB, so the add action lives in the list.
+                            if (isTv) {
+                                item(key = "add_user", contentType = "add_user") {
+                                    AddListRow(
+                                        label = stringResource(Res.string.auth_add_user),
+                                        onClick = onAddUser,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                is JellyPlayViewModel.LoadingState.Error -> {
+                    // The inline error + retry arm — the same full-screen
+                    // state+action shape NewsletterScreen renders its load
+                    // failure with (ScreenEmptyState + core_retry), reusing
+                    // the sibling screens' vocabulary. The raw repository
+                    // message stays a description only (may be blank — a
+                    // local DB read carries no server text); Retry re-runs
+                    // the load through the SAME machine.
                     ScreenEmptyState(
-                        icon = Tabler.Outline.User,
-                        title = stringResource(Res.string.auth_no_users_title),
-                        description = stringResource(Res.string.auth_no_users_desc),
-                        actionLabel = stringResource(Res.string.auth_add_user),
-                        onAction = onAddUser,
+                        icon = Tabler.Outline.AlertTriangle,
+                        title = stringResource(Res.string.auth_users_load_error_title),
+                        description = state.message.takeIf { it.isNotBlank() },
+                        actionLabel = stringResource(CoreUiRes.string.core_retry),
+                        onAction = { loadUsers() },
                     )
                 }
-                else -> {
-                    val firstItemFocusRequester = remember { FocusRequester() }
-                    LaunchedEffect(Unit) {
-                        if (isTv) firstItemFocusRequester.tryRequestFocus("user_first")
-                    }
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().tvFocusGroupRestorer(),
-                        contentPadding = PaddingValues(
-                            start = contentPad,
-                            end = contentPad,
-                            top = contentPad,
-                            bottom = contentPad + Dimensions.floatingNavHeight,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(spacing),
-                    ) {
-                        itemsIndexed(users, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
-                            val visible = remember { mutableStateOf(false) }
-                            LaunchedEffect(Unit) { visible.value = true }
-                            AnimatedVisibility(
-                                visible = visible.value,
-                                enter = fadeIn(
-                                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
-                                ) + slideInVertically(
-                                    initialOffsetY = { it / 10 },
-                                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                                ),
-                            ) {
-                                UserCard(
-                                    user = user,
-                                    firstFocusModifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier,
-                                    onClick = {
-                                        viewModel.switchUser(user.id) { result ->
-                                            if (result.isSuccess) {
-                                                onUserSelected()
-                                            }
-                                        }
-                                    },
-                                    onRemove = { viewModel.removeUser(user.id) },
-                                )
-                            }
-                        }
-
-                        // TV has no FAB, so the add action lives in the list.
-                        if (isTv) {
-                            item(key = "add_user", contentType = "add_user") {
-                                AddListRow(
-                                    label = stringResource(Res.string.auth_add_user),
-                                    onClick = onAddUser,
-                                )
-                            }
-                        }
-                    }
-                }
+                // Structurally unreachable — the machine starts at Loading
+                // and every callback outcome replaces it wholesale — but the
+                // sealed interface demands the arm for exhaustiveness.
+                is JellyPlayViewModel.LoadingState.Idle -> Unit
             }
 
             if (!isTv) {

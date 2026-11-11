@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
 
@@ -114,6 +115,7 @@ class ItemSwitchResetOrderTest {
             ),
             videoFx = seed.videoFx.copy(tvZoomModePercent = 25f),
             episodes = seed.episodes.copy(currentSeasonId = "season-1", isLoadingEpisodes = true),
+            playbackError = PlaybackErrorUi(message = "boom", retryable = true),
         )
 
         val after = before.keepAcrossItems()
@@ -145,5 +147,10 @@ class ItemSwitchResetOrderTest {
         assertFalse(after.dialogueBoostEnabled)
         assertEquals(EffectStrength.NONE, after.dialogueBoostStrength)
         assertEquals(EpisodeBrowserState(), after.episodes)
+        // The error dialog does not ride into the next item either: not a
+        // whitelist leaf, so the single-value error state (the collapsed
+        // playerError/showPlaybackErrorDialog triple) resets to null —
+        // exactly the triple's defaults before the collapse.
+        assertNull(after.playbackError)
     }
 }

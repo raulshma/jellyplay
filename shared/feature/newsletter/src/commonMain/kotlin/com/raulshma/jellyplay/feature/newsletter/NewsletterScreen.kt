@@ -80,11 +80,15 @@ fun NewsletterScreen(
     )
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val sendResultText = state.sendResult?.asText()
-    LaunchedEffect(sendResultText) {
-        if (sendResultText != null) {
-            snackbarHostState.showSnackbar(sendResultText)
-            viewModel.onEvent(NewsletterUiEvent.DismissSendResult)
+    // Send feedback rides the VM's one-shot sendResults Channel (the former
+    // sendResult uiState field replayed its snackbar on state restoration) —
+    // this single collector consumes each result exactly once, showing the
+    // same snackbar the state-field pump showed. The message resolves via
+    // the suspend compose-resources resolver inside collect (asText), since
+    // a flow collector has no composition context.
+    LaunchedEffect(Unit) {
+        viewModel.sendResults.collect { result ->
+            snackbarHostState.showSnackbar(result.asText())
         }
     }
 

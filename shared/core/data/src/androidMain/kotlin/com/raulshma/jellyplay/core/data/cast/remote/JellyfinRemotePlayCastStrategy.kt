@@ -7,7 +7,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
+import com.raulshma.jellyplay.core.data.cast.CastSessionPhase
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
+import com.raulshma.jellyplay.core.data.cast.beginConnecting
+import com.raulshma.jellyplay.core.data.cast.connected
+import com.raulshma.jellyplay.core.data.cast.disconnected
+import com.raulshma.jellyplay.core.data.cast.projected
 import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.syncplay.TimeSyncManager
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -85,11 +90,21 @@ class JellyfinRemotePlayCastStrategy(
     private val _isAvailable = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = _isAvailable.asStateFlow()
 
-    private val _isConnected = MutableStateFlow(false)
-    override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+    /**
+     * The connection phase machine (commonMain [CastSessionPhase]) — the ONE
+     * source of truth the former `_isConnected` / `_isConnecting` boolean
+     * pair folded into two hand-synced flags. The public
+     * [isConnected] / [isConnecting] surface below are read-through
+     * projections of it (synchronous `.value` semantics preserved — the
+     * Play-On gates in AudioPlaybackManager / PlaybackSession /
+     * PlayOnViewModel read `.value` directly).
+     */
+    private val _phase = MutableStateFlow<CastSessionPhase>(CastSessionPhase.Idle)
+    val phase: StateFlow<CastSessionPhase> = _phase.asStateFlow()
 
-    private val _isConnecting = MutableStateFlow(false)
-    override val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
+    override val isConnected: StateFlow<Boolean> = _phase.projected { it.isConnected }
+
+    override val isConnecting: StateFlow<Boolean> = _phase.projected { it.isConnecting }
 
     private val _discoveredDevices = MutableStateFlow<List<CastDevice>>(emptyList())
     override val discoveredDevices: StateFlow<List<CastDevice>> = _discoveredDevices.asStateFlow()
@@ -202,16 +217,23 @@ class JellyfinRemotePlayCastStrategy(
     }
 
     override fun connect(context: Context, device: CastDevice) {
-        if (_isConnected.value) {
+        if (_phase.value.isConnected) {
             disconnect(context)
         }
 
         val session = device.tag as? SessionInfo ?: return
-        _isConnecting.value = true
+
+        // The synchronous Idle→Connecting→Connected flip is the pinned
+        // observable outcome (JellyfinRemotePlayCastStrategyTest asserts
+        // isConnected.value immediately after this call returns; the
+        // read-through phase projections keep that exact). Connecting exists
+        // only between these two statements — no suspension, no read — so it
+        // stays unobservable here, exactly as the former
+        // `_isConnecting=true → _isConnected=true` pair was.
+        _phase.value = _phase.value.beginConnecting()
         connectedSessionId = session.id
         _targetName.value = device.name
-        _isConnected.value = true
-        _isConnecting.value = false
+        _phase.value = _phase.value.connected()
 
         // Real-time sync: subscribe to the server's `Sessions` WebSocket push so
         // transport state (position / play-pause / now-playing) reflects the
@@ -225,8 +247,7 @@ class JellyfinRemotePlayCastStrategy(
         tasks.cancel(SESSIONS_OBSERVER)
         connectedSessionId = null
         _targetName.value = null
-        _isConnected.value = false
-        _isConnecting.value = false
+        _phase.value = _phase.value.disconnected()
         _positionMs.value = 0L
         _durationMs.value = 0L
         _isPlaying.value = false

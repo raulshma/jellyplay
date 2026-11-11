@@ -141,10 +141,23 @@ class AuthViewModel(
         }
     }
 
-    fun getUsersForServer(serverId: String, onResult: (List<UserInfo>) -> Unit) {
+    /**
+     * Loads a server's pick-list users (the local one-shot Room read,
+     * [AuthRepository.getUsersForServer]) and delivers the outcome to
+     * [onResult] as a [Result] — the same callback shape the sibling
+     * [login]/[switchUser] callbacks use. The bare-list callback this
+     * replaces had NO failure channel: a thrown repository read (a DB error
+     * behind the one-shot query) propagated into this coroutine and never
+     * invoked [onResult], which stranded UserSelectionScreen's loading flag
+     * true forever — an eternal spinner with no error arm. [runCatching]
+     * folds that thrown path into the Result so the screen's Retry re-runs
+     * this and lands in its error arm instead. A cancellation escaping the
+     * read also folds into a failure; the screen is gone by then, so the
+     * folded result is inert.
+     */
+    fun getUsersForServer(serverId: String, onResult: (Result<List<UserInfo>>) -> Unit) {
         launch {
-            val users = authRepository.getUsersForServer(serverId)
-            onResult(users)
+            onResult(runCatching { authRepository.getUsersForServer(serverId) })
         }
     }
 

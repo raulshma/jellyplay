@@ -105,6 +105,24 @@ internal class QueuePlaylistMirror(
      * `removeMediaItem` (the shifted-in row then plays and its transition
      * echo reconciles), so [EngineDispatch.prepare] must not also
      * seek/rebuild on top of it.
+     *
+     * GATE — [EngineDispatch.prepare] reads this FIRST and early-returns
+     * while it is true (AudioPlaybackManager's `engineDispatch` override),
+     * because the chassis's remove-of-current-row transition routes its
+     * engine write through that same prepare: without the gate the remove
+     * would double-write (a seek/rebuild landing on top of the
+     * removeMediaItem the caller is about to make).
+     *
+     * THE STRAND HAZARD (why the writer brackets the set/clear in
+     * try/finally): this var is only cleared by removeFromQueue's own
+     * epilogue. If anything between set and clear throws (a chassis write
+     * gone wrong, a listener failure), the flag strands true for the rest
+     * of the process — and every later chassis transition that needs an
+     * engine write (skipToNext/skipToPrevious, playFromQueue, the
+     * remove-of-current-row path itself) silently no-ops its prepare, so
+     * playback freezes at the stale cursor with NO error surfaced anywhere.
+     * Skips and queue plays just quietly die. The finally is what makes
+     * the gate exception-safe; keep the bracket when touching removeFromQueue.
      */
     var removingCurrentRow: Boolean = false
 

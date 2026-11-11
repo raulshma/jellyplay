@@ -89,6 +89,7 @@
     <string name="server_health_checking">Checking…</string>
 
     <!-- User selection screen -->
+    <string name="auth_users_load_error_title">Couldn\'t load users</string>
     <string name="auth_loading_users">Loading users…</string>
     <string name="auth_no_users_title">No users on this server</string>
     <string name="auth_no_users_desc">Add a user to get started</string>

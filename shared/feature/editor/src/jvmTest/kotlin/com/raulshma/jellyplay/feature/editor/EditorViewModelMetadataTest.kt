@@ -47,17 +47,21 @@ import kotlin.test.assertTrue
  * Pins the metadata-editor side of [EditorViewModel] beyond the upload path
  * covered by [EditorViewModelUploadTest]:
  *
- *  - `loadEditorData`: failure → error + loading cleared; success → admin-gated
- *    population of image infos / image providers / editor info, the editable
- *    field mapping, and the isAdmin flag flow-through (admin-only endpoints are
- *    skipped for non-admins instead of firing guaranteed-to-fail 403s).
+ *  - `loadEditorData`: failure → the load phase settles to `Failed` (message
+ *    verbatim, content untouched); success → the load phase settles to `Ready`
+ *    with admin-gated population of image infos / image providers / editor
+ *    info, the editable field mapping, and the isAdmin flag flow-through
+ *    (admin-only endpoints are skipped for non-admins instead of firing
+ *    guaranteed-to-fail 403s).
  *  - `saveMetadata`: exact `EditableItemMetadata` mapping submitted to the
  *    repository (incl. blank→null and runtimeMinutes→ticks derivations),
- *    isDirty cleared on success, error surfaced on failure.
+ *    isDirty cleared on success, the save phase settling back to Idle, and
+ *    failures surfacing on the `actionError` banner channel.
  *  - `deleteImage` / `loadRemoteImages` / `refreshMetadata` repository
  *    forwarding (incl. provider/startIndex pagination and the refresh mode
  *    being reused for both metadata and image refresh).
- *  - `updateField` (form-typed) dirty tracking, `clearError`, and image URL
+ *  - `updateField` (form-typed) dirty tracking, `clearError` (the banner
+ *    dismissal — it settles a Failed load phase too), and image URL
  *    delegation. The per-field mapping/dirty pins live beside the form in
  *    [EditableItemMetadataFormTest].
  */
@@ -186,15 +190,18 @@ class EditorViewModelMetadataTest {
     }
 
     @Test
-    fun `loadEditorData surfaces a media detail failure as error and clears loading`() = runTest {
+    fun `loadEditorData surfaces a media detail failure as the Failed load phase`() = runTest {
         coEvery { editorRepository.getMediaDetail(itemId) } returns Result.failure(RuntimeException("detail boom"))
 
         viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals("detail boom", state.error)
-        assertFalse(state.isLoading)
+        // One phase value carries both old pins at once: Failed("detail boom")
+        // IS the settled state, so "loading cleared" needs no second assert
+        // (the phase cannot be Loading and Failed simultaneously — that
+        // unrepresentability is the migration's point).
+        assertEquals(EditorLoadPhase.Failed("detail boom"), state.loadPhase)
         assertNull(state.mediaDetail)
     }
 
@@ -210,8 +217,8 @@ class EditorViewModelMetadataTest {
 
         val state = viewModel.uiState.value
         assertTrue(state.isAdmin)
-        assertFalse(state.isLoading)
-        assertNull(state.error)
+        assertEquals(EditorLoadPhase.Ready, state.loadPhase)
+        assertNull(state.actionError)
         assertNotNull(state.mediaDetail)
         assertNotNull(state.editorInfo)
         assertEquals(imageInfos, state.imageInfos)
@@ -253,7 +260,7 @@ class EditorViewModelMetadataTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.isAdmin)
-        assertNull(state.error)
+        assertEquals(EditorLoadPhase.Ready, state.loadPhase)
         assertNotNull(state.mediaDetail)
         assertTrue(state.imageInfos.isEmpty())
         assertTrue(state.imageProviders.isEmpty())
@@ -311,8 +318,8 @@ class EditorViewModelMetadataTest {
         coVerify(exactly = 1) { editorRepository.updateItem(itemId, expected) }
         val state = viewModel.uiState.value
         assertFalse(state.isDirty)
-        assertFalse(state.isSaving)
-        assertNull(state.error)
+        assertEquals(EditorSavePhase.Idle, state.savePhase)
+        assertNull(state.actionError)
     }
 
     @Test
@@ -370,11 +377,11 @@ class EditorViewModelMetadataTest {
             dateCreated = "2020-01-01",
         )
         coVerify(exactly = 1) { editorRepository.updateItem(itemId, expected) }
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 
     @Test
-    fun `saveMetadata surfaces a repository failure and keeps the dirty flag`() = runTest {
+    fun `saveMetadata surfaces a repository failure on the banner channel and keeps the dirty flag`() = runTest {
         viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
@@ -385,8 +392,12 @@ class EditorViewModelMetadataTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals("save boom", state.error)
-        assertFalse(state.isSaving)
+        // Save failures land on the actionError banner channel (the screen's
+        // one ErrorBanner reads bannerError), NOT in a savePhase arm — and the
+        // save machine settles back to Idle exactly as isSaving did.
+        assertEquals("save boom", state.actionError)
+        assertEquals("save boom", state.bannerError)
+        assertEquals(EditorSavePhase.Idle, state.savePhase)
         assertTrue(state.isDirty)
         coVerify(exactly = 1) { editorRepository.updateItem(any(), any()) }
     }
@@ -421,7 +432,7 @@ class EditorViewModelMetadataTest {
         viewModel.onEvent(EditorUiEvent.DeleteImage("Backdrop", 2))
         advanceUntilIdle()
 
-        assertEquals("delete boom", viewModel.uiState.value.error)
+        assertEquals("delete boom", viewModel.uiState.value.actionError)
     }
 
     @Test
@@ -446,7 +457,7 @@ class EditorViewModelMetadataTest {
 
         coVerify(exactly = 1) { editorRepository.getRemoteImages(itemId, "Primary", "TheMovieDb", 20, 50) }
         assertEquals(result, viewModel.uiState.value.remoteImages)
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 
     @Test
@@ -466,15 +477,20 @@ class EditorViewModelMetadataTest {
     }
 
     @Test
-    fun `clearError clears a surfaced error`() = runTest {
+    fun `clearError settles a Failed load phase so the banner stops rendering`() = runTest {
         coEvery { editorRepository.getMediaDetail(itemId) } returns Result.failure(RuntimeException("load boom"))
         viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
-        assertEquals("load boom", viewModel.uiState.value.error)
+        assertEquals(EditorLoadPhase.Failed("load boom"), viewModel.uiState.value.loadPhase)
 
         viewModel.onEvent(EditorUiEvent.ClearError)
 
-        assertNull(viewModel.uiState.value.error)
+        // The dismissed failure settles to Ready — the ladder finished and the
+        // banner must stop rendering, exactly as the old error=null left the
+        // non-loading state with whatever content survived.
+        assertEquals(EditorLoadPhase.Ready, viewModel.uiState.value.loadPhase)
+        assertNull(viewModel.uiState.value.actionError)
+        assertNull(viewModel.uiState.value.bannerError)
     }
 
     @Test
@@ -507,6 +523,6 @@ class EditorViewModelMetadataTest {
         viewModel.onEvent(EditorUiEvent.RefreshMetadata(MetadataRefreshOption.REPLACE_IMAGES))
         advanceUntilIdle()
         coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, MetadataRefreshParams("None", "FullRefresh", replaceAllMetadata = false, replaceAllImages = true)) }
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 }

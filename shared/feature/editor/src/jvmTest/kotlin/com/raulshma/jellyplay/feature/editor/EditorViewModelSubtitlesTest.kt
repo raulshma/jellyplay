@@ -35,7 +35,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -45,20 +44,21 @@ import kotlin.test.assertTrue
  * covered by [EditorViewModelUploadTest]:
  *
  *  - `uploadSubtitle` / `uploadSubtitleFromFile`: base64-encoded bytes reach the
- *    repository, a success re-polls media detail, a failure surfaces in
- *    [EditorUiState.error] without a reload.
+ *    repository, a success re-polls media detail, a failure surfaces on the
+ *    [EditorUiState.actionError] banner channel without a reload.
  *  - `deleteSubtitle`: forwards the stream index, purges the durable local copy
  *    of the removed server stream on success (and only then), and refreshes.
  *  - `searchRemoteSubtitles` / `downloadRemoteSubtitle`: result/error handling,
  *    download success re-polling media detail for the new stream.
  *  - Multi-provider search: `loadConfiguredSubtitleProviders` chip set,
  *    `searchAllSubtitleProviders` query derivation (item ids + language),
- *    streaming partial results, per-kind error map, searching-flag toggle, and
- *    the no-media early return.
+ *    streaming partial results, per-kind error map, the Searching phase
+ *    raise/settle, and the no-media early return.
  *  - `downloadProviderSubtitle`: external rows saved durably then uploaded to
  *    the server (with attribution on upload success), the "Saved to device
- *    only" note when the upload fails, download-failure surfacing, and Jellyfin
- *    rows routed through the server-side download instead of `downloadExternal`.
+ *    only" note when the upload fails, download-failure surfacing, Jellyfin
+ *    rows routed through the server-side download instead of `downloadExternal`,
+ *    and the Downloading phase raise/settle (ex-`isDownloadingProviderSubtitle`).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelSubtitlesTest {
@@ -164,7 +164,7 @@ class EditorViewModelSubtitlesTest {
         }
         // Initial load + the success-triggered reload.
         coVerify(exactly = 2) { editorRepository.getMediaDetail(itemId) }
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 
     @Test
@@ -178,7 +178,7 @@ class EditorViewModelSubtitlesTest {
         viewModel.onEvent(EditorUiEvent.UploadSubtitle(byteArrayOf(1), "sub.srt", "eng", isForced = false, isHearingImpaired = false))
         advanceUntilIdle()
 
-        assertEquals("upload boom", viewModel.uiState.value.error)
+        assertEquals("upload boom", viewModel.uiState.value.actionError)
         coVerify(exactly = 1) { editorRepository.getMediaDetail(itemId) }
     }
 
@@ -206,7 +206,7 @@ class EditorViewModelSubtitlesTest {
                 true,
             )
         }
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 
     @Test
@@ -225,7 +225,7 @@ class EditorViewModelSubtitlesTest {
         assertEquals(expectedPurge, subtitleStore.purgedCopies)
         // Initial load + the success-triggered reload.
         coVerify(exactly = 2) { editorRepository.getMediaDetail(itemId) }
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 
     @Test
@@ -239,7 +239,7 @@ class EditorViewModelSubtitlesTest {
         viewModel.onEvent(EditorUiEvent.DeleteSubtitle(2))
         advanceUntilIdle()
 
-        assertEquals("delete boom", viewModel.uiState.value.error)
+        assertEquals("delete boom", viewModel.uiState.value.actionError)
         assertTrue(subtitleStore.purgedCopies.isEmpty())
         coVerify(exactly = 1) { editorRepository.getMediaDetail(itemId) }
     }
@@ -257,7 +257,7 @@ class EditorViewModelSubtitlesTest {
         advanceUntilIdle()
 
         assertEquals(rows, viewModel.uiState.value.remoteSubtitleResults)
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 
     @Test
@@ -271,7 +271,7 @@ class EditorViewModelSubtitlesTest {
         viewModel.onEvent(EditorUiEvent.SearchRemoteSubtitles("eng"))
         advanceUntilIdle()
 
-        assertEquals("search boom", viewModel.uiState.value.error)
+        assertEquals("search boom", viewModel.uiState.value.actionError)
         assertTrue(viewModel.uiState.value.remoteSubtitleResults.isEmpty())
     }
 
@@ -285,7 +285,7 @@ class EditorViewModelSubtitlesTest {
 
         coVerify(exactly = 1) { editorRepository.downloadRemoteSubtitle(itemId, "remote-1") }
         coVerify(exactly = 2) { editorRepository.getMediaDetail(itemId) }
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 
     @Test
@@ -299,7 +299,7 @@ class EditorViewModelSubtitlesTest {
         viewModel.onEvent(EditorUiEvent.DownloadRemoteSubtitle("remote-1"))
         advanceUntilIdle()
 
-        assertEquals("download boom", viewModel.uiState.value.error)
+        assertEquals("download boom", viewModel.uiState.value.actionError)
         coVerify(exactly = 1) { editorRepository.getMediaDetail(itemId) }
     }
 
@@ -315,7 +315,7 @@ class EditorViewModelSubtitlesTest {
     }
 
     @Test
-    fun `searchAllSubtitleProviders fans out with the item query, streams partials, and toggles the searching flag`() = runTest {
+    fun `searchAllSubtitleProviders fans out with the item query, streams partials, and drives the searching phase`() = runTest {
         viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         viewModel.onEvent(EditorUiEvent.LoadConfiguredSubtitleProviders)
@@ -332,8 +332,9 @@ class EditorViewModelSubtitlesTest {
         coEvery {
             subtitleProviderRepository.searchAllStreaming(any(), any(), any(), any())
         } coAnswers {
-            // The VM flips the flag on before fanning out.
-            searchingDuringRepositoryCall = viewModel.uiState.value.isSearchingProviderSubtitles
+            // The VM raises the Searching phase before fanning out.
+            searchingDuringRepositoryCall =
+                viewModel.uiState.value.providerSubtitleSearchPhase is ProviderSubtitleSearchPhase.Searching
             arg<(MergedSubtitleSearch) -> Unit>(3)(partial)
             final
         }
@@ -344,9 +345,9 @@ class EditorViewModelSubtitlesTest {
         val state = viewModel.uiState.value
         assertTrue(
             searchingDuringRepositoryCall,
-            "Expected the searching flag set while the provider fan-out runs",
+            "Expected the Searching phase raised while the provider fan-out runs",
         )
-        assertFalse(state.isSearchingProviderSubtitles)
+        assertEquals(ProviderSubtitleSearchPhase.Idle, state.providerSubtitleSearchPhase)
         assertEquals(final.results, state.providerSubtitleResults)
         assertEquals(final.errors, state.providerSubtitleErrors)
         assertEquals(
@@ -369,7 +370,7 @@ class EditorViewModelSubtitlesTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { subtitleProviderRepository.searchAllStreaming(any(), any(), any(), any()) }
-        assertFalse(viewModel.uiState.value.isSearchingProviderSubtitles)
+        assertEquals(ProviderSubtitleSearchPhase.Idle, viewModel.uiState.value.providerSubtitleSearchPhase)
     }
 
     @Test
@@ -381,7 +382,8 @@ class EditorViewModelSubtitlesTest {
         val row = searchResult(SubtitleProviderKind.WYZIE, "wz-1")
         var downloadingDuringRepositoryCall = false
         coEvery { subtitleProviderRepository.downloadExternal(row) } coAnswers {
-            downloadingDuringRepositoryCall = viewModel.uiState.value.isDownloadingProviderSubtitle
+            downloadingDuringRepositoryCall =
+                viewModel.uiState.value.providerSubtitleDownloadPhase is ProviderSubtitleDownloadPhase.Downloading
             Result.success(file)
         }
 
@@ -389,9 +391,9 @@ class EditorViewModelSubtitlesTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertTrue(downloadingDuringRepositoryCall, "Expected the downloading flag set during the provider download")
-        assertFalse(state.isDownloadingProviderSubtitle)
-        assertNull(state.error)
+        assertTrue(downloadingDuringRepositoryCall, "Expected the Downloading phase raised during the provider download")
+        assertEquals(ProviderSubtitleDownloadPhase.Idle, state.providerSubtitleDownloadPhase)
+        assertNull(state.actionError)
         assertEquals(1, subtitleStore.savedSubtitles.size)
         assertEquals(itemId, subtitleStore.attributedItemIds.single())
         coVerify(exactly = 1) {
@@ -424,8 +426,8 @@ class EditorViewModelSubtitlesTest {
 
         // Best-effort upload: the durable local copy backs the subtitle, so the
         // failure is an info note rather than the raw error.
-        assertEquals("Saved to device only: server offline", viewModel.uiState.value.error)
-        assertFalse(viewModel.uiState.value.isDownloadingProviderSubtitle)
+        assertEquals("Saved to device only: server offline", viewModel.uiState.value.actionError)
+        assertEquals(ProviderSubtitleDownloadPhase.Idle, viewModel.uiState.value.providerSubtitleDownloadPhase)
         assertTrue(subtitleStore.attributedItemIds.isEmpty())
         coVerify(exactly = 1) { editorRepository.getMediaDetail(itemId) }
     }
@@ -442,8 +444,8 @@ class EditorViewModelSubtitlesTest {
         viewModel.onEvent(EditorUiEvent.DownloadProviderSubtitle(row))
         advanceUntilIdle()
 
-        assertEquals("provider down", viewModel.uiState.value.error)
-        assertFalse(viewModel.uiState.value.isDownloadingProviderSubtitle)
+        assertEquals("provider down", viewModel.uiState.value.actionError)
+        assertEquals(ProviderSubtitleDownloadPhase.Idle, viewModel.uiState.value.providerSubtitleDownloadPhase)
         assertTrue(subtitleStore.savedSubtitles.isEmpty())
         coVerify(exactly = 0) { editorRepository.uploadSubtitle(any(), any(), any(), any(), any(), any()) }
     }

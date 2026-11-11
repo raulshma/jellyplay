@@ -9,7 +9,12 @@ import com.raulshma.jellyplay.core.concurrency.PollSpec
 import com.raulshma.jellyplay.core.concurrency.boundedPoll
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
+import com.raulshma.jellyplay.core.data.cast.CastSessionPhase
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
+import com.raulshma.jellyplay.core.data.cast.beginConnecting
+import com.raulshma.jellyplay.core.data.cast.connected
+import com.raulshma.jellyplay.core.data.cast.disconnected
+import com.raulshma.jellyplay.core.data.cast.projected
 import com.raulshma.jellyplay.core.data.cast.withCastQueryParams
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
@@ -56,11 +61,20 @@ class DlnaCastStrategy(
     private val _isAvailable = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = _isAvailable.asStateFlow()
 
-    private val _isConnected = MutableStateFlow(false)
-    override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+    /**
+     * The connection phase machine (commonMain [CastSessionPhase]) — the ONE
+     * source of truth the former `_isConnected` / `_isConnecting` boolean
+     * pair folded into two hand-synced flags. The public
+     * [isConnected] / [isConnecting] surface below are read-through
+     * projections of it (synchronous `.value` semantics preserved — the
+     * former pair was written and read on the caller's thread).
+     */
+    private val _phase = MutableStateFlow<CastSessionPhase>(CastSessionPhase.Idle)
+    val phase: StateFlow<CastSessionPhase> = _phase.asStateFlow()
 
-    private val _isConnecting = MutableStateFlow(false)
-    override val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
+    override val isConnected: StateFlow<Boolean> = _phase.projected { it.isConnected }
+
+    override val isConnecting: StateFlow<Boolean> = _phase.projected { it.isConnecting }
 
     private val _discoveredDevices = MutableStateFlow<List<CastDevice>>(emptyList())
     override val discoveredDevices: StateFlow<List<CastDevice>> = _discoveredDevices.asStateFlow()
@@ -169,7 +183,7 @@ class DlnaCastStrategy(
     }
 
     override fun connect(context: Context, device: CastDevice) {
-        if (_isConnected.value) {
+        if (_phase.value.isConnected) {
             disconnect(context)
         }
 
@@ -178,10 +192,16 @@ class DlnaCastStrategy(
             return
         }
 
-        _isConnecting.value = true
+        // The synchronous Idle→Connecting→Connected flip is the pinned
+        // observable outcome (DlnaCastStrategyTest asserts isConnected.value
+        // immediately after this call returns; the read-through phase
+        // projections keep that exact). Connecting exists only between these
+        // two statements — no suspension, no read — so it stays unobservable
+        // here, exactly as the former `_isConnecting=true → _isConnected=true`
+        // pair was.
+        _phase.value = _phase.value.beginConnecting()
         connectedDevice = upnpDevice
-        _isConnected.value = true
-        _isConnecting.value = false
+        _phase.value = _phase.value.connected()
 
         scope.launch {
             saveRecentDevice(upnpDevice)
@@ -201,8 +221,7 @@ class DlnaCastStrategy(
             }
         }
         connectedDevice = null
-        _isConnected.value = false
-        _isConnecting.value = false
+        _phase.value = _phase.value.disconnected()
         _rendererPositionMs.value = 0L
         _rendererDurationMs.value = 0L
         _rendererIsPlaying.value = false

@@ -34,11 +34,23 @@ class GoogleCastStrategy(
     private val _isAvailable = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = _isAvailable.asStateFlow()
 
-    private val _isConnected = MutableStateFlow(false)
-    override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+    /**
+     * The connection phase machine (commonMain [CastSessionPhase]) — the ONE
+     * source of truth the former `_isConnected` / `_isConnecting` boolean
+     * pair folded into two hand-synced flags. The public
+     * [isConnected] / [isConnecting] surface below are read-through
+     * projections of it. The listener-side transitions are the
+     * `session*` handlers under [sessionListener]; they are `internal` so
+     * the store-lane suite (GoogleCastStrategyTest) can drive the ladder
+     * without a live CastContext — same thin-host split as the DLNA /
+     * Jellyfin wirings.
+     */
+    private val _phase = MutableStateFlow<CastSessionPhase>(CastSessionPhase.Idle)
+    val phase: StateFlow<CastSessionPhase> = _phase.asStateFlow()
 
-    private val _isConnecting = MutableStateFlow(false)
-    override val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
+    override val isConnected: StateFlow<Boolean> = _phase.projected { it.isConnected }
+
+    override val isConnecting: StateFlow<Boolean> = _phase.projected { it.isConnecting }
 
     private val _discoveredDevices = MutableStateFlow<List<CastDevice>>(emptyList())
     override val discoveredDevices: StateFlow<List<CastDevice>> = _discoveredDevices.asStateFlow()
@@ -76,34 +88,80 @@ class GoogleCastStrategy(
         }
     }
 
+    /**
+     * The GMS listener is a thin adapter: every callback forwards to a
+     * `session*` handler that owns the phase transition (and the KDoc on the
+     * handler records the former boolean writes). The handlers are
+     * `internal` so the store-lane suite can drive the ladder without a
+     * live CastContext — the callbacks themselves need a real GMS stack.
+     */
     private val sessionListener = object : SessionManagerListener<CastSession> {
         override fun onSessionStarted(session: CastSession, sessionId: String) {
-            _isConnected.value = true
-            _isConnecting.value = false
+            sessionStarted()
         }
         override fun onSessionEnded(session: CastSession, error: Int) {
-            _isConnected.value = false
-            _isConnecting.value = false
+            sessionEnded()
         }
         override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
-            _isConnected.value = true
-            _isConnecting.value = false
+            sessionResumed()
         }
         override fun onSessionSuspended(session: CastSession, reason: Int) {}
         override fun onSessionStarting(session: CastSession) {
-            _isConnecting.value = true
+            sessionStarting()
         }
         override fun onSessionEnding(session: CastSession) {}
         override fun onSessionResumeFailed(session: CastSession, error: Int) {
-            _isConnected.value = false
-            _isConnecting.value = false
+            sessionResumeFailed(error)
         }
         override fun onSessionStartFailed(session: CastSession, error: Int) {
-            _isConnecting.value = false
+            sessionStartFailed(error)
         }
         override fun onSessionResuming(session: CastSession, sessionId: String) {
-            _isConnecting.value = true
+            sessionResuming()
         }
+    }
+
+    /** `onSessionStarting`: a start attempt is in flight. Former write: `_isConnecting = true` only — so a mid-session re-route kept the stale `isConnected=true` standing; the machine drops the connected projection for the re-route, and the manager observers see the same Disconnected→Connected pair either way. */
+    internal fun sessionStarting() {
+        _phase.value = _phase.value.beginConnecting()
+    }
+
+    /** `onSessionStarted`: the session is live. Former writes: `_isConnected = true`, `_isConnecting = false`. */
+    internal fun sessionStarted() {
+        _phase.value = _phase.value.connected()
+    }
+
+    /** `onSessionResumed` (app resumed with the session alive): same outcome as a start. Former writes: `_isConnected = true`, `_isConnecting = false`. */
+    internal fun sessionResumed() {
+        _phase.value = _phase.value.connected()
+    }
+
+    /** `onSessionResuming` (auto-resume attempt): a connection attempt. Former write: `_isConnecting = true`. */
+    internal fun sessionResuming() {
+        _phase.value = _phase.value.beginConnecting()
+    }
+
+    /** `onSessionEnded`: the session is gone. Former writes: `_isConnected = false`, `_isConnecting = false`. */
+    internal fun sessionEnded() {
+        _phase.value = _phase.value.disconnected()
+    }
+
+    /** `onSessionResumeFailed`: the auto-resume attempt failed. Former writes: `_isConnected = false`, `_isConnecting = false` — same projections as [CastSessionPhase.Failed], now with the attempt's failure carried on the phase. */
+    internal fun sessionResumeFailed(error: Int) {
+        _phase.value = _phase.value.failed(reason = error.toString())
+    }
+
+    /**
+     * `onSessionStartFailed`: DECLARED FIX #1. The former write cleared ONLY
+     * `_isConnecting`, so when a PRIOR session's `_isConnected=true` was
+     * still standing (session died without an `onSessionEnded` reaching us,
+     * then the next start attempt failed), the strategy kept reporting a
+     * connected=true dead session — the phantom connection. Landing in
+     * [CastSessionPhase.Failed] makes both projections honest: the failed
+     * start clears the stale connected flag.
+     */
+    internal fun sessionStartFailed(error: Int) {
+        _phase.value = _phase.value.failed(reason = error.toString())
     }
 
     private fun ensureListenersRegistered() {
@@ -112,7 +170,17 @@ class GoogleCastStrategy(
             val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(appContext) }
             if (!sessionListenerRegistered) {
                 castContext.sessionManager.addSessionManagerListener(sessionListener, CastSession::class.java)
-                _isConnected.value = castContext.sessionManager.currentCastSession?.isConnected == true
+                // Seed from the LIVE session the framework may still hold (a
+                // registration after process-level re-entry): a live session
+                // recovers to Connected from any phase; no live session lands
+                // on Idle — which also retires any Failed state from a
+                // previous registration. The former write seeded
+                // `_isConnected` only and left `_isConnecting` untouched.
+                _phase.value = if (castContext.sessionManager.currentCastSession?.isConnected == true) {
+                    _phase.value.connected()
+                } else {
+                    _phase.value.disconnected()
+                }
                 sessionListenerRegistered = true
             }
             if (!castStateListenerRegistered) {

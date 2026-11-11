@@ -309,9 +309,11 @@ internal class SessionLoadPipeline(
         }
 
         // loadMedia reports its own failures (offline gate, detail-fetch miss,
-        // vanished offline file) by leaving isReady = false. Continuing would
+        // vanished offline file) by landing LoadPhase.Failed. Continuing would
         // create a media session and report playback START for an item that
         // never started, so stop here; the finally lifts the loading veil.
+        // (`isReady` is the derived projection of the phase — Loading/Failed
+        // are distinguishable through loadPhase itself.)
         if (!sessionManager.sessionState.value.isReady) return
 
         val sessionState = sessionManager.sessionState.value

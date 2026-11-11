@@ -14,29 +14,102 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 
+/**
+ * The discovery scan's phase. Orthogonal to [AddServerConnectPhase] BY
+ * INTENT: today's connect never stops a running scan (a user can tap a
+ * discovered server while the scan keeps spinning — the server-count row
+ * shows "found · scanning" during a connect), so the two ladders advance
+ * independently and each stays a single value. Single-valuedness is the
+ * point: the impossible boolean combinations of the two former flags
+ * (`isDiscovering && discoveryFailed` — a scan both running and failed) are
+ * no longer representable.
+ *
+ * Pinned by AddServerViewModelPhaseTest (a Running scan survives a connect)
+ * and the discovery cases in AddServerViewModelTest.
+ */
+sealed class AddServerDiscoveryPhase {
+    /** No scan in flight: none ever ran, the last one completed, or it was stopped early. */
+    data object Idle : AddServerDiscoveryPhase()
+
+    /** A scan is collecting from [ServerDiscoveryRepository.discoverLocalServers]. */
+    data object Running : AddServerDiscoveryPhase()
+
+    /** The last scan threw; the screen offers the retry row (already-found servers are kept). */
+    data object Failed : AddServerDiscoveryPhase()
+}
+
+/**
+ * The connect + TLS-trust machine's whole phase — ONE value replacing the
+ * former `isConnecting` / `connectError` / `tlsTrustPromptAddress` flag
+ * triple AND the out-of-state `pendingTrustRetry` closure. That closure (a
+ * hidden ViewModel field capturing the retry address + the caller's
+ * callback) was the implicit "trust dialog armed" flag living OUTSIDE the ui
+ * state, which is what let `clearError` produce the incoherent state
+ * "trust dialog up, explanatory error gone, retry still armed". Folding the
+ * closure into [TlsTrustPending] makes the armed dialog part of the state:
+ * clearing the error is a phase transition, and prompt-without-error is no
+ * longer representable.
+ *
+ * Equality note: [TlsTrustPending] carries a lambda, so instances compare by
+ * reference — deliberate and safe. The screen only `when`-branches on the
+ * phase (never `==`), and the StateFlow's equality dedupe can never wrongly
+ * collapse two distinct retry closures (they are distinct objects exactly
+ * when they are distinct attempts).
+ *
+ * Pinned by AddServerViewModelPhaseTest.
+ */
+sealed class AddServerConnectPhase {
+    /** No connect attempt in flight or resolved on screen. */
+    data object Idle : AddServerConnectPhase()
+
+    /** A connect attempt is in flight (every spinner/enable condition derives from this). */
+    data object Connecting : AddServerConnectPhase()
+
+    /**
+     * The last connect failed with the classifier's user-facing [error]. The
+     * screen renders it as the address field's error/supporting text;
+     * [AddServerViewModel.clearError] is the way back to [Idle].
+     */
+    data class Failed(val error: AuthMessage) : AddServerConnectPhase()
+
+    /**
+     * The last connect failed on TLS trust against an https address:
+     * [address] is the canonical `scheme://host[:port]` to grant self-signed
+     * trust for (the screen renders the trust-and-retry dialog from it),
+     * [error] is the SAME failure's explanatory message — still rendered
+     * under the field while the dialog is up, because the former machine set
+     * the prompt and the error together and the screen shows both — and
+     * [retry] re-runs the exact failed attempt (same address + caller
+     * callback) once the grant is persisted.
+     *
+     * [retry] is null once [AddServerViewModel.confirmTrustServer] has
+     * CONSUMED it: the dialog stays up during the grant-propagation await,
+     * and a second confirm (double-tap) must not re-invoke the retry — the
+     * former code's synchronous `pendingTrustRetry = null` guard, now a
+     * visible state field instead of a hidden one.
+     */
+    data class TlsTrustPending(
+        val address: String,
+        val error: AuthMessage,
+        val retry: (() -> Unit)? = null,
+    ) : AddServerConnectPhase()
+}
+
 data class AddServerUiState(
     val discoveredServers: List<DiscoveredServer> = emptyList(),
-    val isDiscovering: Boolean = false,
-    val discoveryFailed: Boolean = false,
-    val isConnecting: Boolean = false,
-    val connectError: AuthMessage? = null,
+    val discoveryPhase: AddServerDiscoveryPhase = AddServerDiscoveryPhase.Idle,
+    val connectPhase: AddServerConnectPhase = AddServerConnectPhase.Idle,
     val manualAddress: String = "",
     /**
      * The Android 17+ local-network rationale banner flag: the platform
      * enforces the permission AND the grant is absent. Folded here by
      * [AddServerViewModel.onLocalNetworkAccessSynced] from the screen's
      * composition-side platform seam (`rememberLocalNetworkAccess()`); a
-     * non-enforcing platform (desktop) can never set it.
+     * non-enforcing platform (desktop) can never set it. Deliberately NOT
+     * part of either phase ladder: it tracks the platform permission sync,
+     * not the discovery/connect machines.
      */
     val localNetworkRationale: Boolean = false,
-    /**
-     * Non-null when the last connect attempt failed on TLS trust AND the
-     * address is https: the canonical `scheme://host[:port]` the user would
-     * grant self-signed-certificate trust for. The screen renders the
-     * trust-and-retry dialog while set; [AddServerViewModel.dismissTrustPrompt]
-     * / [AddServerViewModel.confirmTrustServer] clear it.
-     */
-    val tlsTrustPromptAddress: String? = null,
 )
 
 class AddServerViewModel(
@@ -63,7 +136,7 @@ class AddServerViewModel(
      *    banner from state instead of re-deriving the permission algebra in
      *    composition.
      * 2. Discovery auto-start: a granted report (initial or post-grant
-     *    transition) starts a scan — the [startDiscovery] isDiscovering
+     *    transition) starts a scan — the [startDiscovery] Running-phase
      *    guard dedupes. A denied report never starts one: a scan without
      *    the permission silently finds nothing, which is exactly the trap
      *    the banner replaces.
@@ -76,15 +149,21 @@ class AddServerViewModel(
     /**
      * Start discovering local Jellyfin servers (UDP discovery broadcast on port 7359).
      * Automatically acquires/releases the Wi-Fi multicast lock.
+     *
+     * The former `isDiscovering` guard is now the single-valued
+     * [AddServerDiscoveryPhase.Running] check — same dedupe semantics (a
+     * second call while a scan runs is a no-op; already-known servers are
+     * kept), pinned by AddServerViewModelGapsTest. Completion and failure
+     * each land in exactly one phase value, so Running-and-Failed is no
+     * longer representable.
      */
     fun startDiscovery() {
-        if (_uiState.value.isDiscovering) return
+        if (_uiState.value.discoveryPhase is AddServerDiscoveryPhase.Running) return
 
         discoveryJob?.cancel()
         _uiState.update {
             it.copy(
-                isDiscovering = true,
-                discoveryFailed = false,
+                discoveryPhase = AddServerDiscoveryPhase.Running,
                 discoveredServers = emptyList(),
             )
         }
@@ -99,14 +178,9 @@ class AddServerViewModel(
                         }
                     }
                 }
-                _uiState.update { it.copy(isDiscovering = false) }
+                _uiState.update { it.copy(discoveryPhase = AddServerDiscoveryPhase.Idle) }
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isDiscovering = false,
-                        discoveryFailed = true,
-                    )
-                }
+                _uiState.update { it.copy(discoveryPhase = AddServerDiscoveryPhase.Failed) }
             }
         }
     }
@@ -117,56 +191,92 @@ class AddServerViewModel(
     fun stopDiscovery() {
         discoveryJob?.cancel()
         discoveryJob = null
-        _uiState.update { it.copy(isDiscovering = false) }
+        _uiState.update { it.copy(discoveryPhase = AddServerDiscoveryPhase.Idle) }
     }
 
     /**
      * Update the manual address text field.
+     *
+     * ONE atomic phase write: the address text and the connect-phase reset to
+     * [AddServerConnectPhase.Idle] land in a single `_uiState.update`. The
+     * former machine cleared `connectError`/`tlsTrustPromptAddress` in one
+     * update and the armed `pendingTrustRetry` closure in a SECOND write,
+     * leaving a window where the prompt was visually gone but the retry was
+     * still armed. The retry now lives IN the phase, so the single write
+     * drops it with everything else — there is no second step to race. The
+     * unconditional Idle cannot clobber an in-flight connect: the field is
+     * disabled while [AddServerConnectPhase.Connecting] (AddServerScreen's
+     * ManualEntrySection), so edits only ever arrive from Idle, Failed or
+     * TlsTrustPending.
      */
     fun updateManualAddress(address: String) {
         _uiState.update {
             it.copy(
                 manualAddress = address,
-                connectError = null,
-                tlsTrustPromptAddress = null,
+                connectPhase = AddServerConnectPhase.Idle,
             )
         }
-        pendingTrustRetry = null
     }
 
     /**
      * Connect to a server using an address string (either from manual entry or discovered server).
+     *
+     * The whole connect+trust machine advances through single-valued phases:
+     * entry lands in [AddServerConnectPhase.Connecting] (one write that also
+     * drops any previous Failed/TlsTrustPending — including the previous
+     * attempt's armed retry, which used to need a separate
+     * `tlsTrustPromptAddress = null` clear); the result lands in exactly one
+     * terminal phase — [AddServerConnectPhase.Idle], [AddServerConnectPhase.Failed]
+     * or [AddServerConnectPhase.TlsTrustPending] — before the caller's
+     * callback fires, same ordering as before but with the former two-step
+     * `isConnecting=false` then `connectError=…` updates collapsed into one.
+     * A TLS-trust failure on an https address arms [AddServerConnectPhase.TlsTrustPending.retry]
+     * with a closure redoing THIS attempt (address + caller callback) — the
+     * former out-of-state `pendingTrustRetry`, now part of the ui state.
+     * Pinned by AddServerViewModelPhaseTest.
      */
     fun connectToServer(address: String, onResult: (Result<ServerInfo>) -> Unit) {
         if (address.isBlank()) {
-            _uiState.update { it.copy(connectError = UiMessage.Resource(Res.string.auth_error_server_address_required)) }
+            // Validation rejection, not an attempt: no Connecting ever shows.
+            // Landing in Failed (instead of the former flag-set that left the
+            // prompt/retry untouched) is safe: the trust dialog is modal and
+            // blocks every connectToServer entry point, so this can never
+            // clobber a live TlsTrustPending in practice.
+            _uiState.update {
+                it.copy(
+                    connectPhase = AddServerConnectPhase.Failed(
+                        UiMessage.Resource(Res.string.auth_error_server_address_required),
+                    )
+                )
+            }
             return
         }
 
-        _uiState.update { it.copy(isConnecting = true, connectError = null, tlsTrustPromptAddress = null) }
+        _uiState.update { it.copy(connectPhase = AddServerConnectPhase.Connecting) }
 
         launch {
             val trimmed = address.trim()
             val result = authRepository.addServer(trimmed)
-            _uiState.update { it.copy(isConnecting = false) }
             result.onSuccess {
-                pendingTrustRetry = null
+                // Idle subsumes the former explicit `pendingTrustRetry = null`:
+                // the retry lived in the phase, and the transition drops it.
+                _uiState.update { it.copy(connectPhase = AddServerConnectPhase.Idle) }
                 onResult(result)
             }.onFailure { throwable ->
                 val tlsPrompt = tlsTrustPromptFor(trimmed, throwable)
+                val error = getConnectionErrorMessage(trimmed, throwable, localNetworkStatus)
                 _uiState.update {
-                    it.copy(
-                        connectError = getConnectionErrorMessage(trimmed, throwable, localNetworkStatus),
-                        tlsTrustPromptAddress = tlsPrompt,
-                    )
-                }
-                if (tlsPrompt != null) {
-                    // Remember how to redo THIS attempt so the trust dialog's
-                    // confirm can retry the exact same connect (address +
-                    // caller callback) once the grant is persisted.
-                    pendingTrustRetry = { connectToServer(address, onResult) }
-                } else {
-                    pendingTrustRetry = null
+                    if (tlsPrompt != null) {
+                        it.copy(
+                            connectPhase = AddServerConnectPhase.TlsTrustPending(
+                                address = tlsPrompt,
+                                error = error,
+                                retry = { connectToServer(address, onResult) },
+                            )
+                        )
+                    } else {
+                        it.copy(connectPhase = AddServerConnectPhase.Failed(error))
+                    }
                 }
                 onResult(result)
             }
@@ -174,12 +284,22 @@ class AddServerViewModel(
     }
 
     /**
-     * User declined the trust dialog: drop the prompt (the connect error
-     * message stays visible) and forget the pending retry.
+     * User declined the trust dialog: drop back to
+     * [AddServerConnectPhase.Failed] carrying the SAME failure's error — the
+     * former machine kept `connectError` visible while nulling
+     * `tlsTrustPromptAddress`, and the phase encoding preserves that by
+     * keeping the error in the destination phase. The armed retry dies with
+     * the phase (it only ever existed inside TlsTrustPending).
      */
     fun dismissTrustPrompt() {
-        pendingTrustRetry = null
-        _uiState.update { it.copy(tlsTrustPromptAddress = null) }
+        _uiState.update {
+            val phase = it.connectPhase
+            if (phase is AddServerConnectPhase.TlsTrustPending) {
+                it.copy(connectPhase = AddServerConnectPhase.Failed(phase.error))
+            } else {
+                it
+            }
+        }
     }
 
     /**
@@ -194,32 +314,63 @@ class AddServerViewModel(
      * (the retry then just fails like an ungranted host and re-prompts). No
      * client rebuild anywhere (the network layer reads the set at handshake
      * time).
+     *
+     * The retry is consumed SYNCHRONOUSLY (nulled inside the phase) before
+     * launching: the dialog stays up during the propagation await, so a
+     * double-tap on confirm reaches this method twice — the second read must
+     * see the retry already gone (it still persists the grant and re-awaits,
+     * exactly as the former machine's second confirm did after its
+     * synchronous `pendingTrustRetry = null`). Pinned by
+     * AddServerViewModelPhaseTest.
      */
     fun confirmTrustServer() {
-        val entry = _uiState.value.tlsTrustPromptAddress ?: return
-        val retry = pendingTrustRetry
-        pendingTrustRetry = null
+        val pending = _uiState.value.connectPhase as? AddServerConnectPhase.TlsTrustPending ?: return
+        val entry = pending.address
+        val retry = pending.retry
+        _uiState.update {
+            val phase = it.connectPhase
+            if (phase is AddServerConnectPhase.TlsTrustPending) {
+                it.copy(connectPhase = phase.copy(retry = null))
+            } else {
+                it
+            }
+        }
         launch {
             networkOfflineStore.addSelfSignedTrustHost(entry)
             withTimeoutOrNull(TRUST_PROPAGATION_TIMEOUT_MS) {
                 networkOfflineStore.networkOffline.first { entry in it.selfSignedTrustHosts }
             }
-            _uiState.update { it.copy(tlsTrustPromptAddress = null) }
+            _uiState.update { it.copy(connectPhase = AddServerConnectPhase.Idle) }
             retry?.invoke()
         }
     }
 
+    /**
+     * Clear the standalone connect-error banner: only
+     * [AddServerConnectPhase.Failed] offers a clearable standalone error, so
+     * this is a Failed → Idle phase transition. During
+     * [AddServerConnectPhase.TlsTrustPending] the error is PART of the dialog
+     * phase — clearing it alone would recreate the former machine's
+     * incoherent "trust dialog up, explanatory error gone, retry armed"
+     * state, so the phase stands (dismissing the dialog is the way out). The
+     * screen itself never calls this today; it exists for the banner-clear
+     * contract pinned by AddServerViewModelGapsTest and
+     * AddServerViewModelPhaseTest.
+     */
     fun clearError() {
-        _uiState.update { it.copy(connectError = null) }
+        _uiState.update {
+            when (it.connectPhase) {
+                is AddServerConnectPhase.Failed -> it.copy(connectPhase = AddServerConnectPhase.Idle)
+                is AddServerConnectPhase.TlsTrustPending -> it
+                AddServerConnectPhase.Connecting, AddServerConnectPhase.Idle -> it
+            }
+        }
     }
 
     override fun onCleared() {
         super.onCleared()
         discoveryJob?.cancel()
     }
-
-    /** Pending retry for the shown TLS-trust dialog, if any. */
-    private var pendingTrustRetry: (() -> Unit)? = null
 
     private companion object {
         /**

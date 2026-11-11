@@ -21,7 +21,9 @@ import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -92,6 +94,29 @@ class NewsletterViewModelTest {
         notificationStore = notificationStore,
         authRepository = authRepository,
     )
+
+    /**
+     * Arms a one-shot [NewsletterViewModel.sendResults] collector on
+     * [backgroundScope] — the [UnconfinedTestDispatcher] on the test's own
+     * scheduler is load-bearing (the HomeViewModelEventsTest pattern): a
+     * background-scope collector riding the default StandardTestDispatcher
+     * has its post-`trySend` resumption classified as background-only work,
+     * which `advanceUntilIdle()` will not run once the foreground (VM) work
+     * drains — the element would sit in the channel buffer past the
+     * assertion and every send case would read an empty list. Unconfined on
+     * the SAME scheduler delivers the receive inline with the VM's
+     * `trySend`, so the assertions stay virtual-time-deterministic, while
+     * backgroundScope still cancels the collector at test end (no
+     * UncompletedCoroutinesError).
+     */
+    private fun kotlinx.coroutines.test.TestScope.collectSendResults(
+        vm: NewsletterViewModel,
+        received: MutableList<NewsletterMessage>,
+    ) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.sendResults.collect { received += it }
+        }
+    }
 
     /** Routes getNewsletterData(since) into [response]; captures the since arg. */
     private fun stubLoad(response: () -> Result<NewsletterData>) {
@@ -170,18 +195,23 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `send now maps success to SendSuccess with the send_success resource`() = runTest(mainDispatcher) {
+    fun `send now emits SendSuccess once on the one-shot channel`() = runTest(mainDispatcher) {
         coEvery { mediaRepository.sendNewsletter() } returns Result.success(Unit)
 
         val vm = createViewModel()
+        val received = mutableListOf<NewsletterMessage>()
+        collectSendResults(vm, received)
         advanceUntilIdle()
         vm.onEvent(NewsletterUiEvent.SendNow)
         assertEquals(NewsletterSendAction.SEND_NOW, vm.uiState.value.pendingSendAction)
         vm.onEvent(NewsletterUiEvent.ConfirmSend)
         advanceUntilIdle()
 
+        // The send result rides the sendResults Channel (the former
+        // sendResult parked uiState field replayed on restoration), carrying
+        // the SAME resource payload it always did.
+        assertEquals<List<NewsletterMessage>>(listOf(NewsletterMessage.SendSuccess(Res.string.newsletter_send_success)), received)
         val state = vm.uiState.value
-        assertEquals(NewsletterMessage.SendSuccess(Res.string.newsletter_send_success), state.sendResult)
         assertFalse(state.isSending)
         assertNull(state.pendingSendAction)
         coVerify(exactly = 1) { mediaRepository.sendNewsletter() }
@@ -189,48 +219,62 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `send test maps success to TestSent with the test_sent resource`() = runTest(mainDispatcher) {
+    fun `send test emits TestSent with the test_sent resource`() = runTest(mainDispatcher) {
         coEvery { mediaRepository.sendTestNewsletter() } returns Result.success(Unit)
 
         val vm = createViewModel()
+        val received = mutableListOf<NewsletterMessage>()
+        collectSendResults(vm, received)
         advanceUntilIdle()
         vm.onEvent(NewsletterUiEvent.SendTest)
         vm.onEvent(NewsletterUiEvent.ConfirmSend)
         advanceUntilIdle()
 
-        val state = vm.uiState.value
-        assertEquals(NewsletterMessage.TestSent(Res.string.newsletter_test_sent), state.sendResult)
-        assertFalse(state.isSending)
+        assertEquals<List<NewsletterMessage>>(listOf(NewsletterMessage.TestSent(Res.string.newsletter_test_sent)), received)
+        assertFalse(vm.uiState.value.isSending)
         coVerify(exactly = 1) { mediaRepository.sendTestNewsletter() }
     }
 
     @Test
-    fun `send failure maps to SendFailed with the send_failed resource`() = runTest(mainDispatcher) {
+    fun `send failure emits SendFailed with the send_failed resource`() = runTest(mainDispatcher) {
         coEvery { mediaRepository.sendNewsletter() } returns Result.failure(IllegalStateException("smtp down"))
 
         val vm = createViewModel()
+        val received = mutableListOf<NewsletterMessage>()
+        collectSendResults(vm, received)
         advanceUntilIdle()
         vm.onEvent(NewsletterUiEvent.SendNow)
         vm.onEvent(NewsletterUiEvent.ConfirmSend)
         advanceUntilIdle()
 
-        val state = vm.uiState.value
-        assertEquals(NewsletterMessage.SendFailed(Res.string.newsletter_send_failed), state.sendResult)
-        assertFalse(state.isSending)
+        // The failure arm is part of the machine: a failed send still tells
+        // the user once.
+        assertEquals<List<NewsletterMessage>>(listOf(NewsletterMessage.SendFailed(Res.string.newsletter_send_failed)), received)
+        assertFalse(vm.uiState.value.isSending)
     }
 
     @Test
-    fun `dismiss send result clears it`() = runTest(mainDispatcher) {
+    fun `send result never replays to a late collector`() = runTest(mainDispatcher) {
+        // THE migration pin: the former sendResult uiState field was a
+        // StateFlow value, so every new collector (process restoration,
+        // re-subscription) received the old send's result again and the
+        // snackbar re-fired. The Channel must deliver exactly once and
+        // nothing to a collector that arrives late.
         coEvery { mediaRepository.sendNewsletter() } returns Result.success(Unit)
         val vm = createViewModel()
+        val first = mutableListOf<NewsletterMessage>()
+        collectSendResults(vm, first)
         advanceUntilIdle()
         vm.onEvent(NewsletterUiEvent.SendNow)
         vm.onEvent(NewsletterUiEvent.ConfirmSend)
         advanceUntilIdle()
-        assertTrue(vm.uiState.value.sendResult != null)
+        assertEquals(1, first.size)
 
-        vm.onEvent(NewsletterUiEvent.DismissSendResult)
-        assertNull(vm.uiState.value.sendResult)
+        val late = mutableListOf<NewsletterMessage>()
+        collectSendResults(vm, late)
+        advanceUntilIdle()
+        assertTrue(late.isEmpty())
+        assertEquals(1, first.size)
     }
 
     @Test
