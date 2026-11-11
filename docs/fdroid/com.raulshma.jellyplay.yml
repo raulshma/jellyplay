@@ -42,6 +42,22 @@ UpdateCheckData: version.properties|jellyplay\.versionCode=(\d+)|.|jellyplay\.ve
 # auto-detects the built APKs (licaon-kter's concern in the plan review).
 AutoUpdateMode: Version
 
+# Reproducible builds via developer-signed reference binaries
+# (docs/adr/0014-fdroid-reproducible-binaries.md). fdroidserver expands this
+# single template PER BUILD (%v → versionName, %c → the build's versionCode:
+# 11091 arm64-v8a / 11092 x86_64), downloads the APK from the release, and
+# byte-compares it against the buildserver's own unsigned build
+# (apksigcopier + apksigner validate) — mismatch marks the build FAILED, so
+# the release blocks instead of silently diverging. The binaries are cut by
+# .github/workflows/fdroid-release.yml, which mirrors the buildserver
+# environment; the assets must exist for the pinned version BEFORE the MR's
+# build runs (backfill via workflow_dispatch with the tag).
+# MUST be in the metadata at inclusion: the F-Droid-key lineage locks at the
+# first merged release and switching to Binaries afterwards would break
+# every installed user.
+Binaries:
+  - https://github.com/raulshma/jellyplay/releases/download/v%v/jellyplay-v%v-fdroid-%c.apk
+
 Builds:
   # NOTE (mezinster's hash-pin concern): `commit:` MUST be the tag commit,
   # i.e. the output of `git rev-parse v0.11.9` at release time — not a dev
@@ -77,19 +93,27 @@ Builds:
     # fdroidserver globs build outputs automatically — same pattern LensCast
     # used. Add an explicit `output:` only if `fdroid build` cannot find the
     # APK (TO-CHECK on a real fdroiddata run).
-    # NDK: no ndkVersion is declared anywhere in the repo (grep 2026-11-09);
+    # NDK — RESOLVED (fdroidserver buildserver/provision-android-ndk,
+    # 2026-11-11): the buildserver preinstalls NO NDK; its provisioning only
+    # makes /opt/android-sdk/ndk writable so AGP auto-installs the version
+    # the build requests. Unpinned that request is AGP 9.5's default
+    # (28.2.13676358), and the buildserver would install exactly that — but
+    # the default moves on AGP upgrades, so the repo pins
+    # ndkVersion="28.2.13676358" (app/build.gradle.kts) from 0.11.10 and
+    # fdroid-release.yml installs the same version: llvm-strip output bytes
+    # depend on the NDK version and must match between our reference
+    # binaries and the buildserver build (Binaries byte-compare). The
+    # v0.11.9 tag predates the pin — both sides converge on the same AGP
+    # default, so parity holds there too.
     # release buildType sets ndk.debugSymbolLevel=SYMBOL_TABLE
-    # (app/build.gradle.kts:125) for libmpv/libvlc/libass symbolication, but
-    # packaging skips symbol extraction with a warning when no NDK is present,
-    # so the build does not require one. TO-CHECK whether the build server's
-    # NDK presence changes the APK (it would affect reproducibility, not
-    # acceptance).
-    # sudo: none expected. No jvmToolchain pin exists anywhere in the repo
-    # and the release lane already builds the signed release APKs on
-    # Temurin 17 (.github/workflows/release.yml:130), so the daemon JDK
-    # requirement is 17 — buildserver defaults (bookworm openjdk-17,
-    # trixie openjdk-21) satisfy it. Re-check once on the first real
-    # `fdroid build`.
+    # (app/build.gradle.kts) for libmpv/libvlc/libass symbolication.
+    # sudo: none expected, JDK-wise. The one `jvmToolchain(17)` in the repo
+    # (apps/desktop/build.gradle.kts) is inside the module the prebuild sed
+    # drops from settings.gradle.kts, so the fdroid lane requests NO
+    # toolchain and the daemon runs on the buildserver's default JDK
+    # (trixie default-jdk-headless = 21) — fdroid-release.yml mirrors it
+    # with Temurin 21. Nothing to auto-download (and the buildserver
+    # disables JVM auto-provisioning anyway).
   - versionName: 0.11.9
     versionCode: 11092
     # TO-FILL after the v0.11.9 tag exists: git rev-parse v0.11.9

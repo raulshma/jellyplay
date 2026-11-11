@@ -74,6 +74,20 @@ android {
     namespace = "com.raulshma.jellyplay"
     compileSdk = 37
 
+    // Reproducible-build parity pin. F-Droid's buildserver ships NO NDK —
+    // AGP auto-installs whatever version the build requests into its
+    // writable /opt/android-sdk/ndk (buildserver/provision-android-ndk
+    // exists exactly to make that dir installable). Unpinned, that request
+    // is AGP's compile-time default (28.2.13676358 for AGP 9.5), which
+    // silently moves on every AGP upgrade — and with it every llvm-strip
+    // pass over the bundled AAR .so files (release ndk.debugSymbolLevel
+    // below makes the NDK required for release packaging). Strip output
+    // bytes depend on the NDK version, so a moved default breaks the
+    // Binaries byte-comparison against our CI-built reference APKs
+    // (.github/workflows/fdroid-release.yml installs this same version).
+    // Keep the pin and the workflow env var in lockstep.
+    ndkVersion = "28.2.13676358"
+
     defaultConfig {
         applicationId = "com.raulshma.jellyplay"
         minSdk = 28
