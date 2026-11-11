@@ -106,6 +106,14 @@ jobs:
         run: |
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
+          # Mirror the metadata prebuild (see MR !56862): R8's output ordering
+          # — and the pg-map-id hash embedded in the dex marker — varies with
+          # thread scheduling across machines, which breaks the Binaries
+          # byte-compare (found by the fdroiddata MR CI: identical class sets
+          # and string tables, shifted dex layout). One R8 thread on BOTH
+          # sides pins the ordering so the reference binaries and the
+          # buildserver build stay byte-identical.
+          printf '\nsystemProp.com.android.tools.r8.threadCount=1\n' >> gradle.properties
 
       - name: Set buildserver environment
         # SOURCE_DATE_EPOCH: fdroidserver common.py get_source_date_epoch =
