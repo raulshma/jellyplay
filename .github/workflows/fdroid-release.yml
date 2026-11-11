@@ -32,8 +32,10 @@ concurrency:
   group: fdroid-release-${{ inputs.tag || github.event.release.tag_name }}
   cancel-in-progress: false
 
+# Least-privilege default: the build matrix only reads; only attach-release
+# writes (release assets).
 permissions:
-  contents: write
+  contents: read
 
 defaults:
   run:
@@ -118,7 +120,13 @@ jobs:
         # builds request exactly this version; the frozen v0.11.9 tag has no
         # pin, but 28.2.13676358 is ALSO AGP 9.5's unpinned default, so the
         # buildserver's auto-install resolves the same version either way.
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" > /dev/null
+        # `yes` feeds stdin via process substitution — a plain
+        # `yes | sdkmanager` pipeline fails under the runner shell's
+        # pipefail when sdkmanager closes the pipe (SIGPIPE ≠ sdkmanager's
+        # exit status).
+        run: >
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+          < <(yes) > /dev/null
 
       - name: Build phoneFdroidRelease (${{ matrix.abi }})
         # gradlew-fdroid parity: --no-daemon (org.gradle.daemon=false on the
@@ -166,6 +174,8 @@ jobs:
   attach-release:
     needs: build-binaries
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download APK Artifacts
         uses: actions/download-artifact@v4

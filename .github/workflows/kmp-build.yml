@@ -14,6 +14,16 @@ on:
     # unverified during the v0.10.6 merges.
     branches: ['main', 'master', 'kmp-alpha']
   pull_request:
+    # Skip doc-only PRs entirely (paths-ignore fires only when EVERY changed
+    # file matches — a mixed .md+.kt PR still runs). Safe without branch
+    # protection: no required status contexts exist on main/dev, so nothing
+    # can get stuck on a skipped check.
+    paths-ignore:
+      - 'docs/**'
+      - 'website/**'
+      - '**/*.md'
+      - '*.md'
+      - 'fastlane/metadata/**'
   workflow_dispatch:
 
 # Least-privilege GITHUB_TOKEN for every job in this workflow — checkout,
@@ -22,15 +32,17 @@ on:
 permissions:
   contents: read
 
-# Keyed on the HEAD BRANCH, not github.ref: pushing kmp-alpha with an open
-# PR fires BOTH the push event (ref refs/heads/kmp-alpha) and pull_request
-# synchronize (ref refs/pull/N/merge) — distinct github.ref values meant the
-# cancel-in-progress guard never matched and every commit built the full
-# matrix twice. Head-branch keying makes both events share one group; the
-# surviving run's checks attach to the commit SHA either way, so the PR still
-# reports them.
+# Keyed on the HEAD BRANCH within each event type, not github.ref: pushing
+# kmp-alpha with an open PR fires BOTH the push event (ref
+# refs/heads/kmp-alpha) and pull_request synchronize (ref refs/pull/N/merge)
+# — distinct github.ref values meant the cancel-in-progress guard never
+# matched and every commit built the full matrix twice. Branch keying within
+# an event keeps that dedup. The EVENT PREFIX keeps the two event types in
+# separate groups: a PR run must never cancel a push run, because the
+# push-only fdroid-smoke job below is now the sole runner of the F-Droid
+# R8 smoke gate — a cancelled push run would leave the commit without it.
 concurrency:
-  group: kmp-build-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: kmp-build-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 # bash on every OS: pwsh choked on the folded multi-line Gradle invocations
@@ -56,11 +68,13 @@ env:
 
 jobs:
   shared-targets:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    # ubuntu-only (was ×3 OS): every shared module declares only jvm() +
+    # android targets (KmpLibraryBasePlugin), so this job's work is
+    # OS-independent and the win+mac legs only re-ran the same tests ~3×
+    # slower — they were the workflow's critical path. Cross-OS JVM compile
+    # coverage stays via desktop-package below.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout Repository
         # submodules: recursive — the plugin tree (jellyfin-plugin-jellyplay)
@@ -88,7 +102,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+          # Write caches on push/dispatch and same-repo PRs (iterative pushes
+          # restore the previous push's caches); fork PRs stay read-only —
+          # untrusted code must never poison the shared cache.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Derive shared module lanes from settings.gradle.kts
         id: shared-modules
@@ -136,7 +153,6 @@ jobs:
         # only surfaces a forgotten submodule csproj bump early. Compares the
         # release.yml branch-name derivation against the pinned plugin tree's
         # <Version>; PR checkouts (NN/merge) carry no version segment and skip.
-        if: matrix.os == 'ubuntu-latest'
         run: |
           set -eu
           csproj="jellyfin-plugin-jellyplay/src/Jellyfin.Plugin.JellyPlay/Jellyfin.Plugin.JellyPlay.csproj"
@@ -224,6 +240,7 @@ jobs:
     # No explicit Android SDK setup is needed: hosted ubuntu runners ship the
     # SDK (same reliance as release.yml and codeql.yml).
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout Repository
         # submodules: recursive — uniform with shared-targets above; the
@@ -246,9 +263,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+          # Same fork-safe policy as shared-targets above.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
-      - name: App unit tests (phone + tv debug)
+      - name: App unit tests + compose-resources guard
         # Run in CI, not just as local gate runs (baseline:
         # 94 phone / 98 tv tests).
         # :shared:core:{ui,data}:testAndroidHostTest are the cutover
@@ -271,24 +289,72 @@ jobs:
         # are NOT part of the derived shared-module scan above: which modules
         # own an androidHostTest source set is not derivable from
         # settings.gradle.kts.)
-        run: ./gradlew :app:testPhoneStoreDebugUnitTest :app:testTvStoreDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest :shared:feature:player-video:testAndroidHostTest :shared:feature:syncplay:testAndroidHostTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+        # One invocation (was two): the compose-resources guard
+        # (verifyPhoneStoreDebugComposeResources) dependsOn
+        # assemblePhoneStoreDebug, so a single call overlaps its packaging
+        # with the test compiles and saves a full configuration phase. The
+        # full R8 fdroid RELEASE smoke build lives in the fdroid-smoke job
+        # below (deferred off PRs).
+        run: ./gradlew :app:testPhoneStoreDebugUnitTest :app:testTvStoreDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest :shared:feature:player-video:testAndroidHostTest :shared:feature:syncplay:testAndroidHostTest :app:verifyPhoneStoreDebugComposeResources --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
-      - name: Compose-resources APK guard
-        # dependsOn assemblePhoneStoreDebug — the guard opens the built APKs.
-        run: ./gradlew :app:verifyPhoneStoreDebugComposeResources --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+      - name: AboutLibraries fdroid asset drift check
+        # The fdroid lane ships a COMMITTED aboutlibraries.json
+        # (app/src/fdroid/assets/) because the build-time export DOWNLOADS
+        # license texts — a network coin flip that broke the reproducible-
+        # builds determinism watchdog (two clean checkouts, one differing
+        # APK entry). This re-exports the fdroid variant's LIVE dependency
+        # graph to the gitignored src/main/assets path and byte-compares it
+        # against the committed file: a dependency change must be
+        # re-committed or this fails. (The committed file is the fdroid
+        # graph — 231 libraries, GPL-3.0 text included — deliberately NOT
+        # the store graph, whose extra entries list proprietary deps the
+        # fdroid APK does not contain.)
+        run: |
+          ./gradlew :app:exportLibraryDefinitionsPhoneFdroidRelease --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+          if ! cmp -s app/src/main/assets/aboutlibraries.json app/src/fdroid/assets/aboutlibraries.json; then
+            echo "::error::app/src/fdroid/assets/aboutlibraries.json drifted from the live fdroid dependency graph — re-run :app:exportLibraryDefinitionsPhoneFdroidRelease and commit app/src/fdroid/assets/aboutlibraries.json"
+            diff <(head -c 2000 app/src/main/assets/aboutlibraries.json) <(head -c 2000 app/src/fdroid/assets/aboutlibraries.json) || true
+            exit 1
+          fi
+          echo "PASS: committed fdroid license asset matches the live dependency graph"
 
+  fdroid-smoke:
+    # Deferred off PRs: the full R8 minify + resource-shrink RELEASE build
+    # of the fdroid flavor is a push/dispatch gate, not a per-PR gate (it
+    # adds ~10 min of packaging that PR iteration doesn't need). A separate
+    # job rather than a gated step: on push it runs IN PARALLEL with
+    # android-app instead of serially appending to it, and on PRs the whole
+    # job is skipped (no runner allocated). Runs on push to main/master/
+    # kmp-alpha (incl. direct merges that never open a PR — the reason the
+    # kmp-alpha branch exists on this trigger) + workflow_dispatch; skipped
+    # on pull_request.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Set up JDK 17 + 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: |
+            21
+            17
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
       - name: F-Droid flavor smoke build (GMS-free assertions)
         # Assembles the fdroid distribution flavor for the phone (exactly one
-        # arm64-v8a APK, no universal; versionCode = version.properties base +
-        # the arm64 abiIndex = 11090 + 1) and runs tools/fdroid/verify-apk.sh
+        # arm64-v8a APK, no universal) and runs tools/fdroid/verify-apk.sh
         # against it (see tools/fdroid/README.md for the policy each check
-        # protects). Strict on purpose — no escape hatch: until the
-        # cast/updater/fonts seams land, the GMS manifest/dex checks are
-        # EXPECTED to fail (the tree still carries GMS cast code), and once
-        # they land any regression fails this step loudly. The step's
-        # mechanical value regardless of seam state: the flavor+abiFilter
-        # build path stays green and the verify script keeps tracking the
-        # shipped artifact format.
+        # protects). The release-grade parity lane (buildserver env mirror +
+        # signed reference binaries) is fdroid-release.yml; this job only
+        # keeps the flavor+abiFilter build path green and the verify script
+        # tracking the shipped artifact format.
         run: |
           ./gradlew :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
           code=$(grep -oP '(?<=^jellyplay\.versionCode=)\d+' version.properties)
@@ -306,6 +372,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     steps:
       - name: Checkout Repository
         # submodules: recursive — packaging embeds the shared tree; keep the
@@ -329,7 +396,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+          # Same fork-safe policy as shared-targets above.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Package desktop installers for current OS
         # -PjellyplayVersion mirrors the release-lane contract documented in

@@ -55,8 +55,11 @@ AutoUpdateMode: Version
 # MUST be in the metadata at inclusion: the F-Droid-key lineage locks at the
 # first merged release and switching to Binaries afterwards would break
 # every installed user.
-Binaries:
-  - https://github.com/raulshma/jellyplay/releases/download/v%v/jellyplay-v%v-fdroid-%c.apk
+# SCALAR, not a YAML list: fdroidserver types Binaries as TYPE_STRING
+# (metadata.py fieldtypes default) and its FieldValidator applies
+# ^http[s]?:// to the raw value — a list stringifies to "['https://…']" and
+# fails validation.
+Binaries: https://github.com/raulshma/jellyplay/releases/download/v%v/jellyplay-v%v-fdroid-%c.apk
 
 Builds:
   # NOTE (mezinster's hash-pin concern): `commit:` MUST be the tag commit,

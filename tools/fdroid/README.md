@@ -31,7 +31,7 @@ vacuously.
 | Dex: no `Lcom/google/android/gms/` in every `classes*.dex` | Even reflection-only GMS usage must not survive into the fdroid artifact; the dex scan catches classes the manifest cannot show. |
 | Dex: no `Lcom/github/junrar/` | Vendored RAR extraction code with incomplete license provenance is a classic mechanical F-Droid rejection. |
 | `res/font/` >= `MIN_FONT_FILES` (default 20) | fdroid theming must bundle its TTF families instead of GMS downloadable fonts — otherwise the theme silently degrades for users with no Play services. |
-| `assets/aboutlibraries.json` present | The settings screen renders licenses from this asset; on F-Droid's clean-clone CI the build itself must produce it (`exportLibraryDefinitions` is wired into `merge*ReleaseAssets` in `app/build.gradle.kts`). |
+| `assets/aboutlibraries.json` present | The settings screen renders licenses from this asset; the fdroid lane ships it as a COMMITTED source asset (`app/src/fdroid/assets/aboutlibraries.json`, CI-drift-checked against the live dependency graph — the build-time export downloads license texts, which is nondeterministic and broke the reproducible-builds byte-compare). |
 | `--expect-version-code N` | F-Droid's `VercodeOperation` aligns the APK versionCode with the metadata base + per-ABI index; a mismatch is the most common mechanical rejection. CI derives `N` from `version.properties` (+1 for the arm64 abiIndex). |
 
 During the migration waves, the GMS checks are EXPECTED to fail — the tree
@@ -52,11 +52,12 @@ the fdroid lane cannot silently regress once those seams land.
   so a `res/font/`-prefix count would false-negative on exactly the artifacts
   the lane ships. The check counts `res/*.ttf` by extension instead, which
   matches both minified and unminified/debug APKs.
-- **Do not build store and fdroid releases in one Gradle invocation.** Both
-  variants' per-variant aboutlibraries export tasks write the same gitignored
-  `app/src/main/assets/aboutlibraries.json`; a combined build is untested and
-  racy (variant asset merges racing on one file). Build one variant at a time
-  — CI and fdroidserver both do.
+- **Do not build store and fdroid releases in one Gradle invocation.** The
+  store variants' per-variant aboutlibraries export tasks still write the
+  same gitignored `app/src/main/assets/aboutlibraries.json`, so two STORE
+  variants in one invocation race on one file (the fdroid variant no longer
+  exports at all — it ships the committed `app/src/fdroid/assets/` asset).
+  Build one variant at a time — CI and fdroidserver both do.
 
 ### versionCode scheme
 

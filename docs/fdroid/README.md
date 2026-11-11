@@ -217,4 +217,9 @@ Rules that keep the two channels disjoint:
   lane asserts it.
 - A weekly watchdog (`fdroid-determinism.yml`) builds the same commit at two
   paths and byte-compares, so self-inflicted nondeterminism surfaces within
-  a week rather than at the buildserver.
+  a week rather than at the buildserver. (First catch, 2026-11-11: the
+  AboutLibraries export downloads license texts at build time — the GPL-3.0
+  body is a gnu.org fetch — so the fdroid lane now ships a COMMITTED
+  `app/src/fdroid/assets/aboutlibraries.json` and the export wiring is
+  store-only; kmp-build drift-checks the committed file against the live
+  dependency graph every PR.)
