@@ -65,7 +65,14 @@ Supporting pieces, all in this repo:
   `jellyplay-v<version>-fdroid-<code>.apk`, and attaches to the release.
 - **`fdroid-determinism.yml`** — weekly watchdog: same commit, two checkout
   paths, byte-compare. Nondeterminism regressions surface here within a
-  week, not at the buildserver where they block a release.
+  week, not at the buildserver where they block a release. (It earned its
+  keep on its first run: two clean checkouts of one commit produced APKs
+  differing in exactly one entry — `assets/aboutlibraries.json`, whose
+  GPL-3.0 text the AboutLibraries export DOWNLOADS at build time and a
+  rate-limited fetch silently dropped. Fix: the fdroid lane ships a
+  committed, CI-drift-checked asset at `app/src/fdroid/assets/` and the
+  build-time export is scoped to the store variants, which are never
+  byte-compared.)
 
 Channel coexistence is naming-based and test-pinned
 (`GitHubReleasesApiImplTest`): the store updater's asset matcher requires a

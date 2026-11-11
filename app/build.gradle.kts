@@ -316,18 +316,17 @@ aboutLibraries {
 
 // The exported asset regenerates on demand (./gradlew :app:exportLibraryDefinitions)
 // rather than on every preBuild — it only changes when the dependency graph does.
-// aboutlibraries.json is gitignored and generated on demand; release builds
-// (including F-Droid's clean-clone builds, which never see a prior developer
-// run) need it present at asset-merge time, so the export task is wired into
-// the release asset-merge chain — PER VARIANT: AboutLibraries registers one
-// filtered export task per variant, and every merge task name embeds its full
-// variant name (mergePhoneFdroidReleaseAssets → PhoneFdroidRelease), so the
-// wiring is a mechanical rename. Each merge reads the export of ITS variant's
-// dependency graph, which is what keeps the store-only dependencies (junrar,
-// the GMS cast stack — storeImplementation-only) out of the FDROID license
-// list; the store variants' assets still declare them. Debug builds keep the
-// on-demand behavior.
-tasks.matching { it.name.matches(Regex("merge.*ReleaseAssets")) }.configureEach {
+// WIRING SCOPE — STORE MERGES ONLY (RB, ADR 0014): the export DOWNLOADS license
+// texts it can't resolve from its bundled metadata (the GPL-3.0-only body is a
+// gnu.org fetch), so a generated aboutlibraries.json is a network coin flip —
+// the CI determinism watchdog caught two clean checkouts of one commit
+// producing 162KB vs 127KB exports (the single differing APK entry). The
+// F-Droid lane therefore ships a COMMITTED, CI-drift-checked asset instead:
+// app/src/fdroid/assets/aboutlibraries.json (see the fdroid drift step in
+// kmp-build.yml; regenerate+commit it whenever the dependency graph changes).
+// Store variants keep live generation — they are not byte-compared anywhere.
+// Debug builds keep the on-demand behavior.
+tasks.matching { it.name.matches(Regex("merge.*Store.*ReleaseAssets")) }.configureEach {
     dependsOn("exportLibraryDefinitions" + name.removePrefix("merge").removeSuffix("Assets"))
 }
 

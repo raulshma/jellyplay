@@ -186,10 +186,13 @@ else
 fi
 
 # --- check 4: assets — aboutlibraries.json ----------------------------------
-# The settings screen renders licenses from this asset; on F-Droid's
-# clean-clone CI it must be produced by the build itself (the export task is
-# wired into merge*ReleaseAssets). A hit-less APK ships a license screen
-# that cannot render — an F-Droid compliance gap for "declared licenses".
+# The settings screen renders licenses from this asset. It is COMMITTED at
+# app/src/fdroid/assets/aboutlibraries.json (RB: the build-time export
+# downloads license texts, which made it a network coin flip — see ADR 0014
+# — so the fdroid lane ships the committed file as a plain source asset,
+# drift-checked against the live dependency graph in CI). A hit-less APK
+# ships a license screen that cannot render — an F-Droid compliance gap for
+# "declared licenses".
 # grep -c (not -q): with pipefail, -q's early exit SIGPIPEs unzip and fails
 # the pipeline even when the entry exists.
 about_count="$(unzip -l "$apk" | grep -c 'assets/aboutlibraries.json' || true)"
