@@ -297,6 +297,27 @@ jobs:
         # below (deferred off PRs).
         run: ./gradlew :app:testPhoneStoreDebugUnitTest :app:testTvStoreDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest :shared:feature:player-video:testAndroidHostTest :shared:feature:syncplay:testAndroidHostTest :app:verifyPhoneStoreDebugComposeResources --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
+      - name: AboutLibraries fdroid asset drift check
+        # The fdroid lane ships a COMMITTED aboutlibraries.json
+        # (app/src/fdroid/assets/) because the build-time export DOWNLOADS
+        # license texts — a network coin flip that broke the reproducible-
+        # builds determinism watchdog (two clean checkouts, one differing
+        # APK entry). This re-exports the fdroid variant's LIVE dependency
+        # graph to the gitignored src/main/assets path and byte-compares it
+        # against the committed file: a dependency change must be
+        # re-committed or this fails. (The committed file is the fdroid
+        # graph — 231 libraries, GPL-3.0 text included — deliberately NOT
+        # the store graph, whose extra entries list proprietary deps the
+        # fdroid APK does not contain.)
+        run: |
+          ./gradlew :app:exportLibraryDefinitionsPhoneFdroidRelease --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+          if ! cmp -s app/src/main/assets/aboutlibraries.json app/src/fdroid/assets/aboutlibraries.json; then
+            echo "::error::app/src/fdroid/assets/aboutlibraries.json drifted from the live fdroid dependency graph — re-run :app:exportLibraryDefinitionsPhoneFdroidRelease and commit app/src/fdroid/assets/aboutlibraries.json"
+            diff <(head -c 2000 app/src/main/assets/aboutlibraries.json) <(head -c 2000 app/src/fdroid/assets/aboutlibraries.json) || true
+            exit 1
+          fi
+          echo "PASS: committed fdroid license asset matches the live dependency graph"
+
   fdroid-smoke:
     # Deferred off PRs: the full R8 minify + resource-shrink RELEASE build
     # of the fdroid flavor is a push/dispatch gate, not a per-PR gate (it
