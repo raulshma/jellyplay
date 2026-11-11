@@ -13,8 +13,9 @@ name: F-Droid determinism
 # failure mode it guards is drift, not per-PR breakage.
 #
 # Mirrors the buildserver environment exactly as fdroid-release.yml does
-# (JDK 21, prebuild seds, SOURCE_DATE_EPOCH, LC_ALL, NDK pin, --no-daemon);
-# see docs/fdroid/README.md §6 for the mapping table.
+# (debian:trixie container with Debian's default-jdk-headless, prebuild
+# seds, SOURCE_DATE_EPOCH, LC_ALL, NDK pin, --no-daemon); see
+# docs/fdroid/README.md §6 for the mapping table.
 
 on:
   schedule:
@@ -31,34 +32,36 @@ defaults:
 jobs:
   double-build:
     runs-on: ubuntu-latest
+    container:
+      # Same reasoning as fdroid-release.yml: the buildserver's Debian
+      # OpenJDK build is byte-relevant, so the watchdog must hunt for
+      # nondeterminism in THAT environment, not under Temurin. trixie has
+      # no git until the toolchain step installs it — the two checkouts are
+      # manual clones (public repos).
+      image: debian:trixie
     steps:
+      - name: Install buildserver toolchain
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq default-jdk-headless git unzip wget >/dev/null
+          SDK=/opt/android-sdk
+          mkdir -p "$SDK/cmdline-tools"
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13158590_latest.zip -O /tmp/clt.zip
+          unzip -q /tmp/clt.zip -d /tmp/clt
+          mv /tmp/clt/cmdline-tools "$SDK/cmdline-tools/latest"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses < <(yes) > /dev/null
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "ndk;28.2.13676358" < <(yes) > /dev/null
+
       - name: Checkout copy A
-        uses: actions/checkout@v7
-        with:
-          path: a
-          submodules: recursive
+        run: git clone --depth 1 https://github.com/raulshma/jellyplay a
 
       - name: Checkout copy B
-        uses: actions/checkout@v7
-        with:
-          path: b
-          submodules: recursive
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: '21'
+        run: git clone --depth 1 https://github.com/raulshma/jellyplay b
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Install NDK 28.2.13676358
-        # Process substitution, not `yes |` — the runner shell sets pipefail
-        # and `yes` dies of SIGPIPE on a successful sdkmanager.
-        run: >
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
-          < <(yes) > /dev/null
 
       - name: Set buildserver environment
         # A separate step: GITHUB_ENV writes apply to SUBSEQUENT steps only,
@@ -79,10 +82,6 @@ jobs:
         run: |
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
-          # Mirror the metadata prebuild + fdroid-release.yml: pin R8 to one
-          # thread so its output ordering (and the dex-embedded pg-map-id) is
-          # machine-independent — see fdroid-release.yml for the incident.
-          printf '\nsystemProp.com.android.tools.r8.threadCount=1\n' >> gradle.properties
           ./gradlew --no-daemon --no-build-cache -Porg.gradle.java.installations.auto-download=false :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a --stacktrace
 
       - name: Build copy B
@@ -90,7 +89,6 @@ jobs:
         run: |
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
-          printf '\nsystemProp.com.android.tools.r8.threadCount=1\n' >> gradle.properties
           ./gradlew --no-daemon --no-build-cache -Porg.gradle.java.installations.auto-download=false :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a --stacktrace
 
       - name: Compare APKs
