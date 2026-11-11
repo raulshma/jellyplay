@@ -24,12 +24,12 @@ AutoName: JellyPlay
 UpdateCheckMode: Tags
 # Desktop pre-releases are tagged vX.Y.Z-alpha.N; only semver tags are releases.
 UpdateCheckRegex: ^v\d+\.\d+\.\d+$
-# Committed version.properties carries the base code (0.11.9 → 11090; scheme
+# Committed version.properties carries the base code (0.11.10 → 11100; scheme
 # major*100000 + minor*1000 + patch*10). Each tag yields TWO builds: base+1
 # (arm64-v8a) and base+2 (x86_64).
 VercodeOperation:
-  - '%c + 1' # arm64-v8a → e.g. 11091
-  - '%c + 2' # x86_64   → e.g. 11092
+  - '%c + 1' # arm64-v8a → e.g. 11101
+  - '%c + 2' # x86_64   → e.g. 11102
 # ORDERING INVARIANT (fdroidserver auto-update semantics, checkupdates.py):
 # a new detected version deep-copies the LAST len(VercodeOperation) Builds
 # entries and zips the SORTED computed codes onto them. Builds entries for
@@ -45,7 +45,7 @@ AutoUpdateMode: Version
 # Reproducible builds via developer-signed reference binaries
 # (docs/adr/0014-fdroid-reproducible-binaries.md). fdroidserver expands this
 # single template PER BUILD (%v → versionName, %c → the build's versionCode:
-# 11091 arm64-v8a / 11092 x86_64), downloads the APK from the release, and
+# 11101 arm64-v8a / 11102 x86_64), downloads the APK from the release, and
 # byte-compares it against the buildserver's own unsigned build
 # (apksigcopier + apksigner validate) — mismatch marks the build FAILED, so
 # the release blocks instead of silently diverging. The binaries are cut by
@@ -58,19 +58,23 @@ AutoUpdateMode: Version
 # SCALAR, not a YAML list: fdroidserver types Binaries as TYPE_STRING
 # (metadata.py fieldtypes default) and its FieldValidator applies
 # ^http[s]?:// to the raw value — a list stringifies to "['https://…']" and
-# fails validation.
-Binaries: https://github.com/raulshma/jellyplay/releases/download/v%v/jellyplay-v%v-fdroid-%c.apk
+# fails validation. NOTE: `fdroid rewritemeta` refolds the long URL into the
+# two-line form below (with a trailing space after the key) — the MR file
+# must match that canonical byte form or rewritemeta fails; it also wants NO
+# blank line between Repo: and Binaries:, and AllowedAPKSigningKeys placed
+# right after the Builds block.
+Binaries:
+  https://github.com/raulshma/jellyplay/releases/download/v%v/jellyplay-v%v-fdroid-%c.apk
 
 Builds:
   # NOTE (mezinster's hash-pin concern): `commit:` MUST be the tag commit,
-  # i.e. the output of `git rev-parse v0.11.9` at release time — not a dev
+  # i.e. the output of `git rev-parse vX.Y.Z` at release time — not a dev
   # branch head. Fill BOTH entries with the same hash. The dex/manifest
   # telemetry audit evidence is tools/fdroid/verify-apk.sh (run it on the
   # built APKs and paste the output into the MR description).
-  - versionName: 0.11.9
-    versionCode: 11091
-    # TO-FILL after the v0.11.9 tag exists: git rev-parse v0.11.9
-    commit: TO-FILL-v0.11.9-tag-commit
+  - versionName: 0.11.10
+    versionCode: 11101
+    commit: b8866e4e537059e799935e2d1df370ee2a720a11 # git rev-parse v0.11.10
     # jellyfin-plugin-jellyplay is a real git submodule (.gitmodules:
     # https://github.com/raulshma/jellyfin-plugin-jellyplay.git) — required.
     submodules: true
@@ -81,11 +85,47 @@ Builds:
     # declared in app/build.gradle.kts). The value is a task-name fragment,
     # not a single-dimension flavor name — fdroidserver's build_local does
     # `assemble` + ''.join(first-letter-capitalized fragments) + `Release`
-    # (verified in fdroidserver master 2026-11-10). VERIFIED locally:
-    # ./gradlew :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a builds
-    # clean and tools/fdroid/verify-apk.sh passes on the artifact.
+    # (verified in fdroidserver master 2026-11-10). VERIFIED: the fdroiddata
+    # MR CI builds this task end-to-end (schema/lint/checkupdates/build all
+    # green on the live MR).
     gradle:
       - phoneFdroid
+    # The distribution dimension switches seams (fonts, cast, updater, RAR)
+    # but the per-ABI packaging comes from the abiFilter Gradle property on
+    # splits.abi (app/build.gradle.kts).
+    rm:
+      - apps/desktop
+    prebuild: sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d'
+      ../settings.gradle.kts
+    # rm + prebuild MUST stay in lockstep with
+    # .github/workflows/fdroid-release.yml (which applies the identical
+    # steps) — the Binaries byte-compare compares the buildserver build
+    # against OUR reference binaries, so both sides must transform the tree
+    # identically.
+    ndk: 28.2.13676358
+    # NDK — REQUIRED, not optional (proven on v0.11.10's first buildserver
+    # compare): the buildserver preinstalls NO NDK, and without one AGP logs
+    # "Unable to strip … packaging them as they are" and ships UNSTRIPPED
+    # native libs while our reference binaries are stripped
+    # (ndk.debugSymbolLevel=SYMBOL_TABLE in app/build.gradle.kts) — the
+    # 9.3 MB vs 1.37 MB libc++_shared.so mismatch. The `ndk:` field makes
+    # fdroidserver install exactly 28.2.13676358 (== the repo's
+    # ndkVersion pin == AGP 9.5's default); fdroid-release.yml installs the
+    # same version explicitly. The pre-PIN v0.11.9 tag converges on AGP's
+    # unpinned default, so parity holds there too.
+    # JDK — byte-relevant. The buildserver daemon is Debian's
+    # default-jdk-headless (trixie = OpenJDK 21.0.13), and kotlinc/R8 emit
+    # DIFFERENT dex bytes under Temurin's OpenJDK than under Debian's:
+    # v0.11.10's first compare failed with identical class sets and string
+    # tables but different code bytes; a local rebuild under Debian's JDK
+    # reproduced the buildserver dex byte-for-byte. fdroid-release.yml now
+    # runs in a debian:trixie container with apt default-jdk-headless —
+    # match it (or the buildserver's exact image) when building reference
+    # binaries by hand. The one `jvmToolchain(17)` in the repo
+    # (apps/desktop/build.gradle.kts) is inside the module the prebuild sed
+    # drops from settings.gradle.kts, so the fdroid lane requests NO
+    # toolchain; nothing to auto-download (and the buildserver disables JVM
+    # auto-provisioning anyway). No sudo needed.
     # The distribution dimension switches seams (fonts, cast, updater, RAR)
     # but the per-ABI packaging comes from the abiFilter Gradle property on
     # splits.abi (app/build.gradle.kts).
@@ -94,35 +134,27 @@ Builds:
     # `output:` intentionally omitted: with abiFilter the split APK carries the
     # abi suffix in its filename (app-phone-fdroid-arm64-v8a-release.apk) and
     # fdroidserver globs build outputs automatically — same pattern LensCast
-    # used. Add an explicit `output:` only if `fdroid build` cannot find the
-    # APK (TO-CHECK on a real fdroiddata run).
-    # NDK — RESOLVED (fdroidserver buildserver/provision-android-ndk,
-    # 2026-11-11): the buildserver preinstalls NO NDK; its provisioning only
-    # makes /opt/android-sdk/ndk writable so AGP auto-installs the version
-    # the build requests. Unpinned that request is AGP 9.5's default
-    # (28.2.13676358), and the buildserver would install exactly that — but
-    # the default moves on AGP upgrades, so the repo pins
-    # ndkVersion="28.2.13676358" (app/build.gradle.kts) from 0.11.10 and
-    # fdroid-release.yml installs the same version: llvm-strip output bytes
-    # depend on the NDK version and must match between our reference
-    # binaries and the buildserver build (Binaries byte-compare). The
-    # v0.11.9 tag predates the pin — both sides converge on the same AGP
-    # default, so parity holds there too.
-    # release buildType sets ndk.debugSymbolLevel=SYMBOL_TABLE
-    # (app/build.gradle.kts) for libmpv/libvlc/libass symbolication.
-    # sudo: none expected, JDK-wise. The one `jvmToolchain(17)` in the repo
-    # (apps/desktop/build.gradle.kts) is inside the module the prebuild sed
-    # drops from settings.gradle.kts, so the fdroid lane requests NO
-    # toolchain and the daemon runs on the buildserver's default JDK
-    # (trixie default-jdk-headless = 21) — fdroid-release.yml mirrors it
-    # with Temurin 21. Nothing to auto-download (and the buildserver
-    # disables JVM auto-provisioning anyway).
-  - versionName: 0.11.9
-    versionCode: 11092
-    # TO-FILL after the v0.11.9 tag exists: git rev-parse v0.11.9
-    commit: TO-FILL-v0.11.9-tag-commit
+    # used. Verified on the live MR: fdroid build finds the outputs with no
+    # explicit output:.
+  - versionName: 0.11.10
+    versionCode: 11102
+    commit: b8866e4e537059e799935e2d1df370ee2a720a11 # git rev-parse v0.11.10
     submodules: true
     gradle:
       - phoneFdroid
+    rm:
+      - apps/desktop
+    prebuild: sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d'
+      ../settings.gradle.kts
+    ndk: 28.2.13676358
     gradleprops:
       - abiFilter=x86_64
+
+# Required alongside Binaries (fdroidserver schema + lint: "App has Binaries
+# but does not have corresponding AllowedAPKSigningKeys"): the SHA-256 of the
+# signing certificate (apksigner verify --print-certs on any released fdroid
+# binary). fdroidserver refuses Binaries APKs signed by anything else.
+AllowedAPKSigningKeys: 7db42d4a2ff53c7b0f5914531dcdfaf5620c98715d4889813db1d88d31b6db0b
+
+CurrentVersion: 0.11.10
+CurrentVersionCode: 11102
