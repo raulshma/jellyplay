@@ -80,6 +80,34 @@ class GitHubReleasesApiImplTest {
         assertEquals("JELLYPLAY-v1.2.3-PHONE-ARM64-V8A.apk", chosen?.name)
     }
 
+    // F-Droid channel coexistence: the same releases carry developer-signed
+    // fdroid binaries (Binaries: …/jellyplay-v%v-fdroid-%c.apk → e.g.
+    // jellyplay-v1.2.3-fdroid-11091.apk). The fdroid flavor has no
+    // self-updater, but a store-flavor install probing the release page must
+    // never resolve to one: the flavor prefix fails all three tiers, and the
+    // last-resort "any universal" tier only matches `-universal.apk` — which
+    // is exactly why the fdroid lane's rename ends in the versionCode and
+    // MUST never publish a universal-named APK.
+
+    @Test
+    fun `selectAsset ignores fdroid channel binaries`() {
+        val assets = listOf(
+            asset("jellyplay-v1.2.3-fdroid-11091.apk"),
+            asset("jellyplay-v1.2.3-fdroid-11092.apk"),
+        )
+        assertNull(GitHubReleasesApiImpl.selectAsset(assets, "1.2.3", "phone", arrayOf("arm64-v8a")))
+        assertNull(GitHubReleasesApiImpl.selectAsset(assets, "1.2.3", "tv", arrayOf("arm64-v8a")))
+    }
+
+    @Test
+    fun `selectAsset keeps store assets ahead of fdroid binaries`() {
+        val assets = listOf(
+            asset("jellyplay-v1.2.3-fdroid-11091.apk"),
+            asset("jellyplay-v1.2.3-phone-store-arm64-v8a.apk"),
+        )
+        val chosen = GitHubReleasesApiImpl.selectAsset(assets, "1.2.3", "phone", arrayOf("arm64-v8a"))
+        assertEquals("jellyplay-v1.2.3-phone-store-arm64-v8a.apk", chosen?.name)
+    }
     // ---- fetchLatestUpdate deserialization + the allow-list gates.
     // The canned responses come from an application interceptor against the
     // REAL LATEST_RELEASE_URL — never a loopback MockWebServer, because a

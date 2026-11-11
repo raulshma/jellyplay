@@ -1,0 +1,183 @@
+name: F-Droid release binaries
+
+# Build, verify and publish the developer-signed F-Droid reference binaries
+# (the `Binaries:` URLs in the fdroiddata metadata expand to
+# releases/download/v%v/jellyplay-v%v-fdroid-%c.apk — fdroidserver's
+# buildserver rebuilds the same commit and byte-compares against these).
+#
+# Triggers:
+#  * release published — the stable draft from release.yml becomes
+#    published; this lane then attaches the two fdroid APKs to that same
+#    release. NOTE: release-triggered workflows run from the DEFAULT branch,
+#    so automation arms only once this file lands on main.
+#  * workflow_dispatch with a tag input — backfill path (e.g. building
+#    v0.11.9 binaries for the inclusion MR) and manual re-runs.
+#
+# Buildserver parity (the whole point of this lane): every choice below
+# mirrors what fdroidserver's buildserver does for `gradle: [phoneFdroid]`
+# builds — see docs/fdroid/README.md §6 for the mapping table.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to build (e.g. v0.11.9) — stable vX.Y.Z only'
+        required: true
+
+# Per-tag serialization: a re-dispatch must not race the previous run's
+# asset upload for the same release.
+concurrency:
+  group: fdroid-release-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-binaries:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # abi_index mirrors app/build.gradle.kts abiVersionIndexes — the
+          # build derives versionCode = version.properties base + index from
+          # -PabiFilter alone (the F-Droid path; NEVER pass -PversionCode).
+          - abi: arm64-v8a
+            abi_index: 1
+          - abi: x86_64
+            abi_index: 2
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          TAG="${{ inputs.tag || github.event.release.tag_name }}"
+          # Stable semver only: KMP alphas (vX.Y.Z-alpha.N) ride the same
+          # release-published event via kmp-alpha-release and must not
+          # trigger fdroid binaries.
+          if ! grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' <<<"$TAG"; then
+            echo "::error::Tag '$TAG' is not a stable vX.Y.Z release — skipping"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          # Matches the metadata's `submodules: true` (jellyfin-plugin-jellyplay).
+          submodules: recursive
+
+      - name: Set up JDK 21
+        # The buildserver basebox is debian/trixie64 whose default-jdk is 21
+        # (provision-apt-get-install sets the highest alternative as the
+        # system default); mirror it so the Gradle daemon matches.
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      # Keystore decode — the same one-liner as
+      # .github/actions/setup-gmd-runner, inlined because that composite
+      # action hard-requires /dev/kvm (GMD emulator prereq) which this lane
+      # never needs.
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > jellyplay-release.jks
+          chmod +x ./gradlew
+
+      # Mirrors the metadata `prebuild:` + `rm:` verbatim — the buildserver
+      # runs exactly these (foojay gone means no JVM toolchain auto-download,
+      # matching gradlew-fdroid's installations.auto-download=false).
+      - name: Apply F-Droid prebuild
+        run: |
+          sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
+          rm -rf apps/desktop
+
+      - name: Set buildserver environment
+        # SOURCE_DATE_EPOCH: fdroidserver common.py get_source_date_epoch =
+        # `git log -n1 --pretty=%ct` over the build checkout. LC_ALL:
+        # buildserver setup-env-vars exports C.UTF-8.
+        run: |
+          echo "SOURCE_DATE_EPOCH=$(git log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
+          echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
+
+      - name: Install NDK 28.2.13676358
+        # KEEP IN SYNC with ndkVersion in app/build.gradle.kts. The pinned
+        # builds request exactly this version; the frozen v0.11.9 tag has no
+        # pin, but 28.2.13676358 is ALSO AGP 9.5's unpinned default, so the
+        # buildserver's auto-install resolves the same version either way.
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" > /dev/null
+
+      - name: Build phoneFdroidRelease (${{ matrix.abi }})
+        # gradlew-fdroid parity: --no-daemon (org.gradle.daemon=false on the
+        # buildserver) and JVM auto-provisioning off. Signing envs activate
+        # the release signingConfig (app/build.gradle.kts signingConfigs).
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: >
+          ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false
+          :app:assemblePhoneFdroidRelease -PabiFilter=${{ matrix.abi }} --stacktrace
+
+      - name: Verify and rename APK
+        env:
+          EXPECTED_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          VERSION=$(grep -oP '(?<=^jellyplay\.versionName=)\S+' version.properties)
+          BASE=$(grep -oP '(?<=^jellyplay\.versionCode=)\d+' version.properties)
+          CODE=$((BASE + ${{ matrix.abi_index }}))
+          if [ "v${VERSION}" != "${EXPECTED_TAG}" ]; then
+            echo "::error::version.properties says v${VERSION} but building ${EXPECTED_TAG} — version.properties was not bumped for this tag"
+            exit 1
+          fi
+          APK=$(ls app/build/outputs/apk/phoneFdroid/release/*-${{ matrix.abi }}-release.apk)
+          tools/fdroid/verify-apk.sh --expect-version-code "$CODE" "$APK"
+          # The exact filename fdroidserver's Binaries: template expands to
+          # (v%v → this tag, %c → this build's versionCode). The store
+          # updater ignores these by construction: its asset matcher
+          # requires a -phone-/-tv- prefix and an -<abi>.apk/-universal.apk
+          # suffix (GitHubReleasesApiImpl.kt).
+          DEST="jellyplay-v${VERSION}-fdroid-${CODE}.apk"
+          cp "$APK" "$DEST"
+          echo "sha256 of the published reference binary:"
+          sha256sum "$DEST"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fdroid-apk-${{ matrix.abi }}
+          path: jellyplay-*-fdroid-*.apk
+          retention-days: 7
+          if-no-files-found: error
+
+  attach-release:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APK Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+          pattern: 'fdroid-apk-*'
+
+      - name: Attach to release
+        # Uploads to the existing vX.Y.Z release (published draft for the
+        # release-event path; the already-published release for backfills).
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag || github.event.release.tag_name }}
+          files: dist/*.apk
