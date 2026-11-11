@@ -80,6 +80,59 @@ class GitHubReleasesApiImplTest {
         assertEquals("JELLYPLAY-v1.2.3-PHONE-ARM64-V8A.apk", chosen?.name)
     }
 
+    // The distribution flavor split inserted a `store` segment into the
+    // release lane's output names (jellyplay-v1.2.3-phone-store-arm64-v8a.apk);
+    // selection must stay transparent to it — v0.11.9 otherwise sent every
+    // updater to the universal APK.
+
+    @Test
+    fun `selectAsset matches ABI split with distribution infix`() {
+        val assets = listOf(
+            asset("jellyplay-v1.2.3-phone-store-universal.apk"),
+            asset("jellyplay-v1.2.3-phone-store-arm64-v8a.apk"),
+        )
+        val chosen = GitHubReleasesApiImpl.selectAsset(assets, "1.2.3", "phone", arrayOf("arm64-v8a"))
+        assertEquals("jellyplay-v1.2.3-phone-store-arm64-v8a.apk", chosen?.name)
+    }
+
+    @Test
+    fun `selectAsset keeps ABI preference with distribution infix`() {
+        val assets = listOf(
+            asset("jellyplay-v1.2.3-phone-store-x86_64.apk"),
+            asset("jellyplay-v1.2.3-phone-store-arm64-v8a.apk"),
+        )
+        val chosen = GitHubReleasesApiImpl.selectAsset(
+            assets, "1.2.3", "phone", arrayOf("arm64-v8a", "x86_64"),
+        )
+        assertEquals("jellyplay-v1.2.3-phone-store-arm64-v8a.apk", chosen?.name)
+    }
+
+    @Test
+    fun `selectAsset universal fallback matches distribution infix`() {
+        val assets = listOf(asset("jellyplay-v1.2.3-phone-store-universal.apk"))
+        val chosen = GitHubReleasesApiImpl.selectAsset(assets, "1.2.3", "phone", arrayOf("arm64-v8a"))
+        assertEquals("jellyplay-v1.2.3-phone-store-universal.apk", chosen?.name)
+    }
+
+    @Test
+    fun `selectAsset still matches pre-split plain names`() {
+        val assets = listOf(
+            asset("jellyplay-v1.2.3-phone-arm64-v8a.apk"),
+            asset("jellyplay-v1.2.3-phone-universal.apk"),
+        )
+        val chosen = GitHubReleasesApiImpl.selectAsset(assets, "1.2.3", "phone", arrayOf("arm64-v8a"))
+        assertEquals("jellyplay-v1.2.3-phone-arm64-v8a.apk", chosen?.name)
+    }
+
+    @Test
+    fun `selectAsset prefix does not swallow longer flavor lookalikes`() {
+        val assets = listOf(asset("jellyplay-v1.2.3-phone-store-arm64-v8a.apk"))
+        // The tv flavor's prefix must not match a phone-flavored asset —
+        // and "1.2.3" must not match inside "1.2.30".
+        assertNull(GitHubReleasesApiImpl.selectAsset(assets, "1.2.3", "tv", arrayOf("arm64-v8a")))
+        assertNull(GitHubReleasesApiImpl.selectAsset(assets, "1.2.30", "phone", arrayOf("arm64-v8a")))
+    }
+
     // F-Droid channel coexistence: the same releases carry developer-signed
     // fdroid binaries (Binaries: …/jellyplay-v%v-fdroid-%c.apk → e.g.
     // jellyplay-v1.2.3-fdroid-11091.apk). The fdroid flavor has no
@@ -108,6 +161,7 @@ class GitHubReleasesApiImplTest {
         val chosen = GitHubReleasesApiImpl.selectAsset(assets, "1.2.3", "phone", arrayOf("arm64-v8a"))
         assertEquals("jellyplay-v1.2.3-phone-store-arm64-v8a.apk", chosen?.name)
     }
+
     // ---- fetchLatestUpdate deserialization + the allow-list gates.
     // The canned responses come from an application interceptor against the
     // REAL LATEST_RELEASE_URL — never a loopback MockWebServer, because a
