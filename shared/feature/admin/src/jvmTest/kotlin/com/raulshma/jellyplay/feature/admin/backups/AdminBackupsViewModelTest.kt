@@ -169,8 +169,10 @@ class AdminBackupsViewModelTest {
         coVerify(exactly = 1) { authRepository.restoreSession() }
         // The list refreshed after the reconnect (init load + post-restore).
         coVerify(exactly = 2) { backupRepository.getBackupsSnapshot() }
-        assertEquals(RestorePhase.Idle, viewModel.state.value.restorePhase)
-        assertTrue(viewModel.state.value.restoreComplete)
+        // The success feedback is the phase's terminal variant — not a
+        // Boolean beside it (v0.11.10 cohort: `Restoring && restoreComplete`
+        // is unrepresentable now).
+        assertEquals(RestorePhase.Complete, viewModel.state.value.restorePhase)
         assertNull(viewModel.state.value.error)
     }
 
@@ -185,7 +187,6 @@ class AdminBackupsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(RestorePhase.Idle, viewModel.state.value.restorePhase)
-        assertFalse(viewModel.state.value.restoreComplete)
         assertNotNull(viewModel.state.value.error)
         coVerify(exactly = 0) { authRepository.probeServer(any()) }
         coVerify(exactly = 0) { authRepository.restoreSession() }
@@ -204,11 +205,9 @@ class AdminBackupsViewModelTest {
 
         coVerify(exactly = 60) { authRepository.probeServer(serverAddress) }
         coVerify(exactly = 0) { authRepository.restoreSession() }
-        assertEquals(RestorePhase.Idle, viewModel.state.value.restorePhase)
-        assertFalse(viewModel.state.value.restoreComplete)
-        // The unreachable-server feedback is a typed flag — the screen
-        // localizes it; the VM carries no user-facing text.
-        assertTrue(viewModel.state.value.restoreServerUnreachable)
+        // The unreachable-server feedback is the phase's terminal variant —
+        // the screen localizes it; the VM carries no user-facing text.
+        assertEquals(RestorePhase.ServerUnreachable, viewModel.state.value.restorePhase)
         assertNull(viewModel.state.value.error)
     }
 
@@ -231,7 +230,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `a list reload after the poll timeout clears the unreachable flag`() = runTest(mainDispatcher) {
+    fun `a list reload after the poll timeout clears the unreachable outcome`() = runTest(mainDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
         coEvery { backupRepository.restoreBackup(any()) } returns Result.success(Unit)
@@ -240,15 +239,60 @@ class AdminBackupsViewModelTest {
 
         viewModel.restoreBackup("jf.zip")
         advanceUntilIdle()
-        assertTrue(viewModel.state.value.restoreServerUnreachable)
+        assertEquals(RestorePhase.ServerUnreachable, viewModel.state.value.restorePhase)
 
         // The error screen's retry is this ladder — a successful reload must
         // hand the UI back, not leave the unreachable message owning it.
         viewModel.loadBackups()
         advanceUntilIdle()
 
-        assertFalse(viewModel.state.value.restoreServerUnreachable)
+        assertEquals(RestorePhase.Idle, viewModel.state.value.restorePhase)
         assertNull(viewModel.state.value.error)
         assertTrue(viewModel.state.value.isSupported)
+    }
+
+    @Test
+    fun `a restore restart from the unreachable outcome is admitted and clears it`() = runTest(mainDispatcher) {
+        val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
+        advanceUntilIdle()
+        coEvery { backupRepository.restoreBackup(any()) } returns Result.success(Unit)
+        // First ladder: the server never answers — the 60-probe budget
+        // exhausts into the unreachable outcome.
+        coEvery { authRepository.probeServer(serverAddress) } returns
+            Result.failure(RuntimeException("down forever"))
+
+        viewModel.restoreBackup("jf.zip")
+        advanceUntilIdle()
+        assertEquals(RestorePhase.ServerUnreachable, viewModel.state.value.restorePhase)
+
+        // The user fixes the server and re-fires: the outcome phase must not
+        // gate re-entry (legacy: the phase sat at Idle with the flag beside
+        // it, so the Idle guard admitted this — the phase variant keeps it).
+        coEvery { authRepository.probeServer(serverAddress) } returns
+            Result.success(ServerInfo(id = "server-1", name = "Jelly", address = serverAddress))
+        viewModel.restoreBackup("jf.zip")
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { backupRepository.restoreBackup(any()) }
+        assertEquals(RestorePhase.Complete, viewModel.state.value.restorePhase)
+    }
+
+    @Test
+    fun `the Complete outcome survives a list reload until the next restore`() = runTest(mainDispatcher) {
+        val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
+        advanceUntilIdle()
+        coEvery { backupRepository.restoreBackup(any()) } returns Result.success(Unit)
+        coEvery { authRepository.probeServer(serverAddress) } returns
+            Result.success(ServerInfo(id = "server-1", name = "Jelly", address = serverAddress))
+
+        viewModel.restoreBackup("jf.zip")
+        advanceUntilIdle()
+        assertEquals(RestorePhase.Complete, viewModel.state.value.restorePhase)
+
+        // A plain list reload (pull-to-refresh path) leaves the success
+        // banner standing — legacy `restoreComplete` behavior.
+        viewModel.loadBackups()
+        advanceUntilIdle()
+        assertEquals(RestorePhase.Complete, viewModel.state.value.restorePhase)
     }
 }

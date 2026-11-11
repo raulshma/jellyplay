@@ -30,7 +30,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 /**
  * Image-upload and no-item-guard gaps in [EditorViewModel] NOT pinned by
@@ -38,19 +37,19 @@ import kotlin.test.assertTrue
  *
  * 1. `uploadImageFromUrl` — entirely untested: success forwards
  *    (itemId, imageType, url) to `downloadRemoteImage` and re-polls the image
- *    infos; failure surfaces the message in [EditorUiState.error] without a
- *    reload.
+ *    infos; failure surfaces the message on the [EditorUiState.actionError]
+ *    banner channel without a reload.
  * 2. `uploadImage(bytes)` failure — the byte-upload success path is covered;
  *    the failure branch (error surfaced, no reload) was not.
  * 3. The `mediaDetail == null` guards: every image entry point
  *    (`uploadImage` / `uploadImageFromUrl` / `deleteImage`) is a no-op
  *    repository-wise before an item is loaded.
  * 4. `saveMetadata` without a loaded item — PINS CURRENT BEHAVIOR, which is a
- *    SUSPECTED BUG: `isSaving` is set true before the itemId guard, and the
- *    guard `return@launch`s without resetting it, so the saving spinner state
- *    sticks forever until some other path clears it. If a fix lands (reset
- *    isSaving on the early return), this test MUST be flipped to assert
- *    `isSaving == false`.
+ *    SUSPECTED BUG: the `Saving` save phase is raised before the itemId guard,
+ *    and the guard `return@launch`s without settling it, so the saving spinner
+ *    state sticks forever until some other path clears it. If a fix lands
+ *    (settle savePhase to Idle on the early return), this test MUST be flipped
+ *    to assert `savePhase == EditorSavePhase.Idle`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelImageAndSaveGapsTest {
@@ -128,7 +127,7 @@ class EditorViewModelImageAndSaveGapsTest {
         // the user is anonymous here, so this is the reload itself).
         coVerify(exactly = 1) { editorRepository.getItemImageInfo(itemId) }
         assertEquals(imageInfos, viewModel.uiState.value.imageInfos)
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 
     @Test
@@ -142,7 +141,7 @@ class EditorViewModelImageAndSaveGapsTest {
         viewModel.onEvent(EditorUiEvent.UploadImageFromUrl("https://remote/art.jpg", "Primary"))
         advanceUntilIdle()
 
-        assertEquals("remote 404", viewModel.uiState.value.error)
+        assertEquals("remote 404", viewModel.uiState.value.actionError)
         coVerify(exactly = 0) { editorRepository.getItemImageInfo(any()) }
     }
 
@@ -158,7 +157,7 @@ class EditorViewModelImageAndSaveGapsTest {
         viewModel.onEvent(EditorUiEvent.UploadImage(ByteArray(4), "Primary"))
         advanceUntilIdle()
 
-        assertEquals("quota exceeded", viewModel.uiState.value.error)
+        assertEquals("quota exceeded", viewModel.uiState.value.actionError)
         coVerify(exactly = 0) { editorRepository.getItemImageInfo(any()) }
     }
 
@@ -174,25 +173,28 @@ class EditorViewModelImageAndSaveGapsTest {
         coVerify(exactly = 0) { editorRepository.setItemImage(any(), any(), any()) }
         coVerify(exactly = 0) { editorRepository.downloadRemoteImage(any(), any(), any()) }
         coVerify(exactly = 0) { editorRepository.deleteItemImage(any(), any(), any()) }
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 
-    // ── saveMetadata without an item (suspected isSaving bug) ────────────
+    // ── saveMetadata without an item (suspected stuck-Saving bug) ────────
 
     @Test
-    fun `saveMetadata without a loaded item skips the repository but leaves isSaving set`() = runTest {
+    fun `saveMetadata without a loaded item skips the repository but leaves the save phase Saving`() = runTest {
         // SUSPECTED BUG PIN — see the class KDoc: the itemId guard returns
-        // AFTER isSaving was raised, and nothing resets it. The repository is
-        // correctly never called; the stuck spinner flag is the bug.
+        // AFTER the Saving phase was raised, and nothing settles it. The
+        // repository is correctly never called; the stuck spinner phase is
+        // the bug (preserved verbatim from the isSaving pin by the phase
+        // migration — flipping this assert belongs to FIXING the bug).
         viewModel.onEvent(EditorUiEvent.SaveMetadata)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { editorRepository.updateItem(any(), any()) }
-        assertTrue(
-            viewModel.uiState.value.isSaving,
-            "pins current behavior: isSaving sticks after the no-item early return",
+        assertEquals(
+            EditorSavePhase.Saving,
+            viewModel.uiState.value.savePhase,
+            "pins current behavior: savePhase sticks at Saving after the no-item early return",
         )
         assertFalse(viewModel.uiState.value.isDirty)
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.actionError)
     }
 }

@@ -186,7 +186,21 @@ class CastManager(
         }
     }
 
-    fun isActive(): Boolean = castPlayer != null && isConnected
+    /**
+     * Whether a cast session is live — DECLARED FIX: derived from the ACTIVE
+     * strategy's connection phase (its [CastStrategy.isConnected] projection,
+     * i.e. phase == Connected), not the Google `castPlayer != null` shape it
+     * used to be (`castPlayer != null && isConnected`). The old conjunct was
+     * a Google-Player-shaped leak: a connected DLNA / Jellyfin session on a
+     * device that never built a CastPlayer reported isActive()==false, while
+     * a STALE CastPlayer cached from an earlier Google session made
+     * isActive()==true report through a dead session. Both arms now answer
+     * from the strategy that actually owns routing. Identical to [isConnected]
+     * — kept as its own named member because callers read it as a verb
+     * ("is a cast session active right now"), and it documents the
+     * strategy-phase derivation at the one place the old shape lived.
+     */
+    fun isActive(): Boolean = isConnected
 
     fun setVolume(volume: Float) {
         activeTransport.setRendererVolume(volume)
@@ -395,11 +409,36 @@ class CastManager(
         strategies[name] = strategy
     }
 
+    /**
+     * Removes a strategy from the map. DECLARED FIX: when the unregistered
+     * strategy is the ACTIVE one, the former body re-seated routing on
+     * STRATEGY_GOOGLE unconditionally — which, when GOOGLE was the strategy
+     * being unregistered (the fdroid/unavailable-integration edge), left
+     * [activeStrategyName] pointing at a name the map no longer contains:
+     * [activeStrategy] went null, every cast call became a silent no-op, and
+     * the flow getters' DLNA fallback below had to paper over the gap. Now
+     * the re-seat picks a strategy that REMAINS registered — Google when it
+     * survives (the historical default), else DLNA (mirroring
+     * [applyDefaultCastingStrategy]'s degrade-to-DLNA renderer-capable
+     * fallback), else whatever is left — and re-observes the session edge so
+     * the observer follows the re-seated strategy ([setActiveStrategy]
+     * semantics). Unregistering a NON-active strategy leaves
+     * [activeStrategyName] untouched — picking a new route (e.g. dropping
+     * Google on fdroid while DLNA is active) must not clobber the user's
+     * active renderer. Keeping the Google NAME with an empty map preserves
+     * the historical default for a manager with no strategies at all; the
+     * flow getters' DLNA fallback remains the honest reporter there.
+     */
     fun unregisterStrategy(name: String) {
         strategies.remove(name)
-        if (activeStrategyName == name) {
-            activeStrategyName = STRATEGY_GOOGLE
+        if (activeStrategyName != name) return
+        activeStrategyName = when {
+            strategies.containsKey(STRATEGY_GOOGLE) -> STRATEGY_GOOGLE
+            strategies.isNotEmpty() ->
+                if (strategies.containsKey(STRATEGY_DLNA)) STRATEGY_DLNA else strategies.keys.first()
+            else -> STRATEGY_GOOGLE
         }
+        observeStrategySession()
     }
 
     fun setActiveStrategy(name: String) {
@@ -462,10 +501,11 @@ class CastManager(
     val isConnecting: Boolean
         get() = activeStrategy?.isConnecting?.value == true
 
-    // The flow fallbacks read DLNA: activeStrategy is only ever null when the
-    // Google strategy is unregistered (fdroid's integration is Unavailable and
-    // seeds no google arm) — where DLNA is the only renderer-capable strategy
-    // left to report.
+    // The flow fallbacks read DLNA: activeStrategy is only null when the map
+    // holds no strategies at all (unregisterStrategy re-seats routing onto a
+    // REMAINING strategy whenever one survives, so a null activeStrategy no
+    // longer happens on the unregistered-Google edge it used to) — where
+    // DLNA is the only renderer-capable strategy left to report.
     val isAvailableFlow: StateFlow<Boolean>
         get() = activeStrategy?.isAvailable ?: dlnaCastStrategy.isAvailable
 
@@ -642,12 +682,25 @@ class CastManager(
         strategies.values.forEach { it.stopDiscovery() }
     }
 
+    /**
+     * The session-edge reset: zero the ENTIRE now-playing family, not just
+     * the transport quartet. DECLARED FIX: the former reset covered only
+     * position / duration / isPlaying / buffered, so the LAST session's
+     * title, subtitle and volume bled into the next one — a Jellyfin cast's
+     * "Pilot · S1E1" kept rendering after the session died, and the dead
+     * session's volume carried into the following session's first render.
+     * Each flow returns to its construction default (volume 1f, title /
+     * subtitle empty), the same defaults a fresh manager starts with.
+     */
     private fun resetCastState() {
         tasks.cancel(TICKER)
         _castPositionMs.value = 0L
         _castDurationMs.value = 0L
         _castIsPlaying.value = false
         _castBufferedPositionMs.value = 0L
+        _castVolume.value = 1f
+        _castTitle.value = ""
+        _castSubtitle.value = ""
     }
 }
 

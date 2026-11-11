@@ -35,7 +35,8 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
  * Boundary gaps in [AddServerViewModel] NOT pinned by [AddServerViewModelTest]:
  *
  * 1. [AddServerViewModel.clearError] clears the connect-error banner (the
- *    existing suite only covers the address-edit clear path).
+ *    Failed → Idle phase transition; the existing suite only covers the
+ *    address-edit clear path).
  * 2. The blank-address guard fires for a whitespace-only address with the
  *    `auth_error_server_address_required` resource (the existing suite covers
  *    the empty-string case; the guard is `isBlank`).
@@ -43,11 +44,14 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
  *    repository call and reports the repository's result 1:1 — the probe
  *    endpoint is the trimmed form, not the padded input.
  * 4. [AddServerViewModel.startDiscovery] re-entrant guard: a second call while
- *    a scan is already running is a no-op (repository invoked once, already
+ *    a scan is already Running is a no-op (repository invoked once, already
  *    discovered servers kept, no state reset).
- * 5. Editing the manual address after a TLS-trust failure forgets the pending
- *    retry — [AddServerViewModel.confirmTrustServer] then no-ops (no store
- *    write, no second connect attempt), while the error banner itself stays.
+ * 5. Editing the manual address after a TLS-trust failure lands the connect
+ *    phase back in Idle in ONE atomic write — the phase carried the armed
+ *    retry, so it dies with the transition and
+ *    [AddServerViewModel.confirmTrustServer] then no-ops (no store write, no
+ *    second connect attempt). The phase machine's own transition pins live in
+ *    AddServerViewModelPhaseTest.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddServerViewModelGapsTest {
@@ -81,17 +85,32 @@ class AddServerViewModelGapsTest {
         Dispatchers.resetMain()
     }
 
+    // Phase-read helpers, same shape as AddServerViewModelTest's.
+
+    private fun connectError(state: AddServerUiState): AuthMessage? =
+        when (val phase = state.connectPhase) {
+            is AddServerConnectPhase.Failed -> phase.error
+            is AddServerConnectPhase.TlsTrustPending -> phase.error
+            AddServerConnectPhase.Idle, AddServerConnectPhase.Connecting -> null
+        }
+
+    private fun trustAddress(state: AddServerUiState): String? =
+        (state.connectPhase as? AddServerConnectPhase.TlsTrustPending)?.address
+
+    private fun isConnecting(state: AddServerUiState): Boolean =
+        state.connectPhase is AddServerConnectPhase.Connecting
+
     @Test
     fun clearError_clearsTheConnectBanner() = runTest(testDispatcher) {
         coEvery { authRepository.addServer("http://server") } returns
             Result.failure(RuntimeException("boom"))
         viewModel.connectToServer("http://server") {}
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.connectError != null)
+        assertTrue(connectError(viewModel.uiState.value) != null)
 
         viewModel.clearError()
 
-        assertNull(viewModel.uiState.value.connectError)
+        assertNull(connectError(viewModel.uiState.value))
     }
 
     @Test
@@ -102,7 +121,7 @@ class AddServerViewModelGapsTest {
 
         assertEquals(
             UiMessage.Resource(Res.string.auth_error_server_address_required),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
         assertFalse(resultInvoked)
         coVerify(exactly = 0) { authRepository.addServer(any()) }
@@ -120,7 +139,7 @@ class AddServerViewModelGapsTest {
 
         coVerify(exactly = 1) { authRepository.addServer("http://server") }
         assertTrue(received?.isSuccess == true)
-        assertFalse(viewModel.uiState.value.isConnecting)
+        assertFalse(isConnecting(viewModel.uiState.value))
     }
 
     @Test
@@ -135,7 +154,7 @@ class AddServerViewModelGapsTest {
         viewModel.startDiscovery()
         advanceUntilIdle()
         assertEquals(listOf(first), viewModel.uiState.value.discoveredServers)
-        assertTrue(viewModel.uiState.value.isDiscovering)
+        assertEquals(AddServerDiscoveryPhase.Running, viewModel.uiState.value.discoveryPhase)
 
         // Re-entrant call: the scan must not restart (no second repository
         // call, no discovered-list wipe, no reset of the running flag).
@@ -143,11 +162,11 @@ class AddServerViewModelGapsTest {
         advanceUntilIdle()
 
         assertEquals(listOf(first), viewModel.uiState.value.discoveredServers)
-        assertTrue(viewModel.uiState.value.isDiscovering)
+        assertEquals(AddServerDiscoveryPhase.Running, viewModel.uiState.value.discoveryPhase)
 
         gate.complete(Unit)
         advanceUntilIdle()
-        assertFalse(viewModel.uiState.value.isDiscovering)
+        assertEquals(AddServerDiscoveryPhase.Idle, viewModel.uiState.value.discoveryPhase)
         // One scan total.
         verify(exactly = 1) { serverDiscoveryRepository.discoverLocalServers() }
     }
@@ -161,12 +180,14 @@ class AddServerViewModelGapsTest {
         advanceUntilIdle()
         assertEquals(
             "https://selfsigned.example.com",
-            viewModel.uiState.value.tlsTrustPromptAddress,
+            trustAddress(viewModel.uiState.value),
         )
 
-        // Editing the address field drops the prompt AND the remembered retry.
+        // Editing the address field lands the phase in Idle in ONE atomic
+        // write — the prompt AND the remembered retry die with the transition.
         viewModel.updateManualAddress("https://other.example.com")
-        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+        assertNull(trustAddress(viewModel.uiState.value))
+        assertEquals(AddServerConnectPhase.Idle, viewModel.uiState.value.connectPhase)
 
         viewModel.confirmTrustServer()
         advanceUntilIdle()

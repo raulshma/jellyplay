@@ -11,16 +11,23 @@ import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.distribution.DistributionPlatform
 import com.raulshma.jellyplay.feature.onboarding.OnboardingScreen
+import com.raulshma.jellyplay.feature.shell.LaunchPhase
 import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
 import com.raulshma.jellyplay.feature.shell.navigation.SignedOutAuthHost
 import com.raulshma.jellyplay.shell.ShellInfra
+import com.raulshma.jellyplay.shell.shellSurface
 
 /**
  * The Android app shell's root dispatcher. One `when` over the session state
  * (the shell-session contract — the session policy lives HERE, per shell, never
  * in shared):
- * restoring / onboarding gate / authenticated [MainContent] / signed-out
- * [SignedOutAuthHost], with the update sheet overlaid above every branch.
+ * LaunchPhase.Restoring (nothing — splash pinned) / onboarding gate /
+ * authenticated [MainContent] / signed-out [SignedOutAuthHost], with the
+ * root overlays (self-update sheet, What's New sheet) composed after the
+ * `when` so they sit above main-surface content — but gated to the MAIN
+ * surface by the pure [shellSurface] fold (an update found mid-onboarding,
+ * signed-out, or during restore stays pending in the coordinator and
+ * surfaces when the session reaches main).
  * The `viewModel` parameter is the [ShellGateModel] slice — the gate's view
  * of the activity-scoped ViewModel; the layout subtree receives the
  * [MainShellModel] slice through [MainContent].
@@ -47,8 +54,15 @@ internal fun JellyPlayApp(
     // keeps its constructor injection only to START the same Koin singles on
     // its scope). Resolved here on first composition.
     val session = infra.sessionCoordinatorLazy.value
-    val isRestoring by session.isRestoring.collectAsStateWithLifecycle()
-    val isAuthenticated by session.isAuthenticated.collectAsStateWithLifecycle()
+    // The launch gate as ONE phase (shared LaunchPhase): Restoring pins the
+    // splash, NeedsAuth/Authenticated name the branch. Every session
+    // predicate below reads THIS value and nothing else — the former
+    // two-boolean read (isRestoring + isAuthenticated, independently
+    // written) could observe splash-down while the authenticated flag still
+    // read false after a successful restore and flash the login screen for
+    // a frame; one mutually exclusive phase makes that frame
+    // unrepresentable (see SessionRestore's class KDoc).
+    val phase by session.phase.collectAsStateWithLifecycle()
     // Topic preference slices (ShellPreferenceSlices.kt): the gate's
     // onboarding flag plus the nav-chrome and shell-environment slices the
     // layout subtree consumes. Each maps the same merged
@@ -64,7 +78,7 @@ internal fun JellyPlayApp(
     val isTv = context.isTv()
 
     LaunchedEffect(Unit) {
-        if (isTv && isAuthenticated && !onboardingCompleted) {
+        if (isTv && phase == LaunchPhase.Authenticated && !onboardingCompleted) {
             viewModel.markOnboardingCompleted()
         }
     }
@@ -82,22 +96,22 @@ internal fun JellyPlayApp(
         LocalUserMessageBus provides sharedUserMessageBus,
     ) {
         when {
-            isRestoring -> {}
+            phase == LaunchPhase.Restoring -> {}
             // First-run wizard gate — the shared pure decision both shells run
             // (feature/shell OnboardingGateRoute); the TV build auto-completes
             // in the LaunchedEffect below instead of gating. No onComplete
             // wiring here: the wizard persists completion itself
             // (OnboardingViewModel writes the same onboarding_completed pref on
-            // both platforms — see OnboardingGate), and the flip below swaps
-            // this branch out.
+            // both platforms — see OnboardingGate), and the phase flip below
+            // swaps this branch out.
             onboardingGateRoute(
-                authenticated = isAuthenticated,
+                authenticated = phase == LaunchPhase.Authenticated,
                 onboardingCompleted = onboardingCompleted,
                 isTv = isTv,
             ) != null -> {
                 OnboardingScreen(onComplete = {})
             }
-            isAuthenticated -> {
+            phase == LaunchPhase.Authenticated -> {
                 // "Surprise Me" launcher-shortcut controller. Built
                 // once so the StateFlow reference is stable across recompositions.
                 val surpriseController = remember(viewModel) {
@@ -145,29 +159,49 @@ internal fun JellyPlayApp(
                 }
             }
             else -> {
-                // Signed out: the shared auth host (shared/feature/shell) — the
-                // same ServerList-seeded NavDisplay over authSection the
-                // desktop shell runs. Its onAuthenticated stays empty: the
-                // isAuthenticated flip above swaps this branch out and
-                // disposes the stack.
+                // Signed out (phase == LaunchPhase.NeedsAuth): the shared
+                // auth host (shared/feature/shell) — the same ServerList-seeded
+                // NavDisplay over authSection the desktop shell runs. Its
+                // onAuthenticated stays empty: the Authenticated phase above
+                // swaps this branch out and disposes the stack.
                 SignedOutAuthHost()
             }
         }
 
-        // In-app self-update sheet. Rendered at the root so it overlays every
-        // screen (auth, onboarding, main). Stays hidden while Idle; the launch-time
-        // check (store) flips it to UpdateAvailable when a newer build exists.
-        // The overlay itself is flavor-bound (DistributionPlatform): store
-        // renders the real sheet, fdroid is a no-op. Keep this after the `when`
-        // so the sheet sits above all content.
-        DistributionPlatform.UpdateSheetOverlay(infra.updateCoordinatorLazy.value)
+        // Which surface the shell is on, for the root overlays' main-surface
+        // gate. [shellSurface] mirrors the `when` above branch-for-branch (it
+        // re-runs the same onboardingGateRoute decision — see its KDoc), so
+        // the surface can never name something the `when` isn't rendering.
+        val surface = shellSurface(
+            phase = phase,
+            onboardingCompleted = onboardingCompleted,
+            isTv = isTv,
+        )
 
-        // Post-update What's New sheet — same root placement, but the overlay
-        // itself defers to the update sheet above (never stacks on it). Deep
-        // links ride the ViewModel's pending-route channel.
+        // In-app self-update sheet. Composed at the root so it sits above all
+        // main-surface content — but MAIN-surface only: an update found while
+        // the user is mid-onboarding, signed out, or still restoring stays
+        // pending in the coordinator's StateFlow (no dismissal, no stamp —
+        // the sheet is never composed) and surfaces when the session reaches
+        // main. The gate itself is the pure AppUpdateDecision.shouldShowOverlay
+        // (store) applied inside the flavor-bound overlay. Stays hidden while
+        // Idle; the launch-time check (store) flips it to UpdateAvailable when
+        // a newer build exists. fdroid binds a permanently-idle noop, so the
+        // sheet never renders there by construction.
+        DistributionPlatform.UpdateSheetOverlay(
+            update = infra.updateCoordinatorLazy.value,
+            surface = surface,
+        )
+
+        // Post-update What's New sheet — same root placement, same
+        // main-surface gate (a returning signed-out user with an unseen
+        // upgrade would otherwise have it pop over the auth host), plus the
+        // existing deference to the update sheet above (never stacks on it).
+        // Deep links ride the ViewModel's pending-route channel.
         WhatsNewSheetOverlay(
             whatsNew = infra.whatsNewCoordinatorLazy.value,
             update = infra.updateCoordinatorLazy.value,
+            surface = surface,
             onNavigate = viewModel::navigateFromShell,
         )
     }

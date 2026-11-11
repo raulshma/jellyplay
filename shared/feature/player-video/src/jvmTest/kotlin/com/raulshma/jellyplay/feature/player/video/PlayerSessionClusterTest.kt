@@ -74,5 +74,7 @@ class PlayerSessionStateDefaultsTest {
         assertFalse(state.isDirectPlayForced)
         assertTrue(state.transcodeReasons.isEmpty())
         assertEquals("", state.title)
+        // The load phase is the stored truth; isReady is its Ready projection.
+        assertTrue(state.loadPhase is LoadPhase.Idle)
     }
 }

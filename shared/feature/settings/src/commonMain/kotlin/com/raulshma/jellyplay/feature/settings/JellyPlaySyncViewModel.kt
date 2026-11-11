@@ -74,6 +74,25 @@ data class JellyPlaySyncHistoryKeyDetail(
     val keys: List<JellyPlaySyncHistoryKey>? = null,
 )
 
+/** The snapshot-sheet verb a [SnapshotActionPhase] reports. */
+enum class SnapshotActionVerb {
+    /** The manual restore-point capture. */
+    Create,
+    /** The settings export bundle read (the screen's share seam). */
+    Export,
+}
+
+/**
+ * The snapshot-sheet action machine: one verb runs at a time, its failure
+ * shows as the banner's second face and is cleared by the next action. The
+ * re-entry guard is [Running] — refiring from [Failed] is the retry.
+ */
+sealed interface SnapshotActionPhase {
+    data object Idle : SnapshotActionPhase
+    data class Running(val verb: SnapshotActionVerb) : SnapshotActionPhase
+    data class Failed(val verb: SnapshotActionVerb) : SnapshotActionPhase
+}
+
 /** The sync screen's loaded state. */
 @Immutable
 data class JellyPlaySyncUiState(
@@ -101,10 +120,13 @@ data class JellyPlaySyncUiState(
     val snapshots: List<JellyPlaySnapshot>? = null,
     /** The selective-sync + usage rows (server usage ∪ engine namespaces); built by [refresh]. */
     val namespaceRows: List<JellyPlaySyncNamespaceRow> = emptyList(),
-    /** One snapshot create/restore/export/import action in flight — the rows' re-entry guard. */
-    val actionInFlight: Boolean = false,
-    /** The last snapshot/export/import action failed — the banner's second face; cleared by the next action. */
-    val actionError: Boolean = false,
+    /**
+     * The snapshot-sheet action machine ([SnapshotActionPhase]) — which verb
+     * is running/failing is representable, and a failure can no longer ride
+     * beside a fresh in-flight run (the v0.11.10 cohort: this replaced the
+     * `actionInFlight`/`actionError` Booleans).
+     */
+    val actionPhase: SnapshotActionPhase = SnapshotActionPhase.Idle,
     /**
      * One-shot warning: the pre-destructive safety restore point could
      * not be captured before the namespace reset (the reset still ran — the
@@ -335,34 +357,37 @@ class JellyPlaySyncViewModel(
 
     /** Captures a manual restore point; the list re-reads once it lands. */
     fun createSnapshot() {
-        scope.launch { runSnapshotAction { pluginApiClient.createSnapshot() } }
+        scope.launch { runSnapshotAction(SnapshotActionVerb.Create) { pluginApiClient.createSnapshot() } }
     }
 
     /**
      * Fetches the settings export bundle and hands the raw JSON to [onReady]
-     * (the screen's share seam). A failed read raises [JellyPlaySyncUiState.actionError].
+     * (the screen's share seam). A failed read lands the verb's
+     * [SnapshotActionPhase.Failed].
      */
     fun exportSettings(onReady: (String) -> Unit) {
         scope.launch {
             if (!syncGateOpen()) return@launch
-            _uiState.update { it.copy(actionInFlight = true, actionError = false) }
+            _uiState.update { it.copy(actionPhase = SnapshotActionPhase.Running(SnapshotActionVerb.Export)) }
             val bundle = runCatchingRethrowingCancellation { pluginApiClient.exportSettings().getOrNull() }.getOrNull()
             if (bundle == null) {
-                _uiState.update { it.copy(actionInFlight = false, actionError = true) }
+                _uiState.update { it.copy(actionPhase = SnapshotActionPhase.Failed(SnapshotActionVerb.Export)) }
             } else {
-                _uiState.update { it.copy(actionInFlight = false) }
+                _uiState.update { it.copy(actionPhase = SnapshotActionPhase.Idle) }
                 onReady(bundle)
             }
         }
     }
 
-    /** The shared guard for the snapshot create action: gate + in-flight + error face + refresh. */
-    private suspend fun runSnapshotAction(action: suspend () -> Result<*>) {
+    /** The shared runner for the snapshot verbs: gate + phase transitions + refresh. */
+    private suspend fun runSnapshotAction(verb: SnapshotActionVerb, action: suspend () -> Result<*>) {
         if (!syncGateOpen()) return
-        _uiState.update { it.copy(actionInFlight = true, actionError = false) }
+        _uiState.update { it.copy(actionPhase = SnapshotActionPhase.Running(verb)) }
         val result = runCatchingRethrowingCancellation { action().getOrNull() }
         val ok = result.isSuccess && result.getOrNull() != null
-        _uiState.update { it.copy(actionInFlight = false, actionError = !ok) }
+        _uiState.update {
+            it.copy(actionPhase = if (ok) SnapshotActionPhase.Idle else SnapshotActionPhase.Failed(verb))
+        }
         if (ok) refresh()
     }
 

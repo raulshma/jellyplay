@@ -13,7 +13,7 @@ import java.io.IOException
  * Android actual of the [EditorFilePicker] seam: the SAF open-document
  * launchers plus the deferred contentResolver byte read (including the
  * distinct "Cannot open input stream…" error messages, which surface through
- * uiState.error at upload time). androidx.activity.compose rides
+ * uiState.actionError at upload time). androidx.activity.compose rides
  * navigation3-ui's transitive edge (settings BackupFilePicker / BackHandler-seam
  * pattern), so this source set needs no extra dependency.
  */

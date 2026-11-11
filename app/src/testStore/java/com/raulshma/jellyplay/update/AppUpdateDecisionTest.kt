@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.update
 
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
+import com.raulshma.jellyplay.shell.ShellSurface
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -12,7 +13,7 @@ import java.io.File
 /**
  * Pure JVM tests for the app-update decision rules split out of `MainViewModel`.
  * No Android, coroutines, or I/O — just the suppression, selection,
- * auto-download, and dismiss-version logic.
+ * auto-download, dismiss-version, and main-surface-overlay-gate logic.
  */
 class AppUpdateDecisionTest {
 
@@ -209,4 +210,58 @@ class AppUpdateDecisionTest {
         assertNull(AppUpdateDecision.dismissedVersion(UpdateState.Error("boom")))
         assertNull(AppUpdateDecision.dismissedVersion(UpdateState.NoUpdate(info("1.2.3"))))
     }
+
+    // ── shouldShowOverlay ─────────────────────────────────────────────
+
+    @Test
+    fun `shouldShowOverlay false when Idle on both surfaces`() {
+        assertFalse(AppUpdateDecision.shouldShowOverlay(UpdateState.Idle, ShellSurface.Main))
+        assertFalse(AppUpdateDecision.shouldShowOverlay(UpdateState.Idle, ShellSurface.OnboardingOrAuth))
+    }
+
+    @Test
+    fun `shouldShowOverlay true on Main for every non-Idle state`() {
+        for (state in nonIdleStates()) {
+            assertTrue(
+                "expected true on Main for $state",
+                AppUpdateDecision.shouldShowOverlay(state, ShellSurface.Main),
+            )
+        }
+    }
+
+    @Test
+    fun `shouldShowOverlay false on OnboardingOrAuth for every non-Idle state`() {
+        // The main-surface-only gate: nothing the update flow can be doing may
+        // interrupt the splash, the onboarding wizard, or the signed-out auth
+        // host — Checking included (the launch check starts before the session
+        // settles).
+        for (state in nonIdleStates()) {
+            assertFalse(
+                "expected false on OnboardingOrAuth for $state",
+                AppUpdateDecision.shouldShowOverlay(state, ShellSurface.OnboardingOrAuth),
+            )
+        }
+    }
+
+    @Test
+    fun `shouldShowOverlay defers render - gated on OnboardingOrAuth then true once Main is reached with the state still pending`() {
+        // The deferred-render pin: an update found mid-onboarding stays in the
+        // coordinator's StateFlow untouched (no dismissal, no stamp — the
+        // gated sheet is never composed), so the SAME state re-evaluated on
+        // Main must show the sheet. The fold is pure, so the surface flip is
+        // just a second call with the state unchanged.
+        val available = UpdateState.UpdateAvailable(info("1.2.3"))
+        assertFalse(AppUpdateDecision.shouldShowOverlay(available, ShellSurface.OnboardingOrAuth))
+        assertTrue(AppUpdateDecision.shouldShowOverlay(available, ShellSurface.Main))
+    }
+
+    /** Every [UpdateState] variant except Idle — the six states a sheet could render. */
+    private fun nonIdleStates(): List<UpdateState> = listOf(
+        UpdateState.Checking,
+        UpdateState.NoUpdate(info("1.2.3")),
+        UpdateState.UpdateAvailable(info("1.2.3")),
+        UpdateState.Downloading(info("1.2.3"), 0.5f, 500L, 1000L),
+        UpdateState.Downloaded(info("1.2.3"), File("x.apk")),
+        UpdateState.Error("boom"),
+    )
 }

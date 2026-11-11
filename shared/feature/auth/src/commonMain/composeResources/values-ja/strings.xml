@@ -79,6 +79,7 @@
     <string name="auth_remove">削除</string>
 
     <!-- User selection screen -->
+    <string name="auth_users_load_error_title">ユーザーを読み込めませんでした</string>
     <string name="auth_loading_users">ユーザーを読み込み中…</string>
     <string name="auth_no_users_title">このサーバーにユーザーがいません</string>
     <string name="auth_no_users_desc">ユーザーを追加して開始してください</string>

@@ -64,6 +64,7 @@ import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.feature.editor.EditorFilePicker
+import com.raulshma.jellyplay.feature.editor.EditorLoadPhase
 import com.raulshma.jellyplay.feature.editor.EditorPickedFile
 import com.raulshma.jellyplay.feature.editor.EditorUiEvent
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
@@ -182,7 +183,10 @@ internal fun ImagesTab(
     var pendingDelete by remember { mutableStateOf(PendingConfirmation<ImageInfo>()) }
     var selectedImageInfo by remember { mutableStateOf<ImageInfo?>(null) }
 
-    if (state.isLoading) {
+    // Load veil: only the Loading arm replaces the tab with the spinner;
+    // Ready and Failed fall through to the tab body (see MetadataTab's note —
+    // the three tabs veil identically).
+    if (state.loadPhase is EditorLoadPhase.Loading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             JellyPlayLoadingIndicator()
         }

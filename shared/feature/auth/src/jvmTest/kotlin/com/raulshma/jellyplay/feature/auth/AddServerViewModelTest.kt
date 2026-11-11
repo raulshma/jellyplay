@@ -49,6 +49,11 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
  * [NetworkOfflineStore] and retries the same connect. The store is mockk'd
  * (final DataStore-backed class — the pref→config mapping itself is covered by
  * OkHttpConfigProviderImplTest in core:data).
+ *
+ * Assertions read the sealed connect/discovery phases
+ * ([AddServerConnectPhase] / [AddServerDiscoveryPhase]) through the
+ * file-local helpers below; the phase machine's own transition pins live in
+ * AddServerViewModelPhaseTest.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddServerViewModelTest {
@@ -80,6 +85,22 @@ class AddServerViewModelTest {
         Dispatchers.resetMain()
     }
 
+    // The phase machine replaced the flat flags; these helpers keep the
+    // assertions reading like the classifier-identity pins they are.
+
+    private fun connectError(state: AddServerUiState): AuthMessage? =
+        when (val phase = state.connectPhase) {
+            is AddServerConnectPhase.Failed -> phase.error
+            is AddServerConnectPhase.TlsTrustPending -> phase.error
+            AddServerConnectPhase.Idle, AddServerConnectPhase.Connecting -> null
+        }
+
+    private fun trustAddress(state: AddServerUiState): String? =
+        (state.connectPhase as? AddServerConnectPhase.TlsTrustPending)?.address
+
+    private fun isConnecting(state: AddServerUiState): Boolean =
+        state.connectPhase is AddServerConnectPhase.Connecting
+
     // ------------------------------------------------------ connect (manual)
 
     @Test
@@ -90,7 +111,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
         assertEquals(
             UiMessage.Resource(Res.string.auth_error_server_address_required),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
         // The blank address returns before launching, so neither the
         // repository nor the callback ever run.
@@ -108,7 +129,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
         assertEquals(
             UiMessage.Resource(Res.string.auth_error_resolve_address),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
     }
 
@@ -124,7 +145,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
         assertEquals(
             UiMessage.Resource(Res.string.auth_error_ssl),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
     }
 
@@ -140,7 +161,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
         assertEquals(
             UiMessage.Resource(Res.string.auth_error_cleartext),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
     }
 
@@ -155,7 +176,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
         assertEquals(
             UiMessage.Resource(Res.string.auth_error_local_network_denied),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
     }
 
@@ -172,7 +193,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
         assertEquals(
             UiMessage.Resource(Res.string.auth_error_ssl),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
     }
 
@@ -186,7 +207,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
         assertEquals(
             UiMessage.Raw("boom"),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
     }
 
@@ -202,7 +223,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
         assertEquals(
             UiMessage.Resource(Res.string.auth_error_connection_failed),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
     }
 
@@ -216,8 +237,8 @@ class AddServerViewModelTest {
 
         advanceUntilIdle()
         assertTrue(received?.isSuccess == true)
-        assertNull(viewModel.uiState.value.connectError)
-        assertFalse(viewModel.uiState.value.isConnecting)
+        assertNull(connectError(viewModel.uiState.value))
+        assertFalse(isConnecting(viewModel.uiState.value))
     }
 
     @Test
@@ -226,12 +247,12 @@ class AddServerViewModelTest {
             Result.failure(RuntimeException("boom"))
         viewModel.connectToServer("http://server") {}
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.connectError != null)
+        assertTrue(connectError(viewModel.uiState.value) != null)
 
         viewModel.updateManualAddress("http://other")
 
         assertEquals("http://other", viewModel.uiState.value.manualAddress)
-        assertNull(viewModel.uiState.value.connectError)
+        assertNull(connectError(viewModel.uiState.value))
     }
 
     // ------------------------------------------------------ self-signed trust
@@ -246,12 +267,12 @@ class AddServerViewModelTest {
         advanceUntilIdle()
         assertEquals(
             "https://selfsigned.example.com",
-            viewModel.uiState.value.tlsTrustPromptAddress,
+            trustAddress(viewModel.uiState.value),
         )
         // The SSL error message is still surfaced alongside the dialog.
         assertEquals(
             UiMessage.Resource(Res.string.auth_error_ssl),
-            viewModel.uiState.value.connectError,
+            connectError(viewModel.uiState.value),
         )
     }
 
@@ -267,7 +288,7 @@ class AddServerViewModelTest {
         // message-first and this assert needs the explanatory message.
         kotlin.test.assertEquals(
             "https://selfsigned.example.com",
-            viewModel.uiState.value.tlsTrustPromptAddress,
+            trustAddress(viewModel.uiState.value),
             "the grant entry must be the normalized canonical form, not the raw input",
         )
     }
@@ -282,7 +303,7 @@ class AddServerViewModelTest {
         viewModel.connectToServer("http://server") {}
 
         advanceUntilIdle()
-        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+        assertNull(trustAddress(viewModel.uiState.value))
     }
 
     @Test
@@ -293,7 +314,7 @@ class AddServerViewModelTest {
         viewModel.connectToServer("https://server") {}
 
         advanceUntilIdle()
-        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+        assertNull(trustAddress(viewModel.uiState.value))
     }
 
     @Test
@@ -318,7 +339,7 @@ class AddServerViewModelTest {
         coVerify(exactly = 1) { networkOfflineStore.addSelfSignedTrustHost("https://selfsigned.example.com") }
         kotlin.test.assertEquals(2, attempts, "confirm must retry the same connect")
         assertTrue(finalResult?.isSuccess == true)
-        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+        assertNull(trustAddress(viewModel.uiState.value))
     }
 
     @Test
@@ -347,7 +368,7 @@ class AddServerViewModelTest {
         storeFlow.value = NetworkOfflineSlice(selfSignedTrustHosts = setOf("https://selfsigned.example.com"))
         advanceUntilIdle()
         kotlin.test.assertEquals(2, attempts, "the retry runs as soon as the store flow shows the entry")
-        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+        assertNull(trustAddress(viewModel.uiState.value))
     }
 
     @Test
@@ -369,7 +390,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
 
         kotlin.test.assertEquals(2, attempts, "timeout degrades to proceeding with the retry")
-        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+        assertNull(trustAddress(viewModel.uiState.value))
     }
 
     @Test
@@ -378,11 +399,11 @@ class AddServerViewModelTest {
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
         viewModel.connectToServer("https://selfsigned.example.com") {}
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.tlsTrustPromptAddress != null)
+        assertTrue(viewModel.uiState.value.connectPhase is AddServerConnectPhase.TlsTrustPending)
 
         viewModel.dismissTrustPrompt()
 
-        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+        assertNull(trustAddress(viewModel.uiState.value))
         coVerify(exactly = 0) { networkOfflineStore.addSelfSignedTrustHost(any()) }
         coVerify(exactly = 1) { authRepository.addServer(any()) }
     }
@@ -393,11 +414,11 @@ class AddServerViewModelTest {
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
         viewModel.connectToServer("https://selfsigned.example.com") {}
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.tlsTrustPromptAddress != null)
+        assertTrue(viewModel.uiState.value.connectPhase is AddServerConnectPhase.TlsTrustPending)
 
         viewModel.updateManualAddress("https://other")
 
-        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+        assertNull(trustAddress(viewModel.uiState.value))
     }
 
     @Test
@@ -423,8 +444,9 @@ class AddServerViewModelTest {
         val state = viewModel.uiState.value
         // The address-dupe is dropped (dedupe predicate: id OR address).
         assertEquals(listOf(a, b), state.discoveredServers)
-        assertFalse(state.isDiscovering)
-        assertFalse(state.discoveryFailed)
+        // Completed cleanly: Idle, not Failed (the former
+        // `!isDiscovering && !discoveryFailed` pair in one phase value).
+        assertEquals(AddServerDiscoveryPhase.Idle, state.discoveryPhase)
     }
 
     @Test
@@ -436,8 +458,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertTrue(state.discoveryFailed)
-        assertFalse(state.isDiscovering)
+        assertEquals(AddServerDiscoveryPhase.Failed, state.discoveryPhase)
     }
 
     @Test
@@ -447,6 +468,6 @@ class AddServerViewModelTest {
 
         viewModel.stopDiscovery()
 
-        assertFalse(viewModel.uiState.value.isDiscovering)
+        assertEquals(AddServerDiscoveryPhase.Idle, viewModel.uiState.value.discoveryPhase)
     }
 }

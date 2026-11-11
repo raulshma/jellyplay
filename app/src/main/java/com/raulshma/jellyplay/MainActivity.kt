@@ -39,6 +39,7 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.di.KoinViewModelFactory
 import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
 import com.raulshma.jellyplay.deeplink.IncomingIntentRequest
+import com.raulshma.jellyplay.feature.shell.LaunchPhase
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
@@ -199,7 +200,9 @@ class MainActivity : FragmentActivity() {
         // first composition finish). Every later getSharedInstance caller
         // (the hidden route button there, CastManager, GoogleCastStrategy)
         // hits the cached singleton.
-        splashScreen.setKeepOnScreenCondition { shellInfra.sessionCoordinatorLazy.value.isRestoring.value }
+        splashScreen.setKeepOnScreenCondition {
+            shellInfra.sessionCoordinatorLazy.value.phase.value == LaunchPhase.Restoring
+        }
         // Fully-drawn report: the splash gate clearing is the app's real
         // "content ready" boundary (Home is composed and the shell can render),
         // so that is where reportFullyDrawn fires. StartupTimingMetric uses it
@@ -210,8 +213,8 @@ class MainActivity : FragmentActivity() {
         // subscriber and the restore choreography can flip the gate more than
         // once during a locale-driven recreate().
         lifecycleScope.launch(Dispatchers.Main) {
-            shellInfra.sessionCoordinatorLazy.value.isRestoring.collect { restoring ->
-                if (!restoring && fullyDrawnReported.compareAndSet(false, true)) {
+            shellInfra.sessionCoordinatorLazy.value.phase.collect { phase ->
+                if (phase != LaunchPhase.Restoring && fullyDrawnReported.compareAndSet(false, true)) {
                     reportFullyDrawn()
                 }
             }

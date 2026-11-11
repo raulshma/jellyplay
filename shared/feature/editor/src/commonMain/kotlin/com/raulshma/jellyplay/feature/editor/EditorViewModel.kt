@@ -32,10 +32,31 @@ import kotlinx.coroutines.delay
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
+/**
+ * The editor screen's single state snapshot. MIGRATED (v0.11.10) from the
+ * repo's worst boolean soup — `isLoading` / `isSaving` /
+ * `isSearchingProviderSubtitles` / `isDownloadingProviderSubtitle` plus ONE
+ * shared `error: String?` carrying load, save, image, subtitle, and refresh
+ * failures alike — to the StateManagementConventions §1 sealed-phase shape:
+ *
+ *  - [loadPhase] owns the load lifecycle AND the load failure (ex-`isLoading`
+ *    + the load half of `error`);
+ *  - [savePhase] owns the save-in-flight dimension (ex-`isSaving`);
+ *  - [providerSubtitleSearchPhase] / [providerSubtitleDownloadPhase] own the
+ *    two provider-subtitle op machines (ex-`isSearchingProviderSubtitles` /
+ *    `isDownloadingProviderSubtitle` — kept as TWO machines because the ops
+ *    genuinely overlap, see [ProviderSubtitleSearchPhase]);
+ *  - [actionError] is the one banner channel for every ACTION failure
+ *    (save/image/subtitle/refresh — ex- the action half of `error`), with the
+ *    file-level `bannerError` extension below the banner's precedence fold;
+ *  - the content fields ([mediaDetail], [editorInfo], [remoteImages], …) stay
+ *    plain nullable/list fields for this pass — folding them into phase
+ *    payloads is the deferred catalog-row work, not part of the de-souping.
+ */
 @Immutable
 data class EditorUiState(
-    val isLoading: Boolean = true,
-    val isSaving: Boolean = false,
+    val loadPhase: EditorLoadPhase = EditorLoadPhase.Loading,
+    val savePhase: EditorSavePhase = EditorSavePhase.Idle,
     val mediaDetail: MediaDetail? = null,
     val editorInfo: MetadataEditorInfo? = null,
     val imageInfos: List<ImageInfo> = emptyList(),
@@ -48,9 +69,15 @@ data class EditorUiState(
     val providerSubtitleErrors: Map<SubtitleProviderKind, String> = emptyMap(),
     /** Providers the user has configured (drives chip visibility). */
     val configuredSubtitleProviders: Set<SubtitleProviderKind> = emptySet(),
-    val isSearchingProviderSubtitles: Boolean = false,
-    val isDownloadingProviderSubtitle: Boolean = false,
-    val error: String? = null,
+    val providerSubtitleSearchPhase: ProviderSubtitleSearchPhase = ProviderSubtitleSearchPhase.Idle,
+    val providerSubtitleDownloadPhase: ProviderSubtitleDownloadPhase = ProviderSubtitleDownloadPhase.Idle,
+    /** The banner channel for ACTION failures (save / image / subtitle /
+     *  refresh / provider-download degradation note). Load failures do NOT
+     *  land here — they are [EditorLoadPhase.Failed]. One carrier, not one
+     *  per action concern, because the screen renders every failure in ONE
+     *  banner with last-write-wins semantics (see the bannerError fold
+     *  below). */
+    val actionError: String? = null,
     val isAdmin: Boolean = false,
     /** The metadata-editing session (live form + loaded original) — the ~30
      *  flat metadata fields live in one value slice, so the load/save
@@ -60,6 +87,142 @@ data class EditorUiState(
     /** Derived from the embedded session — no stored dirty flag (or dirty
      *  hash) to keep in sync with the form fields. */
     val isDirty: Boolean get() = metadata.isDirty
+}
+
+/**
+ * The message the screen's ONE error banner renders (EditorScreen renders it
+ * via `ErrorBanner`, dismissible via `EditorUiEvent.ClearError`).
+ *
+ * Precedence: [EditorUiState.actionError] FIRST, a load [EditorLoadPhase.Failed]
+ * second. This fold preserves the former single-`error` field's
+ * last-write-wins behavior in every reachable combination:
+ *
+ *  - load fails, then an action fails → the action write landed last, and
+ *    this fold shows the action message (the old field would have been
+ *    overwritten the same way);
+ *  - an action fails, then a load runs → `loadEditorData`'s start arm clears
+ *    [EditorUiState.actionError] (the old `start` cleared `error` just the
+ *    same), so the banner shows only the load failure;
+ *  - the reverse ordering (action error surviving into a load failure) is
+ *    unreachable for the same reason — no reader ever saw it either.
+ *
+ * Null when nothing should render; [EditorLoadPhase.Failed.message] can
+ * itself be null (a message-less Throwable used to publish `error = null`
+ * and the banner skipped it), so a null here always means no banner.
+ *
+ * A file-level extension rather than a UiState member: it adds no STATE, only
+ * the banner's precedence decision over the two existing error carriers, and
+ * the EditorViewModelOwnershipTest ratchet counts declarations sharing the
+ * ViewModel's file at member indentation (isDirty is grandfathered; this fold
+ * refuses to spend that budget — the DetailUiState.kt top-level derived-folds
+ * precedent: pickBackdropTrailerEntry).
+ */
+internal val EditorUiState.bannerError: String? get() =
+    actionError ?: (loadPhase as? EditorLoadPhase.Failed)?.message
+
+/**
+ * Sealed load phase for the editor's ONE load ladder (`loadEditorData`,
+ * riding the core/ui `loadInto` choreography) — the migration that collapsed
+ * the former `isLoading: Boolean` plus the load half of the shared
+ * `error: String?` into one mutually-exclusive state (the
+ * StateManagementConventions §1 shape, following the `DetailUiLoadState`
+ * exemplar).
+ *
+ * The old boolean shape could represent states the screen never meant:
+ * `isLoading && isSaving` (a save spinner under the load veil),
+ * `error != null && isLoading` (a stale banner over a fresh spinner), and a
+ * stale image grid drawn over an in-flight load. Those are unrepresentable
+ * now — a phase is one value at a time. The concerns that genuinely run
+ * CONCURRENTLY with the ladder (saves while Ready; a provider-subtitle
+ * download's spinner across a reload's Loading veil) stay separate phase
+ * fields precisely so those overlaps remain representable — they are today's
+ * real behavior, not soup.
+ */
+sealed interface EditorLoadPhase {
+
+    /** A load is in flight. Both the cold-load state (the state's initial
+     *  value, ex-`isLoading = true`) AND the reload state: the screen never
+     *  distinguished the two — all three tabs veil their content behind the
+     *  same spinner whenever the old flag was up, including on the
+     *  subtitle-op / refresh-triggered reloads of already-shown content — so
+     *  a single arm is the exact shape. A `Refreshing` arm would be a state
+     *  the old booleans could not express and no reader consumed. */
+    data object Loading : EditorLoadPhase
+
+    /** A load succeeded. Content fields stay the single authority for WHAT
+     *  renders; Ready only says the ladder settled green. This is also where
+     *  a DISMISSED failure lands (`clearError` maps Failed here — the
+     *  dismissed banner must stop rendering, and the old dismissal left
+     *  `isLoading = false` with whatever content fields survived, which is
+     *  exactly Ready-with-possibly-null-content), matching the
+     *  DetailUiLoadState.Loaded precedent of a load state only surfaced
+     *  while it has something to say. */
+    data object Ready : EditorLoadPhase
+
+    /** The most recent load failed; content fields are untouched (the old
+     *  failure arm never cleared them — a reload failure keeps the stale
+     *  content visible). [message] is the exception's `message` VERBATIM and
+     *  deliberately NULLABLE: the former `error = e.message` write could
+     *  publish null for a message-less Throwable, and the banner skips
+     *  nulls — that failure rendered NO banner, which `Failed("")` would
+     *  have silently changed. */
+    data class Failed(val message: String?) : EditorLoadPhase
+}
+
+/**
+ * Sealed save phase for `saveMetadata` (ex-`isSaving: Boolean`). Only the
+ * in-flight dimension is modeled: a save FAILURE lands in
+ * [EditorUiState.actionError], not in a Failed arm here — the screen renders
+ * every action failure in the one shared banner (see
+ * [EditorUiState.bannerError]), so a phase arm would fork the "where does an
+ * error surface" answer per concern without changing a single rendered pixel.
+ *
+ * KNOWN BUG PRESERVED: the no-item early return in `saveMetadata` happens
+ * AFTER [Saving] is raised and nothing resets it, so the phase sticks — the
+ * old `isSaving` pin (EditorViewModelImageAndSaveGapsTest) documents this as
+ * a suspected bug and asserts the stick; the migration preserves the stick
+ * verbatim. Flipping that test is part of FIXING the bug, not of migrating.
+ */
+sealed interface EditorSavePhase {
+    data object Idle : EditorSavePhase
+    data object Saving : EditorSavePhase
+}
+
+/**
+ * Sealed in-flight phase for the multi-provider subtitle SEARCH fan-out
+ * (`handleSearchAllSubtitleProviders`, ex-`isSearchingProviderSubtitles`).
+ *
+ * Deliberately its OWN machine, not one merged `providerSubtitleOpPhase` with
+ * the download: the two ops GENUINELY OVERLAP today. The search streams
+ * partial rows live (ProviderResultsSection) and its per-row download buttons
+ * stay ENABLED while the Searching spinner is up, so "downloading during an
+ * active search" is a reachable state the old booleans both represented.
+ * One merged phase would let the download's settle-to-Idle extinguish the
+ * search spinner mid-fan-out — a visible regression — and a combined
+ * `SearchingAndDownloading` arm would just re-derive two booleans at the
+ * render site. Orthogonal machines, one phase field each; the overlap stays
+ * representable as [Searching] and
+ * [ProviderSubtitleDownloadPhase.Downloading] on their own fields, and the
+ * EditorViewModelPhasePinsTest pins that combination.
+ */
+sealed interface ProviderSubtitleSearchPhase {
+    data object Idle : ProviderSubtitleSearchPhase
+    data object Searching : ProviderSubtitleSearchPhase
+}
+
+/**
+ * Sealed in-flight phase for the external-provider subtitle DOWNLOAD
+ * choreography (`handleDownloadProviderSubtitle`, ex-`isDownloadingProviderSubtitle`;
+ * download → persist → upload → reload → attribute). Jellyfin-provider rows
+ * route through the server-side download path and never touch this machine —
+ * exactly as they never touched the old flag.
+ *
+ * Kept separate from [ProviderSubtitleSearchPhase] — see that type's KDoc for
+ * why the merge was rejected (the ops genuinely overlap mid-search).
+ */
+sealed interface ProviderSubtitleDownloadPhase {
+    data object Idle : ProviderSubtitleDownloadPhase
+    data object Downloading : ProviderSubtitleDownloadPhase
 }
 
 internal class EditorViewModel(
@@ -132,21 +295,32 @@ internal class EditorViewModel(
             // The editor's ONE load ladder (core/ui loadInto, ex-EditorLoad).
             // Only the editor-data load is a genuine single-fetch ladder: the
             // other fetches are declared non-ladders — `saveMetadata` raises
-            // `isSaving` (a save, not a load, and its success arm re-baselines
+            // `savePhase` (a save, not a load, and its success arm re-baselines
             // the form session), `searchAllSubtitleProviders` streams partial
             // provider results instead of dispatching one Result, the
             // provider-subtitle download is a multi-leg choreography
             // (download → persist → upload → reload → attribute), and the
             // image/subtitle mutations use the bare `.onSuccess`/`.onFailure`
-            // idiom with no loading-flag guard at all — folding any of them
+            // idiom with no loading guard at all — folding any of them
             // would change behaviour, not centralize it.
+            //
+            // Phase mapping (ex-`isLoading` + the load half of `error`): start
+            // raises [EditorLoadPhase.Loading] and clears the ACTION error (the
+            // old `error = null` — a fresh load dismisses any lingering action
+            // banner), the success arm settles [EditorLoadPhase.Ready], and
+            // the failure arm settles [EditorLoadPhase.Failed] with the
+            // exception's message verbatim (nullable — see the arm's KDoc).
             loadInto(
-                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                start = {
+                    _uiState.update {
+                        it.copy(loadPhase = EditorLoadPhase.Loading, actionError = null)
+                    }
+                },
                 fetch = { fetchEditorData(itemId) },
                 onSuccess = { loaded ->
                     _uiState.update { state ->
                         state.copy(
-                            isLoading = false,
+                            loadPhase = EditorLoadPhase.Ready,
                             mediaDetail = loaded.detail,
                             editorInfo = loaded.editorInfo,
                             imageInfos = loaded.imageInfos,
@@ -155,7 +329,9 @@ internal class EditorViewModel(
                         )
                     }
                 },
-                onFailure = { e -> _uiState.update { it.copy(isLoading = false, error = e.message) } },
+                onFailure = { e ->
+                    _uiState.update { it.copy(loadPhase = EditorLoadPhase.Failed(e.message)) }
+                },
             )
         }
     }
@@ -215,16 +391,34 @@ internal class EditorViewModel(
         _uiState.update { state -> state.copy(metadata = state.metadata.edit(update)) }
     }
 
-    /** Clears the transient [EditorUiState.error] shown by the screen's error banner. */
+    /**
+     * Dismisses the screen's ONE error banner: clears every source
+     * [EditorUiState.bannerError] can render — the [EditorUiState.actionError]
+     * channel AND a load [EditorLoadPhase.Failed] (which settles to
+     * [EditorLoadPhase.Ready]; the old dismissal left `isLoading = false` with
+     * the content fields untouched, which is exactly Ready-with-possibly-null
+     * content). Nothing else is cleared: content, save phase, provider-op
+     * phases, and the dirty session all survive a dismissal, as they survived
+     * the old single-field clear.
+     */
     private fun clearError() {
-        _uiState.update { it.copy(error = null) }
+        _uiState.update { state ->
+            state.copy(
+                actionError = null,
+                loadPhase = if (state.loadPhase is EditorLoadPhase.Failed) {
+                    EditorLoadPhase.Ready
+                } else {
+                    state.loadPhase
+                },
+            )
+        }
     }
 
     private fun saveMetadata() {
         launch {
-            // Clear any stale error from a prior failed save so the red banner
-            // doesn't linger while this retry is in flight.
-            _uiState.update { it.copy(isSaving = true, error = null) }
+            // Clear any stale action error from a prior failed save so the red
+            // banner doesn't linger while this retry is in flight.
+            _uiState.update { it.copy(savePhase = EditorSavePhase.Saving, actionError = null) }
             try {
                 val state = _uiState.value
                 val itemId = state.mediaDetail?.item?.id ?: return@launch
@@ -234,11 +428,15 @@ internal class EditorViewModel(
                     metadata = state.metadata.value.toEditable(state.mediaDetail?.dateCreated),
                 ).getOrThrow()
 
-                _uiState.update { it.copy(isSaving = false, metadata = it.metadata.saved()) }
+                _uiState.update {
+                    it.copy(savePhase = EditorSavePhase.Idle, metadata = it.metadata.saved())
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSaving = false, error = e.message) }
+                _uiState.update {
+                    it.copy(savePhase = EditorSavePhase.Idle, actionError = e.message)
+                }
             }
         }
     }
@@ -248,7 +446,7 @@ internal class EditorViewModel(
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.setItemImage(itemId, imageType, imageBytes)
                 .onSuccess { reloadImageInfos(itemId) }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -257,14 +455,14 @@ internal class EditorViewModel(
      * and uploads them. The background-thread read lives in the platform
      * actuals of [EditorPickedFile.readBytes] (contentResolver on Android,
      * java.io.File on desktop); failures surface through
-     * [EditorUiState.error].
+     * [EditorUiState.actionError].
      */
     private fun handleUploadImageFromFile(file: EditorPickedFile, imageType: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             runCatchingRethrowingCancellation { file.readBytes() }
                 .onSuccess { bytes -> uploadImage(bytes, imageType) }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -273,7 +471,7 @@ internal class EditorViewModel(
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.downloadRemoteImage(itemId, imageType, url)
                 .onSuccess { reloadImageInfos(itemId) }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -282,7 +480,7 @@ internal class EditorViewModel(
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.deleteItemImage(itemId, imageType, imageIndex)
                 .onSuccess { reloadImageInfos(itemId) }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -291,7 +489,7 @@ internal class EditorViewModel(
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.getRemoteImages(itemId, imageType, provider, startIndex, 50)
                 .onSuccess { result -> _uiState.update { it.copy(remoteImages = result) } }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -301,7 +499,7 @@ internal class EditorViewModel(
             val base64Data = Base64.Default.encode(fileBytes)
             editorRepository.uploadSubtitle(itemId, base64Data, fileName, language, isForced, isHearingImpaired)
                 .onSuccess { loadEditorData(itemId) }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -311,7 +509,7 @@ internal class EditorViewModel(
      * [fileName] is blank. The background-thread read lives in the platform
      * actuals of [EditorPickedFile.readBytes] (contentResolver on Android,
      * java.io.File on desktop); failures surface through
-     * [EditorUiState.error].
+     * [EditorUiState.actionError].
      */
     private fun handleUploadSubtitleFromFile(
         file: EditorPickedFile,
@@ -324,7 +522,7 @@ internal class EditorViewModel(
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             runCatchingRethrowingCancellation { file.readBytes() }
                 .onSuccess { bytes -> uploadSubtitle(bytes, fileName, language, isForced, isHearingImpaired) }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -339,7 +537,7 @@ internal class EditorViewModel(
                     subtitleStore.purgeDeletedServerStreamCopies(itemId, index, deletedStream)
                     loadEditorData(itemId)
                 }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -354,7 +552,7 @@ internal class EditorViewModel(
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.searchRemoteSubtitles(itemId, language)
                 .onSuccess { results -> _uiState.update { it.copy(remoteSubtitleResults = results) } }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -363,7 +561,7 @@ internal class EditorViewModel(
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.downloadRemoteSubtitle(itemId, subtitleId)
                 .onSuccess { loadEditorData(itemId) }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 
@@ -391,7 +589,7 @@ internal class EditorViewModel(
         launch {
             _uiState.update {
                 it.copy(
-                    isSearchingProviderSubtitles = true,
+                    providerSubtitleSearchPhase = ProviderSubtitleSearchPhase.Searching,
                     providerSubtitleResults = emptyList(),
                     providerSubtitleErrors = emptyMap(),
                 )
@@ -410,7 +608,7 @@ internal class EditorViewModel(
             }
             _uiState.update {
                 it.copy(
-                    isSearchingProviderSubtitles = false,
+                    providerSubtitleSearchPhase = ProviderSubtitleSearchPhase.Idle,
                     providerSubtitleResults = merged.results,
                     providerSubtitleErrors = merged.errors,
                 )
@@ -424,7 +622,7 @@ internal class EditorViewModel(
      * server-side [handleDownloadRemoteSubtitle] path; external rows ride the
      * store's [EditorSubtitleStore.saveUploadAndAttribute] choreography (the
      * save → encode → upload → reload → attribute sequencing). This side
-     * keeps only the busy/error flags and the
+     * keeps only the download phase and the
      * "Saved to device only" degradation wording.
      */
     private fun handleDownloadProviderSubtitle(result: SubtitleSearchResult) {
@@ -434,7 +632,7 @@ internal class EditorViewModel(
                 result.jellyfinInfo?.let { handleDownloadRemoteSubtitle(it.id) }
             }
             else -> launch {
-                _uiState.update { it.copy(isDownloadingProviderSubtitle = true) }
+                _uiState.update { it.copy(providerSubtitleDownloadPhase = ProviderSubtitleDownloadPhase.Downloading) }
                 subtitleProviderRepository.downloadExternal(result)
                     .onSuccess { file ->
                         val saved = ProviderSubtitleSave(
@@ -468,12 +666,12 @@ internal class EditorViewModel(
                             // is surfaced as an info note rather than a hard error.
                             .onFailure { e ->
                                 _uiState.update {
-                                    it.copy(error = "Saved to device only: ${e.message}")
+                                    it.copy(actionError = "Saved to device only: ${e.message}")
                                 }
                             }
                     }
-                    .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
-                _uiState.update { it.copy(isDownloadingProviderSubtitle = false) }
+                    .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
+                _uiState.update { it.copy(providerSubtitleDownloadPhase = ProviderSubtitleDownloadPhase.Idle) }
             }
         }
     }
@@ -500,7 +698,7 @@ internal class EditorViewModel(
                         loadEditorData(itemId)
                     }
                 }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                .onFailure { e -> _uiState.update { it.copy(actionError = e.message) } }
         }
     }
 

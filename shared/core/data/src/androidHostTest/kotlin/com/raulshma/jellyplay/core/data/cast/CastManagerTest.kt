@@ -52,7 +52,16 @@ import org.robolectric.annotation.Config
  *   the manager's now-playing flows (write-through of the pure
  *   [castStateFanout]; the full per-field contract, including the
  *   Jellyfin-only title/subtitle divergence, is pinned in CastStateFanoutTest).
- * - `unregisterStrategy` of the active strategy falls back to `google`.
+ * - A session-disconnect edge resets the ENTIRE now-playing family — the
+ *   transport quartet AND title/subtitle/volume (the former reset let the
+ *   dead session's title and volume bleed into the next one).
+ * - `isActive()` derives from the ACTIVE strategy's connection phase, not the
+ *   Google `castPlayer != null` shape: a live DLNA session is active with no
+ *   CastPlayer, and no stale CastPlayer can fake activity.
+ * - `unregisterStrategy` of the active strategy re-seats routing on a
+ *   REMAINING strategy (google when it survives, else the first remaining
+ *   renderer) — never on the name just removed; a NON-active unregister
+ *   leaves the active strategy alone.
  * - Consumer refcounting: `releaseConsumer` to zero tears the shared state
  *   down (strategy `release()` + `stopDiscovery()`), `softRelease` only stops
  *   discovery.
@@ -281,6 +290,49 @@ class CastManagerTest {
         collector.cancel()
     }
 
+    @Test
+    fun `a disconnect edge resets the whole now-playing family including title subtitle and volume`() {
+        // Set the full family through the Jellyfin fan-out (the only branch
+        // that contributes title/subtitle), then kill the session: the reset
+        // must return EVERY flow to its construction default — the former
+        // reset covered only the transport quartet, so the dead session's
+        // title and volume bled into the next one.
+        every { jellyfinCastStrategy.positionMs } returns MutableStateFlow(1_000L)
+        every { jellyfinCastStrategy.durationMs } returns MutableStateFlow(2_000L)
+        every { jellyfinCastStrategy.isPlaying } returns MutableStateFlow(true)
+        every { jellyfinCastStrategy.volume } returns MutableStateFlow(0.5f)
+        every { jellyfinCastStrategy.nowPlayingTitle } returns MutableStateFlow("Pilot")
+        every { jellyfinCastStrategy.nowPlayingSubtitle } returns MutableStateFlow("Show · S1E1")
+        every {
+            jellyfinCastStrategy.loadMedia(
+                any<MediaItem>(), any(), any<Player.Listener>(), any(),
+            )
+        } returns true
+        every { jellyfinCastStrategy.ownsExternalListener } returns false
+        val manager = manager()
+        manager.setActiveStrategy(CastManager.STRATEGY_JELLYFIN)
+        manager.loadMedia(MediaItem.Builder().setMediaId("id").setUri("http://server/v/stream").build(), 0L, mockk())
+        idleMain()
+        assertEquals("Pilot", manager.castTitle.value)
+        assertEquals(0.5f, manager.castVolume.value)
+
+        // The reset fires on the session edge, so the observer must see the
+        // connect first (same pattern as the DLNA reset pin above).
+        jellyfinConnected.value = true
+        idleMain()
+
+        jellyfinConnected.value = false
+        idleMain()
+
+        assertEquals("", manager.castTitle.value)
+        assertEquals("", manager.castSubtitle.value)
+        assertEquals(1f, manager.castVolume.value)
+        assertEquals(0L, manager.castPositionMs.value)
+        assertEquals(0L, manager.castDurationMs.value)
+        assertEquals(0L, manager.castBufferedPositionMs.value)
+        assertFalse(manager.castIsPlaying.value)
+    }
+
     // ── state fan-out write-through ───────────────────────────────────────
 
     @Test
@@ -367,6 +419,55 @@ class CastManagerTest {
         manager.unregisterStrategy(CastManager.STRATEGY_DLNA)
 
         assertEquals(CastManager.STRATEGY_GOOGLE, manager.currentStrategyName)
+    }
+
+    @Test
+    fun `unregistering the ACTIVE Google strategy re-seats routing on a remaining strategy`() {
+        castPreference.value = SyncPlayCastSlice(defaultCastingStrategy = CastingStrategy.PREFER_CAST)
+        val manager = manager()
+        assertEquals(CastManager.STRATEGY_GOOGLE, manager.currentStrategyName)
+
+        manager.unregisterStrategy(CastManager.STRATEGY_GOOGLE)
+
+        // The former body re-seated STRATEGY_GOOGLE — the very name just
+        // removed — leaving activeStrategy null and every cast call a silent
+        // no-op. Routing now lands on a strategy the map still holds (DLNA,
+        // the renderer-capable fallback).
+        assertEquals(CastManager.STRATEGY_DLNA, manager.currentStrategyName)
+    }
+
+    @Test
+    fun `unregistering a NON-active strategy leaves the active strategy alone`() {
+        castPreference.value = SyncPlayCastSlice(defaultCastingStrategy = CastingStrategy.PREFER_DLNA)
+        val manager = manager()
+
+        manager.unregisterStrategy(CastManager.STRATEGY_GOOGLE)
+
+        assertEquals(CastManager.STRATEGY_DLNA, manager.currentStrategyName)
+    }
+
+    // ── isActive: strategy-phase derivation ────────────────────────────────
+
+    @Test
+    fun `isActive follows the active strategy's connection phase not the Google player shape`() {
+        castPreference.value = SyncPlayCastSlice(defaultCastingStrategy = CastingStrategy.PREFER_DLNA)
+        val manager = manager()
+
+        // No CastPlayer exists under Robolectric (the fake integration's
+        // ensureCastPlayer returns null) — the OLD `castPlayer != null &&
+        // isConnected` shape reported FALSE for this live DLNA session.
+        assertFalse(manager.isActive())
+
+        dlnaConnected.value = true
+
+        assertTrue(manager.isActive())
+
+        // The dead-player arm: Google active with no CastPlayer never
+        // reports active — with or without a strategy edge.
+        dlnaConnected.value = false
+        manager.setActiveStrategy(CastManager.STRATEGY_GOOGLE)
+
+        assertFalse(manager.isActive())
     }
 
     @Test

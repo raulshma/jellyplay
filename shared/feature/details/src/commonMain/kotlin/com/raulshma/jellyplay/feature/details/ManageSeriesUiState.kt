@@ -23,8 +23,13 @@ data class ManageSeriesUiState(
     /** Season number → episodes (sorted; specials at end). */
     val episodesBySeason: Map<Int, List<ArrSeriesEpisode>> = emptyMap(),
     val expandedSeasons: Set<Int> = emptySet(),
-    /** One-shot snackbar message for action feedback. */
-    val userMessage: String? = null,
+    // The former `userMessage` one-shot snackbar field died with its
+    // ClearUserMessage consume event — it rode the uiState StateFlow, which
+    // replays its current value to every new collector, so the snackbar
+    // re-fired on state restoration. One-shot feedback now rides the
+    // ViewModel's [ManageSeriesViewModel.messages] Channel (the
+    // ManageSeriesMessage sealed type, the details module's DetailMessage
+    // idiom), which never replays.
     /**
      * Episode-delete confirm machine ([PendingConfirmation]). The guard RULE
      * lives in the machine, fed the [ManageSeriesUiState.isDeleting] flag;

@@ -79,6 +79,7 @@
     <string name="auth_remove">제거</string>
 
     <!-- User selection screen -->
+    <string name="auth_users_load_error_title">사용자를 불러올 수 없음</string>
     <string name="auth_loading_users">사용자 불러오는 중…</string>
     <string name="auth_no_users_title">이 서버에 사용자가 없음</string>
     <string name="auth_no_users_desc">사용자를 추가하여 시작하세요</string>

@@ -860,17 +860,17 @@ class VideoPlayerViewModel(
     }
 
     /**
-     * The error-dialog dismissal write: all three fields move together (flag
-     * down, error + retryable nulled) — one home for the triple instead of a
-     * hand-copied `copy(...)` at each dismissal site.
+     * The error-dialog dismissal write: everything the error put up comes down
+     * in one null write. Formerly the error triple (flag down, error +
+     * retryable nulled); the triple collapsed into the single
+     * [VideoPlayerUiState.playbackError] value, so the funnel is now literally
+     * one field write — and it stays the ONE dismissal home (RetryPlayback /
+     * RetryWithEngine / DismissPlaybackError all route through here) instead
+     * of a hand-copied `copy(...)` at each dismissal site.
      */
     private fun clearPlaybackErrorState() {
         _uiState.update {
-            it.copy(
-                showPlaybackErrorDialog = false,
-                playerError = null,
-                playerErrorRetryable = false,
-            )
+            it.copy(playbackError = null)
         }
     }
 
@@ -899,8 +899,9 @@ class VideoPlayerViewModel(
      * Same-engine retry for recoverable [EngineError]s (Network, Render, or the
      * buffering watchdog timeout). Reloads the current engine at the current
      * position, mirroring [retryWithEngine] without changing engine. UI gates
-     * this button on [VideoPlayerUiState.playerErrorRetryable]; fatal errors
-     * (Decoder, Drm) only offer switch-engine.
+     * this button on [VideoPlayerUiState.playbackError]'s
+     * [PlaybackErrorUi.retryable]; fatal errors (Decoder, Drm) only offer
+     * switch-engine.
      */
     private fun retryPlayback() {
         clearPlaybackErrorState()

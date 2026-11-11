@@ -57,6 +57,29 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
+ * The VOD session's load lifecycle: one machine replacing the former
+ * `isReady` Boolean (which could not distinguish Loading from Failed — every
+ * reader had to guess). Transitions are owned by [PlayerSessionManager]:
+ * `loadMedia` arms [Loading] up front, the success sites land [Ready]
+ * (including the offline missing-file and engine-bind paths), and every
+ * failure converges on [failLoad] → [Failed]. [Failed] carries the reason so
+ * consumers never read it out of a metadata field.
+ */
+sealed interface LoadPhase {
+    /** No load has been armed (fresh session, or after [PlayerSessionManager.release]). */
+    data object Idle : LoadPhase
+
+    /** A load is armed and resolving (`loadMedia` start through the success/failure sites). */
+    data object Loading : LoadPhase
+
+    /** The session settled on a playable source (stream or external hand-off). */
+    data object Ready : LoadPhase
+
+    /** The load failed; [message] is the user-facing reason (also sent on the message bus). */
+    data class Failed(val message: String) : LoadPhase
+}
+
+/**
  * Session state for the VOD player: resolved item metadata, stream info, and
  * the play-method badge fields surfaced by the player chrome.
  */
@@ -80,7 +103,7 @@ data class PlayerSessionState(
      * playback or when the client falls back to a static direct URL.
      */
     val playSessionId: String? = null,
-    val isReady: Boolean = false,
+    val loadPhase: LoadPhase = LoadPhase.Idle,
     val streamUrl: String? = null,
     /**
      * True when the current item is playing from a local download (resolved
@@ -89,7 +112,15 @@ data class PlayerSessionState(
      * discovery and autoplay work without a server round-trip.
      */
     val isOffline: Boolean = false,
-)
+) {
+    /**
+     * Derived projection of [loadPhase] — the `SessionLoadPipeline` gate and
+     * the tests read the same Boolean as before. Deliberately a getter, NOT a
+     * stored field: the stored Boolean could not distinguish Loading from
+     * Failed, which is exactly what [LoadPhase] fixes.
+     */
+    val isReady: Boolean get() = loadPhase is LoadPhase.Ready
+}
 
 /**
  * The settled next-item warm slot, published for the ViewModel's next-stream
@@ -323,7 +354,7 @@ internal class PlayerSessionManager(
                     episodeNumber = detail.item.episodeNumber,
                 ),
                 transcodeReasons = emptyList(),
-                isReady = true
+                loadPhase = LoadPhase.Ready,
             )
         }
         publishNowPlayingMeta()
@@ -361,7 +392,7 @@ internal class PlayerSessionManager(
         transcodeReasonsRefresher.cancel()
         sidecarCatchUpJob?.cancel()
         lastLoadStartPositionMs = startPositionTicks / 10_000
-        _sessionState.update { it.copy(currentItemId = itemId, isReady = false) }
+        _sessionState.update { it.copy(currentItemId = itemId, loadPhase = LoadPhase.Loading) }
 
         // The download lookup is needed both for Auto resolution and for
         // metadata enrichment during offline playback, so it is performed
@@ -416,12 +447,20 @@ internal class PlayerSessionManager(
     }
 
     /**
-     * Fail a load: publish the not-ready state and surface the reason to the
-     * user. Every [loadMedia] failure path converges here so the state write
-     * and the feedback emission cannot drift apart.
+     * Fail a load: land the [LoadPhase.Failed] outcome and surface the reason
+     * to the user. Every [loadMedia] failure path converges here so the state
+     * write and the feedback emission cannot drift apart.
+     *
+     * Declared fix (v0.11.10 cohort): the former write put [message] into
+     * [PlayerSessionState.title] — the projector mirrors `title` into
+     * uiState unguarded, so the error text rendered as the media title in the
+     * player chrome, tripped the pause-details `hasDetails` gate (the message
+     * is non-blank), and leaked into screenshot filenames. The reason now
+     * lives ONLY in [LoadPhase.Failed.message] + the message bus; `title`
+     * keeps whatever the item metadata had (blank for a never-resolved item).
      */
     private fun failLoad(message: String) {
-        _sessionState.update { it.copy(title = message, isReady = false) }
+        _sessionState.update { it.copy(loadPhase = LoadPhase.Failed(message)) }
         userMessageBus.error(message)
     }
 
@@ -435,10 +474,14 @@ internal class PlayerSessionManager(
         if (localFile == null) {
             // The file vanished after resolution — surface an error rather
             // than silently falling back online (callers that want fallback
-            // should use [PlaybackSource.Auto]).
+            // should use [PlaybackSource.Auto]). Converges on [failLoad] like
+            // every other failure path: the former inline arm wrote the
+            // message into `title` only (the reason leaked into the chrome as
+            // the media title) and never reached the message bus, so no error
+            // dialog ever explained the dead air.
             // KMP seam: compose-resources' suspend resolver
             // replaces context.getString (loadOffline is already suspend).
-            _sessionState.update { it.copy(title = getString(Res.string.player_video_error_offline_file_missing), isReady = false) }
+            failLoad(getString(Res.string.player_video_error_offline_file_missing))
             return
         }
 
@@ -516,7 +559,7 @@ internal class PlayerSessionManager(
         }
 
         if (playerType == PlayerType.EXTERNAL) {
-            _sessionState.update { it.copy(isReady = true, mediaDetail = detail, isOffline = true) }
+            _sessionState.update { it.copy(loadPhase = LoadPhase.Ready, mediaDetail = detail, isOffline = true) }
             publishNowPlayingMeta()
             return
         }
@@ -556,7 +599,7 @@ internal class PlayerSessionManager(
         }
 
         _sessionState.update { it.copy(
-            isReady = true,
+            loadPhase = LoadPhase.Ready,
             mediaDetail = detail,
             isOffline = true,
         ) }
@@ -844,7 +887,7 @@ internal class PlayerSessionManager(
         scheduleTranscodeReasonsRefresh(itemId, playMethod)
 
         if (playerType == PlayerType.EXTERNAL) {
-            _sessionState.update { it.copy(isReady = true) }
+            _sessionState.update { it.copy(loadPhase = LoadPhase.Ready) }
             publishNowPlayingMeta()
             return
         }
@@ -865,7 +908,7 @@ internal class PlayerSessionManager(
             persistedSubtitleStreams = streams,
         )
 
-        _sessionState.update { it.copy(isReady = true) }
+        _sessionState.update { it.copy(loadPhase = LoadPhase.Ready) }
         publishNowPlayingMeta()
     }
 

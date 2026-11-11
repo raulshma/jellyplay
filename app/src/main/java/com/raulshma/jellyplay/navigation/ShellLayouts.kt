@@ -523,6 +523,12 @@ internal fun PhoneContent(
                         devices = playOnState.devices,
                         onSelect = { device ->
                             playOn.connectAndFling(playOnContext, device)
+                            // The select path must stop discovery exactly like
+                            // the dismiss path — a discovery left running after
+                            // a connect kept scanning (and refreshing the dead
+                            // sheet's device list) for the whole session
+                            // (v0.11.10 cohort fix).
+                            playOn.stopDiscovery()
                             showPlayOnSheet = false
                         },
                         onDismiss = {

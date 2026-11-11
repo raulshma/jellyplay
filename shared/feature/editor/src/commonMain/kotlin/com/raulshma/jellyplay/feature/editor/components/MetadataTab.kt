@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
+import com.raulshma.jellyplay.feature.editor.EditorLoadPhase
 import com.raulshma.jellyplay.feature.editor.EditorUiEvent
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
 import com.composables.icons.tabler.Tabler
@@ -146,7 +147,11 @@ internal fun MetadataTab(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    if (state.isLoading) {
+    // Load veil: an explicitly-armless phase read — only the Loading arm
+    // replaces the tab with the spinner; Ready and Failed fall through to the
+    // tab body (a failed load renders whatever content fields survived,
+    // exactly as the ex-`isLoading == false` path did).
+    if (state.loadPhase is EditorLoadPhase.Loading) {
         androidx.compose.foundation.layout.Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,

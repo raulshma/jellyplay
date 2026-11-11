@@ -318,7 +318,7 @@ internal fun BoxScope.PlayerCenterOverlayTier(
     // playback-intended gate, ALWAYS shows on any stall, HIDDEN never shows.
     val bufferingVisible = uiState.uiPrefs.bufferingVeil != BufferingVeil.HIDDEN &&
         uiState.isBuffering &&
-        uiState.playerError == null &&
+        uiState.playbackError == null &&
         !inputs.isPlaying &&
         (uiState.uiPrefs.bufferingVeil == BufferingVeil.ALWAYS || inputs.playbackIntended)
     val bufferingFade = MaterialTheme.motionScheme.fastEffectsSpec<Float>()

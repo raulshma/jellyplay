@@ -19,6 +19,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -363,7 +364,65 @@ class JellyPlaySyncViewModelTest {
 
         viewModel.createSnapshot()
         awaitUntil { createCalls.size == 1 }
-        assertFalse(viewModel.uiState.value.actionError)
+        // Success lands Idle (no Failed face beside the settled machine).
+        assertTrue(viewModel.uiState.value.actionPhase is SnapshotActionPhase.Idle)
+    }
+
+    @Test
+    fun snapshotActions_aFailedCreate_landsTheVerbFailedFace_andAdmitsARetry() = runTest {
+        gateOpen()
+        coEvery { pluginApi.createSnapshot() } coAnswers {
+            createCalls += 1
+            Result.failure(IllegalStateException("500"))
+        }
+
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { !viewModel.uiState.value.isLoading }
+
+        viewModel.createSnapshot()
+        awaitUntil { createCalls.size == 1 }
+
+        // The failure is the verb's Failed face — which verb failed is
+        // representable (v0.11.10 cohort: the Boolean could not say).
+        assertEquals(
+            SnapshotActionPhase.Failed(SnapshotActionVerb.Create),
+            viewModel.uiState.value.actionPhase,
+        )
+
+        // Refiring from Failed is the retry (only Running refuses).
+        coEvery { pluginApi.createSnapshot() } coAnswers {
+            createCalls += 1
+            Result.success(com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotCreated(10L))
+        }
+        viewModel.createSnapshot()
+        awaitUntil { createCalls.size == 2 }
+        assertTrue(viewModel.uiState.value.actionPhase is SnapshotActionPhase.Idle)
+    }
+
+    @Test
+    fun snapshotActions_aRunningVerb_isObservableForTheScreenGuard() = runTest {
+        gateOpen()
+        // Park the create mid-flight so the verb is genuinely Running.
+        coEvery { pluginApi.createSnapshot() } coAnswers {
+            createCalls += 1
+            awaitCancellation()
+        }
+
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { !viewModel.uiState.value.isLoading }
+
+        viewModel.createSnapshot()
+        awaitUntil { createCalls.size == 1 }
+
+        // The re-entry guard lives in the SCREEN's onClick (legacy layering):
+        // it reads exactly this phase (`!is Running`), with the verb carried —
+        // which action is in flight is representable now.
+        assertEquals(
+            SnapshotActionPhase.Running(SnapshotActionVerb.Create),
+            viewModel.uiState.value.actionPhase,
+        )
     }
 
     @Test

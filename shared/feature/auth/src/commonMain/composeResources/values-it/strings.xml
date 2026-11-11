@@ -79,6 +79,7 @@
     <string name="auth_remove">Rimuovi</string>
 
     <!-- User selection screen -->
+    <string name="auth_users_load_error_title">Impossibile caricare gli utenti</string>
     <string name="auth_loading_users">Caricamento utenti…</string>
     <string name="auth_no_users_title">Nessun utente su questo server</string>
     <string name="auth_no_users_desc">Aggiungi un utente per iniziare</string>

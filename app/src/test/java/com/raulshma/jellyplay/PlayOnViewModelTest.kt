@@ -2,6 +2,7 @@ package com.raulshma.jellyplay
 
 import android.content.Context
 import com.raulshma.jellyplay.core.data.cast.CastDevice
+import com.raulshma.jellyplay.core.data.cast.CastSessionPhase
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import io.mockk.coVerify
@@ -46,6 +47,7 @@ class PlayOnViewModelTest {
 
     private val discovered = MutableStateFlow<List<CastDevice>>(emptyList())
     private val connected = MutableStateFlow(false)
+    private val phase = MutableStateFlow<CastSessionPhase>(CastSessionPhase.Idle)
     private val remotePlaying = MutableStateFlow(false)
     private val remotePosition = MutableStateFlow(0L)
     private val remoteDuration = MutableStateFlow(0L)
@@ -64,6 +66,7 @@ class PlayOnViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         every { strategy.discoveredDevices } returns discovered
         every { strategy.isConnected } returns connected
+        every { strategy.phase } returns phase
         every { strategy.isPlaying } returns remotePlaying
         every { strategy.positionMs } returns remotePosition
         every { strategy.durationMs } returns remoteDuration
@@ -198,15 +201,29 @@ class PlayOnViewModelTest {
         advanceUntilIdle()
         val context = mockk<Context>(relaxed = true)
 
+        // The strategy's pinned synchronous Idle→Connected flip — the target
+        // name is written only off its truth.
+        connected.value = true
         vm.connectAndFling(context, device("TV"))
 
-        advanceUntilIdle()
+        // runCurrent, deliberately NOT advanceUntilIdle: with the connection
+        // up, the 5 s status-poll loop never idles, so advanceUntilIdle would
+        // spin it forever (a virtual-time divergence that exhausts the heap).
+        // runCurrent starts the poll launch and parks it at its first delay.
+        runCurrent()
         verify { strategy.connect(context, any()) }
         verify {
             strategy.loadMedia(itemId = "item-9", startPositionMs = 45_000L)
         }
         verify(exactly = 1) { audio.pause() }
         assertEquals("TV", vm.targetDeviceName.value)
+
+        // End with the session down: the poll job is parked at its next 5 s
+        // tick, and runTest's post-body quiesce advance on the shared
+        // scheduler would spin it forever (a connected loop never idles —
+        // the divergence that OOM'd the executor). Flipping connected=false
+        // lets the parked loop exit on that final advance.
+        connected.value = false
     }
 
     @Test
@@ -222,6 +239,37 @@ class PlayOnViewModelTest {
         verify { strategy.connect(context, any()) }
         verify(exactly = 0) { strategy.loadMedia(any(), any()) }
         coVerify(exactly = 0) { audio.pause() }
+        // Declared v0.11.10 fix pin: the connect failed silently (the relaxed
+        // strategy stayed Idle) — the target name must NOT claim a session.
+        assertEquals(null, vm.targetDeviceName.value)
+    }
+
+    @Test
+    fun `a vanished session clears the stale target name`() = runTest(mainDispatcher) {
+        val vm = createVm()
+        attach(vm)
+        advanceUntilIdle()
+        val context = mockk<Context>(relaxed = true)
+
+        connected.value = true
+        vm.connectAndFling(context, device("TV"))
+        // Same runCurrent-not-advanceUntilIdle rule as above (live poll loop).
+        runCurrent()
+        assertEquals("TV", vm.targetDeviceName.value)
+        // The strategy's observer auto-disconnect on a vanished session:
+        // phase walks Connected → Idle (its disconnect() also clears its own
+        // targetName and isConnected). The janitor must OBSERVE Connected
+        // first — a StateFlow subscriber dedups against the last DELIVERED
+        // value, so an unobserved Connected detour overwritten by Idle is a
+        // no-op for it. This does NOT go through vm.disconnect (that path
+        // had its own explicit clear).
+        phase.value = CastSessionPhase.Connected
+        runCurrent()
+        connected.value = false
+        phase.value = CastSessionPhase.Idle
+        runCurrent()
+
+        assertEquals(null, vm.targetDeviceName.value)
     }
 
     @Test
@@ -253,12 +301,14 @@ class PlayOnViewModelTest {
         advanceUntilIdle()
         val context = mockk<Context>(relaxed = true)
 
+        connected.value = true
         vm.connectAndFling(context, device("TV"))
-        advanceUntilIdle()
+        // runCurrent, not advanceUntilIdle — live poll loop (see above).
+        runCurrent()
         assertEquals("TV", vm.targetDeviceName.value)
 
         vm.castStop(context)
-        advanceUntilIdle()
+        runCurrent()
         verify(exactly = 1) { strategy.stop(context) }
         assertEquals(null, vm.targetDeviceName.value)
     }

@@ -22,7 +22,7 @@ import kotlinx.coroutines.runBlocking
  * the cancel path (null directory/file → null → onPicked never fires), and
  * the picked-file contract (file:/ preview URI, lazy Dispatchers.IO read,
  * and the JDK exception a vanished file throws for the ViewModel's
- * runCatching to route into uiState.error).
+ * runCatching to route into uiState.actionError).
  */
 class DesktopEditorFilePickerTest {
 
@@ -98,7 +98,7 @@ class DesktopEditorFilePickerTest {
         // The deferred read means the failure surfaces at upload time, not at
         // pick time: the JDK FileNotFoundException propagates out of
         // readBytes and the ViewModel's platform-neutral runCatching routes
-        // its message into uiState.error (EditorViewModelUploadTest pins the
+        // its message into uiState.actionError (EditorViewModelUploadTest pins the
         // routing; the "Cannot open input stream…" text is Android-only).
         val temp = File.createTempFile("gone", ".srt")
         val picked = assertNotNull(editorPickedFile(temp))

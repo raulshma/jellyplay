@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.update
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import com.raulshma.jellyplay.core.model.compareVersions
+import com.raulshma.jellyplay.shell.ShellSurface
 
 /**
  * Pure decision functions for the in-app self-update flow, split out of
@@ -74,4 +75,39 @@ object AppUpdateDecision {
         is UpdateState.Downloaded -> state.info.latestVersion
         else -> null
     }
+
+    /**
+     * Whether the self-update sheet may render right now. The sheet is a
+     * MAIN-surface-only modal: it must never interrupt the first-run
+     * onboarding wizard, the signed-out auth host, or the pinned restoring
+     * splash ([ShellSurface.OnboardingOrAuth]) — surfaces where no
+     * session-backed UI exists for the sheet to sit on, and where an update
+     * prompt is at best noise (a brand-new user dismissing an update they
+     * can't evaluate) and at worst a modal over a branch that renders
+     * nothing. This gate is what turned the former implicit exclusion (the
+     * sheet simply composed after every session branch) into a pure
+     * decision; the surface itself is derived at the composition site by the
+     * pure `shellSurface` fold (app/src/main), which mirrors JellyPlayApp's
+     * session `when` branch-for-branch.
+     *
+     * GATING, not SUPPRESSION — the two must stay distinct:
+     *  - Suppression ([isRecentlyDismissed] + the persisted two-field
+     *    dismissal stamp) is "don't show this version again (for a while)" —
+     *    a user decision with a side effect, stamped only when the user
+     *    dismisses a VISIBLE sheet ([dismissedVersion]).
+     *  - Gating (this fold) is "not on this surface, not yet" — no side
+     *    effect, no stamp, no state write. While gated the coordinator keeps
+     *    its state untouched (it's a StateFlow), so an update found
+     *    mid-onboarding stays [UpdateState.UpdateAvailable] and the sheet
+     *    appears the moment the user reaches [ShellSurface.Main] — a
+     *    deferred render, not a dropped one. The gated sheet can't be
+     *    dismissed because it is never composed: no composition, no
+     *    `onDismiss` click, no `dismissUpdate`, no stamp.
+     *
+     * Pinned by AppUpdateDecisionTest's `shouldShowOverlay` rows, including
+     * the gated-then-arrive deferred-render pin (same state, surface flips
+     * to Main → true).
+     */
+    fun shouldShowOverlay(updateState: UpdateState, surface: ShellSurface): Boolean =
+        updateState !is UpdateState.Idle && surface == ShellSurface.Main
 }

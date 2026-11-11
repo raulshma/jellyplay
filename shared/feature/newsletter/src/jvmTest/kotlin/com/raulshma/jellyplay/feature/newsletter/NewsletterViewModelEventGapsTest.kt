@@ -15,7 +15,9 @@ import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -90,6 +92,26 @@ class NewsletterViewModelEventGapsTest {
         authRepository = authRepository,
     )
 
+    /**
+     * Arms a one-shot [NewsletterViewModel.sendResults] collector — the
+     * [UnconfinedTestDispatcher] on the test's own scheduler is load-bearing
+     * (NewsletterViewModelTest.collectSendResults, HomeViewModelEventsTest
+     * pattern): a background-scope collector on the default
+     * StandardTestDispatcher never gets its post-`trySend` resumption run by
+     * `advanceUntilIdle()`, so deliveries would sit in the channel buffer.
+     * Even though this suite's send case only asserts EMPTINESS (the guarded
+     * no-op must emit nothing), the collector must be armed the same way so
+     * a real emission would actually reach it if the guard ever regressed.
+     */
+    private fun kotlinx.coroutines.test.TestScope.collectSendResults(
+        vm: NewsletterViewModel,
+        received: MutableList<NewsletterMessage>,
+    ) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.sendResults.collect { received += it }
+        }
+    }
+
     @Test
     fun `refresh drives isLoading while pull-to-refresh drives isRefreshing`() = runTest(mainDispatcher) {
         val vm = createViewModel()
@@ -143,6 +165,8 @@ class NewsletterViewModelEventGapsTest {
     @Test
     fun `confirm send without a pending action is a guarded no-op`() = runTest(mainDispatcher) {
         val vm = createViewModel()
+        val received = mutableListOf<NewsletterMessage>()
+        collectSendResults(vm, received)
         advanceUntilIdle()
 
         vm.onEvent(NewsletterUiEvent.ConfirmSend)
@@ -151,7 +175,10 @@ class NewsletterViewModelEventGapsTest {
         coVerify(exactly = 0) { mediaRepository.sendNewsletter() }
         coVerify(exactly = 0) { mediaRepository.sendTestNewsletter() }
         assertFalse(vm.uiState.value.isSending)
-        assertNull(vm.uiState.value.sendResult)
+        // The guarded no-op also emits nothing on the one-shot send channel
+        // (the former sendResult state field stayed null here; the channel
+        // must stay silent too).
+        assertTrue(received.isEmpty())
     }
 
     @Test

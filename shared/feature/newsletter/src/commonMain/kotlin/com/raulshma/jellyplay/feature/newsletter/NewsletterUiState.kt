@@ -20,8 +20,8 @@ data class NewsletterUiState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
     val isAdmin: Boolean = false,
+    /** True while a confirmed send is in flight (the admin menu's spinner). */
     val isSending: Boolean = false,
-    val sendResult: NewsletterMessage? = null,
     val pendingSendAction: NewsletterSendAction? = null,
 )
 

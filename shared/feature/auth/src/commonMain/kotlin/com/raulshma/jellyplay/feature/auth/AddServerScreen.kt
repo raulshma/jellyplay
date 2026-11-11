@@ -283,15 +283,16 @@ fun AddServerScreen(
         }
     }
 
-    // Self-signed certificate offer: shown only when the ViewModel classified
-    // the failure as TLS trust against an https address. Confirm persists the
-    // host grant and retries the exact same connect (the network layer picks
-    // the grant up at the next TLS handshake — no client rebuild).
-    uiState.tlsTrustPromptAddress?.let { address ->
+    // Self-signed certificate offer: shown only while the connect phase is
+    // TlsTrustPending (the ViewModel classified the failure as TLS trust
+    // against an https address). Confirm persists the host grant and retries
+    // the exact same connect (the network layer picks the grant up at the
+    // next TLS handshake — no client rebuild).
+    (uiState.connectPhase as? AddServerConnectPhase.TlsTrustPending)?.let { pending ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissTrustPrompt() },
             title = { Text(stringResource(Res.string.auth_tls_trust_title)) },
-            text = { Text(stringResource(Res.string.auth_tls_trust_body, address)) },
+            text = { Text(stringResource(Res.string.auth_tls_trust_body, pending.address)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmTrustServer() }) {
                     Text(stringResource(Res.string.auth_tls_trust_confirm))
@@ -322,18 +323,18 @@ private fun DiscoverySection(
             .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
     ) {
         when {
-            uiState.discoveryFailed -> {
+            uiState.discoveryPhase is AddServerDiscoveryPhase.Failed -> {
                 DiscoveryFailedRow(onRetry = onRetry)
             }
-            uiState.isDiscovering && !hasServers -> {
+            uiState.discoveryPhase is AddServerDiscoveryPhase.Running && !hasServers -> {
                 ScanningRow(onStop = onStop)
             }
             hasServers -> {
                 ServerCountRow(
                     serverCount = serverCount,
-                    isScanning = uiState.isDiscovering,
+                    isScanning = uiState.discoveryPhase is AddServerDiscoveryPhase.Running,
                     servers = uiState.discoveredServers,
-                    isConnecting = uiState.isConnecting,
+                    isConnecting = uiState.connectPhase is AddServerConnectPhase.Connecting,
                     onServerSelected = onServerSelected,
                 )
             }
@@ -616,6 +617,19 @@ private fun ManualEntrySection(
         if (isTv) addressFocusRequester.tryRequestFocus("manual_address")
     }
 
+    // The connect phase folds every former boolean/optional read: Connecting
+    // drives the spinner/enable algebra; Failed and TlsTrustPending both
+    // carry the explanatory error the field renders (TlsTrustPending's error
+    // shows under the field while the trust dialog is up — exactly what the
+    // former flag machine rendered).
+    val connectPhase = uiState.connectPhase
+    val connecting = connectPhase is AddServerConnectPhase.Connecting
+    val connectError: AuthMessage? = when (val phase = connectPhase) {
+        is AddServerConnectPhase.Failed -> phase.error
+        is AddServerConnectPhase.TlsTrustPending -> phase.error
+        AddServerConnectPhase.Idle, AddServerConnectPhase.Connecting -> null
+    }
+
     Column {
         OutlinedTextField(
             value = uiState.manualAddress,
@@ -623,23 +637,23 @@ private fun ManualEntrySection(
             label = { Text(stringResource(Res.string.auth_server_address)) },
             placeholder = { Text(stringResource(Res.string.auth_server_address_hint)) },
             singleLine = true,
-            isError = uiState.connectError != null || showInvalid,
+            isError = connectError != null || showInvalid,
             supportingText = when {
                 showInvalid -> { { Text(addressInvalid) } }
-                uiState.connectError != null -> { { Text(uiState.connectError!!.asText()) } }
+                connectError != null -> { { Text(connectError.asText()) } }
                 else -> null
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(
                 onDone = {
-                    if (!uiState.isConnecting && uiState.manualAddress.isNotBlank() && isAddressValid) {
+                    if (!connecting && uiState.manualAddress.isNotBlank() && isAddressValid) {
                         keyboardController?.hide()
                         onConnect()
                     }
                 },
             ),
             modifier = Modifier.fillMaxWidth().focusRequester(addressFocusRequester),
-            enabled = !uiState.isConnecting,
+            enabled = !connecting,
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -647,19 +661,19 @@ private fun ManualEntrySection(
         val connectFocusState = rememberTvFocusState(focusedScale = 1.04f)
         Button(
             onClick = onConnect,
-            enabled = !uiState.isConnecting && uiState.manualAddress.isNotBlank() && isAddressValid,
+            enabled = !connecting && uiState.manualAddress.isNotBlank() && isAddressValid,
             modifier = Modifier.fillMaxWidth()
                 .then(connectFocusState.focusModifier)
                 .tvFocusIndicator(connectFocusState, ShapeCache.smooth12),
         ) {
-            if (uiState.isConnecting) {
+            if (connecting) {
                 JellyPlayLoadingIndicator(
                     modifier = Modifier.size(20.dp),
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            Text(if (uiState.isConnecting) stringResource(Res.string.auth_connecting) else stringResource(Res.string.auth_connect))
+            Text(if (connecting) stringResource(Res.string.auth_connecting) else stringResource(Res.string.auth_connect))
         }
     }
 }

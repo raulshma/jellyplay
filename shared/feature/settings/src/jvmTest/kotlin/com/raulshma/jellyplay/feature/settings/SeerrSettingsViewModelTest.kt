@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
@@ -428,5 +429,125 @@ class SeerrSettingsViewModelTest {
         assertEquals(false, viewModel.useServerBridge)
         assertNull(viewModel.bridgeFailure)
         coVerify(exactly = 0) { pluginApiClient.seerrLogin(any(), any(), any(), any()) }
+    }
+
+    // ── Machine pins (the SeerrBridgeQuickConnectPhase lifecycle) ─────
+
+    /** Reaches WaitingForApproval("AB12") with the poll parked mid-flight. */
+    private suspend fun TestScope.reachWaitingForApproval(viewModel: SeerrSettingsViewModel) {
+        stubBridgeStatus(linked = false)
+        viewModel.setUseServerBridge(true)
+        advanceUntilIdle()
+
+        coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
+        coEvery { authRepository.initiateQuickConnect() } returns
+            Result.success(QuickConnectInfo(secret = "qc-secret", code = "AB12"))
+        // Park the poll so the pairing is genuinely live (virtual time would
+        // otherwise run the whole window).
+        coEvery { authRepository.pollQuickConnect("qc-secret") } coAnswers { awaitCancellation() }
+
+        viewModel.startBridgeQuickConnect()
+        awaitUntil { viewModel.bridgeQcCode == "AB12" }
+    }
+
+    @Test
+    fun `a failed pairing admits a restart`() = runTest {
+        stubBridgeStatus(linked = false)
+        val viewModel = viewModel(withBridge = true)
+        viewModel.setUseServerBridge(true)
+        advanceUntilIdle()
+
+        // First attempt: QC disabled → the declared failure, phase Failed.
+        coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(false)
+        viewModel.startBridgeQuickConnect()
+        advanceUntilIdle()
+        assertEquals(
+            SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectDisabled),
+            viewModel.bridgeFailure,
+        )
+
+        // The retry path: Failed is the start guard's only non-Idle admission.
+        // The fresh flow transitions Failed → Starting → WaitingForApproval,
+        // so the failure banner clears with the run.
+        coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
+        coEvery { authRepository.initiateQuickConnect() } returns
+            Result.success(QuickConnectInfo(secret = "qc-secret", code = "AB12"))
+        coEvery { authRepository.pollQuickConnect("qc-secret") } coAnswers { awaitCancellation() }
+
+        viewModel.startBridgeQuickConnect()
+        awaitUntil { viewModel.bridgeQcCode == "AB12" }
+
+        coVerify(exactly = 1) { authRepository.initiateQuickConnect() }
+        assertNull(viewModel.bridgeFailure)
+    }
+
+    @Test
+    fun `a poll timeout lands Failed and clears the stranded code`() = runTest {
+        stubBridgeStatus(linked = false)
+        val viewModel = viewModel(withBridge = true)
+        viewModel.setUseServerBridge(true)
+        advanceUntilIdle()
+
+        coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
+        coEvery { authRepository.initiateQuickConnect() } returns
+            Result.success(QuickConnectInfo(secret = "qc-secret", code = "AB12"))
+        // Never approved: every poll answers authenticated=false, so virtual
+        // time runs the whole QC_MAX_ATTEMPTS window to exhaustion.
+        coEvery { authRepository.pollQuickConnect("qc-secret") } returns
+            Result.success(QuickConnectState(authenticated = false, secret = "qc-secret"))
+
+        viewModel.startBridgeQuickConnect()
+        // runCurrent (NOT advanceUntilIdle — it would exhaust the whole poll
+        // window before any assertion) parks the loop at its first delay with
+        // the code on screen.
+        runCurrent()
+        assertEquals("AB12", viewModel.bridgeQcCode)
+
+        advanceUntilIdle()
+
+        // Declared v0.11.10 fix: the timeout now lands Failed, which also
+        // clears the stranded code — the legacy write left `bridgeQcCode`
+        // standing, so the timed-out code stayed on screen and the start
+        // guard blocked a restart until the user found the cancel button.
+        assertEquals(
+            SeerrBridgeFailure.Declared(SeerrBridgeFailure.Fallback.QuickConnectTimeout),
+            viewModel.bridgeFailure,
+        )
+        assertNull(viewModel.bridgeQcCode)
+
+        // The restart is admitted (the legacy guard would have refused it —
+        // this assertion is the strand-fix's teeth).
+        viewModel.startBridgeQuickConnect()
+        advanceUntilIdle()
+        coVerify(exactly = 2) { authRepository.initiateQuickConnect() }
+        assertNull(viewModel.bridgeQcCode)
+    }
+
+    @Test
+    fun `cancelling a live pairing returns to Idle with no failure`() = runTest {
+        val viewModel = viewModel(withBridge = true)
+        reachWaitingForApproval(viewModel)
+
+        viewModel.cancelBridgeQuickConnect()
+        advanceUntilIdle()
+
+        assertNull(viewModel.bridgeQcCode)
+        assertNull(viewModel.bridgeFailure)
+        // The machine is Idle: a fresh start is admitted immediately.
+        viewModel.startBridgeQuickConnect()
+        advanceUntilIdle()
+        coVerify(exactly = 2) { authRepository.initiateQuickConnect() }
+    }
+
+    @Test
+    fun `a second start while waiting is refused`() = runTest {
+        val viewModel = viewModel(withBridge = true)
+        reachWaitingForApproval(viewModel)
+
+        viewModel.startBridgeQuickConnect()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { authRepository.initiateQuickConnect() }
+        assertEquals("AB12", viewModel.bridgeQcCode)
     }
 }

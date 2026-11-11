@@ -2357,20 +2357,20 @@ internal class PlaybackSession(
             events.collect { event ->
                 when (event) {
                     is SessionEvent.ShowError -> uiState.update { s ->
-                        if (event.clearBuffering) {
-                            s.copy(
-                                playerError = event.error,
-                                playerErrorRetryable = event.retryable,
-                                showPlaybackErrorDialog = true,
-                                isBuffering = false,
-                            )
-                        } else {
-                            s.copy(
-                                playerError = event.error,
-                                playerErrorRetryable = event.retryable,
-                                showPlaybackErrorDialog = true,
-                            )
-                        }
+                        // The error triple (message + retryable + dialog flag)
+                        // collapsed into ONE PlaybackErrorUi write — non-null
+                        // IS the dialog-on-screen state. The old arms' only
+                        // difference remains the buffering sibling: the
+                        // start-up watchdog's ShowError (clearBuffering) must
+                        // also lift the stuck spinner; every other error
+                        // surface leaves buffering exactly where it was.
+                        s.copy(
+                            playbackError = PlaybackErrorUi(
+                                message = event.error,
+                                retryable = event.retryable,
+                            ),
+                            isBuffering = if (event.clearBuffering) false else s.isBuffering,
+                        )
                     }
                     is SessionEvent.InformUser -> userMessageBus.info(event.message)
                     is SessionEvent.InformUserKey -> userMessageBus.info(event.message)
@@ -2921,7 +2921,7 @@ internal interface SessionLifecycleHooks {
 /**
  * Event surface a [PlaybackSession] exposes to the ViewModel: the
  * session-event forwarder is the single mapper, routing each event into the
- * existing sinks (the close-player channel, the uiState error fields, the
+ * existing sinks (the close-player channel, the uiState error value, the
  * user-message bus, the pass-out event channel); the end-of-media policy
  * event ([PlaybackEnded]) arms the session's own fold
  * ([PlaybackSession.handlePlaybackEnded]).

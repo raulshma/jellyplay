@@ -161,7 +161,7 @@ data class EditableItemMetadataForm(
  * person `id`/`primaryImageTag` edits trip the dirty flag, and `providerIds`
  * key-set changes are detected order-insensitively. Editing before a load
  * completes does not show dirty either — the metadata tab is gated on
- * `isLoading`, so no edit control exists there.
+ * `loadPhase`'s Loading arm, so no edit control exists there.
  */
 @Immutable
 data class MetadataEditSession(

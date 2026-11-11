@@ -649,7 +649,7 @@ fun VideoPlayerScreen(
         // the layer's re-assert would otherwise steal it right back — the
         // dialog used to be unreachable from a remote.
         val playbackErrorVisible =
-            uiState.showPlaybackErrorDialog && uiState.playerError != null
+            uiState.playbackError != null
         val overlayClaimsFocus =
             isCinemaIntroVisible ||
                 isNextEpisodeVisible ||
@@ -2062,12 +2062,12 @@ fun VideoPlayerScreen(
         viewModel = viewModel,
     )
 
-    val playerError = uiState.playerError
-    if (uiState.showPlaybackErrorDialog && playerError != null) {
+    val playbackError = uiState.playbackError
+    if (playbackError != null) {
         PlaybackErrorDialog(
-            errorMessage = playerError,
+            errorMessage = playbackError.message,
             currentPlayerType = uiState.preferredPlayerType,
-            retryable = uiState.playerErrorRetryable,
+            retryable = playbackError.retryable,
             onRetry = { viewModel.onEvent(VideoPlayerUiEvent.RetryPlayback) },
             onRetryWithEngine = { viewModel.onEvent(VideoPlayerUiEvent.RetryWithEngine(it)) },
             onDismiss = { viewModel.onEvent(VideoPlayerUiEvent.DismissPlaybackError) },

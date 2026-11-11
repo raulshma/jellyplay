@@ -127,7 +127,7 @@ internal fun BoxScope.PlayerStatusOverlayTier(
             playbackSpeed = inputs.playbackSpeed,
             isPlaying = inputs.isPlaying,
             playbackState = when {
-                uiState.playerError != null -> "Error"
+                uiState.playbackError != null -> "Error"
                 !inputs.isPlaying -> "Paused"
                 else -> "Playing"
             },

@@ -23,7 +23,9 @@ import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.feature.book.JunrarRarEntryReader
 import com.raulshma.jellyplay.feature.book.RarEntryReaderFactory
 import com.raulshma.jellyplay.shell.AppUpdateCoordinator
+import com.raulshma.jellyplay.shell.ShellSurface
 import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.update.AppUpdateDecision
 import com.raulshma.jellyplay.update.AppUpdateSheet
 import com.raulshma.jellyplay.update.UpdateState
 import java.io.File
@@ -116,14 +118,20 @@ object DistributionPlatform {
     /**
      * Root overlay for the self-update sheet. Collects the flavor-bound
      * [AppUpdateCoordinator]'s state and renders the [AppUpdateSheet] when an
-     * update flow is active. Centralized here so the launch-time auto-check
-     * and any manual check (Settings) drive the same single sheet.
+     * update flow is active AND the shell is on its main surface — the
+     * sheet is a MAIN-surface-only modal
+     * ([AppUpdateDecision.shouldShowOverlay], with [surface] derived at the
+     * JellyPlayApp call site by the pure `shellSurface` fold), so an update
+     * found while the user is mid-onboarding, signed out, or still
+     * restoring stays pending in the coordinator's StateFlow and surfaces
+     * when the session reaches main. Centralized here so the launch-time
+     * auto-check and any manual check (Settings) drive the same single sheet.
      */
     @Composable
-    fun UpdateSheetOverlay(update: AppUpdateCoordinator) {
+    fun UpdateSheetOverlay(update: AppUpdateCoordinator, surface: ShellSurface) {
         val state by update.updateState.collectAsStateWithLifecycle()
         val autoDownloadEnabled by update.selfUpdateDownloadEnabled.collectAsStateWithLifecycle()
-        if (state !is UpdateState.Idle) {
+        if (state !is UpdateState.Idle && AppUpdateDecision.shouldShowOverlay(state, surface)) {
             val context = LocalContext.current
             AppUpdateSheet(
                 state = state,

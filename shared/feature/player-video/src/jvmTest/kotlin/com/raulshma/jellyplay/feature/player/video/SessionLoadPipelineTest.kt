@@ -133,15 +133,16 @@ class SessionLoadPipelineTest {
     private fun pipeline(
         stages: MutableList<String>,
         hooks: SessionLoadHooks,
-        // isReady = true models a loadMedia that produced a playable session;
-        // the failure early-return is pinned by loadMediaFailure_stopsAfterLoadMedia.
+        // loadPhase = Ready models a loadMedia that produced a playable
+        // session; the failure early-return is pinned by
+        // loadMediaFailure_stopsAfterLoadMedia.
         sessionState: PlayerSessionState = PlayerSessionState(
             currentItemId = "item-1",
             mediaDetail = detail(),
             title = "Test Movie",
             playMethod = PlayMethod.DIRECT_PLAY,
             streamUrl = "https://jellyfin/stream",
-            isReady = true,
+            loadPhase = LoadPhase.Ready,
         ),
         intros: List<MediaItem> = emptyList(),
         aggregate: VideoPlayerAggregate = VideoPlayerAggregate(),
@@ -600,16 +601,20 @@ class SessionLoadPipelineTest {
 
     /**
      * A loadMedia that reports its own failure (offline gate, detail-fetch
-     * miss, vanished offline file) leaves `isReady = false`. The spine must
-     * stop there — no media session, no playback-START report, no tracking —
-     * instead of ghosting a session for an item that never started.
+     * miss, vanished offline file) lands [LoadPhase.Failed] (the derived
+     * `isReady` projection is false). The spine must stop there — no media
+     * session, no playback-START report, no tracking — instead of ghosting a
+     * session for an item that never started.
      */
     @Test
     fun loadMediaFailure_stopsAfterLoadMedia_withoutOutcome() = runTest {
         val pipeline = pipeline(
             stages = stages,
             hooks = recordingHooks(stages),
-            sessionState = PlayerSessionState(currentItemId = "item-1", isReady = false),
+            sessionState = PlayerSessionState(
+                currentItemId = "item-1",
+                loadPhase = LoadPhase.Failed("dead air"),
+            ),
         )
 
         pipeline.start(this, request()).join()

@@ -14,7 +14,7 @@ import org.jetbrains.compose.resources.StringResource
  *
  * [readBytes] defers the stream read to upload time — `withContext(Dispatchers.IO)`
  * around `openInputStream().use { readBytes() }` inside the platform actuals —
- * so a failed read still surfaces through `uiState.error`.
+ * so a failed read still surfaces through `uiState.actionError`.
  * [previewUrl] keeps the Images tab's Coil preview of the picked `content://`
  * URI unchanged on Android; desktop passes the picked file's `file:/` URI,
  * which coil3's common FileUriFetcher decodes.

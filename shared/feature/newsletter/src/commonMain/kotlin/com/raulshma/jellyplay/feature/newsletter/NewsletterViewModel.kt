@@ -9,7 +9,10 @@ import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.receiveAsFlow
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_failed
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_success
@@ -30,6 +33,20 @@ class NewsletterViewModel(
 
     private val _uiState = stateFlow(NewsletterUiState())
     val uiState = _uiState.flow
+
+    /**
+     * One-shot send-result feedback ([NewsletterMessage]) — the codified
+     * one-shot-Channel idiom (core:ui StateManagementConventions §2:
+     * buffered, single collector, never replayed). This replaces the former
+     * `NewsletterUiState.sendResult` parked field + `DismissSendResult`
+     * consume event, which a StateFlow replayed to every new collector —
+     * the send snackbar re-fired on process restoration / re-subscription
+     * for a send that happened once, long ago. [NewsletterScreen] collects
+     * this in a single [LaunchedEffect] and shows the same snackbar it
+     * always has, exactly once per send.
+     */
+    private val _sendResults = Channel<NewsletterMessage>(Channel.BUFFERED)
+    val sendResults: Flow<NewsletterMessage> = _sendResults.receiveAsFlow()
 
     init {
         loadData()
@@ -54,8 +71,6 @@ class NewsletterViewModel(
             NewsletterUiEvent.ConfirmSend -> performSend()
             NewsletterUiEvent.DismissSendDialog ->
                 _uiState.update { it.copy(pendingSendAction = null) }
-            NewsletterUiEvent.DismissSendResult ->
-                _uiState.update { it.copy(sendResult = null) }
         }
     }
 
@@ -137,27 +152,31 @@ class NewsletterViewModel(
     private fun performSend() {
         val action = _uiState.value.pendingSendAction ?: return
         _uiState.update {
-            it.copy(pendingSendAction = null, isSending = true, sendResult = null)
+            it.copy(pendingSendAction = null, isSending = true)
         }
         launch {
             val result = when (action) {
                 NewsletterSendAction.SEND_NOW -> newsletterApiClient.sendNewsletter()
                 NewsletterSendAction.SEND_TEST -> newsletterApiClient.sendTestNewsletter()
             }
-            _uiState.update {
-                it.copy(
-                    isSending = false,
-                    sendResult = if (result.isSuccess) {
-                        if (action == NewsletterSendAction.SEND_NOW) {
-                            NewsletterMessage.SendSuccess(Res.string.newsletter_send_success)
-                        } else {
-                            NewsletterMessage.TestSent(Res.string.newsletter_test_sent)
-                        }
+            _uiState.update { it.copy(isSending = false) }
+            // The settle arm emits the SAME message vocabulary the former
+            // sendResult field carried (SendSuccess / TestSent / SendFailed),
+            // onto the one-shot [_sendResults] channel — BUFFERED always
+            // accepts, so the emission cannot fail or suspend. The failure
+            // branch is part of the machine (a failed send must still tell
+            // the user once), not a success-only arm.
+            _sendResults.trySend(
+                if (result.isSuccess) {
+                    if (action == NewsletterSendAction.SEND_NOW) {
+                        NewsletterMessage.SendSuccess(Res.string.newsletter_send_success)
                     } else {
-                        NewsletterMessage.SendFailed(Res.string.newsletter_send_failed)
-                    },
-                )
-            }
+                        NewsletterMessage.TestSent(Res.string.newsletter_test_sent)
+                    }
+                } else {
+                    NewsletterMessage.SendFailed(Res.string.newsletter_send_failed)
+                },
+            )
         }
     }
 }

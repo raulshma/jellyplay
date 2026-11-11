@@ -30,9 +30,17 @@ import kotlin.test.assertTrue
  *  1. the FIRST connect of a logical session does not emit;
  *  2. an open that follows a previous open (the backoff reconnect after the
  *     drop) emits exactly once;
- *  3. an explicit [JellyfinWebSocketClient.disconnect] clears the
- *     had-connected marker, so the next explicit connect's open is a fresh
- *     first connect and does not emit either.
+ *  3. an explicit [JellyfinWebSocketClient.disconnect] starts a fresh
+ *     logical session, so the next explicit connect's open is a first
+ *     connect and does not emit either;
+ *  4. a GRACEFUL server-side close reconnects too — the clean-close fix
+ *     (the phase machine's `onClosedClean` re-enters the same ladder as a
+ *     failure; the pre-fix client dead-ended there, stranding
+ *     remote-control/SyncPlay pushes until the next auth edge).
+ *
+ * Transition-level pins for all of the above (plus the full ladder
+ * arithmetic, the disconnect-from-any-state invariant and the retry-tick
+ * race guard): [WsConnectionMachineTest].
  */
 class JellyfinWebSocketClientReconnectTest {
 
@@ -104,11 +112,13 @@ class JellyfinWebSocketClientReconnectTest {
 
     /**
      * Drops the server-side end of an upgraded connection with a bare FIN —
-     * an EOF without the close handshake. Two public-API dead ends force this
-     * shape: OkHttp 5.4's server-side `cancel()` NPEs (`call!!` — no call
-     * exists server-side), while a graceful `close()` would land the client
-     * in `onClosed`, which this client deliberately does NOT treat as a
-     * reconnect trigger. A bare EOF is the `onFailure` shape that schedules
+     * an EOF without the close handshake. The shape is forced by a public-API
+     * dead end on the server side only: OkHttp 5.4's server-side `cancel()`
+     * NPEs (`call!!` — no call exists server-side). (Historically a graceful
+     * `close()` was ALSO unusable here — it landed the client in `onClosed`,
+     * which deliberately did not reconnect; since the clean-close fix the
+     * client reconnects from `onClosed` as well, and that shape is exercised
+     * by the test below.) A bare EOF is the `onFailure` shape that schedules
      * the backoff reconnect under test. (OkHttp 5.4's `RealWebSocket` keeps
      * the raw socket in a private `socket` field — the pre-5.x `streams`
      * member no longer exists.)
@@ -148,6 +158,40 @@ class JellyfinWebSocketClientReconnectTest {
         awaitConnected()
         delay(300)
         assertEquals(1, emissions.size, "an explicit disconnect resets the had-connected marker")
+
+        collector.cancel()
+    }
+
+    /**
+     * THE clean-close pin, against a real socket: a graceful server-side
+     * close (1001, "server restarting") lands the client in `onClosed` —
+     * which the pre-fix client treated as a permanent dead end (no reconnect
+     * scheduled; remote-control/SyncPlay pushes stranded until the next auth
+     * edge). The phase machine re-enters the same backoff ladder as a
+     * failure, so the socket re-opens and that open is a true reconnect:
+     * exactly one [JellyfinWebSocketClient.reconnects] emission. The
+     * transition-level pin is [WsConnectionMachineTest]'s clean-close case.
+     */
+    @Test
+    fun `clean server-side close reconnects and emits`() = runBlocking {
+        val emissions = ConcurrentLinkedQueue<Unit>()
+        // UNDISPATCHED: subscribed before the first connect below could open.
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+            client.reconnects.collect { emissions += it }
+        }
+
+        client.connect(credentials())
+        awaitConnected()
+        delay(300)
+        assertTrue(emissions.isEmpty(), "the first connect must not emit a reconnect")
+
+        // Graceful close handshake: the server initiates, OkHttp auto-replies
+        // client-side, and the client's terminal callback is onClosed(1001).
+        serverSockets.peek()!!.close(1001, "server restarting")
+        withTimeout(20_000L) { while (emissions.isEmpty()) delay(50) }
+        assertEquals(1, emissions.size, "the clean-close reconnect open emits exactly once")
+        assertTrue(client.isConnected.value, "the client reconnected after the clean close")
+        assertTrue(serverSockets.size >= 2, "the server saw the clean-close reconnect's upgraded connection")
 
         collector.cancel()
     }

@@ -141,7 +141,7 @@ fun PlaybackInfoOverlay(
     playbackSpeed: Float = 1f,
     audioDelayMs: Long = 0L,
     subtitleDelayMs: Long = 0L,
-    playerError: String? = null,
+    errorMessage: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
@@ -272,10 +272,10 @@ fun PlaybackInfoOverlay(
                 InfoRow(stringResource(Res.string.player_video_active_subtitle), activeSubtitle)
             }
 
-            if (playerError != null) {
+            if (errorMessage != null) {
                 InfoSection(title = stringResource(Res.string.player_video_player_errors)) {
                     Text(
-                        text = playerError,
+                        text = errorMessage,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 4.dp),

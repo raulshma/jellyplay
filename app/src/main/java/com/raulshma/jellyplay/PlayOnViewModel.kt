@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.cast.CastDevice
+import com.raulshma.jellyplay.core.data.cast.CastSessionPhase
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -170,6 +171,29 @@ class PlayOnViewModel(
         jellyfinStrategy.stopDiscovery()
     }
 
+    init {
+        // The target name's janitor: a session vanishing server-side lands the
+        // strategy's phase back in [CastSessionPhase.Idle] (its observer
+        // auto-disconnects) — clear the stale name so the companion screen
+        // never claims a dead session. The `isConnected` re-read is the
+        // fresher truth: it swallows a reconnect's transient Idle blip
+        // (connect() on a live session disconnects first) landing AFTER the
+        // new name was written. Declared v0.11.10 cohort fix; the legacy
+        // write in [connectAndFling] was optimistic and nothing ever cleared
+        // a failed/dropped session's name (the mini bar hid via `isConnected`,
+        // but the companion screen kept showing the dead device).
+        launch {
+            jellyfinStrategy.phase.collect { phase ->
+                if (phase is CastSessionPhase.Idle &&
+                    !jellyfinStrategy.isConnected.value &&
+                    _targetDeviceName.value != null
+                ) {
+                    _targetDeviceName.value = null
+                }
+            }
+        }
+    }
+
     /**
      * Connect to [device] as the active remote player (mirrors jellyfin-web's
      * `trySetActivePlayer`). If audio is currently playing locally, fling it to
@@ -177,10 +201,18 @@ class PlayOnViewModel(
      * [com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager.play] /
      * [com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel] (the
      * "remote is current player" delegation) — no reactive watcher needed.
+     *
+     * The target name is written ONLY on the strategy's synchronous
+     * Idle→Connected flip (its pinned contract): a connect that failed
+     * silently (no SessionInfo tag on the device — the strategy's early
+     * return) no longer leaves a device name claiming a session (declared
+     * v0.11.10 cohort fix; the legacy write was optimistic).
      */
     fun connectAndFling(context: Context, device: CastDevice) {
         jellyfinStrategy.connect(context, device)
-        _targetDeviceName.value = device.name
+        if (jellyfinStrategy.isConnected.value) {
+            _targetDeviceName.value = device.name
+        }
         startStatusPolling()
         val itemId = audioPlaybackManager.currentPlayingItemId.value
         if (itemId != null) {

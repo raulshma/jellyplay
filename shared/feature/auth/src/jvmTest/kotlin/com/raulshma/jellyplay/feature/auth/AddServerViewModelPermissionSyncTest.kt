@@ -40,7 +40,7 @@ import kotlin.test.assertTrue
  *    replaces).
  * 3. A granted sync AFTER a scan already completed starts a FRESH scan
  *    (servers reset) — the screen fires the sync on every entry.
- * 4. The [AddServerViewModel.startDiscovery] isDiscovering guard dedupes a
+ * 4. The [AddServerViewModel.startDiscovery] Running-phase guard dedupes a
  *    granted sync while a scan is still running (repository invoked once).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -73,11 +73,17 @@ class AddServerViewModelPermissionSyncTest {
         Dispatchers.resetMain()
     }
 
-    /** A never-completing scan: keeps [AddServerUiState.isDiscovering] true. */
+    /** A never-completing scan: keeps [AddServerDiscoveryPhase.Running] set. */
     private fun stubNeverEndingScan() {
         every { serverDiscoveryRepository.discoverLocalServers() } returns
             flow<DiscoveredServer> { awaitCancellation() }
-    }    // ── rationale predicate ───────────────────────────────────────────────
+    }
+
+    /** The former `isDiscovering` flag read, over the sealed discovery phase. */
+    private fun isDiscovering(state: AddServerUiState): Boolean =
+        state.discoveryPhase is AddServerDiscoveryPhase.Running
+
+    // ── rationale predicate ───────────────────────────────────────────────
 
     @Test
     fun desktopShape_enforcedFalse_grantedTrue_neverShowsRationale_andStartsDiscovery() = runTest(testDispatcher) {
@@ -87,7 +93,7 @@ class AddServerViewModelPermissionSyncTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.localNetworkRationale)
-        assertTrue(state.isDiscovering, "the desktop entry sync must auto-start the scan")
+        assertTrue(isDiscovering(state), "the desktop entry sync must auto-start the scan")
     }
 
     @Test
@@ -96,7 +102,7 @@ class AddServerViewModelPermissionSyncTest {
 
         val state = viewModel.uiState.value
         assertTrue(state.localNetworkRationale)
-        assertFalse(state.isDiscovering)
+        assertFalse(isDiscovering(state))
         coVerify(exactly = 0) { serverDiscoveryRepository.discoverLocalServers() }
     }
 
@@ -123,7 +129,7 @@ class AddServerViewModelPermissionSyncTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.localNetworkRationale)
-        assertTrue(state.isDiscovering, "the post-grant sync must start the scan")
+        assertTrue(isDiscovering(state), "the post-grant sync must start the scan")
         coVerify(exactly = 1) { serverDiscoveryRepository.discoverLocalServers() }
     }
 
@@ -137,7 +143,7 @@ class AddServerViewModelPermissionSyncTest {
         viewModel.onLocalNetworkAccessSynced(enforced = false, granted = true)
         advanceUntilIdle()
         assertEquals(listOf(server), viewModel.uiState.value.discoveredServers)
-        assertFalse(viewModel.uiState.value.isDiscovering)
+        assertFalse(isDiscovering(viewModel.uiState.value))
 
         // Screen re-entry fires the sync again — a fresh scan resets the
         // discovered list.
@@ -154,12 +160,12 @@ class AddServerViewModelPermissionSyncTest {
         stubNeverEndingScan()
         viewModel.onLocalNetworkAccessSynced(enforced = false, granted = true)
         runCurrent()
-        assertTrue(viewModel.uiState.value.isDiscovering)
+        assertTrue(isDiscovering(viewModel.uiState.value))
 
         viewModel.onLocalNetworkAccessSynced(enforced = false, granted = true)
 
         coVerify(exactly = 1) { serverDiscoveryRepository.discoverLocalServers() }
         // Already-known servers survive the deduped sync (no state reset).
-        assertTrue(viewModel.uiState.value.isDiscovering)
+        assertTrue(isDiscovering(viewModel.uiState.value))
     }
 }

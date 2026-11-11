@@ -126,10 +126,17 @@ fun ManageSeriesScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(uiState.userMessage) {
-        uiState.userMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
-            viewModel.onEvent(ManageSeriesUiEvent.ClearUserMessage)
+    // Action feedback rides the VM's one-shot messages Channel — the former
+    // userMessage uiState field + ClearUserMessage consume dance replayed
+    // the snackbar on state restoration (a StateFlow re-emits its current
+    // value to every new collector). This single collector consumes each
+    // message exactly once and shows the same snackbar text the old pump
+    // showed (the VM already resolved the resource/folded the error text).
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { message ->
+            when (message) {
+                is ManageSeriesMessage.Text -> snackbarHostState.showSnackbar(message.text)
+            }
         }
     }
 

@@ -60,6 +60,9 @@ import com.raulshma.jellyplay.feature.editor.EditorPickedFile
 import com.raulshma.jellyplay.feature.editor.EditorUiEvent
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
+import com.raulshma.jellyplay.feature.editor.EditorLoadPhase
+import com.raulshma.jellyplay.feature.editor.ProviderSubtitleDownloadPhase
+import com.raulshma.jellyplay.feature.editor.ProviderSubtitleSearchPhase
 import com.raulshma.jellyplay.feature.editor.formatStringPattern
 import com.raulshma.jellyplay.feature.editor.rememberSubtitleFilePicker
 import com.composables.icons.tabler.Tabler
@@ -115,7 +118,9 @@ internal fun SubtitlesTab(
     // provider filter chips + the merged provider list.
     androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.onEvent(EditorUiEvent.LoadConfiguredSubtitleProviders) }
 
-    if (state.isLoading) {
+    // Load veil: only the Loading arm replaces the tab with the spinner
+    // (see MetadataTab's note — the three tabs veil identically).
+    if (state.loadPhase is EditorLoadPhase.Loading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             JellyPlayLoadingIndicator()
         }
@@ -252,8 +257,14 @@ internal fun SubtitlesTab(
             providerResults = state.providerSubtitleResults,
             providerErrors = state.providerSubtitleErrors,
             configuredProviders = state.configuredSubtitleProviders,
-            isSearchingProviders = state.isSearchingProviderSubtitles,
-            isDownloadingProvider = state.isDownloadingProviderSubtitle,
+            // Two phase reads, not one: the search and download machines are
+            // deliberately separate fields (they genuinely overlap mid-search —
+            // see ProviderSubtitleSearchPhase), and the sheet consumes them
+            // exactly as it consumed the old booleans: Searching drives the
+            // section's spinner + visibility, Downloading disables the per-row
+            // download buttons.
+            isSearchingProviders = state.providerSubtitleSearchPhase is ProviderSubtitleSearchPhase.Searching,
+            isDownloadingProvider = state.providerSubtitleDownloadPhase is ProviderSubtitleDownloadPhase.Downloading,
             onDownloadProvider = { viewModel.onEvent(EditorUiEvent.DownloadProviderSubtitle(it)) },
         )
     }

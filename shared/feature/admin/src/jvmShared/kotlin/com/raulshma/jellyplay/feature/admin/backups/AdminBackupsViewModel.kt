@@ -19,13 +19,27 @@ import kotlinx.coroutines.flow.StateFlow
  * again". The restore endpoint answers 204 and the server restarts
  * immediately with no progress payload — [Restoring] covers the downtime
  * poll, [Reconnecting] the standard session-recovery pass once the server
- * answers again.
+ * answers again, and the terminal outcomes [Complete] / [ServerUnreachable]
+ * are phase variants (v0.11.10 cohort: they used to be two one-shot
+ * Booleans beside the phase, so `Restoring && restoreComplete` was
+ * representable and readers had to 3-way-combine).
  */
 @Immutable
 sealed interface RestorePhase {
     data object Idle : RestorePhase
     data object Restoring : RestorePhase
     data object Reconnecting : RestorePhase
+
+    /** One-shot success feedback after the poll-and-reconnect ladder completes. */
+    data object Complete : RestorePhase
+
+    /**
+     * The restore fired but the server never answered the health probe
+     * again — the screen renders the localized unreachable-server message
+     * (the VM carries no user-facing text). Cleared by the error screen's
+     * retry ([AdminBackupsViewModel.loadBackups]) or the next restore.
+     */
+    data object ServerUnreachable : RestorePhase
 }
 
 @Immutable
@@ -39,14 +53,6 @@ data class AdminBackupsState(
     /** Create request in flight (create is synchronous: the response is the manifest). */
     val isCreating: Boolean = false,
     val restorePhase: RestorePhase = RestorePhase.Idle,
-    /** One-shot success feedback after the poll-and-reconnect ladder completes. */
-    val restoreComplete: Boolean = false,
-    /**
-     * One-shot failure feedback: the restore fired but the server never
-     * answered the health probe again — the screen renders the localized
-     * unreachable-server message (the VM carries no user-facing text).
-     */
-    val restoreServerUnreachable: Boolean = false,
 )
 
 class AdminBackupsViewModel(
@@ -65,11 +71,23 @@ class AdminBackupsViewModel(
         launch {
             loadInto(
                 start = {
-                    // The unreachable-server flag clears here too: the error
-                    // screen's retry lands on this ladder, and a stale flag
-                    // would otherwise own the UI forever (the restore ladder
-                    // is unreachable behind the error screen).
-                    _state.update { it.copy(isLoading = true, error = null, restoreServerUnreachable = false) }
+                    // The unreachable-server outcome clears here too: the
+                    // error screen's retry lands on this ladder, and a stale
+                    // outcome would otherwise own the UI forever (the restore
+                    // ladder is unreachable behind the error screen).
+                    // Complete deliberately survives (legacy behavior — the
+                    // success banner waits for the next restore).
+                    _state.update {
+                        it.copy(
+                            isLoading = true,
+                            error = null,
+                            restorePhase = if (it.restorePhase == RestorePhase.ServerUnreachable) {
+                                RestorePhase.Idle
+                            } else {
+                                it.restorePhase
+                            },
+                        )
+                    }
                 },
                 fetch = { runCatchingRethrowingCancellation { backupRepository.getBackupsSnapshot().getOrThrow() } },
                 onSuccess = { snapshot ->
@@ -140,11 +158,11 @@ class AdminBackupsViewModel(
      * list. The phase gates re-entry: a restore in flight refuses a second.
      */
     fun restoreBackup(archiveFileName: String) {
-        if (_state.value.restorePhase != RestorePhase.Idle) return
+        if (_state.value.restorePhase != RestorePhase.Idle &&
+            _state.value.restorePhase != RestorePhase.ServerUnreachable
+        ) return
         launch {
-            _state.update {
-                it.copy(restorePhase = RestorePhase.Restoring, restoreComplete = false, restoreServerUnreachable = false, error = null)
-            }
+            _state.update { it.copy(restorePhase = RestorePhase.Restoring, error = null) }
             val fired = backupRepository.restoreBackup(archiveFileName)
             if (fired.isFailure) {
                 _state.update {
@@ -156,14 +174,9 @@ class AdminBackupsViewModel(
                 _state.update { it.copy(restorePhase = RestorePhase.Reconnecting) }
                 authRepository.restoreSession()
                 fetchSnapshot()
-                _state.update { it.copy(restorePhase = RestorePhase.Idle, restoreComplete = true) }
+                _state.update { it.copy(restorePhase = RestorePhase.Complete) }
             } else {
-                _state.update {
-                    it.copy(
-                        restorePhase = RestorePhase.Idle,
-                        restoreServerUnreachable = true,
-                    )
-                }
+                _state.update { it.copy(restorePhase = RestorePhase.ServerUnreachable) }
             }
         }
     }

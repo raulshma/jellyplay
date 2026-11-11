@@ -188,8 +188,13 @@ class PlayerSessionManagerTest {
         // failLoad contract: the state write and the feedback emission carry
         // the SAME message — comparing them needs no resource literal here.
         assertEquals(1, messageBus.errors.size)
-        assertEquals(messageBus.errors.single(), state.title)
-        assertTrue(state.title.isNotBlank())
+        // The reason lands in the load PHASE (declared v0.11.10 fix: it no
+        // longer masquerades as the media title — the projector mirrors
+        // `title` into the player chrome, and the pause-details overlay gate
+        // reads the title's non-blankness).
+        val failure = state.loadPhase as LoadPhase.Failed
+        assertEquals(messageBus.errors.single(), failure.message)
+        assertEquals("", state.title)
     }
 
     @Test
@@ -282,9 +287,35 @@ class PlayerSessionManagerTest {
         val state = sessionManager.sessionState.value
         assertFalse(state.isReady)
         // The name's promise: feedback actually reached the bus, and the state
-        // write and the emission carry the same message (failLoad contract).
+        // write and the emission carry the same message (failLoad contract) —
+        // in the load phase, not `title` (see the offline-gate test above).
         assertEquals(1, messageBus.errors.size)
-        assertEquals(messageBus.errors.single(), state.title)
+        assertEquals(messageBus.errors.single(), (state.loadPhase as LoadPhase.Failed).message)
+        assertEquals("", state.title)
+    }
+
+    @Test
+    fun loadOffline_missingFile_convergesOnFailLoad_withFeedback() = runTest(testDispatcher) {
+        // PlaybackSource.Offline trusts its path by contract ("callers should
+        // have already verified the download is usable") — the vanished-file
+        // gate inside loadOffline is the TOCTOU belt when the file disappears
+        // between that verification and the open.
+        val tempFile = Files.createTempFile("test-video", ".mp4").toFile()
+        tempFile.delete()
+
+        sessionManager.loadMedia(
+            PlaybackSource.Offline("item-movie", tempFile.absolutePath),
+            startPositionTicks = 0L,
+        )
+
+        val state = sessionManager.sessionState.value
+        // Declared v0.11.10 fix: the former inline arm wrote the reason into
+        // `title` ONLY — no bus emission, so no error dialog ever explained
+        // the dead air. It now converges on failLoad like every other path.
+        assertFalse(state.isReady)
+        assertEquals(1, messageBus.errors.size)
+        assertEquals(messageBus.errors.single(), (state.loadPhase as LoadPhase.Failed).message)
+        assertEquals("", state.title)
     }
 
     // ── Reload paths: the isDirectPlayForced badge contract ───────────

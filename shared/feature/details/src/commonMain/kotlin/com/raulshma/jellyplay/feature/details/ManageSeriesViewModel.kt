@@ -5,9 +5,12 @@ import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.SonarrSeriesOperations
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -29,11 +32,14 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_manage_
  *
  * State is a single [MutableStateFlow]<[ManageSeriesUiState]> for atomic
  * snapshots (mirrors the DetailUiState single-state model). One-shot feedback
- * flows through [ManageSeriesUiState.userMessage]; the screen shows it then
- * sends [ManageSeriesUiEvent.ClearUserMessage]. Every user intent arrives as
- * a [ManageSeriesUiEvent] through the single [onEvent] funnel (the home
- * feature's `HomeViewModel` precedent) — the per-action handlers are private,
- * so there is no per-screen command method to keep in sync.
+ * rides the [messages] Channel (the details module's [DetailMessage] /
+ * StateManagementConventions §2 idiom) — the former `userMessage` parked
+ * field + `ClearUserMessage` consume event replayed the snackbar on state
+ * restoration and died. Every user
+ * intent arrives as a [ManageSeriesUiEvent] through the single [onEvent]
+ * funnel (the home feature's `HomeViewModel` precedent) — the per-action
+ * handlers are private, so there is no per-screen command method to keep in
+ * sync.
  *
  * The screen's aggregate state — the season-map folds, the delete confirm
  * machine, the stats — lives on [ManageSeriesUiState] (ManageSeriesUiState.kt);
@@ -47,6 +53,18 @@ class ManageSeriesViewModel internal constructor(
 
     private val _uiState = MutableStateFlow(ManageSeriesUiState())
     val uiState: StateFlow<ManageSeriesUiState> = _uiState.asStateFlow()
+
+    /**
+     * One-shot action feedback ([ManageSeriesMessage]) — the buffered
+     * never-replayed Channel that replaced the former `userMessage` parked
+     * uiState field + `ClearUserMessage` consume event (a StateFlow replays
+     * its current value to every new collector, so the parked field re-fired
+     * the snackbar on state restoration for an action that happened once).
+     * [ManageSeriesScreen] collects this in a single [LaunchedEffect] and
+     * shows the same snackbar it always has.
+     */
+    private val messageChannel = Channel<ManageSeriesMessage>(Channel.BUFFERED)
+    val messages: Flow<ManageSeriesMessage> = messageChannel.receiveAsFlow()
 
     private var tvdbId: Int? = null
     private var loadedSeriesId: String? = null
@@ -68,7 +86,6 @@ class ManageSeriesViewModel internal constructor(
             is ManageSeriesUiEvent.RefreshAndScan -> refreshAndScan()
             is ManageSeriesUiEvent.SearchSeries -> searchSeries()
             is ManageSeriesUiEvent.ToggleSeasonExpanded -> toggleSeasonExpanded(event.seasonNumber)
-            is ManageSeriesUiEvent.ClearUserMessage -> clearUserMessage()
             is ManageSeriesUiEvent.ClearError -> clearError()
         }
     }
@@ -174,7 +191,9 @@ class ManageSeriesViewModel internal constructor(
                 .onFailure { e ->
                     // Revert on failure.
                     _uiState.update { it.updateEpisode(episode) }
-                    _uiState.update { it.copy(userMessage = UserErrorMessages.resolve(e, "Couldn't update monitoring.")) }
+                    messageChannel.trySend(
+                        ManageSeriesMessage.Text(UserErrorMessages.resolve(e, "Couldn't update monitoring.")),
+                    )
                 }
         }
     }
@@ -185,14 +204,12 @@ class ManageSeriesViewModel internal constructor(
         launch {
             sonarr.searchSonarrEpisodes(tvdb, listOf(episode.id))
                 .onSuccess {
-                    _uiState.update {
-                        it.copy(actionTarget = null, userMessage = "Searching for ${episode.title}…")
-                    }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text("Searching for ${episode.title}…"))
                 }
                 .onFailure { e ->
-                    _uiState.update {
-                        it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Search failed."))
-                    }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text(UserErrorMessages.resolve(e, "Search failed.")))
                 }
         }
     }
@@ -215,15 +232,15 @@ class ManageSeriesViewModel internal constructor(
         launch {
             sonarr.deleteSonarrEpisodeFile(tvdb, pending.episodeFileId)
                 .onSuccess {
-                    _uiState.update {
-                        it.copy(actionTarget = null, userMessage = "Deleted ${pending.title}.")
-                    }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text("Deleted ${pending.title}."))
                     refresh()
                 }
                 .onFailure { e ->
-                    _uiState.update {
-                        it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Couldn't delete the file."))
-                    }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(
+                        ManageSeriesMessage.Text(UserErrorMessages.resolve(e, "Couldn't delete the file.")),
+                    )
                 }
             // Settle arm: the flag and the pending confirmation both clear on
             // BOTH outcomes, so a failure leaves nothing stale behind.
@@ -237,14 +254,14 @@ class ManageSeriesViewModel internal constructor(
         launch {
             sonarr.searchMonitoredSonarrSeason(tvdb, seasonNumber)
                 .onSuccess {
-                    _uiState.update {
-                        it.copy(actionTarget = null, userMessage = "Searching monitored episodes in season $seasonNumber…")
-                    }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(
+                        ManageSeriesMessage.Text("Searching monitored episodes in season $seasonNumber…"),
+                    )
                 }
                 .onFailure { e ->
-                    _uiState.update {
-                        it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Search failed."))
-                    }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text(UserErrorMessages.resolve(e, "Search failed.")))
                 }
         }
     }
@@ -266,7 +283,9 @@ class ManageSeriesViewModel internal constructor(
                     _uiState.update {
                         it.updateSeason(seasonNumber) { ep -> ep.copy(monitored = !targetMonitored) }
                     }
-                    _uiState.update { it.copy(userMessage = UserErrorMessages.resolve(e, "Couldn't update monitoring.")) }
+                    messageChannel.trySend(
+                        ManageSeriesMessage.Text(UserErrorMessages.resolve(e, "Couldn't update monitoring.")),
+                    )
                 }
         }
     }
@@ -277,10 +296,12 @@ class ManageSeriesViewModel internal constructor(
         launch {
             sonarr.refreshSonarrSeries(tvdb)
                 .onSuccess {
-                    _uiState.update { it.copy(actionTarget = null, userMessage = "Refreshing series metadata…") }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text("Refreshing series metadata…"))
                 }
                 .onFailure { e ->
-                    _uiState.update { it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Refresh failed.")) }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text(UserErrorMessages.resolve(e, "Refresh failed.")))
                 }
         }
     }
@@ -293,10 +314,12 @@ class ManageSeriesViewModel internal constructor(
             sonarr.refreshSonarrSeries(tvdb)
             sonarr.rescanSonarrSeries(tvdb)
                 .onSuccess {
-                    _uiState.update { it.copy(actionTarget = null, userMessage = "Refreshing & scanning series…") }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text("Refreshing & scanning series…"))
                 }
                 .onFailure { e ->
-                    _uiState.update { it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Scan failed.")) }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text(UserErrorMessages.resolve(e, "Scan failed.")))
                 }
         }
     }
@@ -307,10 +330,12 @@ class ManageSeriesViewModel internal constructor(
         launch {
             sonarr.searchSonarrSeries(tvdb)
                 .onSuccess {
-                    _uiState.update { it.copy(actionTarget = null, userMessage = "Searching all monitored missing episodes…") }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text("Searching all monitored missing episodes…"))
                 }
                 .onFailure { e ->
-                    _uiState.update { it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Search failed.")) }
+                    _uiState.update { it.copy(actionTarget = null) }
+                    messageChannel.trySend(ManageSeriesMessage.Text(UserErrorMessages.resolve(e, "Search failed.")))
                 }
         }
     }
@@ -324,10 +349,6 @@ class ManageSeriesViewModel internal constructor(
             }
             state.copy(expandedSeasons = expanded)
         }
-    }
-
-    private fun clearUserMessage() {
-        _uiState.update { it.copy(userMessage = null) }
     }
 
     private fun clearError() {
