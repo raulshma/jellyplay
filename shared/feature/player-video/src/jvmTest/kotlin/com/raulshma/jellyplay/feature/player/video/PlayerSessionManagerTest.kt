@@ -60,6 +60,9 @@ import java.nio.file.Files
  * Uses [PlayerType.EXTERNAL] to short-circuit engine creation — both
  * `loadOffline` and `loadOnline` return immediately after the EXTERNAL check,
  * letting us verify dispatch decisions without instantiating a real engine.
+ * That dodge is also how the #198 regression (the deleted `initializeEngine`
+ * call in `loadOffline`) slipped through: the EXTERNAL paths never exercise
+ * engine creation, so the #198 section wires mocked engines instead.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayerSessionManagerTest {
@@ -316,6 +319,130 @@ class PlayerSessionManagerTest {
         assertEquals(1, messageBus.errors.size)
         assertEquals(messageBus.errors.single(), (state.loadPhase as LoadPhase.Failed).message)
         assertEquals("", state.title)
+    }
+
+    // ── #198: offline downloads must reach the engine ─────────────────
+
+    /**
+     * Builds a manager pinned to [preferredPlayer] with a mocked engine per
+     * type — the #198 harness. Every engine's `load` is recorded into
+     * [loadedRequests], so the tests can pin that the offline load path
+     * actually issues a request (the v0.11.9 regression flipped the session
+     * to Ready without ever building an engine) and that switching engines
+     * over a live offline session re-loads it. Everything else mirrors
+     * [clientCertSessionManager].
+     */
+    private fun offlineEngineSessionManager(
+        preferredPlayer: PlayerType,
+        loadedRequests: MutableList<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>,
+        vararg engines: Pair<PlayerType, com.raulshma.jellyplay.feature.player.video.engine.MediaEngine>,
+    ): PlayerSessionManager {
+        val agg = VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = preferredPlayer))
+        every { aggregateStore.aggregate } returns MutableStateFlow(agg)
+        every { aggregateStore.aggregateRaw } returns flowOf(agg)
+        engines.forEach { (_, engine) ->
+            every { engine.load(any()) } answers {
+                loadedRequests += firstArg<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+            }
+        }
+        val factory = io.mockk.mockk<com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory> {
+            engines.forEach { (type, engine) -> coEvery { create(type) } returns engine }
+        }
+
+        return PlayerSessionManager(
+            scope = CoroutineScope(testDispatcher + SupervisorJob()),
+            nowPlayingReporter = NowPlayingReporter(),
+            detailFeed = detailFeed,
+            playbackRepository = playbackRepository,
+            imageUrlProvider = mockk(relaxed = true),
+            playbackIdentity = mockk(relaxed = true),
+            offlineRepository = offlineRepository,
+            aggregateStore = aggregateStore,
+            playerLifecycleManager = playerLifecycleManager,
+            pipController = mockk(relaxed = true),
+            adaptiveBitrateManager = adaptiveBitrateManager,
+            videoPerformanceResolver = testVideoPerformanceResolver(),
+            playbackCapResolver = com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver(
+                adaptiveBitrateManager = adaptiveBitrateManager,
+                performanceResolver = testVideoPerformanceResolver(),
+                playbackStore = playbackStore,
+            ),
+            playerEngineFactory = factory,
+            playbackSourceResolver = playbackSourceResolver,
+            sessionSubtitleSources = sessionSubtitleSources(),
+            offlineMediaProbe = mockk(relaxed = true),
+            offlineModeManager = offlineModeManager,
+            userMessageBus = messageBus,
+        )
+    }
+
+    @Test
+    fun loadOffline_createsTheEngineAndHandsItTheLocalFileRequest() = runTest(testDispatcher) {
+        val tempFile = Files.createTempFile("test-video", ".mp4").toFile()
+        tempFile.deleteOnExit()
+        val itemId = "item-movie"
+        // Offline mode: deterministic (no background sidecar catch-up fetch).
+        every { offlineModeManager.isOffline } returns true
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
+            downloadItem(itemId, tempFile.absolutePath)
+        coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
+
+        val loaded = mutableListOf<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        val manager = offlineEngineSessionManager(
+            preferredPlayer = PlayerType.MPV,
+            loadedRequests = loaded,
+            PlayerType.MPV to mockk(relaxed = true),
+        )
+
+        manager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 15_000_000L)
+
+        // The #198 regression: the session flipped Ready with dead air — no
+        // engine was ever built, no request ever issued. The local file must
+        // reach the engine as a real load.
+        assertEquals(1, loaded.size)
+        val request = loaded.single()
+        assertEquals(fileUriString(tempFile), request.uri)
+        // ticks / 10_000, the plan's single fold.
+        assertEquals(1_500L, request.startPositionMs)
+        assertEquals(PlayMethod.DIRECT_PLAY, request.playMethod)
+
+        val state = manager.sessionState.value
+        assertTrue(state.isReady)
+        assertTrue(state.isOffline)
+        assertEquals("Offline", state.playMethodString)
+        assertEquals(0, messageBus.errors.size)
+    }
+
+    @Test
+    fun loadOffline_engineSwitch_replaysTheOfflineRequestOnTheNewEngine() = runTest(testDispatcher) {
+        val tempFile = Files.createTempFile("test-video", ".mp4").toFile()
+        tempFile.deleteOnExit()
+        val itemId = "item-movie"
+        every { offlineModeManager.isOffline } returns true
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
+            downloadItem(itemId, tempFile.absolutePath)
+        coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
+
+        val loaded = mutableListOf<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        val manager = offlineEngineSessionManager(
+            preferredPlayer = PlayerType.MPV,
+            loadedRequests = loaded,
+            PlayerType.MPV to mockk(relaxed = true),
+            PlayerType.EXO_PLAYER to mockk(relaxed = true),
+        )
+        manager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
+        assertEquals(1, loaded.size)
+        loaded.clear()
+
+        // The #198 reporter's recovery attempt: switching engines mid-session
+        // must replay the offline request on the new engine. Before the fix
+        // `lastPlaybackRequest` stayed null for offline sessions, so
+        // reloadWithEngine silently returned — no switch could ever recover.
+        manager.reloadWithEngine(PlayerType.EXO_PLAYER, currentPositionMs = 30_000L)
+
+        assertEquals(1, loaded.size)
+        assertEquals(fileUriString(tempFile), loaded.single().uri)
+        assertEquals(30_000L, loaded.single().startPositionMs)
     }
 
     // ── Reload paths: the isDirectPlayForced badge contract ───────────

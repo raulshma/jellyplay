@@ -564,15 +564,35 @@ internal class PlayerSessionManager(
             return
         }
 
-        // initializeEngine also re-attaches the provider-sourced subtitles
-        // (OpenSubtitles/Wyzie) persisted for this item in the streaming-
-        // subtitle store: `SubtitleManager` always writes provider downloads
-        // there regardless of online/offline playback, so offline (downloaded)
-        // media must restore them too — otherwise a subtitle downloaded once
-        // vanishes on reopen. No server stream list exists offline, so no
-        // deletion reconciliation runs (the null streams input).
+        // The #198 regression: this call is the ONLY thing that builds the
+        // engine and issues the PlaybackRequest for a downloaded item —
+        // dropping it (as the persisted-subtitle refactor did in v0.11.9)
+        // leaves the session "Ready" with dead air: no eng.load(), a null
+        // lastPlaybackRequest (so reloadWithEngine/addExternalSubtitle
+        // no-op forever), and engine switching can never recover. It also
+        // re-attaches the provider-sourced subtitles (OpenSubtitles/Wyzie)
+        // persisted for this item in the streaming-subtitle store:
+        // `SubtitleManager` always writes provider downloads there
+        // regardless of online/offline playback, so offline (downloaded)
+        // media must restore them too — otherwise a subtitle downloaded
+        // once vanishes on reopen. persistedSubtitleStreams=null is the
+        // offline semantic: no server stream list exists to reconcile
+        // deletion against, so every persisted entry reloads.
+        initializeEngine(
+            playerType = playerType,
+            detail = detail,
+            source = null,
+            url = url,
+            startPositionTicks = startPositionTicks,
+            agg = agg,
+            mimeType = mimeHint,
+            persistedSubtitleStreams = null,
+        )
 
         // Attach external subtitles bundled with the download (offline subs).
+        // AFTER initializeEngine: the sidecar gate reads the live engine's
+        // capabilities (bitmap subs are mpv-only) and attaches through the
+        // live engine, both of which need the request loaded above.
         sessionSubtitleSources.loadOfflineSubtitles(itemId, downloadPath)
 
         // Best-effort catch-up for sidecar subtitles added on the server AFTER
