@@ -116,7 +116,19 @@ jobs:
           done
 
       - name: Setup Gradle
+        # cache-disabled is LOAD-BEARING: setup-gradle restores the Gradle
+        # build cache from earlier runs of this lane, and on 2026-11-12 the
+        # "warm lineage" re-dispatch replayed the parallel-cold era's R8
+        # outputs FROM-CACHE (550 hits, minifyPhoneFdroidReleaseWithR8 among
+        # them) — attaching the exact bytes the buildserver rejects, under a
+        # green checkmark, in 4 minutes. The buildserver never restores a
+        # cross-run cache; its warm lineage is within-session state only.
+        # --no-build-cache below matches: an R8 cache hit anywhere in this
+        # lane means the reference binary is NOT a product of the topology
+        # this workflow exists to mirror.
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
 
       - name: Decode Keystore into both trees
         # The same one-liner as .github/actions/setup-gmd-runner, inlined
@@ -151,8 +163,19 @@ jobs:
           rm -rf apps/desktop
           echo "SOURCE_DATE_EPOCH=$(git log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
           echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
-          ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false \
-            :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace
+          ./gradlew --no-daemon --no-build-cache \
+            -Porg.gradle.java.installations.auto-download=false \
+            :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace \
+            2>&1 | tee /tmp/build-c1.log
+          # --no-build-cache: belt-and-braces with cache-disabled above —
+          # even a cache populated some other way must not short-circuit R8.
+          # The guard: the 2026-11-12 re-dispatch attached fully cached
+          # ("warm") bytes in 4 minutes under a green check — R8 replaying
+          # any cache is a topology break, so fail loudly.
+          if grep -q 'FROM-CACHE' /tmp/build-c1.log; then
+            echo "::error::Gradle replayed cached task outputs (FROM-CACHE in build log) — the reference binary would not be a warm-lineage product. Refusing."
+            exit 1
+          fi
           # Verify + rename inline (NOT a helper script: this lane builds the
           # TAG tree, which predates anything added to main after the cut).
           VERSION=$(grep -oP '(?<=^jellyplay\.versionName=)\S+' version.properties)
@@ -186,8 +209,15 @@ jobs:
         run: |
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
-          ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false \
-            :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace
+          ./gradlew --no-daemon --no-build-cache \
+            -Porg.gradle.java.installations.auto-download=false \
+            :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace \
+            2>&1 | tee /tmp/build-c2.log
+          # FROM-CACHE guard as in c1 — see there.
+          if grep -q 'FROM-CACHE' /tmp/build-c2.log; then
+            echo "::error::Gradle replayed cached task outputs (FROM-CACHE in build log) — the reference binary would not be a warm-lineage product. Refusing."
+            exit 1
+          fi
           # Same inline verify + rename as c1 (see there for why not a helper
           # script): the lane builds the TAG tree.
           VERSION=$(grep -oP '(?<=^jellyplay\.versionName=)\S+' version.properties)
