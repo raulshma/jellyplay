@@ -13,13 +13,31 @@ name: F-Droid release binaries
 #  * workflow_dispatch with a tag input — backfill path (e.g. building
 #    v0.11.9 binaries for the inclusion MR) and manual re-runs.
 #
-# Buildserver parity (the whole point of this lane): the build job runs in
+# Buildserver parity (the whole point of this lane): the job runs in
 # a debian:trixie CONTAINER with Debian's own default-jdk-headless, because
 # the JDK BUILD is byte-relevant — kotlinc/R8 emit different dex bytes
 # under Temurin's OpenJDK 21 than under Debian's (proven on v0.11.10: two
 # stable dex variants, identical class sets and string tables, different
 # code bytes; the fdroiddata CI byte-compare failed until we matched the
 # JDK). See docs/fdroid/README.md §6 for the mapping table.
+#
+# TOPOLOGY PARITY (v0.11.11 post-mortem — the second half of the story):
+# the dex output has TWO stable attractor states selected by
+# (JDK build, abiFilter, build lineage), NOT by any declared task input —
+# the manifest/versionCode is provably not an input (a 11111-manifest
+# build reproduced the 11112 CI dexes byte-for-byte locally). The
+# buildserver builds BOTH ABIs SEQUENTIALLY in one job: a fresh source
+# tree per build (fdroidserver copies the tree per build version) sharing
+# one persistent Gradle home — so build 2 (x86_64) always runs WARM from
+# build 1 (arm64), and its profile/R8 lineage is build 1's. Two parallel
+# cold containers do NOT reproduce that lineage: on v0.11.11 the matrix
+# lane's x86_64 binary landed in the cold state while the buildserver's
+# build 2 landed in the warm state — identical class/string sets, a
+# 44-byte code-region delta, a different R8 pg-map-id, and a FAILED
+# byte-compare. This job therefore mirrors the topology exactly: ONE job,
+# TWO fresh clones (c1 = arm64, c2 = x86_64), built SEQUENTIALLY sharing
+# one Gradle home, arm64 first — the metadata's build order. Same lineage,
+# same bytes.
 
 on:
   release:
@@ -36,7 +54,7 @@ concurrency:
   group: fdroid-release-${{ inputs.tag || github.event.release.tag_name }}
   cancel-in-progress: false
 
-# Least-privilege default: the build matrix only reads; only attach-release
+# Least-privilege default: the build only reads; only attach-release
 # writes (release assets).
 permissions:
   contents: read
@@ -53,17 +71,6 @@ jobs:
       # no git, so the tag is cloned manually (public repos — no auth)
       # after the toolchain step instead of using actions/checkout.
       image: debian:trixie
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # abi_index mirrors app/build.gradle.kts abiVersionIndexes — the
-          # build derives versionCode = version.properties base + index from
-          # -PabiFilter alone (the F-Droid path; NEVER pass -PversionCode).
-          - abi: arm64-v8a
-            abi_index: 1
-          - abi: x86_64
-            abi_index: 2
     env:
       TAG_NAME: ${{ inputs.tag || github.event.release.tag_name }}
     steps:
@@ -73,7 +80,10 @@ jobs:
         # cross-vendor stand-in; see the header comment), a writable SDK
         # root, and git for the clone. AGP auto-installs the platform and
         # build-tools it needs once licenses are accepted, same as on the
-        # basebox.
+        # basebox. The cmdline-tools pin tracks dl.google.com's live
+        # inventory — Google rotates these zips and deletes the old ones
+        # (13158590 404ed on 2026-11-12 mid-release; check the repository
+        # index when it rots again).
         run: |
           apt-get update -qq
           apt-get install -y -qq default-jdk-headless git unzip wget >/dev/null
@@ -87,91 +97,85 @@ jobs:
           "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses < <(yes) > /dev/null
           "$SDK/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "ndk;28.2.13676358" < <(yes) > /dev/null
 
-      - name: Checkout tag
-        # Manual clone: debian:trixie has no git until the step above
-        # installs it, and actions/checkout needs git for recursive
+      - name: Checkout tag (two fresh trees)
+        # Two clones, one per build — the buildserver copies the source
+        # tree fresh per build version while keeping one HOME. Both are
+        # the same tag, so every commit-derived input (SOURCE_DATE_EPOCH)
+        # matches. Manual clones: debian:trixie has no git until the step
+        # above installs it, and actions/checkout needs git for recursive
         # submodules. Both repos are public, so no token is needed.
         run: |
           if ! grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' <<<"$TAG_NAME"; then
             echo "::error::Tag '$TAG_NAME' is not a stable vX.Y.Z release — skipping"
             exit 1
           fi
-          git clone --depth 1 --branch "$TAG_NAME" --recurse-submodules \
-            https://github.com/raulshma/jellyplay /work
-          git -C /work log -n1 --pretty='%H %s'
+          for d in c1 c2; do
+            git clone --depth 1 --branch "$TAG_NAME" --recurse-submodules \
+              https://github.com/raulshma/jellyplay "/job/$d"
+            git -C "/job/$d" log -n1 --pretty='%H %s'
+          done
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Keystore decode — the same one-liner as
-      # .github/actions/setup-gmd-runner, inlined because that composite
-      # action hard-requires /dev/kvm (GMD emulator prereq) which this lane
-      # never needs.
-      - name: Decode Keystore
-        working-directory: /work
+      - name: Decode Keystore into both trees
+        # The same one-liner as .github/actions/setup-gmd-runner, inlined
+        # because that composite action hard-requires /dev/kvm (GMD
+        # emulator prereq) which this lane never needs. The signingConfig
+        # resolves the keystore relative to each tree root.
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > jellyplay-release.jks
-          chmod +x ./gradlew
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /job/jellyplay-release.jks
+          cp /job/jellyplay-release.jks /job/c1/jellyplay-release.jks
+          cp /job/jellyplay-release.jks /job/c2/jellyplay-release.jks
+          chmod +x /job/c1/gradlew /job/c2/gradlew
 
-      # Mirrors the metadata `prebuild:` + `rm:` verbatim — the buildserver
-      # runs exactly these (foojay gone means no JVM toolchain auto-download,
-      # matching gradlew-fdroid's installations.auto-download=false).
-      - name: Apply F-Droid prebuild
-        working-directory: /work
-        run: |
-          sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
-          rm -rf apps/desktop
-
-      - name: Set buildserver environment
-        # SOURCE_DATE_EPOCH: fdroidserver common.py get_source_date_epoch =
-        # `git log -n1 --pretty=%ct` over the build checkout. LC_ALL:
-        # buildserver setup-env-vars exports C.UTF-8.
-        run: |
-          echo "SOURCE_DATE_EPOCH=$(git -C /work log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
-          echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
-
-      - name: Build phoneFdroidRelease (${{ matrix.abi }})
-        # gradlew-fdroid parity: --no-daemon (org.gradle.daemon=false on the
-        # buildserver) and JVM auto-provisioning off. Signing envs activate
-        # the release signingConfig (app/build.gradle.kts signingConfigs).
-        working-directory: /work
+      - name: Build + verify c1 (arm64-v8a, build 1)
+        # Mirrors the metadata's FIRST build entry verbatim: prebuild seds,
+        # rm, NDK via the metadata `ndk:` (installed above), --no-daemon,
+        # JVM auto-download off, SOURCE_DATE_EPOCH = last commit's epoch,
+        # LC_ALL=C.UTF-8. abi_index 1 = arm64-v8a per
+        # app/build.gradle.kts abiVersionIndexes; NEVER pass -PversionCode.
+        # SEQUENTIAL ORDER IS LOAD-BEARING: this build warms the shared
+        # Gradle home exactly as buildserver build 1 warms the basebox's,
+        # so c2 below replays the same lineage as buildserver build 2.
+        working-directory: /job/c1
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: >
-          ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false
-          :app:assemblePhoneFdroidRelease -PabiFilter=${{ matrix.abi }} --stacktrace
-
-      - name: Verify and rename APK
-        working-directory: /work
-        env:
-          EXPECTED_TAG: ${{ env.TAG_NAME }}
+          ABI: arm64-v8a
+          ABI_INDEX: 1
         run: |
-          VERSION=$(grep -oP '(?<=^jellyplay\.versionName=)\S+' version.properties)
-          BASE=$(grep -oP '(?<=^jellyplay\.versionCode=)\d+' version.properties)
-          CODE=$((BASE + ${{ matrix.abi_index }}))
-          if [ "v${VERSION}" != "${EXPECTED_TAG}" ]; then
-            echo "::error::version.properties says v${VERSION} but building ${EXPECTED_TAG} — version.properties was not bumped for this tag"
-            exit 1
-          fi
-          APK=$(ls app/build/outputs/apk/phoneFdroid/release/*-${{ matrix.abi }}-release.apk)
-          tools/fdroid/verify-apk.sh --expect-version-code "$CODE" "$APK"
-          # The exact filename fdroidserver's Binaries: template expands to
-          # (v%v → this tag, %c → this build's versionCode). The store
-          # updater ignores these by construction: its asset matcher
-          # requires a -phone-/-tv- prefix and an -<abi>.apk/-universal.apk
-          # suffix (GitHubReleasesApiImpl.kt).
-          DEST="jellyplay-v${VERSION}-fdroid-${CODE}.apk"
-          cp "$APK" "$DEST"
-          echo "sha256 of the published reference binary:"
-          sha256sum "$DEST"
+          sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
+          rm -rf apps/desktop
+          echo "SOURCE_DATE_EPOCH=$(git log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
+          echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
+          ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false \
+            :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace
+          .github/fdroid-verify-and-rename.sh "$ABI" "$ABI_INDEX" "$TAG_NAME"
 
-      - name: Upload APK Artifact
+      - name: Build + verify c2 (x86_64, build 2 — warm lineage)
+        # Second buildserver build: fresh tree, shared (now-warm) Gradle
+        # home. abi_index 2 = x86_64.
+        working-directory: /job/c2
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ABI: x86_64
+          ABI_INDEX: 2
+        run: |
+          sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
+          rm -rf apps/desktop
+          ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false \
+            :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace
+          .github/fdroid-verify-and-rename.sh "$ABI" "$ABI_INDEX" "$TAG_NAME"
+
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: fdroid-apk-${{ matrix.abi }}
-          path: /work/jellyplay-*-fdroid-*.apk
+          name: fdroid-apks
+          path: /job/c*/jellyplay-*-fdroid-*.apk
           retention-days: 7
           if-no-files-found: error
 
@@ -186,7 +190,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-          pattern: 'fdroid-apk-*'
+          pattern: 'fdroid-apks'
 
       - name: Attach to release
         # Uploads to the existing vX.Y.Z release (published draft for the
