@@ -21,21 +21,20 @@ name: F-Droid release binaries
 # code bytes; the fdroiddata CI byte-compare failed until we matched the
 # JDK). See docs/fdroid/README.md §6 for the mapping table.
 #
-# TOPOLOGY PARITY (v0.11.11 post-mortems — mechanism proven on pipeline #43):
-# the buildserver builds BOTH ABIs SEQUENTIALLY in one job: a fresh source
-# tree per build sharing one persistent Gradle home. The dex output of the
-# SECOND build (x86_64) is byte-identical to the FIRST build's — proven by
-# diffing the buildserver's kept failed-build artifact against the arm64
-# reference: identical classes*.dex and baseline.prof. abiFilter is NOT a
-# declared input of the R8 task, so build 2's minifyPhoneFdroidReleaseWithR8
-# is a LOCAL BUILD-CACHE HIT from build 1. That cache hit IS the "warm
-# lineage": a fresh R8 run instead lands in a second stable attractor state
-# (one Kotlin closeFinally specialization in class hse, ~2KB dex delta, 44
-# code bytes on v0.11.10) and the byte-compare fails. This job mirrors the
-# topology: ONE job, TWO fresh clones (c1 = arm64 cold, c2 = x86_64 warm),
-# built SEQUENTIALLY sharing one Gradle home with its local build cache,
-# arm64 first — and c2 enforces dex-equality with c1 so the invariant can
-# never silently rot.
+# TOPOLOGY PARITY (v0.11.11 post-mortems — mechanism pinned via pipeline #43
+# artifact forensics): the buildserver builds BOTH ABIs SEQUENTIALLY in one
+# job — a fresh source tree re-copied into the SAME build/<pkg> path per
+# build, sharing one persistent Gradle home. The SECOND build's (x86_64)
+# dexes are byte-identical to the FIRST build's — proven by diffing the
+# buildserver's kept failed-build artifact against the arm64 reference.
+# The same-path detail is load-bearing: an earlier two-clone layout
+# (/job/c1, /job/c2) made build 2's R8 output diverge (one Kotlin
+# closeFinally specialization in class hse, ~2KB dex delta). This job
+# mirrors the topology exactly: ONE job, ONE path (/job/tree) — clone,
+# build arm64, wipe, re-clone, build x86_64 — sharing one Gradle home with
+# its local build cache (abiFilter is not an R8 task input, so same-path
+# fingerprints let c2 reuse c1's R8 output). c2 hard-verifies dex-equality
+# with c1, so the invariant can never silently rot.
 
 on:
   release:
@@ -95,23 +94,25 @@ jobs:
           "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses < <(yes) > /dev/null
           "$SDK/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "ndk;28.2.13676358" < <(yes) > /dev/null
 
-      - name: Checkout tag (two fresh trees)
-        # Two clones, one per build — the buildserver copies the source
-        # tree fresh per build version while keeping one HOME. Both are
-        # the same tag, so every commit-derived input (SOURCE_DATE_EPOCH)
-        # matches. Manual clones: debian:trixie has no git until the step
-        # above installs it, and actions/checkout needs git for recursive
-        # submodules. Both repos are public, so no token is needed.
+      - name: Checkout tag (one path, reused per build)
+        # The buildserver re-copies the source into the SAME build/<pkg>
+        # path for every build of a version — and the absolute tree path
+        # is a real variable in R8's output (the /job/c1 vs /job/c2
+        # two-clone layout produced a divergent dex on v0.11.11). This
+        # lane therefore also uses ONE path: clone, build arm64, wipe,
+        # re-clone into the identical path, build x86_64. Manual clone:
+        # debian:trixie has no git until the step above installs it, and
+        # actions/checkout needs git for recursive submodules. Public
+        # repo, so no token is needed.
         run: |
           if ! grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' <<<"$TAG_NAME"; then
             echo "::error::Tag '$TAG_NAME' is not a stable vX.Y.Z release — skipping"
             exit 1
           fi
-          for d in c1 c2; do
-            git clone --depth 1 --branch "$TAG_NAME" --recurse-submodules \
-              https://github.com/raulshma/jellyplay "/job/$d"
-            git -C "/job/$d" log -n1 --pretty='%H %s'
-          done
+          git clone --depth 1 --branch "$TAG_NAME" --recurse-submodules \
+            https://github.com/raulshma/jellyplay /job/tree
+          git -C /job/tree log -n1 --pretty='%H %s'
+          mkdir -p /job/out
 
       - name: Setup Gradle
         # cache-disabled is LOAD-BEARING: setup-gradle restores the Gradle
@@ -125,17 +126,16 @@ jobs:
         with:
           cache-disabled: true
 
-      - name: Decode Keystore into both trees
+      - name: Decode Keystore
         # The same one-liner as .github/actions/setup-gmd-runner, inlined
         # because that composite action hard-requires /dev/kvm (GMD
         # emulator prereq) which this lane never needs. The signingConfig
-        # resolves the keystore relative to each tree root.
+        # resolves the keystore relative to the tree root; the copy at
+        # /job/ survives the c2 re-clone.
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /job/jellyplay-release.jks
-          cp /job/jellyplay-release.jks /job/c1/jellyplay-release.jks
-          cp /job/jellyplay-release.jks /job/c2/jellyplay-release.jks
-          chmod +x /job/c1/gradlew /job/c2/gradlew
-          rm /job/jellyplay-release.jks
+          cp /job/jellyplay-release.jks /job/tree/jellyplay-release.jks
+          chmod +x /job/tree/gradlew
 
       - name: Build + verify c1 (arm64-v8a, build 1)
         # Mirrors the metadata's FIRST build entry verbatim: prebuild seds,
@@ -146,7 +146,7 @@ jobs:
         # SEQUENTIAL ORDER IS LOAD-BEARING: this build warms the shared
         # Gradle home exactly as buildserver build 1 warms the basebox's,
         # so c2 below replays the same lineage as buildserver build 2.
-        working-directory: /job/c1
+        working-directory: /job/tree
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -162,12 +162,13 @@ jobs:
             -Porg.gradle.java.installations.auto-download=false \
             :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace \
             2>&1 | tee /tmp/build-c1.log
-          # Build 1 is the ONE real R8 run: the buildserver's first build is
-          # cold (fresh VM), so a cache hit here would mean the reference
-          # binary is someone else's output — the 2026-11-12 re-dispatch
-          # attached fully cached bytes in 4 minutes under a green check.
-          if grep -q 'FROM-CACHE' /tmp/build-c1.log; then
-            echo "::error::Gradle replayed cached task outputs in build 1 (FROM-CACHE in build log) — build 1 must be the cold, real R8 run. Refusing."
+          # R8 must EXECUTE here — this is the one real minify run whose
+          # dexes both this APK and c2's must carry. (FROM-CACHE on
+          # no-op resource-parse tasks is normal even in a fresh
+          # container — modules with identical empty inputs share cache
+          # keys within a single build; the buildserver shows the same.)
+          if grep -q 'Task :app:minifyPhoneFdroidReleaseWithR8 FROM-CACHE' /tmp/build-c1.log; then
+            echo "::error::R8 was FROM-CACHE in build 1 — a cache entry leaked in from an earlier run. Build 1 must be the real R8 run. Refusing."
             exit 1
           fi
           # Verify + rename inline (NOT a helper script: this lane builds the
@@ -181,19 +182,29 @@ jobs:
           fi
           APK=$(ls app/build/outputs/apk/phoneFdroid/release/*-"$ABI"-release.apk)
           tools/fdroid/verify-apk.sh --expect-version-code "$CODE" "$APK"
+          # Stash c1's APK + dexes for the c2 dex-equality invariant and
+          # the artifact upload — the tree is wiped before c2.
+          unzip -qo "$APK" 'classes*.dex' 'assets/dexopt/baseline.prof' -d /job/out/dex1
+          cp "$APK" /job/out/
           # The exact filename fdroidserver's Binaries: template expands to.
           # The store updater ignores these by construction: its asset
           # matcher requires a -phone-/-tv- prefix and an
           # -<abi>.apk/-universal.apk suffix (GitHubReleasesApiImpl.kt).
           DEST="jellyplay-v${VERSION}-fdroid-${CODE}.apk"
-          cp "$APK" "$DEST"
+          mv "/job/out/$(basename "$APK")" "/job/out/$DEST"
           echo "sha256 of the published reference binary:"
-          sha256sum "$DEST"
+          sha256sum "/job/out/$DEST"
 
       - name: Build + verify c2 (x86_64, build 2 — warm lineage)
-        # Second buildserver build: fresh tree, shared (now-warm) Gradle
-        # home. abi_index 2 = x86_64.
-        working-directory: /job/c2
+        # Second buildserver build: FRESH TREE AT THE SAME ABSOLUTE PATH
+        # (fdroidserver re-copies the source into build/<pkg> per build),
+        # shared now-warm Gradle home. abi_index 2 = x86_64. The same
+        # path + same content means c2's task fingerprints match c1's, so
+        # c2 reuses c1's R8 output via the local build cache — mirroring
+        # the buildserver's build 2, whose dexes are byte-identical to
+        # its build 1's (proven on v0.11.11 pipeline #43 by diffing the
+        # kept failed-build artifact).
+        working-directory: /job
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -201,29 +212,26 @@ jobs:
           ABI: x86_64
           ABI_INDEX: 2
         run: |
+          rm -rf /job/tree
+          git clone -q --depth 1 --branch "$TAG_NAME" --recurse-submodules \
+            https://github.com/raulshma/jellyplay /job/tree
+          cp /job/jellyplay-release.jks /job/tree/jellyplay-release.jks
+          chmod +x /job/tree/gradlew
+          cd /job/tree
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
           ./gradlew --no-daemon \
             -Porg.gradle.java.installations.auto-download=false \
-            :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace \
-            2>&1 | tee /tmp/build-c2.log
-          # THE ACTUAL WARM LINEAGE (proven on v0.11.11 pipeline #43): the
-          # buildserver's build 2 dexes are BYTE-IDENTICAL to build 1's —
-          # abiFilter is not an input of the R8 task, so build 2's
-          # minifyPhoneFdroidReleaseWithR8 is a local build-cache HIT from
-          # build 1 (shared Gradle home, same VM). c2 MUST therefore reuse
-          # c1's dexes; a fresh R8 run here lands in a different attractor
-          # state (a closeFinally specialization delta in class hse) and the
-          # fdroiddata byte-compare fails. The local build cache (populated
-          # by c1 above, same job) provides that reuse. Enforce the invariant
-          # directly: the dexes of both APKs must be byte-identical.
-          APK1=$(ls /job/c1/app/build/outputs/apk/phoneFdroid/release/*-arm64-v8a-release.apk)
+            :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace
+          # THE WARM-LINEAGE INVARIANT: c2's dexes must be byte-identical
+          # to c1's. A divergent R8 run (the /job/c2 two-path layout on
+          # v0.11.11: one closeFinally specialization in class hse) fails
+          # the fdroiddata byte-compare, so fail here first, loudly.
           APK2=$(ls app/build/outputs/apk/phoneFdroid/release/*-"$ABI"-release.apk)
-          rm -rf /tmp/dex1 /tmp/dex2 && mkdir /tmp/dex1 /tmp/dex2
-          unzip -qo "$APK1" 'classes*.dex' 'assets/dexopt/baseline.prof' -d /tmp/dex1
+          rm -rf /tmp/dex2 && mkdir /tmp/dex2
           unzip -qo "$APK2" 'classes*.dex' 'assets/dexopt/baseline.prof' -d /tmp/dex2
-          if ! diff -r /tmp/dex1 /tmp/dex2; then
-            echo "::error::c2 dexes differ from c1's — c2 did not reuse c1's R8 output (the buildserver's build 2 is a local build-cache hit of build 1). Refusing."
+          if ! diff -r /job/out/dex1 /tmp/dex2; then
+            echo "::error::c2 dexes differ from c1's — the warm lineage broke (buildserver build 2's dexes equal build 1's). Refusing."
             exit 1
           fi
           # Same inline verify + rename as c1 (see there for why not a helper
@@ -238,15 +246,15 @@ jobs:
           APK=$(ls app/build/outputs/apk/phoneFdroid/release/*-"$ABI"-release.apk)
           tools/fdroid/verify-apk.sh --expect-version-code "$CODE" "$APK"
           DEST="jellyplay-v${VERSION}-fdroid-${CODE}.apk"
-          cp "$APK" "$DEST"
+          cp "$APK" "/job/out/$DEST"
           echo "sha256 of the published reference binary:"
-          sha256sum "$DEST"
+          sha256sum "/job/out/$DEST"
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: fdroid-apks
-          path: /job/c*/jellyplay-*-fdroid-*.apk
+          path: /job/out/jellyplay-*-fdroid-*.apk
           retention-days: 7
           if-no-files-found: error
 
@@ -264,15 +272,10 @@ jobs:
           pattern: 'fdroid-apks'
 
       - name: Flatten APKs to dist root and verify
-        # upload-artifact@v4 keeps the path levels AFTER the first wildcard,
-        # so building from `path: /job/c*/jellyplay-*-fdroid-*.apk` stores the
-        # files as c1/… and c2/… inside the artifact. After merge-multiple
-        # they land at dist/c1/… — and softprops' `dist/*.apk` pattern then
-        # matches NOTHING, warning (🤔) instead of failing: the 2026-11-12
-        # v0.11.11 warm-lineage re-dispatch "succeeded" without attaching a
-        # single byte, leaving the stale parallel-cold binaries on the
-        # release. Flatten here, then hard-fail unless both APKs are at the
-        # dist root so an empty attach can never pass again.
+        # Defense in depth (the 2026-11-12 attach bug: a glob that matched
+        # nothing warned instead of failing, so a re-dispatch "succeeded"
+        # while attaching zero bytes). Flatten anything nested, then
+        # hard-fail unless both APKs sit at the dist root.
         run: |
           find dist -mindepth 2 -name '*.apk' -print -exec mv -t dist {} +
           N=$(find dist -maxdepth 1 -name '*.apk' | wc -l)
