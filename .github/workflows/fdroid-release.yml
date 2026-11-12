@@ -225,6 +225,25 @@ jobs:
           merge-multiple: true
           pattern: 'fdroid-apks'
 
+      - name: Flatten APKs to dist root and verify
+        # upload-artifact@v4 keeps the path levels AFTER the first wildcard,
+        # so building from `path: /job/c*/jellyplay-*-fdroid-*.apk` stores the
+        # files as c1/… and c2/… inside the artifact. After merge-multiple
+        # they land at dist/c1/… — and softprops' `dist/*.apk` pattern then
+        # matches NOTHING, warning (🤔) instead of failing: the 2026-11-12
+        # v0.11.11 warm-lineage re-dispatch "succeeded" without attaching a
+        # single byte, leaving the stale parallel-cold binaries on the
+        # release. Flatten here, then hard-fail unless both APKs are at the
+        # dist root so an empty attach can never pass again.
+        run: |
+          find dist -mindepth 2 -name '*.apk' -print -exec mv -t dist {} +
+          N=$(find dist -maxdepth 1 -name '*.apk' | wc -l)
+          echo "APKs at dist/ root: $N"
+          [ "$N" -eq 2 ] || {
+            echo "::error::expected exactly 2 APKs at dist/ root, found $N — refusing to attach"
+            exit 1
+          }
+
       - name: Attach to release
         # Uploads to the existing vX.Y.Z release (published draft for the
         # release-event path; the already-published release for backfills).
