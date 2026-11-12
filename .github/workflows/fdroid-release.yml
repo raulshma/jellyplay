@@ -31,10 +31,13 @@ name: F-Droid release binaries
 # (/job/c1, /job/c2) made build 2's R8 output diverge (one Kotlin
 # closeFinally specialization in class hse, ~2KB dex delta). This job
 # mirrors the topology exactly: ONE job, ONE path (/job/tree) — clone,
-# build arm64, wipe, re-clone, build x86_64 — sharing one Gradle home with
-# its local build cache (abiFilter is not an R8 task input, so same-path
-# fingerprints let c2 reuse c1's R8 output). c2 hard-verifies dex-equality
-# with c1, so the invariant can never silently rot.
+# build arm64, wipe, re-clone, build x86_64 — sharing one Gradle home.
+# Both sides additionally pin a DETERMINISTIC build (gradle.properties
+# sed: parallel/caching off, single worker) via the fdroiddata metadata's
+# prebuild — without it, Gradle's parallel + build-cache dedup race flips
+# R8 between two dex attractors from run to run, on the buildserver too.
+# c2 hard-verifies dex-equality with c1, so the invariant can never
+# silently rot.
 
 on:
   release:
@@ -158,6 +161,17 @@ jobs:
           rm -rf apps/desktop
           echo "SOURCE_DATE_EPOCH=$(git log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
           echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
+          # DETERMINISM SED — must stay byte-identical to the fdroiddata
+          # metadata's prebuild (see the c2 comment for why the build must
+          # be serial and cacheless): the tag's gradle.properties sets
+          # parallel/caching/worker races that flip R8 between two dex
+          # attractors run-to-run, ON THE BUILDSERVER TOO (its pipeline #41
+          # accepted a c13f-dexed 11111, #43 a 76fb-dexed one).
+          sed -i -e 's/^org\.gradle\.parallel=true$/org.gradle.parallel=false/' \
+                 -e 's/^org\.gradle\.caching=true$/org.gradle.caching=false/' \
+                 -e 's/^org\.gradle\.workers\.max=12$/org.gradle.workers.max=1/' \
+                 -e '\_^org.gradle.configuration-cache.parallel=true_d' gradle.properties
+          grep -E '^org.gradle.(parallel|caching|workers.max|configuration-cache)' gradle.properties
           ./gradlew --no-daemon \
             -Porg.gradle.java.installations.auto-download=false \
             :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace \
@@ -198,12 +212,9 @@ jobs:
       - name: Build + verify c2 (x86_64, build 2 — warm lineage)
         # Second buildserver build: FRESH TREE AT THE SAME ABSOLUTE PATH
         # (fdroidserver re-copies the source into build/<pkg> per build),
-        # shared now-warm Gradle home. abi_index 2 = x86_64. The same
-        # path + same content means c2's task fingerprints match c1's, so
-        # c2 reuses c1's R8 output via the local build cache — mirroring
-        # the buildserver's build 2, whose dexes are byte-identical to
-        # its build 1's (proven on v0.11.11 pipeline #43 by diffing the
-        # kept failed-build artifact).
+        # shared now-warm Gradle home. abi_index 2 = x86_64. With the
+        # determinism sed in force, c2's R8 re-executes and must land on
+        # c1's exact dexes.
         working-directory: /job
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -220,6 +231,16 @@ jobs:
           cd /job/tree
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
+          # Same DETERMINISM SED as c1 — byte-identical to the fdroiddata
+          # metadata's prebuild, so both sides of the reproducible
+          # byte-compare build serially and cachelessly. With caching off,
+          # c2's R8 re-executes; with the race gone it must land on c1's
+          # exact dexes (guard below).
+          sed -i -e 's/^org\.gradle\.parallel=true$/org.gradle.parallel=false/' \
+                 -e 's/^org\.gradle\.caching=true$/org.gradle.caching=false/' \
+                 -e 's/^org\.gradle\.workers\.max=12$/org.gradle.workers.max=1/' \
+                 -e '\_^org.gradle.configuration-cache.parallel=true_d' gradle.properties
+          grep -E '^org.gradle.(parallel|caching|workers.max|configuration-cache)' gradle.properties
           ./gradlew --no-daemon \
             -Porg.gradle.java.installations.auto-download=false \
             :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace
