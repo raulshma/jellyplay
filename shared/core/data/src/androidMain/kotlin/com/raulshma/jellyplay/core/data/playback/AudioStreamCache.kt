@@ -23,6 +23,7 @@ import okhttp3.Request
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import com.raulshma.jellyplay.core.network.api.useResponse
 
 /**
  * Owns the transient audio byte cache ([SimpleCache]) and builds
@@ -202,7 +203,7 @@ open class AudioStreamCache(
 
     private fun discoverContentLength(url: String): Long {
         return try {
-            streamingOkHttpClient.newCall(Request.Builder().url(url).head().build()).execute().use { resp ->
+            streamingOkHttpClient.newCall(Request.Builder().url(url).head().build()).execute().useResponse { resp ->
                 resp.header("Content-Length")?.toLongOrNull() ?: C.LENGTH_UNSET.toLong()
             }
         } catch (e: Exception) {

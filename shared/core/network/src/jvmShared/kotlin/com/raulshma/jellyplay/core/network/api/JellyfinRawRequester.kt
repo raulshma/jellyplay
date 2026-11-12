@@ -18,7 +18,7 @@ internal data class RawSession(val base: String, val token: String)
  * One seam for the jvmShared clients' hand-built raw-OkHttp requests (the
  * plugin catalogue, the newsletter / playback-reporting plugin endpoints, the
  * intro/credit timestamp probes): session guard → failover-correct base URL →
- * `Authorization` header → `newCall().execute().use` → status check, with the
+ * `Authorization` header → `newCall().execute().useResponse` → status check, with the
  * per-endpoint failure text. One fold of
  * the choreography PluginApiClientImpl, MediaInfoApiClientImpl and
  * PlaybackApiClientImpl used to copy per endpoint.
@@ -109,7 +109,7 @@ internal class JellyfinRawRequester(
             .tokenAuthHeader(session.token)
             .get()
             .build()
-        return engine.okHttpClient.newCall(request).execute().use { response ->
+        return engine.okHttpClient.newCall(request).execute().useResponse { response ->
             if (!response.isSuccessful) throw Exception("$failureMessage: ${response.code}")
             decode(response.body)
         }
@@ -131,7 +131,7 @@ internal class JellyfinRawRequester(
             .tokenAuthHeader(session.token)
             .post(bodyText.toRequestBody("application/json".toMediaType()))
             .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
+        engine.okHttpClient.newCall(request).execute().useResponse { response ->
             if (!response.isSuccessful) throw Exception("$failureMessage: ${response.code}")
         }
     }
@@ -144,7 +144,7 @@ internal class JellyfinRawRequester(
             .tokenAuthHeader(session.token)
             .delete()
             .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
+        engine.okHttpClient.newCall(request).execute().useResponse { response ->
             if (!response.isSuccessful) throw Exception("$failureMessage: ${response.code}")
         }
     }
@@ -165,7 +165,7 @@ internal class JellyfinRawRequester(
             .tokenAuthHeader(session.token)
             .get()
             .build()
-        return engine.okHttpClient.newCall(request).execute().use { response ->
+        return engine.okHttpClient.newCall(request).execute().useResponse { response ->
             if (response.isSuccessful) response.body?.string() else null
         }
     }
@@ -201,7 +201,7 @@ internal class JellyfinRawRequester(
             .tokenAuthHeader(session.token)
             .post(bodyText.toRequestBody("application/json".toMediaType()))
             .build()
-        return client.newCall(request).execute().use { response ->
+        return client.newCall(request).execute().useResponse { response ->
             if (!response.isSuccessful) throw Exception("$failureMessage: ${response.code}")
             response.body?.string().orEmpty()
         }
@@ -220,7 +220,7 @@ internal class JellyfinRawRequester(
             .tokenAuthHeader(session.token)
             .post(bodyText.toRequestBody("application/json".toMediaType()))
             .build()
-        return engine.okHttpClient.newCall(request).execute().use { response ->
+        return engine.okHttpClient.newCall(request).execute().useResponse { response ->
             if (response.isSuccessful) response.body?.string() else null
         }
     }

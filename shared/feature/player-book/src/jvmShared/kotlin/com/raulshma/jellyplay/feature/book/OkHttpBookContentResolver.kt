@@ -22,6 +22,7 @@ import okio.Path
 import okio.Path.Companion.toPath
 import okio.buffer
 import okio.use
+import com.raulshma.jellyplay.core.network.api.useResponse
 
 /**
  * The streaming side of [BookContentResolver]: the download-vs-cache fork
@@ -137,7 +138,7 @@ class OkHttpBookFetcher(private val client: OkHttpClient) : BookHttpFetcher {
             // out mid-download) aborts the call — unblocking both the body
             // read loop and a stalled connect — and each chunk re-checks
             // cancellation so the loop exits promptly.
-            call.executeCancellable().use { response ->
+            call.executeCancellable().useResponse { response ->
                 check(response.isSuccessful) { "Book download failed: HTTP ${response.code}" }
                 val body = response.body ?: error("Book download failed: empty body")
                 val total = body.contentLength().takeIf { it >= 0 }

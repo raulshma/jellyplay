@@ -12,6 +12,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import com.raulshma.jellyplay.core.network.api.useResponse
 
 /**
  * [BookFormatProbe] over the shared streaming OkHttp client: one ranged GET
@@ -40,7 +41,7 @@ class OkHttpBookFormatProbe(
             .build()
         val call = client.newCall(request)
         try {
-            call.await().use { response ->
+            call.await().useResponse { response ->
                 if (!response.isSuccessful) return@withContext null
                 BookDownloadMetadata(
                     contentType = response.header("Content-Type"),

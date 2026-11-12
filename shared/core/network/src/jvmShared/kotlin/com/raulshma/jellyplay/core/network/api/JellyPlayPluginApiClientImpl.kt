@@ -504,12 +504,12 @@ class JellyPlayPluginApiClientImpl(
         val readerJob = launch(Dispatchers.IO) {
             var id = 0L
             try {
-                call.execute().use { response ->
+                call.execute().useResponse { response ->
                     if (!response.isSuccessful) {
                         close(IllegalStateException("JellyPlay SSE connect failed: ${response.code}"))
-                        return@use
+                        return@useResponse
                     }
-                    val source = response.body?.source() ?: run { close(); return@use }
+                    val source = response.body?.source() ?: run { close(); return@useResponse }
                     var eventName: String? = null
                     var data = StringBuilder()
                     var eventId = 0L
