@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import com.raulshma.jellyplay.core.network.api.useResponse
 
 /**
  * Resolves and parses the active external subtitle track into a [TimedCue] list
@@ -94,7 +95,7 @@ class AndroidSubtitlePreviewRepository(
             "http", "https" -> {
                 val builder = Request.Builder().url(url)
                 headers.forEach { (k, v) -> builder.header(k, v) }
-                okHttpClient.newCall(builder.build()).execute().use { resp ->
+                okHttpClient.newCall(builder.build()).execute().useResponse { resp ->
                     if (!resp.isSuccessful) null else resp.body?.bytes()
                 }
             }

@@ -25,6 +25,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import com.raulshma.jellyplay.core.network.api.useResponse
 
 /**
  * Outcome of a reachability probe against one server address.
@@ -387,7 +388,7 @@ class ServerAddressRouter(
         try {
             val url = ("$address/System/Info/Public").toHttpUrl()
             val request = Request.Builder().url(url).build()
-            probeClient.newCall(request).execute().use { response ->
+            probeClient.newCall(request).execute().useResponse { response ->
                 val bodyText = if (response.isSuccessful) response.body.string() else null
                 val (id, name) = bodyText?.let { parsePublicSystemInfo(it) } ?: (null to null)
                 AddressProbeResult(

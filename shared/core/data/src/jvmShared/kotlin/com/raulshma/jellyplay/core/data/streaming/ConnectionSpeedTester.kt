@@ -11,6 +11,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import com.raulshma.jellyplay.core.network.api.useResponse
 
 /**
  * The connection-speed probe behind the settings screen's "Test connection
@@ -134,9 +135,9 @@ object SpeedSampleExecutors {
                 // caller's withTimeoutOrNull alone cannot do against a read()
                 // parked in the socket.
                 timeout().timeout(deadlineMs, TimeUnit.MILLISECONDS)
-            }.execute().use { response ->
-                if (!response.isSuccessful) return@use null
-                val body = response.body ?: return@use null
+            }.execute().useResponse { response ->
+                if (!response.isSuccessful) return@useResponse null
+                val body = response.body ?: return@useResponse null
                 val startedAt = System.nanoTime()
                 val source = body.source()
                 var read = 0L
@@ -148,7 +149,7 @@ object SpeedSampleExecutors {
                     read += n
                 }
                 val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L
-                if (read == 0L) return@use null
+                if (read == 0L) return@useResponse null
                 ConnectionSpeedTester.SpeedSample(
                     bytes = read,
                     elapsedMs = elapsedMs.coerceAtLeast(1L),

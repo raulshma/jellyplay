@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
 import com.raulshma.jellyplay.core.model.isVobsubFamilyCodec
 import com.raulshma.jellyplay.core.model.subtitleCompanionFileName
 import com.raulshma.jellyplay.core.model.subtitleSidecarExtension
+import com.raulshma.jellyplay.core.network.api.useResponse
 import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -432,8 +433,8 @@ internal class DownloadSidecarCore(
             playbackIdentity.accessToken()?.takeIf { it.isNotBlank() }?.let {
                 requestBuilder.tokenAuthHeader(it)
             }
-            httpClient.newCall(requestBuilder.build()).awaitResponse().use { resp ->
-                if (!resp.isSuccessful) return@use false
+            httpClient.newCall(requestBuilder.build()).awaitResponse().useResponse { resp ->
+                if (!resp.isSuccessful) return@useResponse false
                 // An auth/proxy failure can arrive as HTTP 200 with an HTML
                 // login page (or a JSON error body); persisting either yields a
                 // sidecar the player can't parse — indistinguishable offline
@@ -442,7 +443,7 @@ internal class DownloadSidecarCore(
                 val contentType = resp.header("Content-Type")?.lowercase().orEmpty()
                 if (REJECTED_SUBTITLE_CONTENT_TYPES.any { contentType.contains(it) }) {
                     Log.d(TAG, "Rejected subtitle response from $url: Content-Type $contentType")
-                    return@use false
+                    return@useResponse false
                 }
                 var moved = false
                 resp.body?.byteStream()?.use { input ->

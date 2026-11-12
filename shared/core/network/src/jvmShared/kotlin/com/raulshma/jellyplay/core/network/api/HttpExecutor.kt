@@ -16,7 +16,7 @@ import java.io.IOException
  * the member vocabulary
  * ([parseJson]/[parseUnit]/[executeForText]/[executeForCookie]) over an
  * [Options] record in the `SubtitleHttp.Options` idiom. Every
- * `newCall().execute().use` → status check → body-null guard →
+ * `newCall().execute().useResponse` → status check → body-null guard →
  * CancellationException-rethrow → catch-Exception→`fromNetwork` ladder the
  * Arr/Seerr/TMDB/GitHub/LrcLib clients used to hand-copy funnels through the
  * members here; the genuine per-service differences travel as declared
@@ -127,7 +127,7 @@ internal class HttpExecutor(
         request: Request,
         onHttpFailure: (Response) -> Nothing,
         onResponse: (Response) -> T,
-    ): T = okHttpClient.newCall(request).execute().use { response ->
+    ): T = okHttpClient.newCall(request).execute().useResponse { response ->
         if (response.isSuccessful) onResponse(response) else onHttpFailure(response)
     }
 
@@ -280,7 +280,7 @@ internal class HttpExecutor(
 }
 
 /**
- * The execute scaffold SubtitleHttp rides: `newCall().execute().use` with the
+ * The execute scaffold SubtitleHttp rides: `newCall().execute().useResponse` with the
  * 2xx / non-2xx split, both arms caller-shaped (subtitle logs a bounded body
  * preview and captures the raw body on the failure [ApiException], so its
  * non-2xx arm cannot be the [HttpExecutor.Options] default).
@@ -289,6 +289,6 @@ internal fun <T> OkHttpClient.executeWithStatusSplit(
     request: Request,
     onHttpFailure: (Response) -> Nothing,
     onResponse: (Response) -> T,
-): T = newCall(request).execute().use { response ->
+): T = newCall(request).execute().useResponse { response ->
     if (response.isSuccessful) onResponse(response) else onHttpFailure(response)
 }
