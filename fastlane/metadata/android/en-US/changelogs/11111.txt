@@ -1,0 +1,1 @@
+Fix: offline downloads play again. A v0.11.9 refactor left downloaded videos stuck at "Ready" with no playback on any engine — mpv, ExoPlayer or external — and switching engines couldn't recover (issue #198). The engine is now built and handed the local file on every offline load, and engine switching re-plays the download correctly.
