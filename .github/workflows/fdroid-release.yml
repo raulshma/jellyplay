@@ -32,12 +32,14 @@ name: F-Droid release binaries
 # closeFinally specialization in class hse, ~2KB dex delta). This job
 # mirrors the topology exactly: ONE job, ONE path (/job/tree) — clone,
 # build arm64, wipe, re-clone, build x86_64 — sharing one Gradle home.
-# Both sides additionally pin a DETERMINISTIC build (gradle.properties
-# sed: parallel/caching off, single worker) via the fdroiddata metadata's
-# prebuild — without it, Gradle's parallel + build-cache dedup race flips
-# R8 between two dex attractors from run to run, on the buildserver too.
-# c2 hard-verifies dex-equality with c1, so the invariant can never
-# silently rot.
+# (An earlier theory pinned the flip on Gradle's parallel + build-cache
+# dedup race; that race is real but only a correlate — the buildserver
+# flipped even serial and cacheless. The actual fix is app-side: PR #211
+# removed the closeFinally-on-Response construct R8 flip-flopped on, so
+# the serial/cacheless gradle.properties sed was reverted from both this
+# lane and the fdroiddata prebuild.)
+# c2 hard-verifies dex-equality with c1, so the reproducibility invariant
+# can never silently rot.
 
 on:
   release:
@@ -161,17 +163,6 @@ jobs:
           rm -rf apps/desktop
           echo "SOURCE_DATE_EPOCH=$(git log -n1 --pretty=%ct)" >> "$GITHUB_ENV"
           echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
-          # DETERMINISM SED — must stay byte-identical to the fdroiddata
-          # metadata's prebuild (see the c2 comment for why the build must
-          # be serial and cacheless): the tag's gradle.properties sets
-          # parallel/caching/worker races that flip R8 between two dex
-          # attractors run-to-run, ON THE BUILDSERVER TOO (its pipeline #41
-          # accepted a c13f-dexed 11111, #43 a 76fb-dexed one).
-          sed -i -e 's/^org\.gradle\.parallel=true$/org.gradle.parallel=false/' \
-                 -e 's/^org\.gradle\.caching=true$/org.gradle.caching=false/' \
-                 -e 's/^org\.gradle\.workers\.max=12$/org.gradle.workers.max=1/' \
-                 -e '\_^org.gradle.configuration-cache.parallel=true_d' gradle.properties
-          grep -E '^org.gradle.(parallel|caching|workers.max|configuration-cache)' gradle.properties
           ./gradlew --no-daemon \
             -Porg.gradle.java.installations.auto-download=false \
             :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace \
@@ -231,16 +222,6 @@ jobs:
           cd /job/tree
           sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d' settings.gradle.kts
           rm -rf apps/desktop
-          # Same DETERMINISM SED as c1 — byte-identical to the fdroiddata
-          # metadata's prebuild, so both sides of the reproducible
-          # byte-compare build serially and cachelessly. With caching off,
-          # c2's R8 re-executes; with the race gone it must land on c1's
-          # exact dexes (guard below).
-          sed -i -e 's/^org\.gradle\.parallel=true$/org.gradle.parallel=false/' \
-                 -e 's/^org\.gradle\.caching=true$/org.gradle.caching=false/' \
-                 -e 's/^org\.gradle\.workers\.max=12$/org.gradle.workers.max=1/' \
-                 -e '\_^org.gradle.configuration-cache.parallel=true_d' gradle.properties
-          grep -E '^org.gradle.(parallel|caching|workers.max|configuration-cache)' gradle.properties
           ./gradlew --no-daemon \
             -Porg.gradle.java.installations.auto-download=false \
             :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace
