@@ -128,6 +128,7 @@ jobs:
           cp /job/jellyplay-release.jks /job/c1/jellyplay-release.jks
           cp /job/jellyplay-release.jks /job/c2/jellyplay-release.jks
           chmod +x /job/c1/gradlew /job/c2/gradlew
+          rm /job/jellyplay-release.jks
 
       - name: Build + verify c1 (arm64-v8a, build 1)
         # Mirrors the metadata's FIRST build entry verbatim: prebuild seds,
@@ -152,7 +153,25 @@ jobs:
           echo "LC_ALL=C.UTF-8" >> "$GITHUB_ENV"
           ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false \
             :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace
-          .github/fdroid-verify-and-rename.sh "$ABI" "$ABI_INDEX" "$TAG_NAME"
+          # Verify + rename inline (NOT a helper script: this lane builds the
+          # TAG tree, which predates anything added to main after the cut).
+          VERSION=$(grep -oP '(?<=^jellyplay\.versionName=)\S+' version.properties)
+          BASE=$(grep -oP '(?<=^jellyplay\.versionCode=)\d+' version.properties)
+          CODE=$((BASE + ABI_INDEX))
+          if [ "v${VERSION}" != "${TAG_NAME}" ]; then
+            echo "::error::version.properties says v${VERSION} but building ${TAG_NAME} — version.properties was not bumped for this tag"
+            exit 1
+          fi
+          APK=$(ls app/build/outputs/apk/phoneFdroid/release/*-"$ABI"-release.apk)
+          tools/fdroid/verify-apk.sh --expect-version-code "$CODE" "$APK"
+          # The exact filename fdroidserver's Binaries: template expands to.
+          # The store updater ignores these by construction: its asset
+          # matcher requires a -phone-/-tv- prefix and an
+          # -<abi>.apk/-universal.apk suffix (GitHubReleasesApiImpl.kt).
+          DEST="jellyplay-v${VERSION}-fdroid-${CODE}.apk"
+          cp "$APK" "$DEST"
+          echo "sha256 of the published reference binary:"
+          sha256sum "$DEST"
 
       - name: Build + verify c2 (x86_64, build 2 — warm lineage)
         # Second buildserver build: fresh tree, shared (now-warm) Gradle
@@ -169,7 +188,21 @@ jobs:
           rm -rf apps/desktop
           ./gradlew --no-daemon -Porg.gradle.java.installations.auto-download=false \
             :app:assemblePhoneFdroidRelease -PabiFilter=$ABI --stacktrace
-          .github/fdroid-verify-and-rename.sh "$ABI" "$ABI_INDEX" "$TAG_NAME"
+          # Same inline verify + rename as c1 (see there for why not a helper
+          # script): the lane builds the TAG tree.
+          VERSION=$(grep -oP '(?<=^jellyplay\.versionName=)\S+' version.properties)
+          BASE=$(grep -oP '(?<=^jellyplay\.versionCode=)\d+' version.properties)
+          CODE=$((BASE + ABI_INDEX))
+          if [ "v${VERSION}" != "${TAG_NAME}" ]; then
+            echo "::error::version.properties says v${VERSION} but building ${TAG_NAME} — version.properties was not bumped for this tag"
+            exit 1
+          fi
+          APK=$(ls app/build/outputs/apk/phoneFdroid/release/*-"$ABI"-release.apk)
+          tools/fdroid/verify-apk.sh --expect-version-code "$CODE" "$APK"
+          DEST="jellyplay-v${VERSION}-fdroid-${CODE}.apk"
+          cp "$APK" "$DEST"
+          echo "sha256 of the published reference binary:"
+          sha256sum "$DEST"
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
