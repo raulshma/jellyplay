@@ -1,3 +1,0 @@
-Reliability release: ~15 subsystems now run explicit state machines instead of boolean flags.
-
-Fixes riding it: clean websocket disconnects now reconnect (was silent); player load failures no longer masquerade as titles; failed casts report failed instead of staying "connected"; the app-lock keypad no longer sticks disabled; the user picker shows retry instead of spinning forever; stuck audio-queue flags no longer kill skips; Seerr pairing timeouts clear; no login flash behind the splash.

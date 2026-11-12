@@ -1,5 +1,0 @@
-First release on F-Droid.
-
-JellyPlay is a client for your own Jellyfin media server: movies and shows (mpv/VLC/ffmpeg engines, styled ASS subtitles), music with synced lyrics, photos, live TV, books and comics, offline downloads, Syncplay co-watching, multi-server support and dynamic color themes.
-
-Compared to the Play/GitHub builds, this build drops Google Cast and the in-app self-updater, bundles its fonts (OFL), and cannot read RAR comic archives (CBZ still works).
