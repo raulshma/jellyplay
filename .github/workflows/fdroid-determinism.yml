@@ -46,7 +46,7 @@ jobs:
           apt-get install -y -qq default-jdk-headless git unzip wget >/dev/null
           SDK=/opt/android-sdk
           mkdir -p "$SDK/cmdline-tools"
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13158590_latest.zip -O /tmp/clt.zip
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip -O /tmp/clt.zip
           unzip -q /tmp/clt.zip -d /tmp/clt
           mv /tmp/clt/cmdline-tools "$SDK/cmdline-tools/latest"
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
