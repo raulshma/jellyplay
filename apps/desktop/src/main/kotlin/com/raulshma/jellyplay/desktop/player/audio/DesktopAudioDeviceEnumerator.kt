@@ -35,7 +35,7 @@ class DesktopAudioDeviceEnumerator(
 
     override suspend fun enumerateAudioDevices(): List<MpvAudioDevice> = withContext(ioContext) {
         try {
-            val context = MpvLib.mpv.mpv_create() ?: return@withContext emptyList()
+            val context = MpvLib.create() ?: return@withContext emptyList()
             try {
                 // `config=no`: never let a user mpv.conf leak into the
                 // enumeration; `idle=yes`: the empty playlist keeps the core

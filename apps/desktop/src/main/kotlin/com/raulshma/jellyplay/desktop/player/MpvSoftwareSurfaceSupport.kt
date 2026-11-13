@@ -45,7 +45,7 @@ object MpvSoftwareSurfaceSupport {
 
     private fun probe(): Boolean {
         val api = MpvLib.mpv
-        val core = api.mpv_create() ?: run {
+        val core = MpvLib.create() ?: run {
             lastProbeFailure = "mpv_create returned null"
             return false
         }
