@@ -184,7 +184,21 @@ class DesktopSheetWheelRobotTest {
             probe.toFront()
         }
         try {
-            Thread.sleep(1_500)
+            // Composition and layout must land before the first wheel: input
+            // into a window with no laid-out scrollable range produces the
+            // exact "events delivered, content stalled" signature and would
+            // cache a false platform verdict for the whole JVM. maxValue =
+            // content − viewport, so > 40 proves layout ran AND a real
+            // scrollable range exists. Bounded, and a timeout is
+            // infrastructure trouble — inconclusive, never grounds to skip
+            // (the same policy the catch below applies).
+            var ready = false
+            val deadline = System.currentTimeMillis() + 10_000
+            while (!ready && System.currentTimeMillis() < deadline) {
+                EventQueue.invokeAndWait { ready = (scrollRef.get()?.maxValue ?: 0) > 40 }
+                if (!ready) Thread.sleep(100)
+            }
+            if (!ready) return WheelProbeOutcome(works = true, deliveredEvents = -1, scrolledPx = 0)
             val probe = winRef.get()
                 ?: return WheelProbeOutcome(works = true, deliveredEvents = 0, scrolledPx = 0)
             val robot = Robot()

@@ -29,10 +29,20 @@ object MpvFeatureProbe {
      * open failure lands on a core that is destroyed immediately after).
      */
     fun hasLoadfileOptionsSlot(): Boolean = probed("loadfileOptions") { core ->
-        MpvLib.mpv.mpv_command_string(
-            core,
-            "loadfile /nonexistent/jellyplay-capability-probe replace 0 start=+1",
-        ) >= 0
+        MpvLib.mpv.mpv_set_option_string(core, "vo", "null")
+        MpvLib.mpv.mpv_set_option_string(core, "ao", "null")
+        // Commands only run on a live core: an uninitialized one answers
+        // every command_string with MPV_ERROR_UNINITIALIZED (measured on
+        // libmpv 0.37 — a valid-shape loadfile returns -3 before
+        // mpv_initialize, 0 after), so without the initialize this probe
+        // would read "no options slot" on every libmpv and silently skip
+        // the start-position contract everywhere. The pitch probe stays
+        // pre-init on purpose: options exist to be set before initialize.
+        MpvLib.mpv.mpv_initialize(core) >= 0 &&
+            MpvLib.mpv.mpv_command_string(
+                core,
+                "loadfile /nonexistent/jellyplay-capability-probe replace 0 start=+1",
+            ) >= 0
     }
 
     /** The `pitch` option (semitone-shift playback without touching speed) — mpv ≥ 0.39. */
