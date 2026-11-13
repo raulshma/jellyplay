@@ -154,9 +154,15 @@ class DesktopAudioQueueManagerRealEngineTest {
                 "balance must stay layout-gated (mono WAV output → skipped): $af",
             )
             assertEquals("mono", prop("audio-channels"), "channel mix rides audio-channels")
-            val pitch = prop("pitch")?.toDoubleOrNull()
-            assertNotNull(pitch)
-            assertTrue(abs(pitch - 1.122462) < 0.001, "pitch property = 2^(2/12), got $pitch")
+            // `pitch` landed in mpv 0.39; older distro libmpv (0.37 — Ubuntu
+            // 24.04) rejects the write silently. The chain assertions above
+            // hold there, so only this slice is capability-gated — on a
+            // current libmpv the assertion always runs.
+            if (MpvFeatureProbe.hasPitch()) {
+                val pitch = prop("pitch")?.toDoubleOrNull()
+                assertNotNull(pitch)
+                assertTrue(abs(pitch - 1.122462) < 0.001, "pitch property = 2^(2/12), got $pitch")
+            }
 
             // Audible-path proxy: playback still ADVANCES through the full
             // chain (ao=null consumes audio, so a rejected/stalled chain would
