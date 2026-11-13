@@ -195,7 +195,7 @@ mirrors the buildserver environment point-for-point:
 | Buildserver (fdroidserver) | `fdroid-release.yml` |
 | --- | --- |
 | debian/trixie64, `default-jdk-headless` → daemon JDK 21 | `debian:trixie` container, apt `default-jdk-headless` — the DEBIAN OpenJDK build, not a cross-vendor stand-in. The JDK build is byte-relevant: v0.11.10's first buildserver compare failed with identical class sets/string tables but different code bytes, and a local Debian-JDK rebuild reproduced the buildserver dex byte-for-byte (Temurin → one stable dex, Debian → another). |
-| ONE job, BOTH ABIs SEQUENTIALLY: fresh source tree per build (fdroidserver copies the tree per build version), ONE persistent Gradle home (`/home/vagrant`) — build 2 (x86_64) always runs WARM from build 1 (arm64) | ONE container job, TWO fresh clones (`c1` arm64, `c2` x86_64), built sequentially sharing one Gradle home, arm64 first (the metadata's build order). Load-bearing: the dex output has TWO stable attractor states selected by (JDK build, abiFilter, build lineage) — none of them a declared task input (a 11111-manifest build reproduced the 11112 CI dexes byte-for-byte locally; the differing bytes are R8 outlining decisions + the derived `pg-map-id` and the dex-checksum-dependent `assets/dexopt/baseline.prof`). v0.11.11 shipped a matrix lane (two parallel COLD containers) whose x86_64 binary landed in the cold state while the buildserver's warm build 2 landed in the warm one — identical class/string sets, a 44-byte code-region delta, a FAILED compare. Parallel cold builds are forbidden on this lane from now on. |
+| ONE job, BOTH ABIs SEQUENTIALLY: fresh source tree per build (fdroidserver copies the tree per build version), ONE persistent Gradle home (`/home/vagrant`) — build 2 (x86_64) always runs WARM from build 1 (arm64) | ONE container job, ONE path (`/job/tree`): clone, build arm64 (c1), wipe, re-clone into the SAME path, build x86_64 (c2), sharing one Gradle home, arm64 first (the metadata's build order). History: the dex output had TWO stable attractor states selected by build lineage/ordering — none of them a declared task input (a 11111-manifest build reproduced the 11112 CI dexes byte-for-byte locally; the differing bytes are R8 outlining decisions + the derived `pg-map-id` and the dex-checksum-dependent `assets/dexopt/baseline.prof`). v0.11.11 shipped a matrix lane (two parallel COLD containers) whose x86_64 binary landed in the cold state while the buildserver's warm build 2 landed in the warm one — identical class/string sets, a 44-byte code-region delta, a FAILED compare. Since the v0.11.12 re-cut the flip is eliminated at the ROOT: `systemProp.com.android.tools.r8.deterministicdebugging=true` in `gradle.properties` pins R8 to threadCount=1 + IdentityIROrdering on BOTH sides (R8 worklist-order bug, issuetracker.google.com 554586985). Topology parity is kept to mirror the buildserver; parallel cold builds remain forbidden on this lane. |
 | no NDK preinstalled; AGP auto-installs the requested version into writable `/opt/android-sdk/ndk` | metadata `ndk:` field + explicit `sdkmanager "ndk;28.2.13676358"` (== the `ndkVersion` pin == AGP 9.5's unpinned default, so the pre-pin v0.11.9 tag converges too). Without an NDK, AGP logs `Unable to strip … packaging them as they are` and ships UNSTRIPPED libs — a guaranteed byte-compare miss |
 | `prebuild:` seds + `rm apps/desktop` from the metadata | identical `sed` + `rm -rf` |
 | `gradlew-fdroid`: `org.gradle.daemon=false`, JVM auto-download off | `--no-daemon -Porg.gradle.java.installations.auto-download=false`, foojay removed by the sed |
@@ -227,4 +227,16 @@ Rules that keep the two channels disjoint:
   dependency graph every PR. Second catch, 2026-11-12: the plugin ALSO
   generates a per-variant `res/raw/aboutlibraries.json` whose GPL entry
   flips with a live spdx.org fetch — pinned by the committed
-  `app/src/fdroid/res/raw/aboutlibraries.json` override.)
+  `app/src/fdroid/res/raw/aboutlibraries.json` override. Third catch,
+  2026-11-13: v0.11.12's buildserver compare failed AGAIN — the same
+  44-byte closeFinally outline flip, this time in a LIBRARY-borne outline
+  (class `hse`) that PR #211's app-side Response fix did not cover. Root
+  cause pinned to R8 itself: worklist-order nondeterminism in phi-type
+  recomputation during lens code rewriting (issuetracker.google.com
+  554586985, sibling 565508292 — upgrading R8 is not a reliable fix).
+  Fixed permanently by `systemProp.com.android.tools.r8.deterministicdebugging=true`
+  in `gradle.properties` (threadCount=1 + IdentityIROrdering). Verified
+  locally before the re-cut: flag-off parallel vs serial R8 runs reproduce
+  BOTH attractor states (each byte-identical to one side of the failed
+  buildserver compare); flag-on parallel, serial and x86_64 runs are all
+  byte-identical.)

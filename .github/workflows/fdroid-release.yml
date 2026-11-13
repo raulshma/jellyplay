@@ -34,10 +34,17 @@ name: F-Droid release binaries
 # build arm64, wipe, re-clone, build x86_64 — sharing one Gradle home.
 # (An earlier theory pinned the flip on Gradle's parallel + build-cache
 # dedup race; that race is real but only a correlate — the buildserver
-# flipped even serial and cacheless. The actual fix is app-side: PR #211
-# removed the closeFinally-on-Response construct R8 flip-flopped on, so
-# the serial/cacheless gradle.properties sed was reverted from both this
-# lane and the fdroiddata prebuild.)
+# flipped even serial and cacheless. PR #211 removed ONE app-side
+# closeFinally-on-Response construct, but v0.11.12 flipped again on a
+# LIBRARY-borne closeFinally outline (class hse): the root cause is R8
+# itself — worklist-order nondeterminism in phi-type recomputation,
+# issuetracker.google.com 554586985 / 565508292. The permanent fix is
+# systemProp.com.android.tools.r8.deterministicdebugging=true in
+# gradle.properties (R8 threadCount=1 + IdentityIROrdering), which every
+# build picks up — buildserver included, no lane-side sed. Verified
+# locally: flag-on parallel and serial R8 runs are byte-identical; flag-off
+# runs reproduce both buildserver/CI attractor states. Topology parity
+# below is kept to mirror the buildserver, not to tame the flip.)
 # c2 hard-verifies dex-equality with c1, so the reproducibility invariant
 # can never silently rot.
 
@@ -203,9 +210,9 @@ jobs:
       - name: Build + verify c2 (x86_64, build 2 — warm lineage)
         # Second buildserver build: FRESH TREE AT THE SAME ABSOLUTE PATH
         # (fdroidserver re-copies the source into build/<pkg> per build),
-        # shared now-warm Gradle home. abi_index 2 = x86_64. With the
-        # determinism sed in force, c2's R8 re-executes and must land on
-        # c1's exact dexes.
+        # shared now-warm Gradle home. abi_index 2 = x86_64. c2's R8
+        # re-executes and must land on c1's exact dexes — the
+        # gradle.properties determinism flag pins both runs.
         working-directory: /job
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
