@@ -42,9 +42,11 @@ class MpvLibNumericLocaleTest {
         repeat(2) { round ->
             // What the JVM startup and a GTK init both do to this category:
             // adopt the environment locale, or a common desktop one. The
-            // C-family rejection lives inside the search: setlocale(""),
-            // which never returns NULL, would otherwise end the search on a
-            // C answer before the explicit candidates were even tried.
+            // C-family rejection lives inside the search, and every
+            // non-adoptable answer — the just-adopted C, or NULL (glibc
+            // reports an env locale that is unavailable or invalid as
+            // failure) — advances to the next candidate instead of ending
+            // the search.
             val adopted = listOf("", "en_US.UTF-8", "de_DE.UTF-8", "fr_FR.UTF-8")
                 .firstNotNullOfOrNull { name ->
                     libc.setlocale(lcNumeric, name)
