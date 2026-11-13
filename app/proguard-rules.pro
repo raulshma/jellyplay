@@ -27,6 +27,19 @@
 # Coil - consumer rules provided by library
 -dontwarn coil3.**
 
+# Coil's okhttp engine closes responses via
+# coil3.network.okhttp.internal.UtilsKt.closeQuietly — compiled from the same
+# `use`-finally idiom as kotlin.io.closeFinally. After R8 inlines it into
+# CallsKt$await$2$2$onResponse$1 (receiver narrowed to okhttp3.Response), R8's
+# close-support rewriting *sometimes* specializes the call to a
+# closeFinally(Response) synthetic — the choice flips between build machines
+# and even between runs on the same machine (two byte-stable dex attractors,
+# ±44 bytes in one outline method). That broke F-Droid reproducible builds on
+# v0.11.11/v0.11.12. Pinning the whole internal package stops the inlining, so
+# the close call stays statically AutoCloseable and there is nothing to
+# specialize — deterministic on every machine. Keep this even if Coil bumps.
+-keep class coil3.network.okhttp.internal.** { *; }
+
 # Paging - consumer rules provided by library
 -dontwarn androidx.paging.**
 
