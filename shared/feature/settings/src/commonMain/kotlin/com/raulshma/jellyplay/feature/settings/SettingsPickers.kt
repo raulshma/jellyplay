@@ -73,8 +73,19 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_save
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_picker_no_results
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_picker_search
 
-/** Lazy-list key for a null picker option — an identity sentinel no real option value can equal. */
-private val NullOptionKey = Any()
+/**
+ * Lazy-list key for a null picker option — an identity sentinel no real option
+ * value can equal. A String (not a bare `Any()`): a lazy item key flows into
+ * `SaveableStateHolder.SaveableStateProvider`, which only accepts
+ * Bundle-saveable types — an `Any()` sentinel throws
+ * `IllegalArgumentException: Type of the key java.lang.Object@… is not
+ * supported` on the row's first re-composition (scroll out and back, or a
+ * filter round trip) — issue #213, the Audio/Subtitle Language pickers whose
+ * option lists lead with a null "Default". The NUL prefix makes a collision
+ * with a real option impossible (settings pickers key on enums, ints, ISO
+ * language codes and plain labels — none can contain a control character).
+ */
+private const val NullOptionKey = "\u0000null-option"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
