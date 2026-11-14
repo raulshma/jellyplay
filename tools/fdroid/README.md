@@ -1,5 +1,67 @@
 # tools/fdroid — F-Droid release tooling
 
+## verify-repro.sh
+
+Runs the REAL F-Droid reproducible-builds check locally. It stages a scratch
+fdroiddata from the metadata draft (`docs/fdroid/<appid>.yml`) and drives the
+same fdroidserver build the fdroiddata MR CI runs — official buildserver
+Docker image, fdroidserver at the CI's pin — so the verdict is fdroidserver's
+own `Binaries:` byte-compare (apksigcopier signature copy + `apksigner
+validate`), the exact gate F-Droid applies to every release. See
+`docs/fdroid/README.md` §6 and `docs/adr/0014-fdroid-reproducible-binaries.md`.
+
+### Usage
+
+```bash
+tools/fdroid/verify-repro.sh meta-check --tag v0.11.13        # ~1 min: scratch fdroiddata + `fdroid readmeta`
+tools/fdroid/verify-repro.sh env-check  --tag v0.11.13        # ~35 min: tag build must byte-match the published reference
+tools/fdroid/verify-repro.sh local      --tag v0.11.13        # ~35 min: build HEAD (or --commit SHA) vs the published reference
+tools/fdroid/verify-repro.sh clean                            # drop the work dir + docker Gradle volumes
+```
+
+Requires docker access (docker group) and git. Everything machine-specific is
+derived at runtime — repo root, GitHub slug from the origin remote, app id
+from the draft filename, base versionCode from `version.properties` — so the
+script hardcodes no user, host path or repository name, and its default work
+dir lives under `~/.cache/fdroid-verify` (override: `--work` or
+`FDROID_VERIFY_HOME`).
+
+### Modes and verdicts
+
+- **`meta-check`** — seconds-fast validation that the comment-stripped draft
+  is metadata fdroidserver accepts. Run it after any draft edit.
+- **`env-check`** — builds the TAG commit cloned from the public remote and
+  must end in `PASS`. This proves the machine faithfully reproduces the
+  buildserver; run it FIRST, or no `local` verdict is trustworthy.
+- **`local`** — builds a (usually pre-merge) commit. An UNPUBLISHED commit can
+  never byte-match the published reference: AGP stamps the built commit into
+  `META-INF/version-control-info.textproto`. The verdict logic accounts for
+  that:
+  - `PASS` — byte-identical (only possible once the commit is pushed and
+    matches the reference's tag).
+  - `PASS-EXPECTED-DELTA` — the ONLY difference in the whole APK is the
+    `revision:` field of that textproto. Every dex/resource/lib byte is
+    identical → the commit is safe for F-Droid reproducible builds. Unpushed
+    commits are built from a `file://` mount of this checkout automatically.
+  - `FAIL` — anything else; the fdroidserver diff detail is printed.
+
+`env-check` and `local` deliberately use SEPARATE docker Gradle volumes:
+their fdroid-graph inputs are identical, so a shared cache would let the
+second run replay cached outputs and pass vacuously. Fresh volumes force full
+re-execution.
+
+### Known limitations
+
+- Only validates the arm64 (`base + 1`) build by default — pass
+  `--vercode` with the x86_64 code (`base + 2`) for the second half of the
+  metadata pair.
+- `meta-check` runs `fdroid readmeta` only; the MR CI's lint/checkupdates
+  steps are not replicated.
+- The `SOURCE_DATE_EPOCH` a scratch fdroiddata produces differs from the
+  fork clone's (fdroidserver derives it from the fdroiddata git log as a
+  fallback); it is proven byte-irrelevant — the env-check passes with a
+  different epoch than the reference was published with.
+
 ## verify-apk.sh
 
 Post-build assertions for the F-Droid (`fdroid` distribution flavor) APK.

@@ -250,3 +250,11 @@ Rules that keep the two channels disjoint:
   BOTH attractor states (each byte-identical to one side of the failed
   buildserver compare); flag-on parallel, serial and x86_64 runs are all
   byte-identical.)
+
+This whole check is automated by
+[`tools/fdroid/verify-repro.sh`](../../tools/fdroid/verify-repro.sh): it
+stages a scratch fdroiddata from the metadata draft and runs the MR CI's real
+`fdroid build` in the official buildserver Docker image, so the local verdict
+is fdroidserver's own Binaries byte-compare (env-check proves the machine
+reproduces the buildserver; local proves a pre-merge commit's payload is
+byte-identical modulo AGP's VCS stamp).
