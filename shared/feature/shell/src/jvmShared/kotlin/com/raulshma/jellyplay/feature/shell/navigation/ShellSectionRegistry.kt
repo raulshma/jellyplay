@@ -8,8 +8,18 @@ import androidx.navigation3.runtime.NavKey
  * installs: private by construction (the shells' sections register their
  * entries with the default derived contentKey), so reference identity against
  * it is an exact registered/unregistered test.
+ *
+ * A String constant (not a bare `Any()`): nav3's saveable-state entry
+ * decorator feeds `entry.contentKey` into
+ * `SaveableStateHolder.SaveableStateProvider`, which only accepts
+ * Bundle-saveable types — if a fallback entry ever rendered (a stray
+ * unregistered key slipping past the dead-end guard), an `Any()` contentKey
+ * would crash the composition with
+ * `IllegalArgumentException: Type of the key … is not supported`. `const` keeps
+ * the single-instance identity the `!==` test relies on, and the NUL prefix
+ * can never collide with a real [NavKey]'s derived contentKey.
  */
-internal val UnregisteredEntryContentKey = Any()
+internal const val UnregisteredEntryContentKey = "\u0000unregistered-entry"
 
 /**
  * Registration ledger for a [shellEntryProvider] graph — the one place a

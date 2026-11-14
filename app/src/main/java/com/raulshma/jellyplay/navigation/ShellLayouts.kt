@@ -20,6 +20,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -302,6 +303,12 @@ internal fun PhoneContent(
     // stops the back-gesture preview indicator from freezing mid-screen when the
     // scrim's full-screen clickable intercepts the edge swipe.
     BackHandler(enabled = isOverflowExpanded) { isOverflowExpanded = false }
+    // The overlay belongs to the destination it was opened on: any tab switch
+    // or back-stack push/pop dismisses it, so it never floats over a screen
+    // the user already navigated to.
+    LaunchedEffect(currentTopLevel, currentRoute) {
+        isOverflowExpanded = false
+    }
 
     // The customized overflow entries: resolved shortcuts folded with this
     // scope's click wiring + the shared decoration fold (OverflowShortcutDecoration

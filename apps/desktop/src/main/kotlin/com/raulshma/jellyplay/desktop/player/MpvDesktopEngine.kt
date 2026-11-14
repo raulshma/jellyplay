@@ -495,7 +495,7 @@ open class MpvDesktopEngine(
     }
 
     private fun createMpv(extraOptions: Map<String, String>, windowHandle: Long?): Pointer? = try {
-        val context = MpvLib.mpv.mpv_create() ?: run {
+        val context = MpvLib.create() ?: run {
             _errorFlow.tryEmit(EngineError.Render(IllegalStateException("mpv_create failed")))
             return null
         }

@@ -15,6 +15,7 @@
 	<img alt="Material 3" src="https://custom-icon-badges.demolab.com/badge/material%20you-lightblue?style=for-the-badge&logoColor=333&logo=material-you" />
 	<img alt="Media3" src="https://img.shields.io/badge/Media3-FF6F00?style=for-the-badge&logo=android&logoColor=white" />
 	<img alt="License GPL-3.0" src="https://img.shields.io/github/license/raulshma/jellyplay?style=for-the-badge&color=blue" />
+	<img alt="Total downloads" src="https://img.shields.io/github/downloads/raulshma/jellyplay/total?style=for-the-badge&logo=github&color=brightgreen" />
 	<img alt="Status - Beta" src="https://img.shields.io/badge/Status-Beta-orange?style=for-the-badge" />
 </p>
 

@@ -1,10 +1,14 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
@@ -22,6 +26,7 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import java.awt.EventQueue
 import java.awt.Point
 import java.awt.Robot
+import java.awt.Toolkit
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -37,9 +42,19 @@ import kotlin.test.assertTrue
  * injected-wheel failures there were infra artifacts, not app behavior).
  *
  * Guarded to interactive display sessions: headless CI skips both cases.
+ * Wheel-driven assertions are additionally guarded to platforms whose
+ * Compose Desktop wheel pipeline actually scrolls (see
+ * [assumeWheelScrollWorks]) — the sheet-expansion assertion runs wheel-free
+ * and stays live everywhere the display is interactive.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 class DesktopSheetWheelRobotTest {
+
+    private companion object {
+        // JUnit builds a fresh instance per test method; the probe (a real
+        // window + real Robot wheel) must run once per JVM and be shared.
+        private val wheelProbeOutcome = AtomicReference<WheelProbeOutcome?>(null)
+    }
 
     private val items = (0 until 100).map { "Item $it" }
 
@@ -108,6 +123,123 @@ class DesktopSheetWheelRobotTest {
         }
     }
 
+    /**
+     * Probes whether the underlying Compose Desktop wheel pipeline actually
+     * scrolls on THIS platform — the wheel-driven assertions can only speak
+     * for app behavior where the substrate works. The probe is a plain
+     * window + [androidx.compose.foundation.verticalScroll] (zero app code,
+     * so it can never mask an app-level regression — it only certifies the
+     * platform): 80 real Robot wheel notches must move it ≥ 40px, AND ≥ 40
+     * of those notches must demonstrably reach the probe window. Both
+     * failure signatures measured while writing this gate skip, each for its
+     * own reason:
+     * - events delivered but content stalls (Linux/X11 + CMP 1.12.2: skiko
+     *   converts every notch into a 1px Scroll chunk; Compose's scrollable
+     *   consumes the first ~6px and then stops entirely — plain scroll
+     *   state, LazyColumn, sheet, wiggle, cadence, all identical);
+     * - events NOT deliverable at all even after the same toFront/focus
+     *   retry the real cases use (screensaver/lock overlay covering the
+     *   display, or an unraisable window).
+     * The gate is conservative the other way too: a probe infrastructure
+     * failure is treated as working, never as grounds to skip.
+     */
+    private fun assumeWheelScrollWorks() {
+        val outcome = wheelProbeOutcome.updateAndGet { current -> current ?: runWheelProbe() }!!
+        org.junit.Assume.assumeTrue(
+            "real wheel input cannot drive this suite here (probe: " +
+                "${outcome.deliveredEvents} of 80 wheel events reached a Compose window, " +
+                "content scrolled ${outcome.scrolledPx}px)",
+            outcome.works,
+        )
+    }
+
+    private fun runWheelProbe(): WheelProbeOutcome {
+        val scrollRef = AtomicReference<androidx.compose.foundation.ScrollState?>(null)
+        val winRef = AtomicReference<ComposeWindow?>(null)
+        var delivered = 0
+        val listener = java.awt.event.AWTEventListener { e ->
+            // Count only wheel events whose dispatch chain lands on the probe
+            // window — a lagging sheet dialog from the previous case says
+            // nothing about this one.
+            if (e is java.awt.event.MouseWheelEvent) {
+                var owner = e.source as? java.awt.Container
+                while (owner != null && owner !is java.awt.Window) owner = owner.parent
+                if (owner === winRef.get()) delivered++
+            }
+        }
+        Toolkit.getDefaultToolkit().addAWTEventListener(listener, java.awt.AWTEvent.MOUSE_WHEEL_EVENT_MASK)
+        EventQueue.invokeLater {
+            val probe = ComposeWindow()
+            winRef.set(probe)
+            probe.setSize(300, 300)
+            probe.setLocation(50, 50)
+            probe.setContent {
+                val st = rememberScrollState()
+                scrollRef.set(st)
+                Column(Modifier.fillMaxSize().verticalScroll(st)) {
+                    repeat(100) { i -> Text("probe item $i", modifier = Modifier.padding(vertical = 20.dp)) }
+                }
+            }
+            probe.isVisible = true
+            probe.toFront()
+        }
+        try {
+            // Composition and layout must land before the first wheel: input
+            // into a window with no laid-out scrollable range produces the
+            // exact "events delivered, content stalled" signature and would
+            // cache a false platform verdict for the whole JVM. maxValue =
+            // content − viewport, so > 40 proves layout ran AND a real
+            // scrollable range exists. Bounded, and a timeout is
+            // infrastructure trouble — inconclusive, never grounds to skip
+            // (the same policy the catch below applies).
+            var ready = false
+            val deadline = System.currentTimeMillis() + 10_000
+            while (!ready && System.currentTimeMillis() < deadline) {
+                EventQueue.invokeAndWait { ready = (scrollRef.get()?.maxValue ?: 0) > 40 }
+                if (!ready) Thread.sleep(100)
+            }
+            if (!ready) return WheelProbeOutcome(works = true, deliveredEvents = -1, scrolledPx = 0)
+            val probe = winRef.get()
+                ?: return WheelProbeOutcome(works = true, deliveredEvents = 0, scrolledPx = 0)
+            val robot = Robot()
+            val center = Point(probe.locationOnScreen.x + 150, probe.locationOnScreen.y + 150)
+            robot.mouseMove(center.x, center.y)
+            Thread.sleep(300)
+            repeat(40) { robot.mouseWheel(1); Thread.sleep(25) }
+            if (delivered == 0) {
+                // No wheel reached the probe window: same infra problem the
+                // real cases retry around (foreground race, screensaver
+                // overlay). Re-assert foreground and wheel once more before
+                // concluding the platform can't deliver input.
+                EventQueue.invokeAndWait {
+                    probe.toFront()
+                    probe.requestFocus()
+                }
+                Thread.sleep(500)
+                robot.mouseMove(center.x, center.y)
+                Thread.sleep(200)
+                repeat(40) { robot.mouseWheel(1); Thread.sleep(25) }
+            }
+            Thread.sleep(800)
+            val scrolled = scrollRef.get()?.value ?: 0
+            return when {
+                // Input undeliverable even after the retry — the platform
+                // cannot host real-wheel assertions (not an app signal).
+                delivered < 40 -> WheelProbeOutcome(works = false, deliveredEvents = delivered, scrolledPx = scrolled)
+                // Events arrive but the scrollable stalls — the wheel pipeline
+                // itself is broken here (the Linux signature).
+                scrolled < 40 -> WheelProbeOutcome(works = false, deliveredEvents = delivered, scrolledPx = scrolled)
+                else -> WheelProbeOutcome(works = true, deliveredEvents = delivered, scrolledPx = scrolled)
+            }
+        } catch (_: Throwable) {
+            // Probe infrastructure failed — inconclusive, never grounds to skip.
+            return WheelProbeOutcome(works = true, deliveredEvents = -1, scrolledPx = 0)
+        } finally {
+            Toolkit.getDefaultToolkit().removeAWTEventListener(listener)
+            EventQueue.invokeLater { winRef.get()?.dispose() }
+        }
+    }
+
     @Test
     fun `robot wheel scrolls the real dialog sheet content`() =
         robotWheelSheetCase(skipPartiallyExpanded = true) { listState, sheetState, before, after ->
@@ -120,17 +252,24 @@ class DesktopSheetWheelRobotTest {
 
     @Test
     fun `desktop sheets open fully expanded and wheel scrolls a default-state caller`() =
-        robotWheelSheetCase(skipPartiallyExpanded = false) { listState, sheetState, before, after ->
-            // With the TvSafeSheet fix, a default (partial) caller state is
-            // substituted by a skip-partial state on desktop, so the tall
-            // sheet's list viewport spans most of the window instead of the
-            // half-height partial sheet that wheel scroll could never grow.
-            val viewportHeight = listState.layoutInfo.viewportEndOffset -
-                listState.layoutInfo.viewportStartOffset
-            assertTrue(
-                viewportHeight > 400,
-                "desktop sheet must open fully expanded (list viewport height=$viewportHeight)",
-            )
+        robotWheelSheetCase(
+            skipPartiallyExpanded = false,
+            preWheelAssert = { listState, _ ->
+                // With the TvSafeSheet fix, a default (partial) caller state is
+                // substituted by a skip-partial state on desktop, so the tall
+                // sheet's list viewport spans most of the window instead of the
+                // half-height partial sheet that wheel scroll could never grow.
+                // Wheel-free: measurable on every interactive display, which is
+                // why it lives ahead of the wheel gate, not beside the wheel
+                // assertion below.
+                val viewportHeight = listState.layoutInfo.viewportEndOffset -
+                    listState.layoutInfo.viewportStartOffset
+                assertTrue(
+                    viewportHeight > 400,
+                    "desktop sheet must open fully expanded (list viewport height=$viewportHeight)",
+                )
+            },
+        ) { _, _, before, after ->
             assertTrue(
                 after > before,
                 "wheel must scroll the content (firstVisibleItemIndex $before -> $after)",
@@ -139,6 +278,7 @@ class DesktopSheetWheelRobotTest {
 
     private fun robotWheelSheetCase(
         skipPartiallyExpanded: Boolean,
+        preWheelAssert: ((LazyListState, SheetState) -> Unit)? = null,
         assert: (LazyListState, SheetState, Int, Int) -> Unit,
     ) {
         assumeInteractiveDisplay()
@@ -215,6 +355,11 @@ class DesktopSheetWheelRobotTest {
             val sheetState = sheetRef.get() ?: error("sheet state missing")
             val before = listState.firstVisibleItemIndex
 
+            // Wheel-free assertions stay live even where the wheel probe
+            // rejects the platform (below).
+            preWheelAssert?.invoke(listState, sheetState)
+            assumeWheelScrollWorks()
+
             val robot = Robot()
             robot.mouseMove(center.x, center.y)
             Thread.sleep(300)
@@ -248,3 +393,6 @@ class DesktopSheetWheelRobotTest {
         }
     }
 }
+
+/** [DesktopSheetWheelRobotTest.assumeWheelScrollWorks]'s cached measurement. */
+private data class WheelProbeOutcome(val works: Boolean, val deliveredEvents: Int, val scrolledPx: Int)

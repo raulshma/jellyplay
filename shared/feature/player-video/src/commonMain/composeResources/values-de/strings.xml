@@ -343,6 +343,8 @@
     <string name="player_video_playback_mode_force_transcode_desc">Immer über den Server transkodieren</string>
 <string name="player_video_quality_title">Qualitaet</string>
     <string name="player_video_quality_description">Aenderungen gelten sofort fuer adaptive Streams. Bei Direct Play wird die maximale Wiedergabe-Bitrate festgelegt.</string>
+    <string name="player_video_quality_source">Quelle: %1$dx%2$d</string>
+    <string name="player_video_quality_original_uncapped">Original (ohne Bitraten-Limit)</string>
     <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate-Obergrenze</string>
     <string name="player_video_adaptive_bitrate_on">Begrenzt Qualitaet in getakteten Netzwerken</string>
     <string name="player_video_adaptive_bitrate_off">Aus - volle Qualitaet (Direct Play)</string>

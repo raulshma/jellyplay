@@ -373,6 +373,8 @@ internal object PlaybackModeSheetModule : PlayerSheetModule {
             // The master LEVEL line (read-only): "Level" (this dial) vs the
             // "Profile" chips above (issue #186's device-tier system).
             performanceLevel = performanceLevel,
+            sourceWidth = uiState.media.sourceVideoWidth,
+sourceHeight = uiState.media.sourceVideoHeight,
         )
     }
 }

@@ -79,6 +79,11 @@ class MpvDesktopEngineTest {
     @Test
     fun startPosition_isHonoured() {
         assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })
+        // start rides loadfile's options slot (mpv >= 0.38); an older distro
+        // libmpv rejects the load command outright — nothing here to assert.
+        assumeTrue(MpvFeatureProbe.hasLoadfileOptionsSlot(), {
+            "libmpv lacks loadfile's options slot (mpv < 0.38) — the start-in-loadfile contract can't run"
+        })
         val engine = MpvDesktopEngine(
             extraOptions = mapOf("vo" to "null", "ao" to "null", "pause" to "yes"),
         )

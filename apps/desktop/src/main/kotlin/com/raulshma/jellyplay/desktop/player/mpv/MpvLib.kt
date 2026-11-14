@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.desktop.player.mpv
 import com.sun.jna.Library
 import com.sun.jna.Memory
 import com.sun.jna.Native
+import com.sun.jna.Platform
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
 
@@ -83,8 +84,70 @@ object MpvLib {
         )
     }
 
+    /**
+     * `mpv_create` with libmpv's locale precondition established first — the
+     * ONLY way to create a core (never call [MpvC.mpv_create] directly).
+     *
+     * mpv refuses to create a core unless libc's `LC_NUMERIC` category is
+     * literally `C`/`C.UTF-8` (it parses and prints floats through libc):
+     * `mpv_create` returns NULL and prints "Non-C locale detected" on the
+     * native stderr. On Linux/macOS the JVM adopts the environment locale at
+     * startup (`setlocale(LC_ALL, "")`), so on any machine whose locale is
+     * not `C` — nearly every real desktop (`en_US.UTF-8`, `en_IN`, `de_DE`,
+     * …) — every create returned null: no playback, a failed sw-render
+     * probe, an empty audio-device list. It stayed invisible because the
+     * engine was developed on Windows (the JVM leaves the CRT locale at `C`
+     * there) and CI runners carry no libmpv, so every live-mpv suite skips.
+     *
+     * Forced before EVERY create, not once in [load]: the category is
+     * process-global and GTK resets it to the environment locale when it
+     * initialises, which the JDK triggers lazily — `Desktop.getDesktop()`
+     * (the open-in-browser path) loads it. A load-time fix would therefore
+     * break again on the first playback after that (verified live: forced
+     * `C` → `Desktop.getDesktop()` → back to `en_IN` → mpv_create NULL).
+     */
+    fun create(): Pointer? {
+        forceCNumericLocale()
+        return mpv.mpv_create()
+    }
+
+    /** libc `setlocale(3)` — the one C-library call this binding needs (see [create]). */
+    private interface CLocale : Library {
+        fun setlocale(category: Int, locale: String?): String?
+    }
+
+    /**
+     * `<locale.h>` LC_NUMERIC on the hosts whose JVM adopts the environment
+     * locale: 1 on Linux (glibc and musl), 4 on macOS. Null elsewhere —
+     * Windows by design: the JVM leaves the CRT locale at `C` there, and
+     * libmpv's own CRT instance is not the one JNA would reach.
+     */
+    private val LC_NUMERIC: Int? = when {
+        Platform.isLinux() -> 1
+        Platform.isMac() -> 4
+        else -> null
+    }
+
+    private val libc: CLocale? by lazy {
+        try {
+            Native.load(Platform.C_LIBRARY_NAME, CLocale::class.java)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun forceCNumericLocale() {
+        val category = LC_NUMERIC ?: return
+        try {
+            libc?.setlocale(category, "C")
+        } catch (_: Throwable) {
+            // Best effort — mpv_create's null return stays the failure surface.
+        }
+    }
+
     @Suppress("FunctionName", "PropertyName")
     interface MpvC : Library {
+        /** Never call directly — [create] establishes the LC_NUMERIC precondition first. */
         fun mpv_create(): Pointer?
         fun mpv_initialize(ctx: Pointer): Int
         fun mpv_terminate_destroy(ctx: Pointer)

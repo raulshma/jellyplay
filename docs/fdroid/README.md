@@ -29,10 +29,10 @@ live behind same-FQCN flavor objects — see
 ## 2. Release flow (F-Droid portion)
 
 The versioning scheme: committed `version.properties`
-(`jellyplay.versionName=0.11.9`, `jellyplay.versionCode=11090`), scheme
+(`jellyplay.versionName=0.11.13`, `jellyplay.versionCode=11130`), scheme
 `major*100000 + minor*1000 + patch*10`. F-Droid gets one APK per ABI with
 `versionCode = base + abiIndex`: `arm64-v8a = +1`, `x86_64 = +2`
-(v0.11.9 → 11091 and 11092).
+(v0.11.13 → 11131 and 11132).
 
 1. **Bump `version.properties` in the release commit** on the
    `release/vX.Y.Z` branch (name and code; the branch name still drives
@@ -40,8 +40,12 @@ The versioning scheme: committed `version.properties`
    `.agents/skills/release/SKILL.md` step 4.
 2. **Write the F-Droid changelogs** for both ABI codes:
    `fastlane/metadata/android/en-US/changelogs/<code>.txt` — one file per code
-   (`11091.txt`, `11092.txt`), identical content, ≤500 chars, plain text.
-   First release already has these; every later release adds a fresh pair.
+   (`11131.txt`, `11132.txt`), identical content, ≤500 chars, plain text.
+   Until the inclusion MR merges, F-Droid ships exactly ONE version of the
+   app, so the tag tree carries ONLY the current pair and its content is the
+   INITIAL fdroid description (what the app is + the flavor deltas), not
+   per-release notes; older pairs are pruned (old tags keep theirs — they're
+   immutable and the buildserver reads the tag tree).
 3. **Verify locally** before pushing the tag:
    ```bash
    ./gradlew :app:assemblePhoneFdroidRelease -PabiFilter=arm64-v8a
@@ -59,24 +63,30 @@ The versioning scheme: committed `version.properties`
    (`jellyplay-vX.Y.Z-fdroid-<code>.apk`) to that release — **the release is
    not done until that lane is green** (F-Droid's buildserver byte-compares
    against these; see §6).
-5. **fdroiddata submission** (after the tag is public):
-   - fork <https://gitlab.com/fdroid/fdroiddata>, branch `com.raulshma.jellyplay`;
-   - copy `docs/fdroid/com.raulshma.jellyplay.yml` to the fdroiddata repo root;
-   - replace both `commit: TO-FILL-v0.11.9-tag-commit` placeholders with the
+5. **fdroiddata MR update** (after the tag is public and the lane is green).
+   The inclusion MR is already open: fdroiddata !56862 ("New app:
+   JellyPlay"), from fork `gitlab.com/raulshma/fdroiddata` branch
+   `new-app-jellyplay`, file `metadata/com.raulshma.jellyplay.yml`. Per
+   release:
+   - copy `docs/fdroid/com.raulshma.jellyplay.yml` over that file, stripped
+     of EVERY comment (the MR file is the lean canonical form
+     `fdroid rewritemeta` emits — the reviewer notes from §3 already live in
+     the MR description);
+   - the MR carries ONLY the latest version: replace the Builds pair with
+     the new one (arm64 first, x86_64 second) and bump
+     `CurrentVersion`/`CurrentVersionCode`;
+   - replace both `commit: TO-FILL-v0.11.13-tag-commit` placeholders with the
      tag hash from step 4;
    - sanity-check metadata:
      ```bash
      fdroid readmeta
      fdroid checkupdates com.raulshma.jellyplay   # expect the two vercodes
-     fdroid build com.raulshma.jellyplay -t v0.11.9 --on-server -v   # if you can
+     fdroid build com.raulshma.jellyplay -t v0.11.13 --on-server -v   # if you can
      ```
      and confirm the flavor fragment still matches: fdroidserver turns
      `gradle: [phoneFdroid]` into the task `assemblePhoneFdroidRelease`
      (task-name fragment joined into `assemble…Release`) — see the comments in
      the yml.
-   - open the MR titled `Adding com.raulshma.jellyplay`, paste the reviewer
-     notes from §3 into the MR description, and include the `verify-apk.sh`
-     output for both ABIs.
 
 ## 3. Reviewer-risk notes (paste into the MR description)
 
