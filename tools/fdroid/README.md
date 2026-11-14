@@ -82,7 +82,10 @@ refreshed sparse clone under the work dir.
   container exiting exactly the fdroid build status the runner logged
   (`=== fdroid build exit: N`), so a container killed after the marker, a
   docker launch failure, or a lost log line fails rather than passing as
-  expected.
+  expected. Docker's status and tee's status are captured separately
+  (`PIPESTATUS`): a failing tee fails the verdict outright — under
+  `pipefail` its failure would otherwise mask the container's true exit
+  status and render the log untrustworthy.
 
 `env-check` and `local` deliberately use SEPARATE docker Gradle volumes:
 their fdroid-graph inputs are identical, so a shared cache would let the

@@ -279,8 +279,16 @@ docker_run() {
 }
 
 build_verdict() {
-  local log=$1 rc=${2:-1}
+  local log=$1 rc=${2:-1} tee_rc=${3:-0}
   local gates
+  if [ "$tee_rc" -ne 0 ]; then
+    echo "VERDICT: FAIL — tee failed (rc=$tee_rc) while capturing the container output:"
+    echo "  the log cannot be trusted as complete (and under pipefail a failing tee"
+    echo "  also masks docker's true exit status), so no status marker or exit"
+    echo "  comparison is sound. Log: $log"
+    tail -30 "$log" 2>/dev/null || true
+    return 1
+  fi
   gates=$(grep -c "POST-CI GATE FAIL" "$log" || true)
   # "N build succeeded" is fdroidserver's FINAL summary (build.py prints it
   # after AllowedAPKSigningKeys validation and every other per-build step), so
@@ -408,11 +416,18 @@ case "$mode" in
     ensure_ref_clone
     stage_data "$data" "$tag_commit" "https://github.com/$GH_SLUG.git"
     repo_mount=""
-    # Keep the container's exit status: the verdict needs it (a success marker
-    # in the log says nothing about a container killed later in the run).
-    container_rc=0
-    docker_run "$APPID:$vercode" 2>&1 | tee "$log" || container_rc=$?
-    build_verdict "$log" "$container_rc"
+    # Capture BOTH pipeline statuses in ONE array read: with pipefail, `|| rc=$?`
+    # would take the rightmost non-zero — a failing tee masks docker's true exit
+    # status, and a tee failure also makes the captured log untrustworthy in its
+    # own right. (Element-by-element reads don't work: any command, including an
+    # assignment, resets PIPESTATUS.)
+    set +e
+    docker_run "$APPID:$vercode" 2>&1 | tee "$log"
+    pipeline_rcs=("${PIPESTATUS[@]}")
+    set -e
+    container_rc=${pipeline_rcs[0]}
+    tee_rc=${pipeline_rcs[1]}
+    build_verdict "$log" "$container_rc" "$tee_rc"
     ;;
   local)
     commit=${commit_arg:-HEAD}
@@ -429,8 +444,12 @@ case "$mode" in
     fi
     ensure_ref_clone
     stage_data "$data" "$commit" "$repourl"
-    container_rc=0
-    docker_run "$APPID:$vercode" 2>&1 | tee "$log" || container_rc=$?
-    build_verdict "$log" "$container_rc"
+    set +e
+    docker_run "$APPID:$vercode" 2>&1 | tee "$log"
+    pipeline_rcs=("${PIPESTATUS[@]}")
+    set -e
+    container_rc=${pipeline_rcs[0]}
+    tee_rc=${pipeline_rcs[1]}
+    build_verdict "$log" "$container_rc" "$tee_rc"
     ;;
 esac
