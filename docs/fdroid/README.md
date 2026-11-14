@@ -250,3 +250,18 @@ Rules that keep the two channels disjoint:
   BOTH attractor states (each byte-identical to one side of the failed
   buildserver compare); flag-on parallel, serial and x86_64 runs are all
   byte-identical.)
+
+This whole check is automated by
+[`tools/fdroid/verify-repro.sh`](../../tools/fdroid/verify-repro.sh), which
+replicates the fdroiddata MR CI job-for-job in the official buildserver Docker
+image (see its README for the full parity table). `meta-check` runs every MR
+CI *test* job locally — `fdroid lint`, `fdroid rewritemeta` canonical-form
+diff, JSON-schema validation, `fdroid checkupdates --auto` (the real
+UpdateCheckData/VercodeOperation/AutoUpdateMode resolution), the git-redirect
+check, the six fdroiddata tools scripts against a sparse fdroiddata master
+clone with our metadata added (MR-branch semantics), and check-fastlane.
+`env-check`/`local` run the MR CI's real `fdroid build` (plus its post-build
+tail and the `check apk` gates: scanner, signing-key DN, manifest, ABI/R8), so
+the local verdict is fdroidserver's own Binaries byte-compare — env-check
+proves the machine reproduces the buildserver; local proves a pre-merge
+commit's payload is byte-identical modulo AGP's VCS stamp.

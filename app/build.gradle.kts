@@ -213,9 +213,7 @@ android {
             // The universal APK (all 4 ABIs of every native player
             // stack, ~3-4x the arm64 payload) is a sideload-only convenience
             // and does not build by default. The release lane opts back in
-            // (-PbuildUniversal=true in release.yml on BOTH the baseline-
-            // profile generate step — which assembles and installs release
-            // APKs on the x86_64 ciPixel8 GMD — and the assemble step), so
+            // (-PbuildUniversal=true in release.yml's assemble step), so
             // release artifacts keep it; every other build skips it.
             // -PabiFilter always forces it off: F-Droid wants exactly one
             // APK per invocation.

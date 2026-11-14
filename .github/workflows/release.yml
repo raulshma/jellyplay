@@ -114,11 +114,9 @@ jobs:
       matrix:
         flavor: [phone, tv]
     env:
-      # The universal APK is opt-in, and BOTH gradle invocations below
-      # must pass the same property — the baseline-profile lane so its GMD
-      # APK set stays identical to pre-gating, the assemble lane so the
-      # published artifact set (the rename step's known_abis) stays
-      # byte-identical. Defined once here so the two steps cannot drift.
+      # The universal APK is opt-in, and the assemble invocation below
+      # must pass the property so the published artifact set (the rename
+      # step's known_abis) stays byte-identical to pre-gating.
       BUILD_UNIVERSAL: -PbuildUniversal=true
     steps:
       - name: Checkout Repository
@@ -131,48 +129,31 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
-      # Keystore + gradlew + KVM — the shared GMD-runner prereqs
-      # (.github/actions/setup-gmd-runner; the KVM guard stays unconditional
-      # to catch runner regressions on both legs, TV included).
+      # Keystore + gradlew — the shared release-signing prereqs
+      # (.github/actions/setup-gmd-runner). No emulator runs in this lane
+      # anymore: the baseline-profile generate step was removed (its GMD run
+      # cost ~50 min per cut for a freshness delta the committed set already
+      # covers), so only the keystore decode is load-bearing here.
       - name: Setup GMD Runner
         uses: ./.github/actions/setup-gmd-runner
         with:
           keystore-base64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      # Generates the ART baseline/startup profile on a headless Gradle Managed
-      # Device and writes baseline-prof.txt + startup-prof.txt into the app's
-      # <flavor>Release sources; the androidx.baselineprofile consumer plugin
-      # merges them into the release APK automatically during assemble.
-      # Phone only — AGP cannot run TV images on Gradle Managed Devices, so the
-      # tv flavor ships without generated profiles.
-      # -PbuildUniversal=true (job-level $BUILD_UNIVERSAL): this step
-      # assembles and installs the
-      # app's release APKs on the x86_64 ciPixel8 GMD — keep its APK set
-      # identical to what it built before the universal-APK gating (the
-      # universal APK is where the emulator's ABI coverage came from).
-      - name: Generate Baseline Profile
-        if: matrix.flavor == 'phone'
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:generate${{ matrix.flavor == 'phone' && 'PhoneStore' || 'TvStore' }}ReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" $BUILD_UNIVERSAL
-
-      # saveInSrc writes the generated profiles into
-      # app/src/phoneStoreRelease/generated/baselineProfiles (baseline-prof.txt /
-      # startup-prof.txt). The generate step can silently produce nothing
-      # (emulator flake, runner regressions) and the lane would still ship a
-      # profile-less release APK — so a verification step still checks BOTH
-      # artifacts (-s, not -f: a zero-byte artifact is just as profile-less
-      # as a missing one; a partial write, e.g. only startup-prof.txt
-      # surviving, is just as profile-less as an empty directory).
+      # The APKs assemble from the COMMITTED profiles in
+      # app/src/phoneStoreRelease/generated/baselineProfiles (saveInSrc tree,
+      # merged into the release APK automatically by the
+      # androidx.baselineprofile consumer plugin during assemble). Phone only —
+      # AGP cannot run TV images on Gradle Managed Devices, so the tv flavor
+      # ships without generated profiles. That committed set is refreshed by
+      # the generate-baseline-profiles lane (weekly cron + manual dispatch),
+      # which is the ONLY place generation runs now.
       #
-      # HARD GATE (restored per the original follow-up): the profile set IS
-      # committed now (generate-baseline-profiles lane, run 38994928241 — note
-      # that lane needs -PbuildUniversal=true for the x86_64 GMD to find an
-      # APK), so a missing/empty set here means the committed tree was
+      # HARD GATE: this step checks BOTH artifacts (-s, not -f: a zero-byte
+      # artifact is just as profile-less as a missing one; a partial write,
+      # e.g. only startup-prof.txt surviving, is just as profile-less as an
+      # empty directory). A missing/empty set means the committed tree was
       # deleted or the refresh regressed — a profile-less release APK must
       # fail the release, not ship with a warning.
       - name: Verify Baseline Profile Artifacts

@@ -4,7 +4,7 @@
 # generate lane) would ship unnoticed. This lane boots the same ciPixel8 GMD the
 # profile generator uses and runs ONLY the startup benchmark (class-filtered —
 # running the module's full suite would also execute BaselineProfileGenerator,
-# which is the release lane's job, not this one).
+# which is the generate lane's job, not this one).
 #
 # CompilationMode.None() measures whatever AOT state the installed APK carries,
 # so this lane must benchmark a CI-assembled nonMinifiedRelease APK (which merges
@@ -40,7 +40,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       # Keystore + gradlew + KVM — the shared GMD-runner prereqs
       # (.github/actions/setup-gmd-runner).
