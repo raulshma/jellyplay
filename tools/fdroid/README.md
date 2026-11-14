@@ -68,11 +68,15 @@ refreshed sparse clone under the work dir.
     identical → the commit is safe for F-Droid reproducible builds. Unpushed
     commits are built from a `file://` mount of this checkout automatically.
   - `FAIL` — anything else; the fdroidserver diff detail is printed.
-- Post-build signals are parsed into the build verdict:
-  `REPRODUCIBLE-SUCCESS` (fdroidserver produced the `.binary.apk` — reference
-  signature copied and validated) strengthens a PASS; any
-  `POST-CI GATE FAIL` line (scanner, signing key, audit-gradle) fails the
-  mode.
+- Post-build signals are parsed into the build verdict. A build-mode `PASS`
+  requires ALL of: fdroidserver's FINAL `N build succeeded` summary (the
+  earlier per-build "compared built binary … successfully" message precedes
+  AllowedAPKSigningKeys signer validation, so it alone never passes),
+  container exit 0, and the post-CI suite reaching its
+  `POST-CI: ALL GATES PASS` marker (a container killed mid-post-CI is an
+  incomplete check, not a pass). Any `POST-CI GATE FAIL` line (scanner,
+  signing key, audit-gradle) fails the mode. `PASS-EXPECTED-DELTA` exists in
+  `local` mode only — `env-check` must byte-match, VCS stamp included.
 
 `env-check` and `local` deliberately use SEPARATE docker Gradle volumes:
 their fdroid-graph inputs are identical, so a shared cache would let the

@@ -279,14 +279,31 @@ docker_run() {
 }
 
 build_verdict() {
-  local log=$1
+  local log=$1 rc=${2:-1}
   local gates
   gates=$(grep -c "POST-CI GATE FAIL" "$log" || true)
-  if grep -q "compared built binary to supplied reference binary successfully" "$log" \
-     || grep -qE '[1-9][0-9]* build succeeded' "$log"; then
+  # "N build succeeded" is fdroidserver's FINAL summary (build.py prints it
+  # after AllowedAPKSigningKeys validation and every other per-build step), so
+  # it is the only reliable completion marker. The per-build "compared built
+  # binary to supplied reference binary successfully" message PRECEDES the
+  # signer check — a byte-identical APK signed with an unapproved key prints
+  # it and then fails the build — so it must never gate a PASS on its own.
+  if grep -qE '[1-9][0-9]* build succeeded' "$log"; then
     if [ "$gates" -gt 0 ]; then
       echo "VERDICT: FAIL — build/byte-compare succeeded but $gates post-CI gate(s) failed:"
       grep "POST-CI GATE FAIL" "$log"
+      return 1
+    fi
+    if [ "$rc" -ne 0 ]; then
+      echo "VERDICT: FAIL — fdroid build succeeded but the container exited $rc"
+      echo "  (docker died, or the runner failed after the build). Log: $log"
+      tail -30 "$log"
+      return 1
+    fi
+    if ! grep -q "POST-CI: ALL GATES PASS" "$log"; then
+      echo "VERDICT: FAIL — post-CI never reached its 'POST-CI: ALL GATES PASS' marker"
+      echo "  (container killed after the build, before the check-apk gates finished). Log: $log"
+      tail -30 "$log"
       return 1
     fi
     if grep -q "REPRODUCIBLE-SUCCESS" "$log"; then
@@ -317,7 +334,14 @@ build_verdict() {
     -e '^[0-9]+([,][0-9]+)?[acd][0-9]+([,][0-9]+)?$' \
     -e '^---$' \
     <<<"$detail" || true)
-  if [ "$gates" -eq 0 ] \
+  # local-mode-only exception: an unpublished commit can differ ONLY in AGP's
+  # VCS stamp. env-check MUST byte-match — any difference there, VCS-stamp
+  # included, is a FAIL — so the exception is accepted in local mode only.
+  # The post-CI suite must ALSO have completed (ALL GATES PASS marker): a
+  # container killed mid-post-CI is an incomplete check, not an expected delta.
+  if [ "$mode" = local ] \
+     && [ "$gates" -eq 0 ] \
+     && grep -q "POST-CI: ALL GATES PASS" "$log" \
      && [ -n "$detail" ] \
      && grep -q "version-control-info.textproto" <<<"$detail" \
      && grep -qE '^[<>][[:space:]]+revision:' <<<"$detail" \
@@ -330,7 +354,7 @@ build_verdict() {
     echo "  exactly what env-check proves)."
     return 0
   fi
-  echo "VERDICT: FAIL — log: $log"
+  echo "VERDICT: FAIL — container exit: $rc, log: $log"
   if [ "$gates" -gt 0 ]; then
     echo "--- post-CI gate failures ---"
     grep "POST-CI GATE FAIL" "$log"
@@ -372,10 +396,11 @@ case "$mode" in
     ensure_ref_clone
     stage_data "$data" "$tag_commit" "https://github.com/$GH_SLUG.git"
     repo_mount=""
-    if docker_run "$APPID:$vercode" 2>&1 | tee "$log"; then
-      :
-    fi
-    build_verdict "$log"
+    # Keep the container's exit status: the verdict needs it (a success marker
+    # in the log says nothing about a container killed later in the run).
+    container_rc=0
+    docker_run "$APPID:$vercode" 2>&1 | tee "$log" || container_rc=$?
+    build_verdict "$log" "$container_rc"
     ;;
   local)
     commit=${commit_arg:-HEAD}
@@ -392,9 +417,8 @@ case "$mode" in
     fi
     ensure_ref_clone
     stage_data "$data" "$commit" "$repourl"
-    if docker_run "$APPID:$vercode" 2>&1 | tee "$log"; then
-      :
-    fi
-    build_verdict "$log"
+    container_rc=0
+    docker_run "$APPID:$vercode" 2>&1 | tee "$log" || container_rc=$?
+    build_verdict "$log" "$container_rc"
     ;;
 esac

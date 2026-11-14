@@ -168,9 +168,18 @@ post_ci() {
       ks=$(mktemp -d)/keystore.jks
       echo -e "$pass\n$pass\ny\ny\ny\ny\ny\ny\ny" \
         | keytool -genkey -keyalg RSA -keystore "$ks" -keysize 2048 2> /dev/null
-      "$(apksigner_bin)" sign --ks "$ks" --in "$tmp_apk" --out "$signed_apk"
+      # CI pipes the throwaway password to apksigner's stdin (no --ks-pass).
+      # post_ci is invoked through ||, so set -e cannot stop us here: gate a
+      # signing failure explicitly or the missing .signed.apk would pass.
+      if echo "$pass" | "$(apksigner_bin)" sign --ks "$ks" \
+           --in "$tmp_apk" --out "$signed_apk"; then
+        echo "throwaway-signed APK: tmp/signed/${appid}_${vercode}.signed.apk (CI behavior for non-reproducible results)"
+      else
+        gate "throwaway-key sign failed (tmp/signed/${appid}_${vercode}.signed.apk)"
+      fi
+    else
+      echo "throwaway-signed APK: tmp/signed/${appid}_${vercode}.signed.apk (CI behavior for non-reproducible results)"
     fi
-    echo "throwaway-signed APK: tmp/signed/${appid}_${vercode}.signed.apk (CI behavior for non-reproducible results)"
   fi
 
   # CI build job tail: `./tools/build-contains-signatures.py $build || continue;
