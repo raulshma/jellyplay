@@ -7,13 +7,37 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the quality-tier offer rule (the F-Droid review's 4K-on-1080p report):
- * transcoding never upscales, so a tier above the source is a no-op offer and
- * must not render. Quality classes are width-conventional though, so the cap
+ * transcoding never upscales, so a tier above the source does not render as a
+ * resolution tier. One exception keeps playback options complete: 4K resolves
+ * to *no* bitrate cap, so below-4K sources keep it as "Original (uncapped)"
+ * ([offersOriginalUncapped]) and metered playback never loses the one-tap
+ * uncapped choice. Quality classes are width-conventional though, so the cap
  * is judged against the 16:9 height the source's width implies too — a scope
  * master (1920x800) still counts as 1080p. Unknown source dimensions keep
  * every tier; AUTO always stays.
  */
 class OfferedQualitiesTest {
+
+    @Test
+    fun unknownDimensionsShowPlainTiers() {
+        assertTrue(!offersOriginalUncapped(null, null))
+    }
+
+    @Test
+    fun below4kSourcePresentsOriginalUncapped() {
+        assertTrue(offersOriginalUncapped(null, 1080))
+        assertTrue(offersOriginalUncapped(1920, 800))
+        assertTrue(offersOriginalUncapped(1920, null))
+        assertTrue(offersOriginalUncapped(null, 360))
+    }
+
+    @Test
+    fun sourceAt4kShowsPlainTier() {
+        assertTrue(!offersOriginalUncapped(null, 2160))
+        assertTrue(!offersOriginalUncapped(3840, 1600))
+        assertTrue(!offersOriginalUncapped(null, 3000))
+    }
+
 
     @Test
     fun unknownSourceOffersEveryTier() {

@@ -344,6 +344,7 @@
 <string name="player_video_quality_title">Calidad</string>
     <string name="player_video_quality_description">Los cambios se aplican inmediatamente para transmisiones adaptativas. Para reproduccion directa, esto establece la tasa de bits maxima de reproduccion.</string>
     <string name="player_video_quality_source">Fuente: %1$dx%2$d</string>
+    <string name="player_video_quality_original_uncapped">Original (sin limite)</string>
     <string name="player_video_adaptive_bitrate_cap">Limite de bitrate adaptativo</string>
     <string name="player_video_adaptive_bitrate_on">Limita la calidad en redes medidas</string>
     <string name="player_video_adaptive_bitrate_off">Desactivado - calidad completa (reproduccion directa)</string>

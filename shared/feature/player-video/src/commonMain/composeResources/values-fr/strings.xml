@@ -344,6 +344,7 @@
 <string name="player_video_quality_title">Qualite</string>
     <string name="player_video_quality_description">Les modifications s appliquent immediatement pour les flux adaptatifs. Pour la lecture directe, cela definit le debit binaire maximal de lecture.</string>
     <string name="player_video_quality_source">Source : %1$dx%2$d</string>
+    <string name="player_video_quality_original_uncapped">Original (sans limite de debit)</string>
     <string name="player_video_adaptive_bitrate_cap">Plafond de debit adaptatif</string>
     <string name="player_video_adaptive_bitrate_on">Limite la qualite sur les reseaux limites</string>
     <string name="player_video_adaptive_bitrate_off">Desactive - qualite maximale (lecture directe)</string>

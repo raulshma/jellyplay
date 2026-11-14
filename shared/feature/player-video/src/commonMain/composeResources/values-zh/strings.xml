@@ -343,6 +343,7 @@
 <string name="player_video_quality_title">质量</string>
     <string name="player_video_quality_description">更改会立即应用于自适应流。对于直接播放，这会设置最大播放比特率。</string>
     <string name="player_video_quality_source">来源：%1$dx%2$d</string>
+    <string name="player_video_quality_original_uncapped">原画（不限码率）</string>
     <string name="player_video_adaptive_bitrate_cap">自适应比特率上限</string>
     <string name="player_video_adaptive_bitrate_on">在按流量计费的网络中限制质量</string>
     <string name="player_video_adaptive_bitrate_off">关闭 - 完整质量（直接播放）</string>

@@ -422,6 +422,7 @@
          "1080p" files) the width-matched 1080p tier only reads correctly
          once the real resolution is visible. -->
     <string name="player_video_quality_source">Source: %1$dx%2$d</string>
+    <string name="player_video_quality_original_uncapped">Original (uncapped)</string>
     <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate Cap</string>
     <string name="player_video_adaptive_bitrate_on">Caps quality on metered networks</string>
     <string name="player_video_adaptive_bitrate_off">Off - full quality (direct play)</string>

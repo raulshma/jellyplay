@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_adaptive_bitrate_off
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_adaptive_bitrate_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_description
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_original_uncapped
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_source
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_title
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_unavailable
@@ -80,12 +81,19 @@ fun QualityPickerSheet(
 }
 
 /**
- * The tiers a source can actually deliver: transcoding never upscales, so a
- * cap above the source is a no-op offer (4K on a 1080p file). Quality classes
- * are width-conventional though ("1080p" = 1920 across), so the cap is judged
+ * The resolution tiers a source can actually deliver: transcoding never
+ * upscales, so a tier above the source cannot honor its resolution meaning
+ * and does not render as one (4K on a 1080p file). Quality classes are
+ * width-conventional though ("1080p" = 1920 across), so the cap is judged
  * against the 16:9 height the source's width implies as well as its coded
  * height — a scope master (1920x800) still counts as 1080p. Unknown source
  * dimensions keep every tier; [StreamingQuality.AUTO] always stays.
+ *
+ * One tier is exempt from disappearing outright: the bitrate map resolves
+ * [StreamingQuality.UHD_4K] to *no* bitrate cap, so on a metered connection
+ * it is the only uncapped choice and dropping it would leave high-bitrate
+ * playback unreachable from the picker. [offersOriginalUncapped] flags that
+ * case and the UI keeps the tier as "Original (uncapped)" instead.
  */
 internal fun offeredQualities(sourceWidth: Int?, sourceHeight: Int?): List<StreamingQuality> =
     StreamingQuality.entries.filter { quality ->
@@ -94,6 +102,20 @@ internal fun offeredQualities(sourceWidth: Int?, sourceHeight: Int?): List<Strea
         val widthClassHeight = (sourceWidth ?: 0) * 9 / 16
         cap <= maxOf(sourceHeight ?: 0, widthClassHeight)
     }
+
+/**
+ * True when the source cannot deliver 4K: the resolution rule above filters
+ * [StreamingQuality.UHD_4K] out, and the UI keeps it offered under its other
+ * identity — the never-capped bitrate choice — labeled "Original (uncapped)".
+ * Unknown dimensions keep every tier as plain resolution tiers, and a source
+ * at or above 4K shows the tier as plain "4K" (the meanings coincide there).
+ */
+internal fun offersOriginalUncapped(sourceWidth: Int?, sourceHeight: Int?): Boolean {
+    if (sourceWidth == null && sourceHeight == null) return false
+    val cap = StreamingQuality.UHD_4K.maxHeight ?: return false
+    val widthClassHeight = (sourceWidth ?: 0) * 9 / 16
+    return cap > maxOf(sourceHeight ?: 0, widthClassHeight)
+}
 
 /**
  * The quality chip row + adaptive-bitrate toggle, shared by the standalone
@@ -132,6 +154,10 @@ fun QualityPickerOptions(
         return
     }
     val offered = offeredQualities(sourceWidth, sourceHeight)
+    // Below-4K sources keep the never-capped tier, relabeled "Original
+    // (uncapped)", so metered playback always has a one-tap uncapped choice.
+    val originalUncapped = offersOriginalUncapped(sourceWidth, sourceHeight)
+    val rows = if (originalUncapped) offered + StreamingQuality.UHD_4K else offered
     // The "Source: WxH" line: tiers key on the source's coded resolution, and
     // on scope masters the width-matched tiers (1080p on a 1920x800 file)
     // only make sense once the real frame size is visible.
@@ -143,11 +169,12 @@ fun QualityPickerOptions(
                     QualitySourceCaption(sourceWidth, sourceHeight)
                 }
                 LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                    items(offered, key = { it.name }) { quality ->
+                    items(rows, key = { it.name }) { quality ->
                         QualityTvOptionRow(
                             quality = quality,
                             currentQuality = currentQuality,
-                            offered = offered,
+                            offered = rows,
+                            originalUncapped = originalUncapped,
                             onSelect = onSelect,
                             tvFocusRequester = tvFocusRequester,
                         )
@@ -159,11 +186,12 @@ fun QualityPickerOptions(
                 if (showSourceCaption) {
                     QualitySourceCaption(sourceWidth, sourceHeight)
                 }
-                offered.forEach { quality ->
+                rows.forEach { quality ->
                     QualityTvOptionRow(
                         quality = quality,
                         currentQuality = currentQuality,
-                        offered = offered,
+                        offered = rows,
+                        originalUncapped = originalUncapped,
                         onSelect = onSelect,
                         tvFocusRequester = tvFocusRequester,
                     )
@@ -182,14 +210,14 @@ fun QualityPickerOptions(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                offered.forEach { quality ->
+                rows.forEach { quality ->
                     val isSelected = quality == currentQuality
                     FilterChip(
                         selected = isSelected,
                         onClick = { onSelect(quality) },
                         label = {
                             Text(
-                                quality.displayName,
+                                qualityOptionLabel(quality, originalUncapped),
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             )
                         },
@@ -235,6 +263,22 @@ private fun QualitySourceCaption(sourceWidth: Int?, sourceHeight: Int?) {
 }
 
 /**
+ * The row label for a quality tier. Below-4K sources present the never-capped
+ * tier under its other identity — "Original (uncapped)" — instead of a
+ * resolution the source can't deliver.
+ */
+@Composable
+private fun qualityOptionLabel(
+    quality: StreamingQuality,
+    originalUncapped: Boolean,
+): String =
+    if (originalUncapped && quality == StreamingQuality.UHD_4K) {
+        stringResource(Res.string.player_video_quality_original_uncapped)
+    } else {
+        quality.displayName
+    }
+
+/**
  * One TV quality row. Kept out of [QualityPickerOptions] so the standalone
  * sheet (own [LazyColumn]) and the combined playback-options sheet (parent
  * lazy list, [QualityPickerOptions]' `tvLazyRows = false`) render identical
@@ -245,6 +289,7 @@ private fun QualityTvOptionRow(
     quality: StreamingQuality,
     currentQuality: StreamingQuality,
     offered: List<StreamingQuality>,
+    originalUncapped: Boolean,
     onSelect: (StreamingQuality) -> Unit,
     tvFocusRequester: FocusRequester,
 ) {
@@ -262,7 +307,10 @@ private fun QualityTvOptionRow(
         ),
         trailingCheck = true,
     ) {
-        TvOptionRowLabel(text = quality.displayName, selected = isSelected)
+        TvOptionRowLabel(
+            text = qualityOptionLabel(quality, originalUncapped),
+            selected = isSelected,
+        )
     }
 }
 
