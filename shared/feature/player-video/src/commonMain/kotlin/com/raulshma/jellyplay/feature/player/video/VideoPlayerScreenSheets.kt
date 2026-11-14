@@ -353,6 +353,8 @@ internal fun PlayerSheetRouter(
                 onToggleAdaptiveBitrate = { viewModel.onEvent(VideoPlayerUiEvent.SetAdaptiveBitrateEnabled(it)) },
                 onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetStreamingQuality(it)) },
                 onDismiss = inputs.dismissSheet,
+                sourceWidth = uiState.media.sourceVideoWidth,
+sourceHeight = uiState.media.sourceVideoHeight,
             )
         }
         is PlayerSheet.PlaybackMode ->

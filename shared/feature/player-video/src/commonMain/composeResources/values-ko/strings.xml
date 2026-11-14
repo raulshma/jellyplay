@@ -342,6 +342,7 @@
     <string name="player_video_playback_mode_force_transcode_desc">항상 서버를 통해 트랜스코딩</string>
 <string name="player_video_quality_title">품질</string>
     <string name="player_video_quality_description">적응형 스트림의 경우 변경 사항이 즉시 적용됩니다. 다이렉트 재생에서는 최대 재생 비트레이트를 설정합니다.</string>
+    <string name="player_video_quality_source">소스: %1$dx%2$d</string>
     <string name="player_video_adaptive_bitrate_cap">적응형 비트레이트 상한</string>
     <string name="player_video_adaptive_bitrate_on">종량제 네트워크에서 품질 제한</string>
     <string name="player_video_adaptive_bitrate_off">꺼짐 - 최고 품질(다이렉트 재생)</string>

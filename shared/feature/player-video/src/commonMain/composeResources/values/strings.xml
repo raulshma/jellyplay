@@ -418,6 +418,10 @@
     <string name="player_video_playback_mode_force_transcode_desc">Always transcode via the server</string>
 <string name="player_video_quality_title">Quality</string>
     <string name="player_video_quality_description">Changes apply immediately for adaptive streams. For direct play, this sets the maximum playback bitrate.</string>
+    <!-- The coded frame size behind the tier list: on scope masters (1920x800
+         "1080p" files) the width-matched 1080p tier only reads correctly
+         once the real resolution is visible. -->
+    <string name="player_video_quality_source">Source: %1$dx%2$d</string>
     <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate Cap</string>
     <string name="player_video_adaptive_bitrate_on">Caps quality on metered networks</string>
     <string name="player_video_adaptive_bitrate_off">Off - full quality (direct play)</string>

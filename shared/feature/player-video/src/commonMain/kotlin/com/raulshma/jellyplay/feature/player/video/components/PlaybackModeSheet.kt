@@ -102,6 +102,8 @@ fun PlaybackModeSheet(
      * two labels never blur.
      */
     performanceLevel: com.raulshma.jellyplay.core.model.PerformanceLevel? = null,
+    sourceWidth: Int? = null,
+    sourceHeight: Int? = null,
 ) {
     val tvMode = LocalTvMode.current
     PickerSheetScaffold(
@@ -195,6 +197,8 @@ fun PlaybackModeSheet(
                         tvFocusRequester = qualityFocusRequester,
                         enabled = qualityAvailable,
                         tvLazyRows = false,
+                        sourceWidth = sourceWidth,
+                        sourceHeight = sourceHeight,
                     )
                 }
 
@@ -326,6 +330,8 @@ fun PlaybackModeSheet(
                     isTv = false,
                     tvFocusRequester = qualityFocusRequester,
                     enabled = qualityAvailable,
+                    sourceWidth = sourceWidth,
+                    sourceHeight = sourceHeight,
                 )
 
                 // The Performance section (issue #186 §5.11): Android-only in

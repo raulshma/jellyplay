@@ -343,6 +343,7 @@
     <string name="player_video_playback_mode_force_transcode_desc">Transcodificar sempre via servidor</string>
 <string name="player_video_quality_title">Qualidade</string>
     <string name="player_video_quality_description">As alteracoes se aplicam imediatamente para streams adaptativos. Para reproducao direta, isso define a taxa de bits maxima de reproducao.</string>
+    <string name="player_video_quality_source">Origem: %1$dx%2$d</string>
     <string name="player_video_adaptive_bitrate_cap">Limite de bitrate adaptativo</string>
     <string name="player_video_adaptive_bitrate_on">Limita a qualidade em redes limitadas</string>
     <string name="player_video_adaptive_bitrate_off">Desativado - qualidade total (reproducao direta)</string>

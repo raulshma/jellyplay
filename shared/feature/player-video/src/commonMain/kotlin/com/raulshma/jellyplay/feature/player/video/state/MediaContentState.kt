@@ -54,6 +54,14 @@ data class MediaContentState(
     val videoFrameRate: Float?
         get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.realFrameRate
 
+    /** Height of the first video stream; null until the load resolves it. */
+    val sourceVideoHeight: Int?
+        get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.height
+
+    /** Width of the first video stream; null until the load resolves it. */
+    val sourceVideoWidth: Int?
+        get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.width
+
     /**
      * The player "Downloaded" badge derivation: shown only while the current
      * session serves the stored download, rendered beside the play-method

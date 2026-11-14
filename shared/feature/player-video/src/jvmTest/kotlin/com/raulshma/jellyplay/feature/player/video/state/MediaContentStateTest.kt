@@ -82,4 +82,56 @@ class MediaContentStateTest {
         )
         assertEquals(23.976f, state.videoFrameRate!!, 0.0001f)
     }
+
+    @Test
+    fun sourceVideoHeight_nullWhenNoVideoStream() {
+        val state = MediaContentState(mediaStreams = emptyList())
+        assertNull(state.sourceVideoHeight)
+    }
+
+    @Test
+    fun sourceVideoHeight_nullWhenHeightAbsent() {
+        val state = MediaContentState(
+            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, height = null)),
+        )
+        assertNull(state.sourceVideoHeight)
+    }
+
+    @Test
+    fun sourceVideoHeight_usesFirstVideoStream() {
+        val state = MediaContentState(
+            mediaStreams = listOf(
+                MediaStream(index = 0, type = StreamType.AUDIO, height = 480),
+                MediaStream(index = 1, type = StreamType.VIDEO, height = 1080),
+                MediaStream(index = 2, type = StreamType.VIDEO, height = 2160),
+            ),
+        )
+        assertEquals(1080, state.sourceVideoHeight)
+    }
+
+    @Test
+    fun sourceVideoWidth_nullWhenNoVideoStream() {
+        val state = MediaContentState(mediaStreams = emptyList())
+        assertNull(state.sourceVideoWidth)
+    }
+
+    @Test
+    fun sourceVideoWidth_nullWhenWidthAbsent() {
+        val state = MediaContentState(
+            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, width = null)),
+        )
+        assertNull(state.sourceVideoWidth)
+    }
+
+    @Test
+    fun sourceVideoWidth_usesFirstVideoStream() {
+        val state = MediaContentState(
+            mediaStreams = listOf(
+                MediaStream(index = 0, type = StreamType.AUDIO, width = 640),
+                MediaStream(index = 1, type = StreamType.VIDEO, width = 1920),
+                MediaStream(index = 2, type = StreamType.VIDEO, width = 3840),
+            ),
+        )
+        assertEquals(1920, state.sourceVideoWidth)
+    }
 }
