@@ -26,6 +26,7 @@
 # <me@raulshma.xyz>.
 Categories:
   - Multimedia
+  - Online Media Player
 License: GPL-3.0-only
 # LICENSE is plain GNU GPL v3 with zero occurrences of "or later"
 # (verified by grep against the repo LICENSE file) → GPL-3.0-only, NOT GPL-3.0+.
@@ -145,6 +146,7 @@ Builds:
     # fdroidserver globs build outputs automatically — same pattern LensCast
     # used. Verified on the live MR: fdroid build finds the outputs with no
     # explicit output:.
+
   - versionName: 0.11.13
     versionCode: 11132
     commit: TO-FILL-v0.11.13-tag-commit # git rev-parse v0.11.13
@@ -174,8 +176,8 @@ UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
 # major*100000 + minor*1000 + patch*10). Each tag yields TWO builds: base+1
 # (arm64-v8a) and base+2 (x86_64).
 VercodeOperation:
-  - '%c + 1' # arm64-v8a → e.g. 11131
-  - '%c + 2' # x86_64   → e.g. 11132
+  - '%c + 1'
+  - '%c + 2'
 # Plain `Version` (no format suffix): with VercodeOperation producing two codes
 # per tag there is no single per-version APK name to point at; fdroidserver
 # auto-detects the built APKs (licaon-kter's concern in the plan review).
