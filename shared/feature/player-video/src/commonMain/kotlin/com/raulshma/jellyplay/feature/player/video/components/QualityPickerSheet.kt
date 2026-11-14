@@ -106,7 +106,9 @@ internal fun offeredQualities(sourceWidth: Int?, sourceHeight: Int?): List<Strea
 /**
  * True when the source cannot deliver 4K: the resolution rule above filters
  * [StreamingQuality.UHD_4K] out, and the UI keeps it offered under its other
- * identity — the never-capped bitrate choice — labeled "Original (uncapped)".
+ * identity — the never-quality-capped bitrate choice — labeled "Original
+ * (uncapped)". "Uncapped" means no tier-derived cap: a manually configured
+ * bandwidth cap still applies (see [com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager]).
  * Unknown dimensions keep every tier as plain resolution tiers, and a source
  * at or above 4K shows the tier as plain "4K" (the meanings coincide there).
  */
