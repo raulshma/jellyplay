@@ -1,51 +1,55 @@
 # Reference draft of the fdroiddata metadata for JellyPlay.
 # This file lives in the JellyPlay repo as the source of truth; it is NOT
-# submitted here. When submitting: fork https://gitlab.com/fdroid/fdroiddata,
-# branch `com.raulshma.jellyplay`, copy this file to the fdroiddata repo root,
-# fill the placeholders flagged below, and open an MR (see docs/fdroid/README.md).
+# submitted here. The live submission is fdroiddata MR !56862 ("New app:
+# JellyPlay"), from fork gitlab.com/raulshma/fdroiddata branch
+# `new-app-jellyplay`, file `metadata/com.raulshma.jellyplay.yml`.
 #
-# Author info verified from `git log --format='%an <%ae>'` (2026-11-09):
-# raulshma <raulshma@gmail.com>.
+# MR policy (per maintainer decision, 2026-11-14):
+#   * the MR carries ONLY the LATEST version's Builds pair — each release
+#     REPLACES the pair (fdroidserver does not need the history; the tag
+#     history stays in the repo) — and bumps CurrentVersion/CurrentVersionCode;
+#   * the MR file has ZERO comments — the lean canonical byte form that
+#     `fdroid rewritemeta` emits (schema/lint run on it in MR CI).
+# This draft is the annotated template of that file: same fields, same byte
+# forms, plus comments. Per release: rewrite the Builds pair below to the new
+# version, fill the commit hash once the tag is public and the fdroid lane
+# attached the reference binaries (MR CI byte-compares against them), then
+# copy the file into the MR branch stripped of every comment. See
+# docs/fdroid/README.md.
+#
+# Field order/byte forms below mirror the live MR exactly: folded `Binaries:`
+# and `UpdateCheckData:` keys carry ONE trailing space after the colon, there
+# is no blank line between `Repo:` and `Binaries:`, and AllowedAPKSigningKeys
+# sits right after the Builds block.
+#
+# Author info updated during MR review (2026-11-13): Rahul Sharma
+# <me@raulshma.xyz>.
 Categories:
   - Multimedia
 License: GPL-3.0-only
 # LICENSE is plain GNU GPL v3 with zero occurrences of "or later"
 # (verified by grep against the repo LICENSE file) → GPL-3.0-only, NOT GPL-3.0+.
-AuthorName: raulshma
-AuthorEmail: raulshma@gmail.com
+AuthorName: Rahul Sharma
+AuthorEmail: me@raulshma.xyz
+AuthorWebSite: https://raulshma.xyz
 SourceCode: https://github.com/raulshma/jellyplay
 IssueTracker: https://github.com/raulshma/jellyplay/issues
-# Deliberately no WebSite field (linsui flags marketing sites; the GitHub repo
-# is enough).
+Changelog: https://github.com/raulshma/jellyplay/releases
+
+Name: JellyPlay
+AutoName: JellyPlay
+# Deliberately no WebSite: field (linsui flags marketing sites; the GitHub
+# repo is enough). AuthorWebSite above is the author's personal page — a
+# different field, added during MR review.
+
 RepoType: git
 Repo: https://github.com/raulshma/jellyplay.git
-AutoName: JellyPlay
-
-UpdateCheckMode: Tags
-# Desktop pre-releases are tagged vX.Y.Z-alpha.N; only semver tags are releases.
-UpdateCheckRegex: ^v\d+\.\d+\.\d+$
-# Committed version.properties carries the base code (0.11.10 → 11100; scheme
-# major*100000 + minor*1000 + patch*10). Each tag yields TWO builds: base+1
-# (arm64-v8a) and base+2 (x86_64).
-VercodeOperation:
-  - '%c + 1' # arm64-v8a → e.g. 11101
-  - '%c + 2' # x86_64   → e.g. 11102
-# ORDERING INVARIANT (fdroidserver auto-update semantics, checkupdates.py):
-# a new detected version deep-copies the LAST len(VercodeOperation) Builds
-# entries and zips the SORTED computed codes onto them. Builds entries for
-# every future release must therefore be appended in this same order —
-# arm64 (+1) first, x86_64 (+2) second — or the auto-generated builds
-# silently swap their ABIs.
-UpdateCheckData: version.properties|jellyplay\.versionCode=(\d+)|.|jellyplay\.versionName=([\d.]+)
-# Plain `Version` (no format suffix): with VercodeOperation producing two codes
-# per tag there is no single per-version APK name to point at; fdroidserver
-# auto-detects the built APKs (licaon-kter's concern in the plan review).
-AutoUpdateMode: Version
-
+Binaries: 
+  https://github.com/raulshma/jellyplay/releases/download/v%v/jellyplay-v%v-fdroid-%c.apk
 # Reproducible builds via developer-signed reference binaries
 # (docs/adr/0014-fdroid-reproducible-binaries.md). fdroidserver expands this
 # single template PER BUILD (%v → versionName, %c → the build's versionCode:
-# 11101 arm64-v8a / 11102 x86_64), downloads the APK from the release, and
+# 11131 arm64-v8a / 11132 x86_64), downloads the APK from the release, and
 # byte-compares it against the buildserver's own unsigned build
 # (apksigcopier + apksigner validate) — mismatch marks the build FAILED, so
 # the release blocks instead of silently diverging. The binaries are cut by
@@ -59,22 +63,27 @@ AutoUpdateMode: Version
 # (metadata.py fieldtypes default) and its FieldValidator applies
 # ^http[s]?:// to the raw value — a list stringifies to "['https://…']" and
 # fails validation. NOTE: `fdroid rewritemeta` refolds the long URL into the
-# two-line form below (with a trailing space after the key) — the MR file
-# must match that canonical byte form or rewritemeta fails; it also wants NO
-# blank line between Repo: and Binaries:, and AllowedAPKSigningKeys placed
-# right after the Builds block.
-Binaries:
-  https://github.com/raulshma/jellyplay/releases/download/v%v/jellyplay-v%v-fdroid-%c.apk
+# two-line form above (with a trailing space after the key) — the MR file
+# must match that canonical byte form or rewritemeta fails.
 
 Builds:
   # NOTE (mezinster's hash-pin concern): `commit:` MUST be the tag commit,
   # i.e. the output of `git rev-parse vX.Y.Z` at release time — not a dev
-  # branch head. Fill BOTH entries with the same hash. The dex/manifest
-  # telemetry audit evidence is tools/fdroid/verify-apk.sh (run it on the
-  # built APKs and paste the output into the MR description).
-  - versionName: 0.11.10
-    versionCode: 11101
-    commit: b8866e4e537059e799935e2d1df370ee2a720a11 # git rev-parse v0.11.10
+  # branch head. Fill BOTH entries of the pair with the same hash. The
+  # dex/manifest telemetry audit evidence is tools/fdroid/verify-apk.sh (run
+  # it on the built APKs and paste the output into the MR description).
+  # ORDERING INVARIANT (fdroidserver auto-update semantics, checkupdates.py):
+  # post-merge, a new detected version deep-copies the LAST
+  # len(VercodeOperation) Builds entries and zips the SORTED computed codes
+  # onto them — the pair must ALWAYS be arm64 (+1) first, x86_64 (+2)
+  # second, or the builds silently swap their ABIs.
+  - versionName: 0.11.13
+    versionCode: 11131
+    commit: TO-FILL-v0.11.13-tag-commit # git rev-parse v0.11.13
+    # `subdir: app` (added during MR review): fdroidserver builds inside
+    # app/, so the task fragment below assembles assemblePhoneFdroidRelease
+    # and the prebuild sed reaches the root settings file via ../.
+    subdir: app
     # jellyfin-plugin-jellyplay is a real git submodule (.gitmodules:
     # https://github.com/raulshma/jellyfin-plugin-jellyplay.git) — required.
     submodules: true
@@ -90,9 +99,6 @@ Builds:
     # green on the live MR).
     gradle:
       - phoneFdroid
-    # The distribution dimension switches seams (fonts, cast, updater, RAR)
-    # but the per-ABI packaging comes from the abiFilter Gradle property on
-    # splits.abi (app/build.gradle.kts).
     rm:
       - apps/desktop
     prebuild: sed -i -e '/foojay-resolver/d' -e '/jogamp.org/d' -e '/apps:desktop/d'
@@ -126,8 +132,11 @@ Builds:
     # drops from settings.gradle.kts, so the fdroid lane requests NO
     # toolchain; nothing to auto-download (and the buildserver disables JVM
     # auto-provisioning anyway). No sudo needed.
-    # The distribution dimension switches seams (fonts, cast, updater, RAR)
-    # but the per-ABI packaging comes from the abiFilter Gradle property on
+    # Since the v0.11.12 re-cut the dex-attractor flip itself is gone:
+    # `systemProp.com.android.tools.r8.deterministicdebugging=true` in the
+    # committed gradle.properties pins R8 on BOTH sides (see
+    # docs/fdroid/README.md §6).
+    # The per-ABI packaging comes from the abiFilter Gradle property on
     # splits.abi (app/build.gradle.kts).
     gradleprops:
       - abiFilter=arm64-v8a
@@ -136,9 +145,10 @@ Builds:
     # fdroidserver globs build outputs automatically — same pattern LensCast
     # used. Verified on the live MR: fdroid build finds the outputs with no
     # explicit output:.
-  - versionName: 0.11.10
-    versionCode: 11102
-    commit: b8866e4e537059e799935e2d1df370ee2a720a11 # git rev-parse v0.11.10
+  - versionName: 0.11.13
+    versionCode: 11132
+    commit: TO-FILL-v0.11.13-tag-commit # git rev-parse v0.11.13
+    subdir: app
     submodules: true
     gradle:
       - phoneFdroid
@@ -156,5 +166,23 @@ Builds:
 # binary). fdroidserver refuses Binaries APKs signed by anything else.
 AllowedAPKSigningKeys: 7db42d4a2ff53c7b0f5914531dcdfaf5620c98715d4889813db1d88d31b6db0b
 
-CurrentVersion: 0.11.10
-CurrentVersionCode: 11102
+AutoUpdateMode: Version
+# Desktop pre-releases are tagged vX.Y.Z-alpha.N; the inline regex keeps only
+# semver tags as releases.
+UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
+# Committed version.properties carries the base code (0.11.13 → 11130; scheme
+# major*100000 + minor*1000 + patch*10). Each tag yields TWO builds: base+1
+# (arm64-v8a) and base+2 (x86_64).
+VercodeOperation:
+  - '%c + 1' # arm64-v8a → e.g. 11131
+  - '%c + 2' # x86_64   → e.g. 11132
+# Plain `Version` (no format suffix): with VercodeOperation producing two codes
+# per tag there is no single per-version APK name to point at; fdroidserver
+# auto-detects the built APKs (licaon-kter's concern in the plan review).
+UpdateCheckData: 
+  version.properties|jellyplay\.versionCode=(\d+)|.|jellyplay\.versionName=([\d.]+)
+# Auto-update reads the committed version.properties (code + name) via the
+# expression above, so a release that forgets the version.properties bump is
+# never detected by the bot.
+CurrentVersion: 0.11.13
+CurrentVersionCode: 11132
