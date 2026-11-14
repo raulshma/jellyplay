@@ -23,7 +23,8 @@ import org.junit.runner.RunWith
  *   tab. Keeping this pass narrow is what keeps `startup-prof.txt` tight —
  *   feature-screen warm-up must never ride inside it.
  *
- * - FEATURE passes (every other @Test) run with `includeInStartupProfile =
+ * - The FEATURE passes ([generateNavigationAndFeedsProfile],
+ *   [generateDetailsAndPlayerProfile]) run with `includeInStartupProfile =
  *   false`: their rules merge into `baseline-prof.txt` only, so those screens
  *   stay AOT-compiled for regular runs without claiming startup priority.
  *   Where the app offers a deep link (`android.intent.action.VIEW` on the
@@ -32,6 +33,14 @@ import org.junit.runner.RunWith
  *   otherwise the gesture is best-effort and skips silently on devices where
  *   the surface isn't reachable (not signed in, onboarding, music/video mode,
  *   or TV form factor).
+ *
+ * Deliberately FEW passes: every `collect` block restarts the app, and each
+ * cold launch of this app on the ciPixel8 GMD costs minutes of wall clock
+ * (nine per-pass-cold-launch generations ran 37-44 min on-device). The
+ * navigation pass therefore walks all top-level destinations inside ONE warm
+ * process — profile recording is method-level, so classes executed via
+ * onNewIntent navigation land in the profile exactly as they would from a
+ * fresh launch; only the redundant cold-launch time is skipped.
  *
  * No pass can fail generation: all navigation is guarded, so an unsigned
  * fresh emulator (the CI GMD) simply yields a narrower profile.
@@ -82,12 +91,27 @@ class BaselineProfileGenerator {
     // ------------------------------------------------------------------
 
     /**
-     * Home feed scroll: warms the LazyColumn row composables, MediaImage +
-     * Coil decode pipeline, and the home ViewModel state machine. Best-effort
-     * — an empty/onboarding screen just consumes the gestures.
+     * Navigation + feeds pass: one warm-process circuit through every
+     * top-level destination, replacing the nine per-screen cold-launch
+     * passes this generator used to run (37-44 min on-device; see the class
+     * doc). In order:
+     *
+     * - Home feed scroll — LazyColumn row composables, MediaImage + Coil
+     *   decode pipeline, home ViewModel state machine.
+     * - Deep-link circuit — library (with a grid scroll), search, settings,
+     *   downloads (with a grid scroll). MainActivity is singleTask, so each
+     *   link lands as onNewIntent + pending-route navigation in the same
+     *   live process; backing out returns to the launcher and the next link
+     *   warms the app again.
+     * - Labeled surfaces with no deep-link host — Live TV (nav drawer /
+     *   bottom bar) and the music-mode "Browse" tab, via guarded taps after
+     *   a shell relaunch.
+     *
+     * Every step is best-effort: an unsigned fresh emulator simply consumes
+     * the gestures and yields a narrower profile.
      */
     @Test
-    fun generateHomeFeedProfile() {
+    fun generateNavigationAndFeedsProfile() {
         baselineProfileRule.collect(
             packageName = TARGET_PACKAGE,
             includeInStartupProfile = false,
@@ -95,81 +119,35 @@ class BaselineProfileGenerator {
             pressHome()
             startActivityAndWait()
             device.waitForIdle()
-            scrollHomeFeed()
-        }
-    }
 
-    /**
-     * Library grid: deep links straight to the Library top-level destination
-     * (`jellyplay://library` — deterministic, no tab-label lookup) and
-     * scrolls it so LibraryScreen + MediaCard + the adaptive grid layout +
-     * Coil prefetcher are exercised.
-     */
-    @Test
-    fun generateLibraryGridProfile() {
-        baselineProfileRule.collect(
-            packageName = TARGET_PACKAGE,
-            includeInStartupProfile = false,
-        ) {
-            pressHome()
+            // Home feed rows.
+            scrollHomeFeed()
+
+            // Deep-link circuit through the top-level destinations.
             startDeepLinkAndWait(libraryDeepLink)
             scrollGrid()
             device.pressBack()
             device.waitForIdle()
-        }
-    }
 
-    /**
-     * Search screen via `jellyplay://search`, so SearchScreen + the
-     * text-field focus pipeline are warmed without depending on tab-label
-     * lookups.
-     */
-    @Test
-    fun generateSearchProfile() {
-        baselineProfileRule.collect(
-            packageName = TARGET_PACKAGE,
-            includeInStartupProfile = false,
-        ) {
-            pressHome()
             startDeepLinkAndWait(searchDeepLink)
             device.pressBack()
             device.waitForIdle()
-        }
-    }
 
-    /**
-     * Settings screen via `jellyplay://settings`, so SettingsScreen's
-     * LazyColumn and preference rows are warmed.
-     */
-    @Test
-    fun generateSettingsProfile() {
-        baselineProfileRule.collect(
-            packageName = TARGET_PACKAGE,
-            includeInStartupProfile = false,
-        ) {
-            pressHome()
             startDeepLinkAndWait(settingsDeepLink)
             device.pressBack()
             device.waitForIdle()
-        }
-    }
 
-    /**
-     * Downloads screen via `jellyplay://downloads` (deterministic) plus a
-     * scroll so the downloads list rows are exercised when the device has
-     * content.
-     */
-    @Test
-    fun generateDownloadsProfile() {
-        baselineProfileRule.collect(
-            packageName = TARGET_PACKAGE,
-            includeInStartupProfile = false,
-        ) {
-            pressHome()
             startDeepLinkAndWait(downloadsDeepLink)
             scrollGrid()
             device.pressBack()
             device.waitForIdle()
+
+            // Labeled surfaces: relaunch the shell so the nav entries are on
+            // screen, then guarded-tap Live TV and the music-mode Browse tab.
+            startActivityAndWait()
+            device.waitForIdle()
+            tapAndWait(liveTvLabel)
+            tapAndWait(audioBrowseTabLabel)
         }
     }
 
@@ -207,45 +185,6 @@ class BaselineProfileGenerator {
             }
         }
     }
-
-    /**
-     * Live TV pass: best-effort tap on the "Live TV" entry (nav drawer /
-     * bottom bar label — there is no deep-link host for live TV). Skips
-     * silently when the entry isn't visible (unsigned, live TV disabled, or
-     * offline-hidden).
-     */
-    @Test
-    fun generateLiveTvProfile() {
-        baselineProfileRule.collect(
-            packageName = TARGET_PACKAGE,
-            includeInStartupProfile = false,
-        ) {
-            pressHome()
-            startActivityAndWait()
-            device.waitForIdle()
-            tapAndWait(liveTvLabel)
-            device.pressHome()
-        }
-    }
-
-    /**
-     * Audio browse pass: the music-mode bottom-nav "Browse" tab (mirrors
-     * MUSIC_TOP_LEVEL_ROUTES) is the only statically reachable audio surface.
-     * Skips silently on video-mode devices.
-     */
-    @Test
-    fun generateAudioBrowseProfile() {
-        baselineProfileRule.collect(
-            packageName = TARGET_PACKAGE,
-            includeInStartupProfile = false,
-        ) {
-            pressHome()
-            startActivityAndWait()
-            device.waitForIdle()
-            tapAndWait(audioBrowseTabLabel)
-            device.pressHome()
-        }
-    }
 }
 
 /**
@@ -277,7 +216,7 @@ private fun MacrobenchmarkScope.scrollHomeFeed() {
 
 /**
  * Scrolls the current screen's grid/list surface. Same gesture shape as
- * [scrollHomeFeed]; kept separate so each pass's intent reads clearly.
+ * [scrollHomeFeed], fewer iterations — grid screens are denser per swipe.
  */
 private fun MacrobenchmarkScope.scrollGrid() {
     val w = device.displayWidth
@@ -290,7 +229,7 @@ private fun MacrobenchmarkScope.scrollGrid() {
 
 /**
  * Taps the phone bottom-nav "Library" tab if present — tap ONLY, no
- * scrolling (that lives in the library feature pass). The label mirrors
+ * scrolling (that lives in the navigation pass's library leg). The label mirrors
  * [com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES]. Skips
  * silently when not found (unsigned, onboarding, music-mode, TV form factor).
  */

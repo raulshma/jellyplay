@@ -1,14 +1,18 @@
-# Baseline-profile generation lane: the consumer plugin's
-# saveInSrc fallback tree (app/src/phoneStoreRelease/generated/baselineProfiles) has
-# never been populated — every non-CI release build (local assembles,
-# sideloads, macrobenchmarks against local APKs) therefore ships with ZERO
-# baseline/startup rules, typically 20-30% worse cold-start TTID. The release
-# lane regenerates profiles on every tagged release (its APKs are always
-# covered), but its runner is ephemeral, so the committed fallback stays empty.
+# Baseline-profile generation lane: the ONLY place profiles are generated.
+# release.yml no longer regenerates in-lane (that GMD run cost ~50 min per
+# cut, on the critical path, for a freshness delta of at most days) — it
+# assembles straight from the committed saveInSrc tree
+# (app/src/phoneStoreRelease/generated/baselineProfiles) and hard-gates on its
+# presence. Keeping that tree fresh is this lane's job.
 #
-# This lane regenerates on a proper KVM runner and COMMITS the two artifacts to
-# the dispatching branch, closing the gap. Manual dispatch only — never
-# scheduled — so a human decides when to refresh the committed profiles.
+# Refresh cadence: weekly cron (Sunday 04:00 UTC — offset from
+# startup-benchmark.yml's 03:00 so the two GMD lanes never contend) commits
+# to the default branch, plus workflow_dispatch so a human can refresh any
+# branch on demand (the recovery recipe when the release lane's hard gate
+# fires). Store APK profiles can therefore trail main by at most a week;
+# stale rules are simply dropped at profile-compile time, and F-Droid
+# reproducibility is unaffected — its lane builds from the same committed
+# tree on both sides of the byte-compare.
 #
 # Local generation note: Gradle Managed Device boot of the ciPixel8 AOSP image
 # fails on many Windows dev boxes (GMD "No matching Apks found" after an
@@ -18,6 +22,10 @@ name: Generate Baseline Profiles
 
 on:
   workflow_dispatch:
+  schedule:
+    # Weekly, Sunday 04:00 UTC — off-peak, and one hour after the
+    # startup-benchmark lane's own GMD run.
+    - cron: '0 4 * * 0'
 
 permissions:
   contents: write
@@ -37,7 +45,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       # Keystore + gradlew + KVM — the shared GMD-runner prereqs
       # (.github/actions/setup-gmd-runner).
@@ -51,8 +59,8 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        # -PbuildUniversal=true is REQUIRED here, same as release.yml's
-        # generate step: the default split config is arm64-only (the universal
+        # -PbuildUniversal=true is REQUIRED here: the default split config
+        # is arm64-only (the universal
         # APK is gated behind this property), and the x86_64 ciPixel8 GMD has
         # no arm64 ABI to install — without the flag the task dies with
         # "No matching Apks found for ciPixel8" (both Oct-2026 dispatches).
