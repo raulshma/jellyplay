@@ -73,10 +73,16 @@ refreshed sparse clone under the work dir.
   earlier per-build "compared built binary … successfully" message precedes
   AllowedAPKSigningKeys signer validation, so it alone never passes),
   container exit 0, and the post-CI suite reaching its
-  `POST-CI: ALL GATES PASS` marker (a container killed mid-post-CI is an
-  incomplete check, not a pass). Any `POST-CI GATE FAIL` line (scanner,
-  signing key, audit-gradle) fails the mode. `PASS-EXPECTED-DELTA` exists in
-  `local` mode only — `env-check` must byte-match, VCS stamp included.
+  `POST-CI: ALL GATES PASS` marker — printed only when the check-apk suite
+  actually ran (a run that retained no APK prints a CHECK APK SKIPPED
+  marker instead, which fails both branches). Any `POST-CI GATE FAIL` line
+  (scanner, signing key, audit-gradle) fails the mode.
+  `PASS-EXPECTED-DELTA` exists in `local` mode only — `env-check` must
+  byte-match, VCS stamp included — and still requires the marker plus the
+  container exiting exactly the fdroid build status the runner logged
+  (`=== fdroid build exit: N`), so a container killed after the marker, a
+  docker launch failure, or a lost log line fails rather than passing as
+  expected.
 
 `env-check` and `local` deliberately use SEPARATE docker Gradle volumes:
 their fdroid-graph inputs are identical, so a shared cache would let the

@@ -314,7 +314,7 @@ build_verdict() {
     fi
     return 0
   fi
-  local detail rest
+  local detail rest logged_build_rc
   # fdroidserver's verbose build failure wraps the error in its own markers
   # (exception.py __str__: "==== detail begin/end ====") and the detail text
   # carries compare boilerplate (common.py compare_apks: "verification of APK
@@ -334,14 +334,26 @@ build_verdict() {
     -e '^[0-9]+([,][0-9]+)?[acd][0-9]+([,][0-9]+)?$' \
     -e '^---$' \
     <<<"$detail" || true)
+  # The container must have ended exactly the way the runner logged its fdroid
+  # build status ("=== fdroid build exit: N"). At this fdroidserver pin
+  # --on-server forces --stop ("to get correct exit code", build.py), so a
+  # failed compare exits 1 and a success exits 0 — but the verdict does not
+  # hardcode that: it requires rc == logged, whatever fdroidserver returns. A
+  # container killed after the marker (137/143…), a docker launch failure or
+  # a lost log line all diverge from the logged status and stay FAILs.
+  logged_build_rc=$(sed -n 's/^=== fdroid build exit: \([0-9][0-9]*\)$/\1/p' "$log" 2>/dev/null | tail -1 || true)
   # local-mode-only exception: an unpublished commit can differ ONLY in AGP's
   # VCS stamp. env-check MUST byte-match — any difference there, VCS-stamp
   # included, is a FAIL — so the exception is accepted in local mode only.
-  # The post-CI suite must ALSO have completed (ALL GATES PASS marker): a
-  # container killed mid-post-CI is an incomplete check, not an expected delta.
+  # The check-apk suite must ALSO have actually run and completed (the ALL
+  # GATES PASS marker is only printed when an APK was checked): a container
+  # killed mid-post-CI or a run with no retained APK is incomplete, not an
+  # expected delta.
   if [ "$mode" = local ] \
      && [ "$gates" -eq 0 ] \
      && grep -q "POST-CI: ALL GATES PASS" "$log" \
+     && [ -n "$logged_build_rc" ] \
+     && [ "$rc" -eq "$logged_build_rc" ] \
      && [ -n "$detail" ] \
      && grep -q "version-control-info.textproto" <<<"$detail" \
      && grep -qE '^[<>][[:space:]]+revision:' <<<"$detail" \

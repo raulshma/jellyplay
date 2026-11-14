@@ -284,6 +284,11 @@ post_ci() {
   echo "===== POST-CI SUMMARY ====="
   if [ "$EXITVALUE" -ne 0 ]; then
     echo "POST-CI: GATE FAILURES ABOVE"
+  elif [ -z "$apk_for_checks" ]; then
+    # No APK retained → the check-apk gates never ran; the ALL GATES PASS
+    # marker must not print or the host verdict could read an incomplete
+    # suite as a pass.
+    echo "POST-CI: CHECK APK SKIPPED — NO BUILT APK RETAINED (suite incomplete)"
   else
     echo "POST-CI: ALL GATES PASS"
   fi
