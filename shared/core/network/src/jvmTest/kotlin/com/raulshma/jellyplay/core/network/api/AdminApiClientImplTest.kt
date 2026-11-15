@@ -53,8 +53,15 @@ class AdminApiClientImplTest {
         // shape requireSession is documented to produce.
         val router = mockk<com.raulshma.jellyplay.core.network.failover.ServerAddressRouter>(relaxed = true)
         every { router.activeAddress } returns kotlinx.coroutines.flow.MutableStateFlow(null)
+        val jellyfin = mockk<Jellyfin>(relaxed = true)
+        // Full-arity createApi stub answering with the SAME recorder: the
+        // multi-write (updateSession) rebuilds the client inside its critical
+        // section, and this suite wants the recorder installed whatever the
+        // write path — partial matchers would execute the real final
+        // createApi and NPE (see AuthApiClientTest's note).
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returns client
         engine = JellyfinApiEngine(
-            jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+            jellyfinLazy = LazyProvider { jellyfin },
             okHttpClientLazy = LazyProvider { OkHttpClient.Builder().addInterceptor(rawRecorder).build() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = router,

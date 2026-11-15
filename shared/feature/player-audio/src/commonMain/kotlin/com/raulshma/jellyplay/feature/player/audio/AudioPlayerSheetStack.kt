@@ -39,14 +39,31 @@ internal sealed interface AudioPlayerSheet {
     data object Lyrics : AudioPlayerSheet
 }
 
+/**
+ * The admission fold — ONE `current` slot instead of the seven parallel
+ * `showX` booleans it replaced. The booleans were an implicit stack: several
+ * could be true at once (the swipe-up queue gesture opened the queue OVER
+ * the delete confirmation, z-order decided by declaration order in the
+ * screen), and [consumeBack] discarded the whole pile in one press. A slot
+ * makes both impossible by construction — exactly one sheet can hold the
+ * screen, and back pops it.
+ *
+ * The confirmation arm is STICKY: while [AudioPlayerSheet.DeleteConfirm] is
+ * the open sheet, [show] is a no-op for every sheet arm — a list/browser
+ * sheet must not silently replace an open confirmation. Back still pops it
+ * ([consumeBack]) and [hide] still closes it by name. The declared non-sheet
+ * arms never touch the slot and stay exempt from the sticky gate.
+ *
+ * Compose-free tests construct it directly (the vars are backing
+ * `mutableStateOf`).
+ */
 internal class AudioPlayerSheetStack {
-    var showQueue by mutableStateOf(false)
-    var showSpeedPicker by mutableStateOf(false)
-    var showEqualizer by mutableStateOf(false)
-    var showEffectsSheet by mutableStateOf(false)
-    var showLyricsSearch by mutableStateOf(false)
-    var showSleepTimer by mutableStateOf(false)
-    var showDeleteConfirm by mutableStateOf(false)
+    /**
+     * The one sheet or dialog currently holding the screen, or null when
+     * none does. Replaces the seven `showQueue`…`showDeleteConfirm`
+     * booleans; the render gates read `current == AudioPlayerSheet.X`.
+     */
+    var current: AudioPlayerSheet? by mutableStateOf(null)
 
     // Declared non-sheet state (see the vocabulary KDoc): a persisted
     // preference and a self-dismissing menu — kept beside the fold so the
@@ -56,37 +73,55 @@ internal class AudioPlayerSheetStack {
 
     /** Any sheet or dialog holding the screen. */
     val open: Boolean
-        get() = showQueue || showSpeedPicker || showEqualizer || showEffectsSheet ||
-            showLyricsSearch || showSleepTimer || showDeleteConfirm
+        get() = current != null
 
     /**
-     * Opens exactly [sheet]; every other flag is untouched (overlaps behave
-     * as the loose flags did — e.g. the queue can open over the menu).
+     * Opens [sheet], closing whatever the slot held — one slot, so a second
+     * sheet can no longer stack over the first (the loose flags let the
+     * queue open over the delete confirmation). EXCEPT while
+     * [AudioPlayerSheet.DeleteConfirm] is the open sheet: every sheet arm is
+     * a no-op — the confirmation cannot be silently replaced; it must be
+     * answered or hidden first. The declared non-sheet arms are exempt:
+     * [AudioPlayerSheet.Lyrics] flips the persisted preference and never
+     * touches the slot (the loose flags never cross-closed it either). The
+     * `when` is exhaustive: a new arm must be routed consciously — a future
+     * declared non-sheet arm must be exempted here, not silently swept into
+     * the slot by an `else`.
      */
     fun show(sheet: AudioPlayerSheet) {
         when (sheet) {
-            AudioPlayerSheet.Queue -> showQueue = true
-            AudioPlayerSheet.SpeedPicker -> showSpeedPicker = true
-            AudioPlayerSheet.Equalizer -> showEqualizer = true
-            AudioPlayerSheet.Effects -> showEffectsSheet = true
-            AudioPlayerSheet.LyricsSearch -> showLyricsSearch = true
-            AudioPlayerSheet.SleepTimer -> showSleepTimer = true
-            AudioPlayerSheet.DeleteConfirm -> showDeleteConfirm = true
             AudioPlayerSheet.Lyrics -> showLyrics = true
+            AudioPlayerSheet.Queue,
+            AudioPlayerSheet.SpeedPicker,
+            AudioPlayerSheet.Equalizer,
+            AudioPlayerSheet.Effects,
+            AudioPlayerSheet.LyricsSearch,
+            AudioPlayerSheet.SleepTimer,
+            AudioPlayerSheet.DeleteConfirm,
+            -> {
+                // Sticky confirmation: a sheet arm cannot silently replace it.
+                if (current == AudioPlayerSheet.DeleteConfirm) return
+                current = sheet
+            }
         }
     }
 
-    /** Closes exactly [sheet]. */
+    /**
+     * Closes exactly [sheet]: a hide of a sheet that isn't the open one is a
+     * no-op (with one slot there is nothing else to close). The lyrics arm
+     * clears the persisted preference.
+     */
     fun hide(sheet: AudioPlayerSheet) {
         when (sheet) {
-            AudioPlayerSheet.Queue -> showQueue = false
-            AudioPlayerSheet.SpeedPicker -> showSpeedPicker = false
-            AudioPlayerSheet.Equalizer -> showEqualizer = false
-            AudioPlayerSheet.Effects -> showEffectsSheet = false
-            AudioPlayerSheet.LyricsSearch -> showLyricsSearch = false
-            AudioPlayerSheet.SleepTimer -> showSleepTimer = false
-            AudioPlayerSheet.DeleteConfirm -> showDeleteConfirm = false
             AudioPlayerSheet.Lyrics -> showLyrics = false
+            AudioPlayerSheet.Queue,
+            AudioPlayerSheet.SpeedPicker,
+            AudioPlayerSheet.Equalizer,
+            AudioPlayerSheet.Effects,
+            AudioPlayerSheet.LyricsSearch,
+            AudioPlayerSheet.SleepTimer,
+            AudioPlayerSheet.DeleteConfirm,
+            -> if (current == sheet) current = null
         }
     }
 
@@ -100,20 +135,16 @@ internal class AudioPlayerSheetStack {
     }
 
     /**
-     * THE back ladder: if any sheet or dialog holds the screen, close all
-     * seven and consume the back press. Lyrics (persisted preference) and the
-     * menu (self-dismissing) are deliberately exempt — a lone `false` result
+     * THE back ladder: pop the slot — close the ONE open sheet and consume
+     * the back press. The former ladder closed all seven flags at once (one
+     * back discarded the whole implicit stack); with one slot there is
+     * nothing else to discard. Lyrics (persisted preference) and the menu
+     * (self-dismissing) are deliberately exempt — a lone `false` result
      * means the caller should navigate away.
      */
     fun consumeBack(): Boolean {
-        val consumed = open
-        showQueue = false
-        showSpeedPicker = false
-        showEqualizer = false
-        showEffectsSheet = false
-        showLyricsSearch = false
-        showSleepTimer = false
-        showDeleteConfirm = false
+        val consumed = current != null
+        current = null
         return consumed
     }
 }

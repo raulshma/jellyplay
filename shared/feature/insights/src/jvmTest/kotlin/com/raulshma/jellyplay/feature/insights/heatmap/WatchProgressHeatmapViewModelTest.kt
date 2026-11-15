@@ -18,11 +18,16 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import java.time.LocalDate
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -40,8 +45,9 @@ import kotlin.test.assertTrue
  * style, no legacy suite existed): the min-activity-date ISO-prefix parse, the
  * streak walk (gap boundaries + the today anchor), the playback-reporting
  * plugin gate, day selection with media-detail resolution (success, failure
- * fallback, and the cross-selection cache), share event toggling, and the
- * load/refresh error paths.
+ * fallback, and the cross-selection cache), the one-shot share-request
+ * channel (two requests deliver twice; consumed requests never replay), and
+ * the load/refresh error paths.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class WatchProgressHeatmapViewModelTest {
@@ -326,19 +332,36 @@ class WatchProgressHeatmapViewModelTest {
         assertNull(viewModel.uiState.value.selectedDay)
     }
 
-    // ── share events ──────────────────────────────────────────────────────
+    // ── share requests (one-shot channel) ─────────────────────────────────
 
     @Test
-    fun share_events_toggle_the_one_shot_flag() = runTest(mainDispatcher) {
+    fun share_requests_are_one_shot_channel_emissions_that_never_replay() = runTest(mainDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
-        assertFalse(viewModel.uiState.value.shareRequested)
 
-        viewModel.onEvent(HeatmapEvent.RequestShare)
-        assertTrue(viewModel.uiState.value.shareRequested)
+        val received = mutableListOf<Unit>()
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+            viewModel.shareRequests.take(2).toList(received)
+        }
+        viewModel.requestShare()
+        advanceUntilIdle()
+        viewModel.requestShare()
+        advanceUntilIdle()
 
-        viewModel.onEvent(HeatmapEvent.ShareConsumed)
-        assertFalse(viewModel.uiState.value.shareRequested)
+        // Two requests, two deliveries — the retired shareRequested parked
+        // boolean + ShareConsumed consume dance could not distinguish them
+        // and replayed on re-subscription.
+        assertEquals(2, received.size)
+
+        // A LATE collector (the screen re-entering composition) receives
+        // NOTHING: the buffered channel never replays a consumed request.
+        val late = mutableListOf<Unit>()
+        val lateCollector = launch(start = CoroutineStart.UNDISPATCHED) {
+            viewModel.shareRequests.collect { late += it }
+        }
+        runCurrent()
+        assertTrue(late.isEmpty(), "a consumed one-shot must not replay to a new collector")
+        lateCollector.cancel()
     }
 
     // ── year/filter/refresh loads ─────────────────────────────────────────

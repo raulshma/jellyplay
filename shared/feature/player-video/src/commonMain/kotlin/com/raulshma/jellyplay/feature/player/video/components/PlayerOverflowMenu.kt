@@ -24,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,6 +93,7 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.feature.player.video.AbRepeatState
@@ -160,6 +160,54 @@ internal data class PlayerOverflowMenuActions(
 )
 
 /**
+ * The overflow menu's ONE exclusive submenu slot inventory —
+ * [PlayerOverflowMenu] renders at most one submenu's rows, so the slot is a
+ * nullable enum (`null` = all collapsed). Folded from the former five parallel
+ * composition booleans: `showGesturesSubmenu` → [Gestures],
+ * `showDialogueBoostSubmenu` → [DialogueBoost], `showNightModeSubmenu` →
+ * [NightMode], `showAudioNormalizationSubmenu` → [AudioNormalization],
+ * `showChannelMixSubmenu` → [ChannelMix] — SAME MENU, FIVE ENCODINGS → one
+ * (the language screen's `LanguageSettingsDialog` fold precedent). Opening one
+ * submenu structurally replaces another (newest show wins): the parallel
+ * booleans allowed two open at once, and on TV their focus effects fought over
+ * the requester chain. `internal` so the slot's decision half
+ * ([overflowSubmenuFocusTarget]) and its jvmTest pin can see it.
+ */
+internal enum class OverflowSubmenu {
+    /** The input-binding quick toggles group (the former `showGesturesSubmenu`). */
+    Gestures,
+
+    /** Dialogue-boost strength picker (the former `showDialogueBoostSubmenu`). */
+    DialogueBoost,
+
+    /** Night-mode strength picker (the former `showNightModeSubmenu`). */
+    NightMode,
+
+    /** Audio-normalization mode picker (the former `showAudioNormalizationSubmenu`). */
+    AudioNormalization,
+
+    /** Channel-mix mode picker (the former `showChannelMixSubmenu`). */
+    ChannelMix,
+}
+
+/**
+ * The pure decision half of the submenu slot's TV focus choreography: which
+ * submenu's just-(re)mounted row grabs D-pad focus on a slot transition.
+ * Opening (`null → X`) and a direct switch (`X → Y` — newest show wins) target
+ * the newly-opened submenu's back row; closing (`X → null`) re-grabs the
+ * just-collapsed submenu's header row (a submenu's back row and header row
+ * share one requester, exactly one of them mounted at a time). The
+ * first-composition run — `previous == current == null` — resolves to no
+ * target: that skip is what replaces the former five `isFirst*Render`
+ * first-render latch machines, whose bookkeeping falls out of the null arm.
+ * Pinned by `PlayerOverflowMenuSlotTest`.
+ */
+internal fun overflowSubmenuFocusTarget(
+    previous: OverflowSubmenu?,
+    current: OverflowSubmenu?,
+): OverflowSubmenu? = current ?: previous
+
+/**
  * The three-dot overflow menu in [PlayerControls]: subtitle style, dialogue
  * boost, night mode, audio normalization, channel mixing, A/V sync, playback
  * mode, decoder, passthrough, subtitle download, stats, sleep timer, video
@@ -184,7 +232,18 @@ internal data class PlayerOverflowMenuActions(
  * the action lambdas ride [PlayerOverflowMenuActions]; the remaining
  * parameters are the session values the rows render. All state is hoisted to
  * the caller via those parameters; only the per-submenu open/close state is
- * local to this composable.
+ * local to this composable — and that state is now ONE exclusive slot
+ * ([OverflowSubmenu]?, `null` = all collapsed) instead of five parallel
+ * booleans (see [OverflowSubmenu]'s KDoc for the fold). The initial D-pad
+ * grab rides core:ui's consolidated [RequestOrRestoreFocus] idiom (its
+ * 3-frame retry replaced the hand-rolled attempt loop), and the five
+ * hand-copied `isFirst*Render` latch machines collapsed into one slot-keyed
+ * effect whose target is [overflowSubmenuFocusTarget] — submenu contents are
+ * static entry lists (no async load), so the `focusEffectKeys` re-arm idiom
+ * does not apply. Menu-close reset still holds: the `if (!expanded) return`
+ * early-return sits ABOVE every `remember` in this composable, so collapsing
+ * the panel disposes the slot, the previous-slot holder and all five focus
+ * requesters — the next open starts fresh.
  */
 
 @Composable
@@ -256,25 +315,27 @@ internal fun BoxScope.PlayerOverflowMenu(
     JellyPlayBackHandler(enabled = true) { onDismiss() }
     val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
     val sleepTimerDisplayText = if (sleepTimerEndOfEpisode) "End of episode" else formatDuration(sleepTimerRemainingMs)
-    var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
-    var showNightModeSubmenu by remember { mutableStateOf(false) }
-    var showAudioNormalizationSubmenu by remember { mutableStateOf(false) }
-    var showChannelMixSubmenu by remember { mutableStateOf(false) }
-    var showGesturesSubmenu by remember { mutableStateOf(false) }
+    // ONE exclusive submenu slot (null = all collapsed) — the former five
+    // parallel composition booleans folded (see [OverflowSubmenu]). The header
+    // row renders for a collapsed submenu, the back-arrow row for the open one;
+    // opening one structurally replaces another.
+    var expandedSubmenu by remember { mutableStateOf<OverflowSubmenu?>(null) }
+    // The slot's previous value, feeding the close transition's header-row
+    // re-grab (see [overflowSubmenuFocusTarget]).
+    var previousExpandedSubmenu by remember { mutableStateOf<OverflowSubmenu?>(null) }
 
     val isTv = LocalTvMode.current
 
     // D-pad entry: without an explicit grab the panel opens with focus still
     // on the ⋮ button behind it. The first row isn't placed on the open
-    // frame, so retry across a few.
+    // frame, so retry across a few — core:ui's consolidated [RequestOrRestoreFocus]
+    // carries that 3-attempt loop (the hand-rolled
+    // `for (attempt in 1..3) { withFrameNanos {}; tryRequestFocus() }` copy is
+    // gone). TV-gated at the call site (the PlaybackErrorDialog precedent) so
+    // touch keeps its no-grab behavior.
     val firstItemFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        if (isTv) {
-            for (attempt in 1..3) {
-                withFrameNanos { }
-                if (firstItemFocusRequester.tryRequestFocus("player_overflow_first")) break
-            }
-        }
+    if (isTv) {
+        RequestOrRestoreFocus(firstItemFocusRequester, debugKey = "player_overflow_first")
     }
 
     val dialogueBoostFocusRequester = remember { FocusRequester() }
@@ -283,60 +344,29 @@ internal fun BoxScope.PlayerOverflowMenu(
     val channelMixFocusRequester = remember { FocusRequester() }
     val gesturesFocusRequester = remember { FocusRequester() }
 
-    var isFirstDialogueBoostRender by remember { mutableStateOf(true) }
-    var isFirstNightModeRender by remember { mutableStateOf(true) }
-    var isFirstAudioNormalizationRender by remember { mutableStateOf(true) }
-    var isFirstChannelMixRender by remember { mutableStateOf(true) }
-    var isFirstGesturesRender by remember { mutableStateOf(true) }
-
-    LaunchedEffect(showDialogueBoostSubmenu) {
-        if (isFirstDialogueBoostRender) {
-            isFirstDialogueBoostRender = false
-        } else {
-            if (isTv) {
-                dialogueBoostFocusRequester.tryRequestFocus()
+    // The five hand-copied `isFirst*Render` latch machines (one latch boolean
+    // + one LaunchedEffect(showXSubmenu) per submenu, edited in lockstep)
+    // collapsed into ONE slot-keyed effect: on every slot transition the
+    // submenu whose rows just (re)mounted grabs D-pad focus — open lands on
+    // the back row, close re-lands on the header row, a direct switch lands
+    // on the newest submenu (where the five parallel latches each fired and
+    // fought over the requester chain). The first-composition run resolves to
+    // no target — the null arm of [overflowSubmenuFocusTarget] — replacing
+    // the latches' skip-first-render bookkeeping. Submenu contents are static
+    // entry lists (no async load), so the PickerSheetScaffold `focusEffectKeys`
+    // re-arm idiom does not apply here.
+    LaunchedEffect(expandedSubmenu) {
+        if (isTv) {
+            when (overflowSubmenuFocusTarget(previousExpandedSubmenu, expandedSubmenu)) {
+                OverflowSubmenu.Gestures -> gesturesFocusRequester.tryRequestFocus()
+                OverflowSubmenu.DialogueBoost -> dialogueBoostFocusRequester.tryRequestFocus()
+                OverflowSubmenu.NightMode -> nightModeFocusRequester.tryRequestFocus()
+                OverflowSubmenu.AudioNormalization -> audioNormalizationFocusRequester.tryRequestFocus()
+                OverflowSubmenu.ChannelMix -> channelMixFocusRequester.tryRequestFocus()
+                null -> Unit
             }
         }
-    }
-
-    LaunchedEffect(showNightModeSubmenu) {
-        if (isFirstNightModeRender) {
-            isFirstNightModeRender = false
-        } else {
-            if (isTv) {
-                nightModeFocusRequester.tryRequestFocus()
-            }
-        }
-    }
-
-    LaunchedEffect(showAudioNormalizationSubmenu) {
-        if (isFirstAudioNormalizationRender) {
-            isFirstAudioNormalizationRender = false
-        } else {
-            if (isTv) {
-                audioNormalizationFocusRequester.tryRequestFocus()
-            }
-        }
-    }
-
-    LaunchedEffect(showChannelMixSubmenu) {
-        if (isFirstChannelMixRender) {
-            isFirstChannelMixRender = false
-        } else {
-            if (isTv) {
-                channelMixFocusRequester.tryRequestFocus()
-            }
-        }
-    }
-
-    LaunchedEffect(showGesturesSubmenu) {
-        if (isFirstGesturesRender) {
-            isFirstGesturesRender = false
-        } else {
-            if (isTv) {
-                gesturesFocusRequester.tryRequestFocus()
-            }
-        }
+        previousExpandedSubmenu = expandedSubmenu
     }
 
     // Rendered in-window (NOT via a Material3 DropdownMenu/Popup). A DropdownMenu
@@ -396,11 +426,11 @@ internal fun BoxScope.PlayerOverflowMenu(
             // tap-to-flip rows. Flipping stays in place (persisted), the
             // submenu stays open so several gates can be flipped in one visit.
             if (inputQuickToggles.isNotEmpty()) {
-                if (showGesturesSubmenu) {
+                if (expandedSubmenu == OverflowSubmenu.Gestures) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
                         label = stringResource(Res.string.player_video_gestures),
-                        onClick = { showGesturesSubmenu = false },
+                        onClick = { expandedSubmenu = null },
                         modifier = Modifier.focusRequester(gesturesFocusRequester),
                     )
                     inputQuickToggles.forEach { toggle ->
@@ -420,7 +450,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                         } else {
                             stringResource(Res.string.player_video_gestures)
                         },
-                        onClick = { showGesturesSubmenu = true },
+                        onClick = { expandedSubmenu = OverflowSubmenu.Gestures },
                         tint = if (enabledCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.focusRequester(gesturesFocusRequester),
                     )
@@ -428,11 +458,11 @@ internal fun BoxScope.PlayerOverflowMenu(
             }
 
             if (capabilities.supportsDialogueBoost) {
-                if (showDialogueBoostSubmenu) {
+                if (expandedSubmenu == OverflowSubmenu.DialogueBoost) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
                         label = stringResource(Res.string.player_video_dialogue_boost),
-                        onClick = { showDialogueBoostSubmenu = false },
+                        onClick = { expandedSubmenu = null },
                         modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
                     )
                     EffectStrength.entries.forEach { strength ->
@@ -472,18 +502,18 @@ internal fun BoxScope.PlayerOverflowMenu(
                     OverflowMenuItem(
                         icon = Tabler.Outline.Music,
                         label = if (dialogueBoostEnabled) stringResource(Res.string.player_video_dialogue_boost_on, dialogueBoostStrength.displayName) else stringResource(Res.string.player_video_dialogue_boost),
-                        onClick = { showDialogueBoostSubmenu = true },
+                        onClick = { expandedSubmenu = OverflowSubmenu.DialogueBoost },
                         tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
                     )
                 }
             }
             if (capabilities.supportsNightMode) {
-                if (showNightModeSubmenu) {
+                if (expandedSubmenu == OverflowSubmenu.NightMode) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
                         label = stringResource(Res.string.player_video_night_mode),
-                        onClick = { showNightModeSubmenu = false },
+                        onClick = { expandedSubmenu = null },
                         modifier = Modifier.focusRequester(nightModeFocusRequester),
                     )
                     EffectStrength.entries.forEach { strength ->
@@ -517,7 +547,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                     OverflowMenuItem(
                         icon = Tabler.Outline.DotsVertical,
                         label = if (nightModeEnabled) stringResource(Res.string.player_video_night_mode_on, nightModeStrength.displayName) else stringResource(Res.string.player_video_night_mode),
-                        onClick = { showNightModeSubmenu = true },
+                        onClick = { expandedSubmenu = OverflowSubmenu.NightMode },
                         tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.focusRequester(nightModeFocusRequester),
                     )
@@ -548,11 +578,11 @@ internal fun BoxScope.PlayerOverflowMenu(
                 )
             }
             if (capabilities.supportsAudioNormalization) {
-                if (showAudioNormalizationSubmenu) {
+                if (expandedSubmenu == OverflowSubmenu.AudioNormalization) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
                         label = stringResource(Res.string.player_video_audio_normalization),
-                        onClick = { showAudioNormalizationSubmenu = false },
+                        onClick = { expandedSubmenu = null },
                         modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
                     )
                     AudioNormalizationMode.entries.forEach { mode ->
@@ -585,18 +615,18 @@ internal fun BoxScope.PlayerOverflowMenu(
                     OverflowMenuItem(
                         icon = Tabler.Outline.Volume,
                         label = if (audioNormalizationEnabled) stringResource(Res.string.player_video_normalization_on, audioNormalizationMode.displayName) else stringResource(Res.string.player_video_audio_normalization),
-                        onClick = { showAudioNormalizationSubmenu = true },
+                        onClick = { expandedSubmenu = OverflowSubmenu.AudioNormalization },
                         tint = if (audioNormalizationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
                     )
                 }
             }
             if (capabilities.supportsChannelMixing) {
-                if (showChannelMixSubmenu) {
+                if (expandedSubmenu == OverflowSubmenu.ChannelMix) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
                         label = stringResource(Res.string.player_video_channel_mixing),
-                        onClick = { showChannelMixSubmenu = false },
+                        onClick = { expandedSubmenu = null },
                         modifier = Modifier.focusRequester(channelMixFocusRequester),
                     )
                     ChannelMixMode.entries.forEach { mode ->
@@ -629,7 +659,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                     OverflowMenuItem(
                         icon = Tabler.Outline.Music,
                         label = if (channelMixEnabled) stringResource(Res.string.player_video_channel_mix_on, channelMixMode.displayName) else stringResource(Res.string.player_video_channel_mixing),
-                        onClick = { showChannelMixSubmenu = true },
+                        onClick = { expandedSubmenu = OverflowSubmenu.ChannelMix },
                         tint = if (channelMixEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.focusRequester(channelMixFocusRequester),
                     )

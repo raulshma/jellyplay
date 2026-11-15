@@ -56,7 +56,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
@@ -335,12 +335,18 @@ class HomeRefresherTest {
         refresher.stop()
 
         assertEquals(2, fetchCalls)
-        val exposedEmptyLoaded = states.any { it.sections.isEmpty() && !it.isLoading && it.error == null }
-        assertTrue(!exposedEmptyLoaded, "empty+loaded+no-error state exposed during the switch: $states")
+        // The phase encoding of the same invariant: the flash was the former
+        // sections=empty + isLoading=false + error=null combination — i.e. a
+        // Ready phase with nothing on screen. Ready + empty sections may now
+        // only be produced by an explicit settling write (stop(), a guarded
+        // finally), never by a cancelled fetch — and no spinless-no-content
+        // state may appear mid-switch.
+        val exposedEmptyLoaded = states.any { it.loadPhase == HomeLoadPhase.Ready && it.sections.isEmpty() }
+        assertTrue(!exposedEmptyLoaded, "Ready-with-no-content state exposed during the switch: $states")
     }
 
     @Test
-    fun `stop clears the spinner flags when cancelling an in-flight fetch`() = runTest {
+    fun `stop settles the phase to Ready when cancelling an in-flight fetch`() = runTest {
         coEvery { homeFeed.getHomeSections(any(), any()) } coAnswers {
             CompletableDeferred<Unit>().await() // parked forever — cancelled by stop()
             Result.success(HomeSectionsResult(sections = emptyList()))
@@ -348,12 +354,12 @@ class HomeRefresherTest {
         fakeTimeSource.nowMs = 120_000 // past the 60s foreground interval: start()'s stale check fetches
         val refresher = buildRefresher()
         refresher.start()
-        runCurrent() // fetch parks with isLoading=true (initial state)
+        runCurrent() // fetch parks with the cold-loading phase up (initial state)
 
         refresher.stop()
         runCurrent()
 
-        assertFalse(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         assertTrue(refresher.state.value.sections.isEmpty())
     }
 
@@ -524,14 +530,14 @@ class HomeRefresherTest {
         // Mid-handshake: full-screen loader up, drain in flight, and the
         // fetch strictly NOT started (it must wait for the drain so Continue
         // Watching reflects the server's post-sync state).
-        assertTrue(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Handshaking, refresher.state.value.loadPhase)
         assertEquals(1, drainCalls)
         coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
 
         drainGate!!.complete(Unit)
         runCurrent()
 
-        assertFalse(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         coVerify(exactly = 1) { homeFeed.getHomeSections(any(), any()) }
         assertTrue(refresher.state.value.sections.isNotEmpty())
         refresher.stop()
@@ -555,12 +561,12 @@ class HomeRefresherTest {
 
         refresher.request(RefreshTrigger.GoingOnline)
         runCurrent()
-        assertTrue(refresher.state.value.isLoading, "the loader must be up while the fetch hangs")
+        assertEquals(HomeLoadPhase.Handshaking, refresher.state.value.loadPhase, "the loader must be up while the fetch hangs")
 
         advanceTimeBy(31_000) // past GOING_ONLINE_TIMEOUT_MS
         runCurrent()
 
-        assertFalse(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         refresher.stop()
     }
 
@@ -593,14 +599,14 @@ class HomeRefresherTest {
         // Mid-handshake: full-screen loader up, outbox draining, fetch
         // strictly not started (same ordering contract as the user-initiated
         // handshake so Continue Watching reflects the server's post-sync state).
-        assertTrue(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Handshaking, refresher.state.value.loadPhase)
         assertEquals(1, drainCalls)
         coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
 
         drainGate!!.complete(Unit)
         runCurrent()
 
-        assertFalse(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         coVerify(exactly = 1) { homeFeed.getHomeSections(any(), any()) }
         assertTrue(refresher.state.value.sections.isNotEmpty())
         refresher.stop()
@@ -659,7 +665,7 @@ class HomeRefresherTest {
         // — while the bypass flag is still armed (until the refetch lands)
         // the echo forces one extra idempotent, mutex-serialized fetch, and
         // after it lands the throttle defers the echo instead.
-        assertFalse(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         coVerify(exactly = 2) { homeFeed.getHomeSections(any(), force = true) }
         assertEquals("post-sync", refresher.state.value.sections.single().items.single().id)
         refresher.stop()
@@ -694,7 +700,7 @@ class HomeRefresherTest {
         fakeTimeSource.nowMs += 17_000
         runCurrent()
         coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
-        assertFalse(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         assertEquals("pre-sync", refresher.state.value.sections.single().items.single().id)
 
         // The sync lands 12s later: echo inside the throttle window, repo now
@@ -750,7 +756,7 @@ class HomeRefresherTest {
         fakeTimeSource.nowMs += 17_000
         runCurrent()
         coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
-        assertFalse(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
 
         // The next identity's echo lands well inside the 60s throttle window —
         // WITHOUT the epoch guard the stale flag would bypass the throttle
@@ -971,9 +977,8 @@ class HomeRefresherTest {
 
         // Stale-while-revalidate paint: the persisted snapshot is on screen
         // with NO full-screen loader while the network fetch is still parked.
-        assertFalse(refresher.state.value.isLoading)
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         assertEquals(listOf("cached1"), refresher.state.value.sections.first { it.type == HomeSectionType.LATEST_MEDIA }.items.map { it.id })
-        assertNull(refresher.state.value.error)
         // 50k ticks = page 5 of 200 → (5+1)/200 — the exact TOC fraction.
         assertEquals(mapOf("book1" to 0.03f), refresher.state.value.bookProgressFractions)
 
@@ -998,8 +1003,10 @@ class HomeRefresherTest {
         val state = refresher.state.value
         assertTrue(state.sections.isEmpty())
         assertTrue(state.discoverSections.isEmpty())
-        assertNull(state.error)
-        assertTrue(state.isLoading)
+        // The identity reset's full-screen loader — the ColdLoading phase
+        // (which also carries "no failure recorded", the former
+        // `error == null` assert).
+        assertEquals(HomeLoadPhase.ColdLoading, state.loadPhase)
         refresher.stop()
     }
 
@@ -1071,7 +1078,7 @@ class HomeRefresherTest {
         )
         runCurrent() // the fetch advances past its sections await and parks inside the decode
 
-        assertTrue(refresher.state.value.isRefreshing, "the fetch is still in flight, parked on the decode")
+        assertEquals(HomeLoadPhase.InlineRefreshing, refresher.state.value.loadPhase, "the fetch is still in flight, parked on the decode")
 
         // The dice roll completes while the fetch is parked mid-decode —
         // strictly before the fetch's drain point.
@@ -1178,7 +1185,7 @@ class HomeRefresherTest {
             r.state.value.sections.single().items.map { it.id },
             "a failed refetch must not blank the row the user is looking at",
         )
-        assertNull(r.state.value.error)
+        assertFalse(r.state.value.fetchFailed)
         assertTrue("latest_lib1" !in r.state.value.refreshingSectionIds)
     }
 
@@ -1370,6 +1377,142 @@ class HomeRefresherTest {
 
         coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
         assertEquals(1L, refresher.state.value.imageReloadEpoch, "the going-online forced fetch bumps the epoch")
+        refresher.stop()
+    }
+
+    // ── load-phase transition pins ──────────────────────────────────────────
+    // One row per [HomeLoadPhase] transition (the sealed migration of the
+    // former isLoading/isRefreshing/error trio). The rules themselves are
+    // pinned directly in [HomeLoadPhaseTransitionsTest]; these rows pin them
+    // end-to-end through the machinery. The remaining transitions are pinned
+    // by their pre-existing rows, adapted to the phase: manual refresh and
+    // inline refresh (HomeRefresherFetchTest's Manual/PullToRefresh rows),
+    // handshake arm+clear (goingOnline_drainsOutbox… above), failure with
+    // stale content and failure hard (HomeRefresherFetchTest's fetchOnce
+    // failure rows), identity reset (signedOut_resetsToEmptyLoadingState),
+    // cancelled-fetch-leaves-phase (the user-switch cold-start row above),
+    // and stop() (the stop-settles row above).
+
+    @Test
+    fun coldLoad_settlesToReady_whenFetchSucceeds() = runTest {
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        assertEquals(HomeLoadPhase.ColdLoading, refresher.state.value.loadPhase, "the state store's cold-start default")
+
+        refresher.fetchOnce()
+        runCurrent()
+
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
+        assertTrue(refresher.state.value.sections.isNotEmpty())
+        refresher.stop()
+    }
+
+    @Test
+    fun fetchSuccess_recoversFromFailedPhase_toReady() = runTest {
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
+            Result.failure(RuntimeException("server down"))
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+        assertIs<HomeLoadPhase.Failed>(refresher.state.value.loadPhase, "the failure recorded")
+
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
+            ),
+        )
+        refresher.fetchOnce()
+        runCurrent()
+
+        // The success arm's recovery — the former `error = null` write closing
+        // the implicit-offline gate and the header chip's error verdict.
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
+        assertFalse(refresher.state.value.fetchFailed)
+        refresher.stop()
+    }
+
+    @Test
+    fun stop_leavesFailedPhaseIntact_andKeepsStaleSections() = runTest {
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
+            Result.failure(RuntimeException("server down"))
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+        val failed = refresher.state.value.loadPhase
+        assertIs<HomeLoadPhase.Failed>(failed)
+
+        refresher.stop()
+        runCurrent()
+
+        // stop() settles spinner phases only — the former flag clear never
+        // touched `error`, so a failure recorded before backgrounding
+        // survives for the next foreground.
+        assertEquals(failed, refresher.state.value.loadPhase)
+    }
+
+    @Test
+    fun stop_fromInlineRefreshing_settlesToReady_andKeepsContent() = runTest {
+        // Pull-to-refresh interrupted by backgrounding: the inline spinner
+        // must drop (the former isRefreshing=false clear) and the content
+        // must stay exactly as painted.
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+        val onScreen = refresher.state.value.sections
+
+        val gate = CompletableDeferred<Unit>()
+        coEvery { homeFeed.getHomeSections(any(), any()) } coAnswers {
+            gate.await()
+            Result.success(HomeSectionsResult(sections = emptyList()))
+        }
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+        assertEquals(HomeLoadPhase.InlineRefreshing, refresher.state.value.loadPhase)
+
+        refresher.stop()
+        runCurrent()
+
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
+        assertEquals(onScreen, refresher.state.value.sections, "stop() never drops content")
+    }
+
+    @Test
+    fun handshake_fetchFailure_landsFailedPhase_andSurvivesHandshakeClear() = runTest {
+        // Declared phase-shape decision (see [HomeLoadPhaseTransitions.failed]):
+        // the handshake's fetch failing REPLACES the Handshaking phase — the
+        // former error+isLoading combination already rendered the hard-error
+        // screen (the surface fold's HardError arm beat the invisible
+        // loader), and the handshake's finally clear must not resurrect the
+        // spinner over the failure (the former clear never touched `error`).
+        val fetchGate = CompletableDeferred<Result<HomeSectionsResult>>()
+        coEvery { homeFeed.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
+        val refresher = buildRefresher()
+        runCurrent() // offline-mode observer subscribes; initial ONLINE emission mirrors only
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
+        refresher.request(RefreshTrigger.GoingOnline)
+        runCurrent() // handshake starts: loader up, drain passed (fast fake), fetch parked
+
+        assertEquals(HomeLoadPhase.Handshaking, refresher.state.value.loadPhase)
+
+        fetchGate.complete(Result.failure(RuntimeException("server down")))
+        runCurrent() // failure write + the handshake's finally clear
+
+        val phase = refresher.state.value.loadPhase
+        assertIs<HomeLoadPhase.Failed>(phase, "the failure replaces the handshake's loader phase")
+        assertEquals("server down", phase.message)
+        coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
         refresher.stop()
     }
 

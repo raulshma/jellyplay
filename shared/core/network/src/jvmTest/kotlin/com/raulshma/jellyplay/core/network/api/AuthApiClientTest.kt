@@ -20,6 +20,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class AuthApiClientImplTest {
@@ -45,6 +46,12 @@ class AuthApiClientImplTest {
     @BeforeTest
     fun setup() {
         val jellyfin = mockk<Jellyfin>(relaxed = true)
+        // Full-arity matchers: partial matchers send mockk's overload auto-
+        // hinting down a path that executes the real final createApi. The
+        // engine's public multi-write (updateSession) rebuilds the client
+        // inside its critical section, so tests that sign the engine in need
+        // createApi to answer on the mock.
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returns mockk(relaxed = true)
         val okHttpClient = OkHttpClient()
         addressRouter = ServerAddressRouter()
         engine = JellyfinApiEngine(
@@ -71,16 +78,14 @@ class AuthApiClientImplTest {
 
     @Test
     fun `setUser updates current user`() = runTest {
-        engine.updateServer(testServer)
-        engine.updateUser(testUser)
+        engine.updateSession(testServer, testUser)
 
         assertEquals(testUser, engine.currentUser.value)
     }
 
     @Test
     fun `disconnect clears server and user`() = runTest {
-        engine.updateServer(testServer)
-        engine.updateUser(testUser)
+        engine.updateSession(testServer, testUser)
 
         authClient.disconnect()
 
@@ -91,7 +96,7 @@ class AuthApiClientImplTest {
 
     @Test
     fun `getServerUrl returns server address`() = runTest {
-        engine.updateServer(testServer)
+        engine.updateSession(testServer, null)
 
         assertEquals("https://test.example.com", authClient.getServerUrl())
     }
@@ -103,7 +108,7 @@ class AuthApiClientImplTest {
 
     @Test
     fun `getAccessToken returns user token`() = runTest {
-        engine.updateUser(testUser)
+        engine.updateSession(null, testUser)
 
         assertEquals("token-123", authClient.getAccessToken())
     }
@@ -123,8 +128,7 @@ class AuthApiClientImplTest {
 
     @Test
     fun `currentUser flow reflects state changes`() = runTest {
-        engine.updateServer(testServer)
-        engine.updateUser(testUser)
+        engine.updateSession(testServer, testUser)
 
         val user = authClient.currentUser.first()
         assertEquals(testUser, user)
@@ -194,6 +198,60 @@ class AuthApiClientImplTest {
         )
     }
 
+    @Test
+    fun `failed atomic login rollback leaves the captured pair and api client intact`() = runTest {
+        // PIN (d): the rollback of a failed atomic write — atomicLogin's
+        // capture/restore — must put back BOTH the previous (server, user)
+        // pair AND the CAPTURED ApiClient instance (restoreSide restores the
+        // capture; a rebuild would mint a different object than the one the
+        // session was captured with). Distinct client instances per
+        // createApi call make the restore observable: the first call is the
+        // multi-write's rebuild (the capture), the second is the round-trip's
+        // local client (the one that fails).
+        val jellyfin = mockk<Jellyfin>(relaxed = true)
+        val capturedApi = mockk<ApiClient>(relaxed = true)
+        val roundTripApi = mockk<ApiClient>(relaxed = true)
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returnsMany listOf(capturedApi, roundTripApi)
+        coEvery { roundTripApi.userApi.authenticateUserByName(any()) } throws
+            java.io.IOException("auth round-trip failed")
+        // The router is a relaxed mock with a permanently-null activeAddress
+        // (the suite-wide pattern — see AdminApiClientImplTest's setup note):
+        // with a REAL router, updateSession's rebuild leaves `_api` non-null
+        // and the engine's rebuild collector races this pin, legitimately
+        // retargeting `_api` between the capture and the assert — the
+        // captured-instance assertion must observe the spine's restore, not
+        // the collector's self-healing retarget.
+        val mockRouter = mockk<ServerAddressRouter>(relaxed = true)
+        every { mockRouter.activeAddress } returns MutableStateFlow(null)
+        val localEngine = JellyfinApiEngine(
+            jellyfinLazy = LazyProvider { jellyfin },
+            okHttpClientLazy = LazyProvider { OkHttpClient() },
+            deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
+            addressRouter = mockRouter,
+        )
+        val client = AuthApiClientImpl(engine = localEngine, addressRouter = mockRouter)
+        localEngine.updateSession(testServer, testUser)
+
+        val result = client.authenticateUser(
+            ServerInfo(id = "server-2", name = "Other Server", address = "https://other.example.com"),
+            username = "testuser",
+            password = "wrong",
+        )
+
+        assertTrue(result.isFailure)
+        assertEquals(
+            ActiveSession(testServer, testUser),
+            localEngine.session.value,
+            "the failed attempt must leave the previous pair published",
+        )
+        assertEquals(testUser, localEngine.currentUser.value)
+        assertSame(
+            capturedApi,
+            localEngine.api,
+            "the restore must put the CAPTURED client back, not mint a fresh one",
+        )
+    }
+
 
     @Test
     fun `connectToServer while signed in adopts new server and drops user atomically`() = runTest {
@@ -209,8 +267,12 @@ class AuthApiClientImplTest {
             serverId = "server-2",
             serverName = "New Server",
         )
+        // Full-arity createApi stub: the probe engine signs in via the
+        // multi-write, which rebuilds the client inside its critical section.
+        val probeJellyfin = mockk<Jellyfin>(relaxed = true)
+        every { probeJellyfin.createApi(any(), any(), any(), any(), any()) } returns mockk(relaxed = true)
         val probeEngine = JellyfinApiEngine(
-            jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+            jellyfinLazy = LazyProvider { probeJellyfin },
             okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = probeRouter,

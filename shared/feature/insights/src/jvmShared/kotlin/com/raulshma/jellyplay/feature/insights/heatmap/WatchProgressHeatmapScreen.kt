@@ -175,10 +175,20 @@ fun WatchProgressHeatmapScreen(
         tag = "heatmap_init",
     )
 
-    if (state.shareRequested && share != null) {
-        LaunchedEffect(state.shareRequested) {
+    // The share request rides the VM's one-shot shareRequests channel (the
+    // codified StateManagementConventions §2 idiom) — the former
+    // shareRequested parked boolean + HeatmapEvent.ShareConsumed consume
+    // dance re-fired the share sheet on re-subscription (a StateFlow replays
+    // its current value to every new collector). Keyed on the share seam:
+    // the collector relaunches when the seam appears or is re-created (the
+    // body needs the seam to snapshot the grid's own capture layer), and
+    // while the seam is absent there IS no collector — requests buffer in
+    // the channel and drain once the seam arrives. Each request is consumed
+    // exactly once.
+    LaunchedEffect(share) {
+        if (share == null) return@LaunchedEffect
+        viewModel.shareRequests.collect {
             share.shareHeatmapImage()
-            viewModel.onEvent(HeatmapEvent.ShareConsumed)
         }
     }
 
@@ -189,7 +199,7 @@ fun WatchProgressHeatmapScreen(
             if (share != null) {
                 val shareFocusState = rememberTvFocusState()
                 IconButton(
-                    onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) },
+                    onClick = { viewModel.requestShare() },
                     // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
                     modifier = Modifier
                         .harnessClickTarget("insights-heatmap-share")

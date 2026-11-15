@@ -252,9 +252,14 @@ class ControllerOwnershipTest {
         // construction-wiring raise shape as the 2026-10-28 entry). Raised to
         // 3_020 (2026-11-03) for the §5.8 tuning slice in the engine-config
         // build (the uiPrefs-mirrored tuning the runtime rebuild folds).
+        // Raised to 3_056 (2026-11-15) for the cinema-intro reliability fix:
+        // the intro load body rides the LOAD task slot (cancel-and-replace
+        // single-flight across rapid skips + external initializes) with the
+        // resurrection guards at its two write sites, and the slot
+        // choreography documented at [PlaybackSession.loadCinemaIntro].
         // Lower the ceiling when a cluster moves out; never raise it to admit
         // growth.
-        val maxPlaybackSessionLines = 3_020
+        val maxPlaybackSessionLines = 3_056
         val session = mainSources().first { it.name == "PlaybackSession.kt" }
         val lines = session.sourceText().lineSequence().count()
         assertTrue(

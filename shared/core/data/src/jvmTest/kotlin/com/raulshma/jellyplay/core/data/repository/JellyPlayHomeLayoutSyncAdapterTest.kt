@@ -62,7 +62,7 @@ class JellyPlayHomeLayoutSyncAdapterTest {
                 homeDiscoveryStore = homeStore,
                 mirrorStore = mirrorStore,
             )
-            identityStore.setActiveUser(USER)
+            identityStore.setActiveSession("srv-1", USER)
             settle { true }
         }
     }

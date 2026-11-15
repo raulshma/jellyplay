@@ -72,7 +72,7 @@ class HomeDiscoverySpecDerivationTest {
         cancelGraphInitCollectors(scope)
     }
 
-    private suspend fun activate(userId: String) = identityStore.setActiveUser(userId)
+    private suspend fun activate(userId: String) = identityStore.setActiveSession("srv-1", userId)
 
     private suspend fun raw(): Preferences = dataStore.data.first()
 

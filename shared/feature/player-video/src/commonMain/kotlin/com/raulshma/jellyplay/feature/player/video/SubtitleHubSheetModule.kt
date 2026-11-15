@@ -5,6 +5,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.stringResource
+import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.feature.player.video.components.RememberPreferenceToggle
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubDelayTab
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubGetTab
@@ -12,6 +15,9 @@ import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubStyleTab
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTracksTab
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
+import com.raulshma.jellyplay.feature.player.video.state.ProviderSubtitleSearchState
+import com.raulshma.jellyplay.feature.player.video.state.RemoteSubtitleSearchState
+import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitle_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitles_off
@@ -156,16 +162,22 @@ internal object SubtitleHubSheetModule : PlayerSheetModule {
                 remoteSubtitlesError = subtitleState.remoteSubtitlesError,
                 onDownload = { sheets.downloadSubtitle(it) },
                 onLoadLocalFile = scope.inputs.onLoadLocalSubtitle,
-                searchResults = subtitleState.searchedSubtitles,
-                isSearching = subtitleState.isSearchingSubtitles,
-                hasSearched = subtitleState.hasSearchedSubtitles,
-                searchError = subtitleState.subtitleSearchError,
+                // The Search tab renders a FOLD of the two independent search
+                // machines (legacy Jellyfin / multi-provider) — see the
+                // `searchTab*` helpers below this class. Folding
+                // "either machine Searching" is the spinner-drop fix: the
+                // legacy machine's completion can no longer drop the sheet's
+                // spinner while provider results are still streaming in.
+                searchResults = subtitleState.searchTabLegacyResults,
+                isSearching = subtitleState.searchTabIsSearching,
+                hasSearched = subtitleState.searchTabHasSearched,
+                searchError = subtitleState.searchTabLegacyError,
                 cultures = subtitleState.subtitleCultures,
                 defaultLanguage = subtitleState.defaultSearchLanguage,
                 onSearch = { sheets.searchRemoteSubtitles(it) },
                 onDownloadSearched = { sheets.downloadSubtitle(it) },
-                providerSearchResults = subtitleState.providerSearchResults,
-                providerSearchErrors = subtitleState.providerSearchErrors,
+                providerSearchResults = subtitleState.searchTabProviderResults,
+                providerSearchErrors = subtitleState.searchTabProviderErrors,
                 configuredProviders = subtitleState.configuredSubtitleProviders,
                 onSearchAllProviders = { sheets.searchAllProviders(it) },
                 onDownloadProviderSubtitle = { sheets.downloadProviderSubtitle(it) },
@@ -199,3 +211,65 @@ internal object SubtitleHubSheetModule : PlayerSheetModule {
         )
     }
 }
+
+// ── The Search tab's fold of the two independent search machines ────────────
+// [SubtitleState] carries ONE state per search machine
+// ([RemoteSubtitleSearchState] / [ProviderSubtitleSearchState]); the tab's
+// rendering surface ([SubtitleManagerSection]) still speaks the old flat
+// vocabulary (isSearching / hasSearched / results / error), so the module
+// folds the two machines into it. Pure rules, pinned in SubtitleManagerTest.
+//
+// The bug the fold fixes: both machines used to write ONE isSearchingSubtitles
+// / hasSearchedSubtitles pair, so the legacy machine's completion dropped the
+// sheet's spinner while provider results were still streaming in (and a slow
+// legacy search flipped the pair under a settled provider flow). Folding
+// "either machine Searching" keeps the spinner up until BOTH machines settle.
+
+/**
+ * The sheet's spinner: up while EITHER machine is in flight. The
+ * spinner-drop fix — the legacy machine's completion can no longer clear the
+ * flag under a still-streaming provider search, and vice versa.
+ */
+internal val SubtitleState.searchTabIsSearching: Boolean
+    get() = remoteSubtitleSearch is RemoteSubtitleSearchState.Searching ||
+        providerSubtitleSearch is ProviderSubtitleSearchState.Searching
+
+/**
+ * "A search has settled" for the tab's no-results branch. Mirrors the old
+ * shared flag's writes exactly: a machine counts as searched when it completed
+ * with results ([RemoteSubtitleSearchState.Done] /
+ * [ProviderSubtitleSearchState.Results]) — a legacy FAILURE does not (the old
+ * code cleared `hasSearchedSubtitles` on failure and rendered only the error
+ * block), and neither does a streaming [ProviderSubtitleSearchState.Searching].
+ */
+internal val SubtitleState.searchTabHasSearched: Boolean
+    get() = remoteSubtitleSearch is RemoteSubtitleSearchState.Done ||
+        providerSubtitleSearch is ProviderSubtitleSearchState.Results
+
+/** The legacy machine's settled results (empty unless [RemoteSubtitleSearchState.Done]). */
+internal val SubtitleState.searchTabLegacyResults: List<RemoteSubtitleInfo>
+    get() = (remoteSubtitleSearch as? RemoteSubtitleSearchState.Done)?.results ?: emptyList()
+
+/**
+ * The legacy machine's failure message — the tab's "search failed" retry
+ * invitation ([SubtitleFetchErrorBlock] in [SubtitleManagerSection]). The
+ * former `subtitleSearchError` field, surface unchanged.
+ */
+internal val SubtitleState.searchTabLegacyError: String?
+    get() = (remoteSubtitleSearch as? RemoteSubtitleSearchState.Failed)?.message
+
+/** The provider machine's results (the streaming partials while still searching). */
+internal val SubtitleState.searchTabProviderResults: List<SubtitleSearchResult>
+    get() = when (val search = providerSubtitleSearch) {
+        is ProviderSubtitleSearchState.Searching -> search.partialResults
+        is ProviderSubtitleSearchState.Results -> search.results
+        ProviderSubtitleSearchState.Idle -> emptyList()
+    }
+
+/** The provider machine's per-provider error chips (the streaming partials while still searching). */
+internal val SubtitleState.searchTabProviderErrors: Map<SubtitleProviderKind, String>
+    get() = when (val search = providerSubtitleSearch) {
+        is ProviderSubtitleSearchState.Searching -> search.partialErrors
+        is ProviderSubtitleSearchState.Results -> search.errors
+        ProviderSubtitleSearchState.Idle -> emptyMap()
+    }

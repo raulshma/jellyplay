@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePortAdapter
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
@@ -80,10 +81,12 @@ class LibraryApiClientImplTest {
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = router,
         )
+        // Full-arity createApi stub: the multi-write (updateSession) rebuilds
+        // the client inside its critical section (see AuthApiClientTest's note).
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returns mockk(relaxed = true)
         // A signed-in (server, user) pair so the favorite cache keys off a real
         // CacheIdentity instead of the pre-login UNKNOWN fallback.
-        engine.updateServer(testServer)
-        engine.updateUser(testUser)
+        runBlocking { engine.updateSession(testServer, testUser) }
 
         client = LibraryApiClientImpl(engine, mockk(relaxed = true), SystemTimeSource())
         // The user-data write funnel rides its own adapter over the SAME

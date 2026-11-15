@@ -46,32 +46,26 @@ import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_username_required
-import com.raulshma.jellyplay.feature.auth.generated.resources.auth_login_failed
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_password
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_quick_connect
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_sign_in
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_sign_in_title
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_signing_in
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_username
-import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.message.UiMessage
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-
-/**
- * Which credential field (if any) a login error is attached to. Ambiguous auth
- * failures (e.g. HTTP 401) use [SERVER] so neither field is reddened while the
- * message still surfaces in the error banner.
- */
-enum class LoginFieldError { USERNAME, PASSWORD, SERVER }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -84,25 +78,16 @@ fun LoginScreen(
 ) {
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
-    var isLoggingIn by rememberSaveable { mutableStateOf(false) }
-    // Typed login error: which field is at fault + the message to show in the
-    // banner. Stored as two saveables (enum name + message) so the pair survives
-    // config changes without needing a Parcelable/Serializable on the enum.
-    var errorField by rememberSaveable { mutableStateOf<String?>(null) }
-    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
-    val error: Pair<LoginFieldError, String>? = run {
-        val msg = errorMessage
-        val field = errorField?.let { f -> LoginFieldError.entries.firstOrNull { it.name == f } }
-        if (msg != null && field != null) field to msg else null
-    }
-    fun setError(field: LoginFieldError, message: String) {
-        errorField = field.name
-        errorMessage = message
-    }
-    fun clearError() {
-        errorField = null
-        errorMessage = null
-    }
+    // The login machine is VM-owned (AuthViewModel.loginPhase / loginError) —
+    // NOT a screen-local saveable. The former `isLoggingIn` rememberSaveable
+    // flag's only writer lived inside the login result callback, so a process
+    // death mid-login restored a stuck `true` that disabled the submit button
+    // forever (the recorded `pinVerifying` bug shape, worse because saveable
+    // persisted it). A fresh ViewModel constructs at Idle with no error; a
+    // config change keeps the surviving VM's phase.
+    val loginPhase by viewModel.loginPhase.collectAsStateWithLifecycle()
+    val isLoggingIn = loginPhase is LoginPhase.Submitting
+    val error by viewModel.loginError.collectAsStateWithLifecycle()
     var contentVisible by rememberSaveable { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -114,8 +99,6 @@ fun LoginScreen(
         title = stringResource(Res.string.auth_sign_in_title),
         onBack = onBack,
     ) { padding ->
-        val usernameRequiredError = stringResource(Res.string.auth_error_username_required)
-        val loginFailedError = stringResource(Res.string.auth_login_failed)
         val adaptiveInfo = LocalAdaptiveInfo.current
         val isTv = LocalTvMode.current
         val contentPad = adaptiveInfo.contentPadding(isTv)
@@ -127,21 +110,20 @@ fun LoginScreen(
 
         fun submit() {
             if (username.isBlank()) {
-                setError(LoginFieldError.USERNAME, usernameRequiredError)
+                viewModel.setLoginFieldError(
+                    LoginFieldError.USERNAME,
+                    UiMessage.Resource(Res.string.auth_error_username_required),
+                )
                 return
             }
-            isLoggingIn = true
-            clearError()
             keyboardController?.hide()
             viewModel.login(serverAddress, username, password) { result ->
-                isLoggingIn = false
                 result.onSuccess {
                     onLoginSuccess()
-                }.onFailure {
-                    // Ambiguous auth failure (likely credentials/server); surface
-                    // the message but don't redden a specific field.
-                    setError(LoginFieldError.SERVER, UserErrorMessages.resolve(it, loginFailedError))
                 }
+                // Failure: the VM parked the typed error (SERVER + the
+                // exception-vs-fallback message) and settled the phase to
+                // Idle — nothing left for the screen to do here.
             }
         }
 
@@ -189,7 +171,7 @@ fun LoginScreen(
                     value = username,
                     onValueChange = {
                         username = it
-                        clearError()
+                        viewModel.clearLoginError()
                     },
                     label = { Text(stringResource(Res.string.auth_username)) },
                     singleLine = true,
@@ -198,7 +180,7 @@ fun LoginScreen(
                         .fillMaxWidth()
                         .focusRequester(usernameFocusRequester)
                         .semantics { contentType = ContentType.Username },
-                    isError = error?.first == LoginFieldError.USERNAME,
+                    isError = error?.field == LoginFieldError.USERNAME,
                 )
             }
 
@@ -215,11 +197,11 @@ fun LoginScreen(
                     value = password,
                     onValueChange = {
                         password = it
-                        clearError()
+                        viewModel.clearLoginError()
                     },
                     label = { Text(stringResource(Res.string.auth_password)) },
                     modifier = Modifier.fillMaxWidth(),
-                    isError = error?.first == LoginFieldError.PASSWORD,
+                    isError = error?.field == LoginFieldError.PASSWORD,
                     imeAction = ImeAction.Done,
                     keyboardActions = KeyboardActions(onDone = { submit(); keyboardController?.hide() }),
                     contentType = ContentType.Password,
@@ -237,7 +219,7 @@ fun LoginScreen(
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                     ) {
                         Text(
-                            error!!.second,
+                            error!!.message.asText(),
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),

@@ -330,6 +330,13 @@ class SyncPlayViewModel(
                             loadCurrentGroup()
                         }
                     }
+                    is SyncPlayEvent.GroupLeft -> {
+                        // The manager already tore the session down (activeGroupId
+                        // nulled); the mirror must follow or the screen renders
+                        // in-group UI over a dead group.
+                        _uiState.update { it.copy(isInGroup = false, currentGroup = null) }
+                        commandJob?.cancel()
+                    }
                     is SyncPlayEvent.Notification -> {
                         _notifications.tryEmit(UiMessage.Raw(event.message))
                     }

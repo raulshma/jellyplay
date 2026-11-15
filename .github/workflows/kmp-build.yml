@@ -283,19 +283,19 @@ jobs:
         # full shared feature graph for both phone+tv unit-test variants
         # (compileAndroidMain died with "GC overhead limit exceeded" in four
         # feature modules before these were added).
-        # :shared:feature:{player-video,syncplay}:testAndroidHostTest are the
-        # feature-side hostTest lanes (Robolectric screen/surface suites) —
-        # they compiled in no CI lane before this was added. (HostTest lanes
-        # are NOT part of the derived shared-module scan above: which modules
-        # own an androidHostTest source set is not derivable from
-        # settings.gradle.kts.)
+        # :shared:feature:{player-video,syncplay,player-audio}:testAndroidHostTest
+        # are the feature-side hostTest lanes (Robolectric screen/surface
+        # suites) — they compiled in no CI lane before this was added.
+        # (HostTest lanes are NOT part of the derived shared-module scan
+        # above: which modules own an androidHostTest source set is not
+        # derivable from settings.gradle.kts.)
         # One invocation (was two): the compose-resources guard
         # (verifyPhoneStoreDebugComposeResources) dependsOn
         # assemblePhoneStoreDebug, so a single call overlaps its packaging
         # with the test compiles and saves a full configuration phase. The
         # full R8 fdroid RELEASE smoke build lives in the fdroid-smoke job
         # below (deferred off PRs).
-        run: ./gradlew :app:testPhoneStoreDebugUnitTest :app:testTvStoreDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest :shared:feature:player-video:testAndroidHostTest :shared:feature:syncplay:testAndroidHostTest :app:verifyPhoneStoreDebugComposeResources --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+        run: ./gradlew :app:testPhoneStoreDebugUnitTest :app:testTvStoreDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest :shared:feature:player-video:testAndroidHostTest :shared:feature:syncplay:testAndroidHostTest :shared:feature:player-audio:testAndroidHostTest :app:verifyPhoneStoreDebugComposeResources --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: AboutLibraries fdroid asset drift check
         # The fdroid lane ships a COMMITTED aboutlibraries.json

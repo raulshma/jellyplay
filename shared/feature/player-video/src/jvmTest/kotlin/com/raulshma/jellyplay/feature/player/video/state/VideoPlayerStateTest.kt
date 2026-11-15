@@ -108,11 +108,16 @@ class VideoPlayerStateTest {
     fun subtitleState_defaultValuesAndCopy() {
         val state = SubtitleState()
         assertTrue(state.remoteSubtitles.isEmpty())
-        assertFalse(state.isSearchingSubtitles)
+        // Sealed adaptation: the former isSearchingSubtitles flag — the legacy
+        // search machine's phase starts Idle.
+        assertEquals(RemoteSubtitleSearchState.Idle, state.remoteSubtitleSearch)
         assertEquals(state.defaultSearchLanguage, "eng")
 
-        val updated = state.copy(isSearchingSubtitles = true, defaultSearchLanguage = "spa")
-        assertTrue(updated.isSearchingSubtitles)
+        val updated = state.copy(
+            remoteSubtitleSearch = RemoteSubtitleSearchState.Searching,
+            defaultSearchLanguage = "spa",
+        )
+        assertEquals(RemoteSubtitleSearchState.Searching, updated.remoteSubtitleSearch)
         assertEquals(updated.defaultSearchLanguage, "spa")
     }
 }

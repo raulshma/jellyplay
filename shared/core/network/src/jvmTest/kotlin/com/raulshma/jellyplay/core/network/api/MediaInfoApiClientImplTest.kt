@@ -5,7 +5,9 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -45,16 +47,22 @@ class MediaInfoApiClientImplTest {
     fun setup() {
         mockWebServer = MockWebServer()
         mockWebServer.start()
+        val jellyfin = mockk<Jellyfin>(relaxed = true)
+        // Full-arity createApi stub: the multi-write (updateSession) rebuilds
+        // the client inside its critical section (see AuthApiClientTest's note).
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returns mockk(relaxed = true)
         engine = JellyfinApiEngine(
-            jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+            jellyfinLazy = LazyProvider { jellyfin },
             okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = ServerAddressRouter(),
         )
-        engine.updateServer(
-            ServerInfo(id = "server-1", name = "Test", address = mockWebServer.url("/").toString().trimEnd('/')),
-        )
-        engine.updateUser(UserInfo(id = "user-1", name = "testuser", serverAddress = "", accessToken = "token-123"))
+        runBlocking {
+            engine.updateSession(
+                ServerInfo(id = "server-1", name = "Test", address = mockWebServer.url("/").toString().trimEnd('/')),
+                UserInfo(id = "user-1", name = "testuser", serverAddress = "", accessToken = "token-123"),
+            )
+        }
         // Real system clock — these suites pin payload decoding, not windows.
         client = MediaInfoApiClientImpl(engine, SystemTimeSource())
     }

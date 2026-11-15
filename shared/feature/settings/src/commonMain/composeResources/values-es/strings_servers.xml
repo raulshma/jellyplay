@@ -18,6 +18,7 @@
     <string name="settings_add_server_cd">Añadir servidor</string>
     <string name="settings_no_servers_configured">No hay servidores configurados</string>
     <string name="settings_server_switch_hint">Toca un servidor para cambiar. El servidor activo aparece resaltado.</string>
+    <string name="settings_server_switch_failed">No se pudo cambiar a este servidor</string>
     <string name="settings_manage_addresses_cd">Gestionar direcciones</string>
     <string name="settings_remove_cd">Quitar</string>
     <string name="settings_remove_server_confirm_title">¿Eliminar servidor?</string>

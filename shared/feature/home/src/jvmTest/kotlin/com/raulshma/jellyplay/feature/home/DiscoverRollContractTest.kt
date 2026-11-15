@@ -360,7 +360,7 @@ class DiscoverRollContractTest {
         val racedGate = sources.gate(discoverCallKey)
         refresher.request(RefreshTrigger.PullToRefresh)
         runCurrent()
-        assertTrue(refresher.state.value.isRefreshing, "the forced fetch is parked inside the transport")
+        assertEquals(HomeLoadPhase.InlineRefreshing, refresher.state.value.loadPhase, "the forced fetch is parked inside the transport")
 
         // The roll completes while that fetch is parked: the REAL fetcher's
         // two generation bumps (drop + seed) with the memo re-seeded to
@@ -418,7 +418,7 @@ class DiscoverRollContractTest {
         tocGate = CompletableDeferred()
         refresher.request(RefreshTrigger.PullToRefresh)
         runCurrent()
-        assertTrue(refresher.state.value.isRefreshing, "the fetch is parked inside the book-fraction decode")
+        assertEquals(HomeLoadPhase.InlineRefreshing, refresher.state.value.loadPhase, "the fetch is parked inside the book-fraction decode")
         assertEquals(2, rawRowFetches())
 
         // The roll lands while the fetch is parked at the decode — strictly

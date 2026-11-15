@@ -187,7 +187,7 @@ class DownloadsStoreTest {
     @Test
     fun `auto-download servers round-trips into the active user's namespace`() = runTest {
         val identity = ServerIdentityStore(dataStore, scope)
-        identity.setActiveUser("user-1")
+        identity.setActiveSession("srv-1", "user-1")
 
         store.setAutoDownloadServers(setOf("srv-1", "srv-2"))
 
@@ -201,13 +201,13 @@ class DownloadsStoreTest {
     @Test
     fun `auto-download servers are per-user - a second user reads the default`() = runTest {
         val identity = ServerIdentityStore(dataStore, scope)
-        identity.setActiveUser("user-1")
+        identity.setActiveSession("srv-1", "user-1")
         store.setAutoDownloadServers(setOf("srv-1"))
 
-        identity.setActiveUser("user-2")
+        identity.setActiveSession("srv-1", "user-2")
         assertEquals(emptySet(), store.downloads.first().autoDownloadServers)
 
-        identity.setActiveUser("user-1")
+        identity.setActiveSession("srv-1", "user-1")
         assertEquals(setOf("srv-1"), store.downloads.first().autoDownloadServers)
     }
 
@@ -219,7 +219,7 @@ class DownloadsStoreTest {
 
         // A corrupted blob under the namespaced key degrades to the default.
         val identity = ServerIdentityStore(dataStore, scope)
-        identity.setActiveUser("user-1")
+        identity.setActiveSession("srv-1", "user-1")
         dataStore.edit { it[stringPreferencesKey("u_user-1::auto_download_servers")] = "nonsense" }
         assertEquals(emptySet(), store.downloads.first().autoDownloadServers)
     }

@@ -54,17 +54,34 @@ sealed interface HomeRenderSource {
  * hard-error screen still requires empty sections — see
  * [homeSurface]).
  *
+ * Consumes the load phase ([HomeLoadPhase]) directly, with an EXHAUSTIVE
+ * `when` — the compiler, not a flag combination, decides the render
+ * treatment: only [HomeLoadPhase.Failed] can open the implicit-offline
+ * ladder; every other variant (loading, refreshing, handshaking, settled)
+ * renders [Online] in online mode. A phase variant added later fails
+ * compilation here until its render treatment is declared — the former
+ * `fetchFailed: Boolean` input silently defaulted every new state to
+ * "healthy".
+ *
  * Public because [HomeUiState.renderSource] exposes it.
  */
 fun computeHomeRenderSource(
     offlineMode: OfflineMode,
-    fetchFailed: Boolean,
+    loadPhase: HomeLoadPhase,
     offlineLibrary: List<OfflineMediaItem>,
     fallbackPending: Boolean,
 ): HomeRenderSource = when {
     offlineMode != OfflineMode.ONLINE -> HomeRenderSource.Offline.Explicit
-    !fetchFailed -> HomeRenderSource.Online
-    fallbackPending -> HomeRenderSource.FallbackPending
-    offlineLibrary.isNotEmpty() -> HomeRenderSource.Offline.Implicit
-    else -> HomeRenderSource.Online
+    else -> when (loadPhase) {
+        is HomeLoadPhase.Failed -> when {
+            fallbackPending -> HomeRenderSource.FallbackPending
+            offlineLibrary.isNotEmpty() -> HomeRenderSource.Offline.Implicit
+            else -> HomeRenderSource.Online
+        }
+        HomeLoadPhase.ColdLoading,
+        HomeLoadPhase.Ready,
+        HomeLoadPhase.InlineRefreshing,
+        HomeLoadPhase.Handshaking,
+        -> HomeRenderSource.Online
+    }
 }

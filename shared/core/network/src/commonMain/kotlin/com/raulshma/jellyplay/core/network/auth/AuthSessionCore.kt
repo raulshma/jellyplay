@@ -44,11 +44,27 @@ data class CapturedLoginState<S>(
  * sections) as every unfolded platform path: setUser, address failover's
  * session republish, the quick-connect endpoints. A write with one side
  * missing collapses the session to null exactly as both holders do.
+ *
+ * INTERNAL, and the mutex discipline lives in the type: the spine's
+ * critical sections (under the mutex injected below) are the ONLY legitimate
+ * callers, so the interface is module-private and its single write —
+ * [publishSessionState] — is the raw primitive those sections compose.
+ * There is no public single-side write anywhere on either holder: the
+ * public multi-write (`JellyfinApiEngine.updateSession`) wraps the primitive
+ * with the engine's own mutex, and the single-side user flow rides the
+ * engine's named `adoptUser` intent.
  */
-interface AuthSessionStateStore {
+internal interface AuthSessionStateStore {
     fun currentSession(): ActiveSession?
-    fun updateServer(server: ServerInfo?)
-    fun updateSession(server: ServerInfo?, user: UserInfo?)
+
+    /**
+     * Publishes this EXACT session state in one step: both side flows, the
+     * collapsed session value, and (on the engine) the address router
+     * dance. Caller MUST hold the session mutex — the one injected into
+     * [AuthSessionCore]; every call site in the spine sits inside a
+     * `mutex.withLock` critical section.
+     */
+    fun publishSessionState(server: ServerInfo?, user: UserInfo?)
 }
 
 /**
@@ -141,7 +157,7 @@ val NoOpAuthSessionSideEffects: AuthSessionSideEffects<Unit> = object : AuthSess
  *  - [restoreSession] runs under [NonCancellable], so the restore survives
  *    caller cancellation mid-round-trip.
  */
-class AuthSessionCore<S>(
+internal class AuthSessionCore<S>(
     /**
      * The SAME mutex the injecting platform guards its other session writes
      * with — mutual exclusion must hold across folded and unfolded paths
@@ -170,8 +186,9 @@ class AuthSessionCore<S>(
             if (session == null) {
                 // Signed-out path: point currentServer at the target server.
                 // Identity stays null → no transition fires, nothing to wipe;
-                // the follow-up login republishes a real pair.
-                state.updateSession(serverInfo, null)
+                // the follow-up login republishes a real pair. The designed
+                // (server, null) login-in-flight intermediate.
+                state.publishSessionState(serverInfo, null)
             }
             CapturedLoginState(session, side)
         }
@@ -196,7 +213,7 @@ class AuthSessionCore<S>(
     private suspend fun publishAuthenticatedSession(serverInfo: ServerInfo, userInfo: UserInfo) {
         mutex.withLock {
             sideEffects.publishSide(serverInfo, userInfo)
-            state.updateSession(
+            state.publishSessionState(
                 serverInfo.copy(
                     userId = userInfo.id,
                     accessToken = userInfo.accessToken,
@@ -226,7 +243,7 @@ class AuthSessionCore<S>(
             mutex.withLock {
                 if (state.currentSession() != previous.session) return@withLock
                 sideEffects.restoreSide(previous.side)
-                state.updateSession(previous.session?.server, previous.session?.user)
+                state.publishSessionState(previous.session?.server, previous.session?.user)
             }
         }
     }
@@ -235,18 +252,27 @@ class AuthSessionCore<S>(
      * `connectToServer`'s atomic adopt of a freshly probed server — adopts
      * the server AND drops any signed-in user in one critical-section step.
      * This path is reachable while authenticated (Settings → Server
-     * Management → Add Server); a single-sided updateServer would publish a
-     * synthetic (newServer, oldUser) ActiveSession — driving identity
-     * observers to a ServerSwitched and a Room clear under the wrong
-     * identity. The follow-up login republishes a real pair.
+     * Management → Add Server); a server-only publish that kept the user
+     * would surface a synthetic (newServer, oldUser) ActiveSession — driving
+     * identity observers to a ServerSwitched and a Room clear under the
+     * wrong identity. The follow-up login republishes a real pair.
      */
     suspend fun adoptServer(info: ServerInfo) {
-        mutex.withLock { state.updateSession(info, null) }
+        mutex.withLock { state.publishSessionState(info, null) }
     }
 
-    /** `setServer`: one locked single-side server update, pairing with the current user. */
+    /**
+     * `setServer`: one locked server republish under the held mutex,
+     * pairing with the ATOMIC session's user — never a bare single-side
+     * write. A published pair keeps its user (the same-identity address
+     * republish `updateServerMetadata` performs); an orphan user (a user
+     * side with no server) is no identity by the engine's own rule, so it
+     * is NOT resurrected into the synthetic (newServer, oldUser) pair the
+     * invariant forbids — the server lands alone, in the designed
+     * (server, null) intermediate shape.
+     */
     suspend fun setServer(info: ServerInfo) {
-        mutex.withLock { state.updateServer(info) }
+        mutex.withLock { state.publishSessionState(info, state.currentSession()?.user) }
     }
 
     /**
@@ -257,7 +283,7 @@ class AuthSessionCore<S>(
     suspend fun disconnect() {
         mutex.withLock {
             sideEffects.clearSide()
-            state.updateSession(null, null)
+            state.publishSessionState(null, null)
         }
     }
 }

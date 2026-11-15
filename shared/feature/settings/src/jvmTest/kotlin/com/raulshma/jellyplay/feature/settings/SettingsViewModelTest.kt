@@ -19,6 +19,7 @@ import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -172,26 +173,29 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `sendMessageToSession posts success and failure events`() = runTest(testDispatcher) {
+    fun `sendMessageToSession posts success and failure as distinct one-shot arms`() = runTest(testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
         coEvery { serverAdminActions.sendMessageToSession("s1", "h", "hello") } returns Result.success(Unit)
         vm.sendMessageToSession("s1", "h", "hello")
         advanceUntilIdle()
-        assertEquals("Message sent successfully", vm.messageSentEvent)
-
-        vm.clearMessageEvent()
-        assertNull(vm.messageSentEvent)
+        // Success and failure are distinct SettingsUserMessage arms — the
+        // fork lives in the type, not in string prefix matching (the former
+        // parked messageSentEvent field carried both outcomes as bare
+        // strings). Each message is delivered exactly once off the buffered
+        // channel; the retired clearMessageEvent consume dance is gone.
+        assertEquals(SettingsUserMessage.MessageSent, vm.messages.first())
+        assertEquals("Message sent successfully", SettingsUserMessage.MessageSent.busText())
 
         coEvery { serverAdminActions.sendMessageToSession("s2", "h", "hi") } returns Result.failure(RuntimeException("offline"))
         vm.sendMessageToSession("s2", "h", "hi")
         advanceUntilIdle()
-        assertEquals("Failed to send message", vm.messageSentEvent)
+        assertEquals(SettingsUserMessage.MessageSendFailed, vm.messages.first())
     }
 
     @Test
-    fun `server user list emission clears the loading flag`() = runTest(testDispatcher) {
+    fun `server user list emission is mirrored into state`() = runTest(testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -199,7 +203,6 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, vm.currentServerUsers.size)
-        assertEquals(false, vm.isLoadingUsers)
     }
 
     // ------------------------------------------------------------ recents

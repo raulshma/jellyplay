@@ -25,6 +25,7 @@ import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
@@ -56,7 +57,9 @@ import kotlinx.coroutines.test.runTest
  *     [SessionEvent.ShowError], the FORCE_DIRECT_PLAY fallback chain, ENDED,
  *     and the released-session guards);
  *  5. Cinema Mode sequencing ([PlaybackSession.beginCinemaMode] /
- *     [PlaybackSession.advanceCinemaIntro]);
+ *     [PlaybackSession.advanceCinemaIntro]) and the intro load's LOAD-slot
+ *     choreography (single-flight rapid advances, the external-initialize
+ *     cancellation, the post-teardown no-op);
  *  6. the coalesced seek-mirror write on a virtual clock.
  *
  * Conventions match [PlaybackSessionReportingTest]: the session's injected
@@ -102,7 +105,11 @@ class PlaybackSessionLifecycleTest {
 
     private var wasInSyncPlay = false
 
-    private fun TestScope.buildSession(currentItemId: String? = null, playSessionId: String? = null) {
+    private fun TestScope.buildSession(
+        realHooks: Boolean = false,
+        currentItemId: String? = null,
+        playSessionId: String? = null,
+    ) {
         hooks = RecordingHooks(
             routeToRemote = { false },
             reclaimEngine = { null },
@@ -113,6 +120,7 @@ class PlaybackSessionLifecycleTest {
             hooks = hooks,
             initialItem = currentItemId,
             initialPlaySessionId = playSessionId,
+            useRealHooks = realHooks,
         )
         session = graph.session
         playerSessionManager = graph.playerSessionManager
@@ -742,6 +750,128 @@ class PlaybackSessionLifecycleTest {
 
         assertNull(graph.uiState.value.cinemaIntroState, "no intro state was ever published")
         coVerify(exactly = 0) { playerSessionManager.loadMedia(any(), any(), any()) }
+    }
+
+    @Test
+    fun advanceCinemaIntro_rapidTaps_singleFlightThroughTheLoadSlot_lastSkipWins() = runTest {
+        buildSession()
+        // Park every intro load inside `loadMedia` so each advance's
+        // cancel-and-replace hits a LIVE body — the race the LOAD slot
+        // serializes. The live set drains as cancelled bodies unwind.
+        val gates = mapOf(
+            "intro-1" to CompletableDeferred<Unit>(),
+            "intro-2" to CompletableDeferred<Unit>(),
+            "intro-3" to CompletableDeferred<Unit>(),
+        )
+        val liveLoads = mutableSetOf<String>()
+        coEvery { playerSessionManager.loadMedia(any(), any(), any()) } coAnswers {
+            val itemId = firstArg<String>()
+            liveLoads += itemId
+            try {
+                gates.getValue(itemId).await()
+            } finally {
+                liveLoads -= itemId
+            }
+        }
+        val intros = listOf(intro("intro-1", "One"), intro("intro-2", "Two"), intro("intro-3", "Three"))
+
+        session.beginCinemaMode(intros, request(itemId = "main"))
+        assertEquals(setOf("intro-1"), liveLoads)
+        session.advanceCinemaIntro()
+        testScheduler.runCurrent()
+        // The intro-1 body was cancelled before the intro-2 body launched —
+        // exactly one intro load in flight at a time.
+        assertEquals(setOf("intro-2"), liveLoads)
+        session.advanceCinemaIntro()
+        testScheduler.runCurrent()
+        assertEquals(setOf("intro-3"), liveLoads)
+
+        // Land the final body: the final skip's intro is the one that rebinds.
+        gates.getValue("intro-3").complete(Unit)
+        testScheduler.runCurrent()
+        assertEquals(setOf(), liveLoads)
+        assertEquals(
+            CinemaIntroUiState(title = "Three", currentIndex = 3, totalCount = 3),
+            graph.uiState.value.cinemaIntroState,
+            "the final landed intro matches the final skip",
+        )
+        // Each tap loaded its own intro exactly once — no double-launch, no
+        // retried stale load.
+        coVerify(exactly = 1) { playerSessionManager.loadMedia("intro-1", null, 0L) }
+        coVerify(exactly = 1) { playerSessionManager.loadMedia("intro-2", null, 0L) }
+        coVerify(exactly = 1) { playerSessionManager.loadMedia("intro-3", null, 0L) }
+        // The superseded bodies never reached the rebind: the media session
+        // and the position tracking follow only the final intro.
+        verify(exactly = 1) { mediaSessionController.createForItem("intro-3", "Test Movie", "2024") }
+        verify(exactly = 0) { mediaSessionController.createForItem("intro-1", any(), any()) }
+        verify(exactly = 0) { mediaSessionController.createForItem("intro-2", any(), any()) }
+        verify(exactly = 1) { progressReporter.startPositionTracking() }
+    }
+
+    @Test
+    fun externalInitialize_midIntro_cancelsTheIntroBody_andTheMirrorStaysCleared() = runTest {
+        // The REAL hooks: this pin is about the teardown half's semantics (the
+        // cinema latch clear + the uiState rebuild), which the recording
+        // double only order-pins.
+        buildSession(realHooks = true)
+        var introBodyResumed = false
+        val gate = CompletableDeferred<Unit>()
+        coEvery { playerSessionManager.loadMedia(any(), any(), any()) } coAnswers {
+            gate.await()
+            introBodyResumed = true
+        }
+        session.beginCinemaMode(listOf(intro("intro-1", "Previously On")), request(itemId = "main"))
+        // The intro body is parked inside loadMedia: mirror published, context armed.
+        assertEquals(
+            CinemaIntroUiState(title = "Previously On", currentIndex = 1, totalCount = 1),
+            graph.uiState.value.cinemaIntroState,
+        )
+        assertNotNull(session.cinemaIntroContext)
+
+        // External initialize (the SyncPlay `onLoadItem` shape): the LOAD slot
+        // cancel reaches the parked intro body, then the per-item teardown
+        // clears the context and the uiState rebuild clears the mirror.
+        session.initialize(request(itemId = "incoming", allowCinemaMode = false))
+
+        assertNull(session.cinemaIntroContext)
+        assertNull(graph.uiState.value.cinemaIntroState, "the per-item teardown rebuild clears the mirror")
+
+        // Release the parked load: the cancelled body must not resume (the
+        // LOAD slot cancel reached it), must not resurrect the mirror, and
+        // must not rebind tracking for the intro it was loading — tracking
+        // follows only the new item (driven by the pipeline, mocked here).
+        gate.complete(Unit)
+        testScheduler.runCurrent()
+        assertFalse(introBodyResumed, "the parked intro body must be cancelled by the external initialize")
+        assertNull(graph.uiState.value.cinemaIntroState, "the cancelled intro body must not resurrect the mirror")
+        verify(exactly = 0) { mediaSessionController.createForItem("intro-1", any(), any()) }
+        verify(exactly = 0) { progressReporter.startPositionTracking() }
+    }
+
+    @Test
+    fun advanceCinemaIntro_afterTeardown_isNoOp_andLeavesTheMirrorCleared() = runTest {
+        // The REAL hooks: the cinema latch clear lives in the session's own
+        // releaseInternalsVmPart, which the recording double does not run.
+        buildSession(realHooks = true)
+        session.beginCinemaMode(listOf(intro("intro-1", "One")), request(itemId = "main"))
+        assertEquals(
+            CinemaIntroUiState(title = "One", currentIndex = 1, totalCount = 1),
+            graph.uiState.value.cinemaIntroState,
+        )
+
+        // The full teardown clears the context (the release split's cinema
+        // latch clear + the uiState rebuild's implicit mirror clear).
+        session.release(vmTeardownAfterInternals = {})
+        assertNull(session.cinemaIntroContext)
+        assertNull(graph.uiState.value.cinemaIntroState)
+
+        // A skip tap landing after the teardown is inert: no re-entrant
+        // main-feature initialize, no load, the mirror stays cleared.
+        session.advanceCinemaIntro()
+
+        assertNull(graph.uiState.value.cinemaIntroState)
+        coVerify(exactly = 1) { playerSessionManager.loadMedia(any(), any(), any()) }
+        coVerify(exactly = 0) { pipeline.start(any(), any()) }
     }
 
     // ── 6. Playhead seeding + seek coalescing ────────────────────────────────

@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import okhttp3.OkHttpClient
@@ -52,14 +54,18 @@ class JellyfinRawRequesterTest {
         mockWebServer.start()
         val baseUrl = mockWebServer.url("/").toString().trimEnd('/')
         router = ServerAddressRouter()
+        val jellyfin = mockk<Jellyfin>(relaxed = true)
+        // Full-arity createApi stub: the multi-write (updateSession) rebuilds
+        // the client inside its critical section (see AuthApiClientTest's
+        // note on partial matchers executing the real final createApi).
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returns mockk(relaxed = true)
         engine = JellyfinApiEngine(
-            jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+            jellyfinLazy = LazyProvider { jellyfin },
             okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = router,
         )
-        engine.updateServer(ServerInfo(id = "server-1", name = "Test", address = baseUrl))
-        engine.updateUser(testUser)
+        runBlocking { engine.updateSession(ServerInfo(id = "server-1", name = "Test", address = baseUrl), testUser) }
         requester = JellyfinRawRequester(engine)
     }
 
@@ -143,15 +149,17 @@ class JellyfinRawRequesterTest {
         // the mock. A seam that built URLs from the server's PRIMARY address
         // would try the dead port and never reach the mock.
         val alternate = mockWebServer.url("/").toString().trimEnd('/')
-        engine.updateServer(
-            ServerInfo(
-                id = "server-1",
-                name = "Test",
-                address = "http://localhost:1",
-                alternateAddresses = listOf(alternate),
-            ),
-        )
-        engine.updateUser(testUser)
+        runBlocking {
+            engine.updateSession(
+                ServerInfo(
+                    id = "server-1",
+                    name = "Test",
+                    address = "http://localhost:1",
+                    alternateAddresses = listOf(alternate),
+                ),
+                testUser,
+            )
+        }
         router.markActive(alternate)
         assertEquals(alternate, engine.activeServerAddress)
 
@@ -173,7 +181,7 @@ class JellyfinRawRequesterTest {
 
         assertEquals("Not connected", assertFailsWith<IllegalStateException> { fresh.requireSession() }.message)
 
-        freshEngine.updateServer(ServerInfo(id = "s", name = "s", address = "https://s.example"))
+        runBlocking { freshEngine.updateSession(ServerInfo(id = "s", name = "s", address = "https://s.example"), null) }
         assertEquals("Not authenticated", assertFailsWith<IllegalStateException> { fresh.requireSession() }.message)
     }
 
@@ -183,7 +191,7 @@ class JellyfinRawRequesterTest {
         assertEquals(mockWebServer.url("/").toString().trimEnd('/'), base)
         assertEquals("token-123", token)
 
-        engine.updateServer(null)
+        runBlocking { engine.updateSession(null, null) }
         assertEquals("No server", assertFailsWith<IllegalStateException> { requester.requirePlaybackSession() }.message)
 
         val userlessEngine = JellyfinApiEngine(
@@ -192,7 +200,7 @@ class JellyfinRawRequesterTest {
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = ServerAddressRouter(),
         )
-        userlessEngine.updateServer(ServerInfo(id = "s", name = "s", address = "https://s.example"))
+        runBlocking { userlessEngine.updateSession(ServerInfo(id = "s", name = "s", address = "https://s.example"), null) }
         assertEquals(
             "No user",
             assertFailsWith<IllegalStateException> { JellyfinRawRequester(userlessEngine).requirePlaybackSession() }.message,

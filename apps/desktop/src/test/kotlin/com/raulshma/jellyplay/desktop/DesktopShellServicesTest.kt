@@ -333,7 +333,7 @@ class DesktopShellServicesTest {
     fun `homeMode writes persist through the session controller into the store`() = runTest {
         val harness = buildHarness()
         // The store skips pre-login writes (no namespace) — sign the fake in first.
-        harness.identityStore.setActiveUser("u1")
+        harness.identityStore.setActiveSession("srv-1", "u1")
 
         harness.services.sessionController.setHomeMode(HomeMode.MUSIC)
         advanceUntilIdle()

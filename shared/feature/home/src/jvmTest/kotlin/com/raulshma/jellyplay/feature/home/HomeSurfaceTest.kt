@@ -51,7 +51,10 @@ class HomeSurfaceTest {
         offlineBookProgressFractions: Map<String, Float> = emptyMap(),
     ) = HomeUiState(
         renderSource = renderSource,
-        error = error,
+        // The former `error` field is the [HomeLoadPhase.Failed] payload now;
+        // the no-error default keeps the old state defaults verbatim
+        // (isLoading=true = the ColdLoading phase).
+        loadPhase = error?.let { HomeLoadPhase.Failed(it) } ?: HomeLoadPhase.ColdLoading,
         sections = sections.toImmutableList(),
         homeMode = homeMode,
         isGoingOnline = isGoingOnline,

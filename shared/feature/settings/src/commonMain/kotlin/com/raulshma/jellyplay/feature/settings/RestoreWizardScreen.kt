@@ -126,6 +126,66 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
+ * Which composition-held dialog the restore wizard has open, if any: the
+ * destructive restore confirm, the secrets passphrase unlock, and the secrets
+ * apply confirm. ONE nullable slot behind the former three parallel
+ * `remember` booleans (`showRestoreConfirm` / `showUnlockDialog` /
+ * `showSecretsApplyConfirm`) — opening one structurally replaces any other
+ * (newest show() wins; the modal dialogs could never actually coexist — each
+ * blocks the diff cards that raise the others — the booleans just allowed the
+ * combination to be represented).
+ *
+ * Two cross-owner behaviors against the ViewModel's sealed phases are
+ * deliberate and preserved ([RestoreWizardDialogRules] pins both):
+ *  - the passphrase arm is closed by the VM-watching effect once
+ *    [SecretsPhase.Unlocked] lands (a wrong passphrase keeps it up for the
+ *    inline retry) — and ONLY that arm closes;
+ *  - the restore-confirm arm stays up (undismissable) while the VM's
+ *    [ApplyPhase.Applying] runs — [ConfirmDialog] already refuses
+ *    back/scrim/Cancel while its confirm is loading, and the scaffold's back
+ *    affordance gates on the same phase.
+ *
+ * These dialogs are NOT part of any screen back ladder — the wizard has none;
+ * each dismisses itself via its own window-level back handling
+ * ([ConfirmDialog]'s `dismissOnBackPress`, routed through its guarded
+ * `onDismiss`), exactly as before.
+ */
+internal enum class RestoreWizardDialog { RestoreConfirm, UnlockPassphrase, SecretsApplyConfirm }
+
+/**
+ * The slot × VM-phase decision rules for [RestoreWizardDialog] — the pure
+ * decision object beside the phase types (StateManagementConventions §3), so
+ * the two cross-owner behaviors above are pinned by tests
+ * (RestoreWizardDialogSlotTest) instead of trusted to comments.
+ */
+internal object RestoreWizardDialogRules {
+
+    /**
+     * Whether an arriving [SecretsPhase] closes the currently-open slot arm:
+     * ONLY the passphrase arm closes, and only once the unlock has succeeded
+     * ([SecretsPhase.Unlocked]). The former unconditional
+     * `showUnlockDialog = false` was a silent no-op for every other arm —
+     * notably the restore confirm, which can be the open arm while an
+     * in-flight unlock settles — and this guard preserves exactly that
+     * (no-op ≡ no close).
+     */
+    fun closesOnUnlock(active: RestoreWizardDialog?, secretsPhase: SecretsPhase?): Boolean =
+        active == RestoreWizardDialog.UnlockPassphrase && secretsPhase is SecretsPhase.Unlocked
+
+    /**
+     * Whether the open slot arm may dismiss (back, scrim, Cancel): the
+     * restore-confirm arm refuses while the apply batch is running
+     * ([ApplyPhase.Applying] — an apply abandoned mid-batch leaves the source
+     * half-restored); every other arm always dismisses. Matches the former
+     * inline guard on `showRestoreConfirm`'s `onDismiss` exactly.
+     */
+    fun dismissAllowed(active: RestoreWizardDialog, applyPhase: ApplyPhase): Boolean = when (active) {
+        RestoreWizardDialog.RestoreConfirm -> applyPhase !is ApplyPhase.Applying
+        RestoreWizardDialog.UnlockPassphrase, RestoreWizardDialog.SecretsApplyConfirm -> true
+    }
+}
+
+/**
  * The unified restore wizard: ONE screen, two internal steps. SOURCE
  * picks the payload — the server's restore points (gated by the sync probe,
  * an explanatory state when sync is off/unavailable) or a backup file (the
@@ -162,26 +222,28 @@ fun RestoreWizardScreen(
     LaunchedEffect(Unit) { viewModel.start(uri, snapshotId) }
 
     // Success: the VM already posted the summary to the bus — pop the wizard.
-    LaunchedEffect(uiState.completed) {
-        if (uiState.completed) {
+    LaunchedEffect(uiState.applyPhase) {
+        if (uiState.applyPhase is ApplyPhase.Completed) {
             viewModel.consumeCompleted()
             onBack()
         }
     }
 
-    // Secrets unlock: drop the passphrase dialog once the counts land (a wrong
-    // passphrase keeps it up for the inline retry).
-    var showUnlockDialog by remember { mutableStateOf(false) }
-    LaunchedEffect(uiState.file?.secretsUnlocked) {
-        if (uiState.file?.secretsUnlocked != null) showUnlockDialog = false
+    // The wizard's ONE dialog slot ([RestoreWizardDialog]; newest show()
+    // replaces). Secrets unlock: the effect drops the passphrase arm once the
+    // counts land (a wrong passphrase keeps it up for the inline retry) — and
+    // only that arm, per [RestoreWizardDialogRules.closesOnUnlock].
+    var activeDialog by remember { mutableStateOf<RestoreWizardDialog?>(null) }
+    LaunchedEffect(uiState.stagedFile()?.secrets) {
+        if (RestoreWizardDialogRules.closesOnUnlock(activeDialog, uiState.stagedFile()?.secrets)) {
+            activeDialog = null
+        }
     }
-    var showSecretsApplyConfirm by remember { mutableStateOf(false) }
-    var showRestoreConfirm by remember { mutableStateOf(false) }
 
     val callbacks = WizardCallbacks(
-        onRestoreConfirm = { showRestoreConfirm = true },
-        onUnlock = { showUnlockDialog = true },
-        onSecretsApply = { showSecretsApplyConfirm = true },
+        onRestoreConfirm = { activeDialog = RestoreWizardDialog.RestoreConfirm },
+        onUnlock = { activeDialog = RestoreWizardDialog.UnlockPassphrase },
+        onSecretsApply = { activeDialog = RestoreWizardDialog.SecretsApplyConfirm },
     )
 
     val focusRequester = remember { FocusRequester() }
@@ -192,7 +254,7 @@ fun RestoreWizardScreen(
         // Back is dead while the confirmed apply runs: an apply abandoned
         // mid-batch leaves the source half-restored. The dialog already
         // refuses dismissal; the scaffold's back affordance must follow.
-        onBack = { if (!uiState.applying) onBack() },
+        onBack = { if (uiState.applyPhase !is ApplyPhase.Applying) onBack() },
         backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         LazyColumn(
@@ -217,93 +279,116 @@ fun RestoreWizardScreen(
                     onPickFile = { importPicker?.launchOpenImport() },
                 )
 
-                WizardStep.DIFF -> when {
-                    uiState.file != null -> fileDiffStep(viewModel, callbacks)
-                    uiState.snapshot != null -> snapshotDiffStep(viewModel, callbacks)
-                    uiState.fullRestore != null -> fullRestoreStep(callbacks)
+                WizardStep.DIFF -> when (val stage = uiState.diffStage) {
+                    is DiffStage.File -> fileDiffStep(viewModel, callbacks)
+                    is DiffStage.Snapshot -> snapshotDiffStep(viewModel, callbacks)
+                    is DiffStage.Full -> fullRestoreStep(callbacks)
+                    null -> Unit
                 }
             }
 
-            if (uiState.step == WizardStep.DIFF && uiState.applyError != null) {
-                item(key = "apply_error") {
-                    WizardWarningCard(
-                        icon = Tabler.Outline.AlertTriangle,
-                        title = uiState.applyError.orEmpty(),
-                        message = null,
-                    )
+            if (uiState.step == WizardStep.DIFF) {
+                when (val phase = uiState.applyPhase) {
+                    is ApplyPhase.Failed -> item(key = "apply_error") {
+                        WizardWarningCard(
+                            icon = Tabler.Outline.AlertTriangle,
+                            title = phase.message,
+                            message = null,
+                        )
+                    }
+                    else -> Unit
                 }
             }
         }
     }
 
-    // ── The destructive confirm: tone + message + the cross-account line ──
-    if (showRestoreConfirm) {
-        val isFullRestore = uiState.fullRestore != null
-        ConfirmDialog(
-            title = stringResource(Res.string.wizard_confirm_title),
-            message = stringResource(
-                if (isFullRestore) Res.string.wizard_confirm_full_message
-                else Res.string.wizard_confirm_message,
-                viewModel.selectedGroupCount(),
-            ),
-            confirmText = stringResource(
-                if (isFullRestore) Res.string.wizard_full_restore
-                else Res.string.wizard_diff_restore_selected,
-            ),
-            dismissText = stringResource(Res.string.settings_cancel),
-            tone = ConfirmTone.DESTRUCTIVE,
-            icon = Tabler.Outline.AlertTriangle,
-            confirmLoading = uiState.applying,
-            // The dialog stays up (loading) until the apply settles: `completed`
-            // pops the wizard; a failure drops `applying` so the dialog becomes
-            // dismissible and the inline apply-error card takes over.
-            onConfirm = { viewModel.restoreSelected() },
-            onDismiss = { if (!uiState.applying) showRestoreConfirm = false },
-            content = if (uiState.file?.crossAccount == true) {
-                {
-                    Text(
-                        text = stringResource(Res.string.wizard_confirm_cross_account),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            } else {
-                null
-            },
-        )
-    }
+    // ── The dialog slot's render site: ONE dialog at a time, in the former
+    // separate-`if`s' order (restore confirm → passphrase unlock → secrets
+    // apply confirm). ──
+    when (activeDialog) {
+        RestoreWizardDialog.RestoreConfirm -> {
+            // The destructive confirm: tone + message + the cross-account line.
+            val isFullRestore = uiState.diffStage is DiffStage.Full
+            ConfirmDialog(
+                title = stringResource(Res.string.wizard_confirm_title),
+                message = stringResource(
+                    if (isFullRestore) Res.string.wizard_confirm_full_message
+                    else Res.string.wizard_confirm_message,
+                    viewModel.selectedGroupCount(),
+                ),
+                confirmText = stringResource(
+                    if (isFullRestore) Res.string.wizard_full_restore
+                    else Res.string.wizard_diff_restore_selected,
+                ),
+                dismissText = stringResource(Res.string.settings_cancel),
+                tone = ConfirmTone.DESTRUCTIVE,
+                icon = Tabler.Outline.AlertTriangle,
+                confirmLoading = uiState.applyPhase is ApplyPhase.Applying,
+                // The dialog stays up (loading) until the apply settles:
+                // `Completed` pops the wizard; a failure lands `Failed` so the
+                // dialog becomes dismissible and the inline apply-error card
+                // takes over. The guarded dismiss is the slot-encoded form of
+                // the former inline `applyPhase !is Applying` check
+                // ([RestoreWizardDialogRules.dismissAllowed]).
+                onConfirm = { viewModel.restoreSelected() },
+                onDismiss = {
+                    if (RestoreWizardDialogRules.dismissAllowed(
+                            RestoreWizardDialog.RestoreConfirm,
+                            uiState.applyPhase,
+                        )
+                    ) {
+                        activeDialog = null
+                    }
+                },
+                content = if (uiState.stagedFile()?.crossAccount == true) {
+                    {
+                        Text(
+                            text = stringResource(Res.string.wizard_confirm_cross_account),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    null
+                },
+            )
+        }
 
-    // ── Secrets: the passphrase unlock + the explicit apply confirm ──
-    if (showUnlockDialog) {
-        UnlockPassphraseDialog(
-            isBusy = uiState.file?.secretsUnlocking == true,
-            errorText = if (uiState.file?.secretsError == true) {
-                stringResource(Res.string.settings_import_secrets_wrong_passphrase)
-            } else {
-                null
-            },
-            onDismiss = {
-                showUnlockDialog = false
-                viewModel.clearSecretsError()
-            },
-            onConfirm = { passphrase -> viewModel.unlockSecrets(passphrase) },
-        )
-    }
-    if (showSecretsApplyConfirm) {
-        ConfirmDialog(
-            title = stringResource(Res.string.settings_import_secrets_confirm_title),
-            message = stringResource(Res.string.settings_import_secrets_confirm_message),
-            confirmText = stringResource(Res.string.settings_import_secrets_apply),
-            tone = ConfirmTone.PRIMARY,
-            icon = Tabler.Outline.Lock,
-            onConfirm = {
-                showSecretsApplyConfirm = false
-                viewModel.applySecrets()
-            },
-            onDismiss = { showSecretsApplyConfirm = false },
-            dismissText = stringResource(Res.string.settings_cancel),
-        )
+        // ── Secrets: the passphrase unlock + the explicit apply confirm ──
+        RestoreWizardDialog.UnlockPassphrase -> {
+            UnlockPassphraseDialog(
+                isBusy = uiState.stagedFile()?.secrets is SecretsPhase.Unlocking,
+                errorText = if (uiState.stagedFile()?.secrets is SecretsPhase.UnlockFailed) {
+                    stringResource(Res.string.settings_import_secrets_wrong_passphrase)
+                } else {
+                    null
+                },
+                onDismiss = {
+                    activeDialog = null
+                    viewModel.clearSecretsError()
+                },
+                onConfirm = { passphrase -> viewModel.unlockSecrets(passphrase) },
+            )
+        }
+
+        RestoreWizardDialog.SecretsApplyConfirm -> {
+            ConfirmDialog(
+                title = stringResource(Res.string.settings_import_secrets_confirm_title),
+                message = stringResource(Res.string.settings_import_secrets_confirm_message),
+                confirmText = stringResource(Res.string.settings_import_secrets_apply),
+                tone = ConfirmTone.PRIMARY,
+                icon = Tabler.Outline.Lock,
+                onConfirm = {
+                    activeDialog = null
+                    viewModel.applySecrets()
+                },
+                onDismiss = { activeDialog = null },
+                dismissText = stringResource(Res.string.settings_cancel),
+            )
+        }
+
+        null -> Unit
     }
 }
 
@@ -313,6 +398,9 @@ private class WizardCallbacks(
     val onUnlock: () -> Unit,
     val onSecretsApply: () -> Unit,
 )
+
+// The staged file-diff face read: `RestoreWizardUiState.stagedFile()` lives
+// beside DiffStage in RestoreWizardViewModel.kt (shared with the VM's writers).
 
 // ---------------------------------------------------------------------------
 // SOURCE step
@@ -324,12 +412,24 @@ private fun LazyListScope.sourceStep(
     viewModel: RestoreWizardViewModel,
     onPickFile: () -> Unit,
 ) {
-    if (uiState.serverAvailable) {
+    // The server section renders only when the arm has a face to show: the
+    // gate-closed / no-client causes keep it absent entirely (the closed-gate
+    // arm's former face), the other causes show the same quiet unavailable
+    // card the conflated flag always rendered.
+    val serverVisible = when (val phase = uiState.sourcePhase) {
+        is SourcePhase.Available -> true
+        SourcePhase.Probing -> true
+        is SourcePhase.Unavailable -> when (phase.reason) {
+            SourceUnavailableReason.OLD_PLUGIN, SourceUnavailableReason.READ_FAILED -> true
+            SourceUnavailableReason.GATE_CLOSED, SourceUnavailableReason.NO_CLIENT -> false
+        }
+    }
+    if (serverVisible) {
         item(key = "server_title") {
             WizardSectionLabel(stringResource(Res.string.wizard_source_server_title))
         }
-        when {
-            uiState.snapshotsUnavailable -> item(key = "server_unavailable") {
+        when (val phase = uiState.sourcePhase) {
+            is SourcePhase.Unavailable -> item(key = "server_unavailable") {
                 WizardWarningCard(
                     icon = Tabler.Outline.CloudDownload,
                     title = stringResource(Res.string.wizard_source_server_unavailable_title),
@@ -337,19 +437,22 @@ private fun LazyListScope.sourceStep(
                 )
             }
 
-            uiState.snapshotsLoading -> item(key = "server_loading") { WizardLoadingLine() }
+            SourcePhase.Probing -> item(key = "server_loading") { WizardLoadingLine() }
 
-            uiState.snapshots.isEmpty() -> item(key = "server_empty") {
-                WizardWarningCard(
-                    icon = Tabler.Outline.CloudDownload,
-                    title = stringResource(Res.string.wizard_source_server_unavailable_title),
-                    message = stringResource(Res.string.wizard_source_server_unavailable_subtitle),
-                )
-            }
-
-            else -> items(uiState.snapshots, key = { "snapshot_${it.id}" }) { snapshot ->
-                SnapshotSourceRow(snapshot = snapshot, onClick = { viewModel.openSnapshot(snapshot.id.toString()) })
-            }
+            is SourcePhase.Available ->
+                if (phase.snapshots.isEmpty()) {
+                    item(key = "server_empty") {
+                        WizardWarningCard(
+                            icon = Tabler.Outline.CloudDownload,
+                            title = stringResource(Res.string.wizard_source_server_unavailable_title),
+                            message = stringResource(Res.string.wizard_source_server_unavailable_subtitle),
+                        )
+                    }
+                } else {
+                    items(phase.snapshots, key = { "snapshot_${it.id}" }) { snapshot ->
+                        SnapshotSourceRow(snapshot = snapshot, onClick = { viewModel.openSnapshot(snapshot.id.toString()) })
+                    }
+                }
         }
     }
 
@@ -373,15 +476,17 @@ private fun LazyListScope.sourceStep(
             )
         }
     }
-    if (uiState.loadError) {
+    uiState.loadFailure?.let { failure ->
         item(key = "load_error") {
             WizardWarningCard(
                 icon = Tabler.Outline.AlertTriangle,
                 title = stringResource(
-                    if (viewModel.lastLoadErrorIsServer) Res.string.wizard_load_failed
-                    else Res.string.settings_import_preview_error,
+                    when (failure) {
+                        is SourceLoadFailure.Server -> Res.string.wizard_load_failed
+                        is SourceLoadFailure.File -> Res.string.settings_import_preview_error
+                    },
                 ),
-                message = viewModel.lastLoadErrorMessage,
+                message = failure.message,
             )
         }
     }
@@ -430,7 +535,7 @@ private fun formatWizardTimestamp(epochMillis: Long): String =
 // ---------------------------------------------------------------------------
 
 private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callbacks: WizardCallbacks) {
-    val file = viewModel.uiState.file ?: return
+    val file = viewModel.uiState.stagedFile() ?: return
     val selection = file.selection
 
     val totalChanged = file.categories.sumOf { it.changed.size } +
@@ -551,12 +656,11 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
         }
     }
 
-    // ── Secrets card (always last) ──
-    if (file.hasSecrets) {
+    // ── Secrets card (always last; hidden when the backup carries no envelope) ──
+    if (file.secrets != SecretsPhase.Hidden) {
         item(key = "secrets") {
             SecretsCard(
-                summary = file.secretsUnlocked,
-                unlocking = file.secretsUnlocking,
+                phase = file.secrets,
                 onUnlock = callbacks.onUnlock,
                 onApply = callbacks.onSecretsApply,
             )
@@ -569,7 +673,7 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
 // ---------------------------------------------------------------------------
 
 private fun LazyListScope.snapshotDiffStep(viewModel: RestoreWizardViewModel, callbacks: WizardCallbacks) {
-    val state = viewModel.uiState.snapshot ?: return
+    val state = (viewModel.uiState.diffStage as? DiffStage.Snapshot)?.state ?: return
 
     val totalRows = state.groups.namespaces.sumOf { it.rows.size } +
         state.groups.prefDomains.sumOf { it.rows.size }
@@ -1054,12 +1158,13 @@ private fun iconForDomain(domain: String): ImageVector = when (domain) {
 /**
  * The secrets card: locked state offers the passphrase unlock; the
  * unlocked state lists WHAT will be restored behind the explicit apply
- * button (never automatic).
+ * button (never automatic). The phase ([SecretsPhase]) drives every face:
+ * the unlock button shows until [SecretsPhase.Unlocked], disabled with a
+ * spinner while [SecretsPhase.Unlocking].
  */
 @Composable
 private fun SecretsCard(
-    summary: SecretsRestoreSummary?,
-    unlocking: Boolean,
+    phase: SecretsPhase,
     onUnlock: () -> Unit,
     onApply: () -> Unit,
 ) {
@@ -1092,11 +1197,12 @@ private fun SecretsCard(
             }
         }
 
+        val summary = phase.summary
         if (summary == null) {
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = onUnlock,
-                enabled = !unlocking,
+                enabled = phase !is SecretsPhase.Unlocking,
                 shape = ShapeCache.smoothPill,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -1104,7 +1210,7 @@ private fun SecretsCard(
                 ),
                 modifier = Modifier.align(Alignment.End),
             ) {
-                if (unlocking) {
+                if (phase is SecretsPhase.Unlocking) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
                     Text(stringResource(Res.string.settings_import_secrets_unlock_button))

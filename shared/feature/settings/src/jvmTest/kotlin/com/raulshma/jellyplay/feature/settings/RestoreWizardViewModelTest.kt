@@ -23,7 +23,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
-import com.raulshma.jellyplay.core.datastore.identity.ServerIdentity
+import com.raulshma.jellyplay.core.datastore.identity.PersistedIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
@@ -104,6 +104,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -157,7 +158,7 @@ class RestoreWizardViewModelTest {
     private lateinit var serverIdentityStore: ServerIdentityStore
 
     private val pluginStatus = MutableStateFlow(JellyPlayPluginStatus.UNAVAILABLE)
-    private val identity = MutableStateFlow(ServerIdentity(activeServerId = "srv-1", activeUserId = "user-1"))
+    private val identity = MutableStateFlow<PersistedIdentity>(PersistedIdentity.ActiveSession("srv-1", "user-1"))
 
     /** The real bus under test — its messages are drained by a collector. */
     private lateinit var bus: UserMessageBus
@@ -302,7 +303,11 @@ class RestoreWizardViewModelTest {
     private fun nameOf(res: org.jetbrains.compose.resources.StringResource): String =
         resName[res] ?: error("resource never resolved in this test: $res")
 
-    private fun viewModel(assembler: SecretsBackupAssembler? = null): RestoreWizardViewModel {
+    private fun viewModel(
+        assembler: SecretsBackupAssembler? = null,
+        /** Null builds the file-only graph (the server arm degrades off). */
+        client: JellyPlaySettingsSyncRoutes? = pluginApi,
+    ): RestoreWizardViewModel {
         val stores = PreferenceStores(
             playback = playbackStore,
             videoPlayer = videoPlayerStore,
@@ -330,7 +335,7 @@ class RestoreWizardViewModelTest {
             userPreferencesStore = userPreferencesStore,
             snapshotReader = PreferenceSnapshotReader(stores, appRuntimeStateStore, pinRateLimiter),
             secretsBackupAssembler = assembler,
-            pluginApiClient = pluginApi,
+            pluginApiClient = client,
             statusStore = statusStore,
             syncRepository = syncRepository,
             serverIdentityStore = serverIdentityStore,
@@ -345,6 +350,14 @@ class RestoreWizardViewModelTest {
         backgroundScope.launch { bus.messages.collect { busMessages += it.toString() } }
     }
 
+    /** The staged file-diff face (the ONE-slot read the assertions share). */
+    private fun RestoreWizardUiState.stagedFile(): FileRestoreState? =
+        (diffStage as? DiffStage.File)?.state
+
+    /** The staged snapshot-diff face (the ONE-slot read the assertions share). */
+    private fun RestoreWizardUiState.stagedSnapshot(): SnapshotRestoreState? =
+        (diffStage as? DiffStage.Snapshot)?.state
+
     private suspend fun TestScope.loadedWithFile(
         json: String,
         uri: String = "backup:v2",
@@ -352,7 +365,7 @@ class RestoreWizardViewModelTest {
     ): RestoreWizardViewModel {
         stubImport(uri, json)
         val vm = viewModel(assembler).also { it.loadBackupFile(uri) }
-        awaitUntil("file diff for $uri") { vm.uiState.file != null || vm.uiState.loadError }
+        awaitUntil("file diff for $uri") { vm.uiState.diffStage is DiffStage.File || vm.uiState.loadFailure != null }
         return vm
     }
 
@@ -445,7 +458,7 @@ class RestoreWizardViewModelTest {
         )
         val vm = viewModel()
         vm.start(uri = null, snapshotId = "s1")
-        awaitUntil("the snapshot diff stages") { vm.uiState.snapshot != null }
+        awaitUntil("the snapshot diff stages") { vm.uiState.diffStage is DiffStage.Snapshot }
         return vm
     }
 
@@ -457,8 +470,11 @@ class RestoreWizardViewModelTest {
         vm.start(uri = null, snapshotId = null)
         advanceUntilIdle()
 
-        assertFalse(vm.uiState.serverAvailable)
-        assertTrue(vm.uiState.snapshotsUnavailable, "the empty state must explain the closed gate")
+        assertEquals(
+            SourcePhase.Unavailable(SourceUnavailableReason.GATE_CLOSED),
+            vm.uiState.sourcePhase,
+            "the closed gate is declared data — the screen keeps rendering nothing for it",
+        )
         coVerify(exactly = 0) { pluginApi.getSnapshots() }
     }
 
@@ -470,26 +486,96 @@ class RestoreWizardViewModelTest {
         )
         val vm = viewModel()
         vm.start(uri = null, snapshotId = null)
-        awaitUntil("the restore points load") { vm.uiState.snapshots.isNotEmpty() }
+        awaitUntil("the restore points load") { vm.uiState.sourcePhase is SourcePhase.Available }
 
-        assertTrue(vm.uiState.serverAvailable)
-        assertFalse(vm.uiState.snapshotsUnavailable)
-        assertEquals(1, vm.uiState.snapshots.size)
+        val available = assertIs<SourcePhase.Available>(vm.uiState.sourcePhase)
+        assertEquals(1, available.snapshots.size)
 
-        // A 404 (null payload) degrades to the same quiet face.
+        // A 404 (null payload) degrades to the same quiet face — the OLD_PLUGIN cause is data now.
         coEvery { pluginApi.getSnapshots() } returns Result.success(null)
         vm.refreshSource()
-        awaitUntil("the old-plugin 404 degrades") { vm.uiState.snapshotsUnavailable }
+        awaitUntil("the old-plugin 404 degrades") {
+            (vm.uiState.sourcePhase as? SourcePhase.Unavailable)?.reason == SourceUnavailableReason.OLD_PLUGIN
+        }
     }
+
+    @Test
+    fun `source unavailable carries each cause - gate closed, no client, old plugin, read failed`() =
+        runTest(testDispatcher) {
+            // 1. gate closed (the plugin-gating contract).
+            val closed = viewModel()
+            closed.start(uri = null, snapshotId = null)
+            advanceUntilIdle()
+            assertEquals(
+                SourceUnavailableReason.GATE_CLOSED,
+                (closed.uiState.sourcePhase as SourcePhase.Unavailable).reason,
+            )
+
+            // 2. no client (the file-only graph — the server arm degrades off).
+            val clientless = viewModel(client = null)
+            clientless.start(uri = null, snapshotId = null)
+            advanceUntilIdle()
+            assertEquals(
+                SourceUnavailableReason.NO_CLIENT,
+                (clientless.uiState.sourcePhase as SourcePhase.Unavailable).reason,
+            )
+
+            // 3. old plugin (the success-null 404 payload).
+            gateOpen()
+            coEvery { pluginApi.getSnapshots() } returns Result.success(null)
+            val oldPlugin = viewModel()
+            oldPlugin.start(uri = null, snapshotId = null)
+            awaitUntil("the old-plugin face lands") {
+                (oldPlugin.uiState.sourcePhase as? SourcePhase.Unavailable)?.reason == SourceUnavailableReason.OLD_PLUGIN
+            }
+
+            // 4. read failed (transport / plugin 5xx) — distinguishable from the 404 now.
+            coEvery { pluginApi.getSnapshots() } returns Result.failure(RuntimeException("500"))
+            val failedRead = viewModel()
+            failedRead.start(uri = null, snapshotId = null)
+            awaitUntil("the read-failed face lands") {
+                (failedRead.uiState.sourcePhase as? SourcePhase.Unavailable)?.reason ==
+                    SourceUnavailableReason.READ_FAILED
+            }
+        }
 
     @Test
     fun `a nav-carried snapshot id jumps straight into the snapshot diff`() = runTest(testDispatcher) {
         val vm = openSnapshotVm()
 
         assertEquals(WizardStep.DIFF, vm.uiState.step)
-        assertNull(vm.uiState.file)
-        assertTrue(vm.uiState.fullRestore == null)
-        assertTrue(vm.uiState.snapshot!!.groups.totalGroups > 0)
+        val stage = assertIs<DiffStage.Snapshot>(vm.uiState.diffStage, "the ONE slot holds the snapshot face alone")
+        assertTrue(stage.state.groups.totalGroups > 0)
+    }
+
+    @Test
+    fun `staging a backup file after a snapshot diff leaves exactly one face`() = runTest(testDispatcher) {
+        val vm = openSnapshotVm()
+        assertIs<DiffStage.Snapshot>(vm.uiState.diffStage)
+
+        // The bug this slot fixed: the former parallel nullable faces let the
+        // file stage ride BESIDE the stale snapshot diff (loadBackupFile never
+        // cleared the others), leaving two non-null faces with
+        // restoreSelected's when-chain silently preferring the file arm.
+        stubImport("backup:after-snapshot", appearanceBackupJson())
+        vm.loadBackupFile("backup:after-snapshot")
+        awaitUntil("the file stage replaces the snapshot") { vm.uiState.diffStage is DiffStage.File }
+
+        // Exactly one face: the slot IS the face — the snapshot arm is
+        // structurally gone, not merely shadowed.
+        val stage = assertIs<DiffStage.File>(vm.uiState.diffStage)
+        assertEquals(WizardStep.DIFF, vm.uiState.step)
+        assertEquals(2, stage.state.schemaVersion)
+        assertEquals(SecretsPhase.Hidden, stage.state.secrets, "the snapshot's secrets face did not leak into the file stage")
+
+        // And the apply follows the slot: the file arm runs, the snapshot arm
+        // never does.
+        gateCaptureOk()
+        vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
+        vm.restoreSelected()
+        awaitUntil("the file arm applies") { vm.uiState.applyPhase is ApplyPhase.Completed }
+        coVerify(exactly = 1) { userPreferencesStore.restoreV2Categories(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { pluginApi.applySettings(any(), any(), any()) }
     }
 
     // ---------------------------------------------------------------- file diff
@@ -498,8 +584,8 @@ class RestoreWizardViewModelTest {
     fun `v2 backup loads the file diff with current-version flags`() = runTest(testDispatcher) {
         val vm = loadedWithFile(appearanceBackupJson())
 
-        assertFalse(vm.uiState.loadError)
-        val file = vm.uiState.file!!
+        assertNull(vm.uiState.loadFailure)
+        val file = vm.uiState.stagedFile()!!
         assertEquals(2, file.schemaVersion)
         assertFalse(file.versionMismatch)
         assertFalse(file.crossAccount)
@@ -526,7 +612,7 @@ class RestoreWizardViewModelTest {
         )
         val vm = loadedWithFile(json)
 
-        assertTrue(vm.uiState.file!!.hasSecuritySensitive)
+        assertTrue(vm.uiState.stagedFile()!!.hasSecuritySensitive)
     }
 
     @Test
@@ -536,7 +622,7 @@ class RestoreWizardViewModelTest {
             uri = "backup:future",
         )
 
-        val file = vm.uiState.file!!
+        val file = vm.uiState.stagedFile()!!
         assertTrue(file.versionMismatch)
         assertEquals(SettingsBackup.CURRENT_SCHEMA_VERSION + 1, file.schemaVersion)
     }
@@ -548,16 +634,22 @@ class RestoreWizardViewModelTest {
         advanceUntilIdle()
 
         vm.loadBackupFile("backup:missing")
-        awaitUntil("the load failure surfaces") { vm.uiState.loadError }
+        awaitUntil("the load failure surfaces") { vm.uiState.loadFailure != null }
 
-        assertNull(vm.uiState.file, "nothing may be staged from an unreadable file")
-        assertEquals("Cannot open backup file", vm.lastLoadErrorMessage)
+        assertNull(vm.uiState.diffStage, "nothing may be staged from an unreadable file")
+        // Presence, message and arm identity land ATOMICALLY in one object —
+        // the side-channel pair this replaced could not promise that.
+        assertEquals(
+            SourceLoadFailure.File("Cannot open backup file"),
+            vm.uiState.loadFailure,
+            "the file arm's failure is one co-located object",
+        )
 
         // A retry with the SAME uri re-reads (the stage was cleared on failure).
         stubImport("backup:missing", appearanceBackupJson())
         vm.loadBackupFile("backup:missing")
-        awaitUntil("the retry stages") { vm.uiState.file != null }
-        assertFalse(vm.uiState.loadError)
+        awaitUntil("the retry stages") { vm.uiState.diffStage is DiffStage.File }
+        assertNull(vm.uiState.loadFailure)
     }
 
     @Test
@@ -565,10 +657,11 @@ class RestoreWizardViewModelTest {
         stubImport("backup:v0", """{"schemaVersion":0}""")
         val vm = viewModel()
         vm.loadBackupFile("backup:v0")
-        awaitUntil("the rejection surfaces") { vm.uiState.loadError }
+        awaitUntil("the rejection surfaces") { vm.uiState.loadFailure != null }
 
-        assertNull(vm.uiState.file)
-        assertTrue(vm.lastLoadErrorMessage!!.contains("schemaVersion"))
+        assertNull(vm.uiState.diffStage)
+        val failure = assertIs<SourceLoadFailure.File>(vm.uiState.loadFailure)
+        assertTrue(failure.message.contains("schemaVersion"))
     }
 
     // ---------------------------------------------------------------- wave-2 slices + extras
@@ -591,7 +684,7 @@ class RestoreWizardViewModelTest {
 
         val vm = loadedWithFile(json)
 
-        val cards = vm.uiState.file!!.externalSlices
+        val cards = vm.uiState.stagedFile()!!.externalSlices
         assertEquals(
             listOf(BackupSliceKey.INTEGRATIONS, BackupSliceKey.PLAYLISTS),
             cards.map { it.key },
@@ -606,17 +699,17 @@ class RestoreWizardViewModelTest {
         // of every offered slice stays one tap (partial → all → clear).
         val offered = listOf(BackupSliceKey.INTEGRATIONS, BackupSliceKey.PLAYLISTS)
         vm.toggle(WizardSelectionTarget.Slice(BackupSliceKey.INTEGRATIONS))
-        var selection = vm.uiState.file!!.selection
+        var selection = vm.uiState.stagedFile()!!.selection
         assertEquals(setOf(BackupSliceKey.INTEGRATIONS), selection.slices)
         assertFalse(selection.allSlicesSelected(offered))
 
         vm.toggle(WizardSelectionTarget.AllSlices)
-        selection = vm.uiState.file!!.selection
+        selection = vm.uiState.stagedFile()!!.selection
         assertTrue(selection.allSlicesSelected(offered))
         assertEquals(offered.toSet(), selection.slices)
 
         vm.toggle(WizardSelectionTarget.AllSlices)
-        assertTrue(vm.uiState.file!!.selection.slices.isEmpty())
+        assertTrue(vm.uiState.stagedFile()!!.selection.slices.isEmpty())
     }
 
     @Test
@@ -625,7 +718,7 @@ class RestoreWizardViewModelTest {
             v2Json(extras = AppRuntimeState(favoriteChannels = setOf("chan-1"))),
         )
 
-        val extras = vm.uiState.file!!.extras!!
+        val extras = vm.uiState.stagedFile()!!.extras!!
         assertTrue(extras.changed.isNotEmpty(), "the incoming favorite channel must diff against the empty live block")
         assertTrue(extras.changed.any { it.factoryValue.contains("chan-1") })
     }
@@ -639,26 +732,26 @@ class RestoreWizardViewModelTest {
 
         // Child toggle lands in the selection…
         vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
-        var selection = vm.uiState.file!!.selection
+        var selection = vm.uiState.stagedFile()!!.selection
         assertTrue(PreferenceResetCategory.APPEARANCE in selection.categories)
         assertFalse(selection.allCategoriesSelected(declared))
 
         // …the parent toggle selects ALL children from a partial state…
         vm.toggle(WizardSelectionTarget.AllCategories)
-        selection = vm.uiState.file!!.selection
+        selection = vm.uiState.stagedFile()!!.selection
         assertTrue(selection.allCategoriesSelected(declared))
         assertEquals(declared.toSet(), selection.categories)
 
         // …and clears them all from the fully-selected state.
         vm.toggle(WizardSelectionTarget.AllCategories)
-        selection = vm.uiState.file!!.selection
+        selection = vm.uiState.stagedFile()!!.selection
         assertTrue(selection.categories.isEmpty())
 
         // Extras + slices toggle independently; the confirm count follows.
         vm.toggle(WizardSelectionTarget.Extras)
         vm.toggle(WizardSelectionTarget.Slice(BackupSliceKey.WIDGET))
         vm.toggle(WizardSelectionTarget.Slice(BackupSliceKey.WIDGET))
-        selection = vm.uiState.file!!.selection
+        selection = vm.uiState.stagedFile()!!.selection
         assertTrue(selection.extras)
         assertTrue(BackupSliceKey.WIDGET !in selection.slices)
         assertEquals(1, vm.selectedGroupCount())
@@ -669,20 +762,20 @@ class RestoreWizardViewModelTest {
         val vm = openSnapshotVm()
 
         vm.toggle(WizardSelectionTarget.PrefDomain("appearance"))
-        var selection = vm.uiState.snapshot!!.selection
+        var selection = vm.uiState.stagedSnapshot()!!.selection
         assertTrue("appearance" in selection.domains)
-        assertFalse(selection.allDomainsSelected(vm.uiState.snapshot!!.groups.prefDomains))
+        assertFalse(selection.allDomainsSelected(vm.uiState.stagedSnapshot()!!.groups.prefDomains))
 
         vm.toggle(WizardSelectionTarget.Prefs)
-        selection = vm.uiState.snapshot!!.selection
-        assertTrue(selection.allDomainsSelected(vm.uiState.snapshot!!.groups.prefDomains))
+        selection = vm.uiState.stagedSnapshot()!!.selection
+        assertTrue(selection.allDomainsSelected(vm.uiState.stagedSnapshot()!!.groups.prefDomains))
 
         vm.toggle(WizardSelectionTarget.Prefs)
-        selection = vm.uiState.snapshot!!.selection
+        selection = vm.uiState.stagedSnapshot()!!.selection
         assertTrue(selection.domains.isEmpty())
 
         vm.toggle(WizardSelectionTarget.Namespace("search"))
-        assertTrue("search" in vm.uiState.snapshot!!.selection.namespaces)
+        assertTrue("search" in vm.uiState.stagedSnapshot()!!.selection.namespaces)
     }
 
     // ---------------------------------------------------------------- file apply
@@ -697,7 +790,7 @@ class RestoreWizardViewModelTest {
         vm.toggle(WizardSelectionTarget.Slice(BackupSliceKey.WIDGET))
         vm.toggle(WizardSelectionTarget.Extras)
         vm.restoreSelected()
-        awaitUntil("the file apply completes") { vm.uiState.completed }
+        awaitUntil("the file apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         coVerify(exactly = 1) {
             userPreferencesStore.restoreV2Categories(
@@ -715,7 +808,23 @@ class RestoreWizardViewModelTest {
         coVerify(exactly = 1) { syncRepository.requestSync() }
         awaitUntil("the summary lands on the bus") { busMessages.isNotEmpty() }
         assertEquals(1, busMessages.size, "the summary lands on the bus")
-        assertFalse(vm.uiState.applying)
+        assertEquals(ApplyPhase.Completed, vm.uiState.applyPhase)
+    }
+
+    @Test
+    fun `completed apply phase consumes one-shot back to idle`() = runTest(testDispatcher) {
+        gateCaptureOk()
+        val vm = loadedWithFile(appearanceBackupJson())
+        vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
+        vm.restoreSelected()
+        awaitUntil("the apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
+
+        vm.consumeCompleted()
+        assertEquals(ApplyPhase.Idle, vm.uiState.applyPhase, "the success signal is spent by the consume")
+
+        // A second consume is inert — the one-shot signal cannot re-fire.
+        vm.consumeCompleted()
+        assertEquals(ApplyPhase.Idle, vm.uiState.applyPhase)
     }
 
     @Test
@@ -728,7 +837,7 @@ class RestoreWizardViewModelTest {
 
         coVerify(exactly = 0) { userPreferencesStore.restoreV2Categories(any(), any(), any(), any()) }
         coVerify(exactly = 1) { pluginApi.createSnapshot() }
-        assertFalse(vm.uiState.completed)
+        assertEquals(ApplyPhase.Idle, vm.uiState.applyPhase, "an empty selection settles back to idle, never completes")
     }
 
     @Test
@@ -740,7 +849,7 @@ class RestoreWizardViewModelTest {
 
         vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
         vm.restoreSelected()
-        awaitUntil("the apply still completes") { vm.uiState.completed }
+        awaitUntil("the apply still completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         coVerify(exactly = 1) {
             userPreferencesStore.restoreV2Categories(any(), any(), any(), any())
@@ -759,7 +868,7 @@ class RestoreWizardViewModelTest {
         vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
 
         vm.restoreSelected()
-        awaitUntil("the apply completes") { vm.uiState.completed }
+        awaitUntil("the apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         coVerify(exactly = 0) { pluginApi.createSnapshot() }
     }
@@ -780,7 +889,7 @@ class RestoreWizardViewModelTest {
         vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.SECURITY))
         vm.toggle(WizardSelectionTarget.SecuritySensitive)
         vm.restoreSelected()
-        awaitUntil("the apply completes") { vm.uiState.completed }
+        awaitUntil("the apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         coVerify(exactly = 1) {
             userPreferencesStore.restoreV2Categories(any(), any(), eq(true), eq(false))
@@ -795,16 +904,16 @@ class RestoreWizardViewModelTest {
             v2Json(originUserId = "user-2", originServerId = "srv-1"),
             uri = "backup:foreign",
         )
-        assertTrue(foreign.uiState.file!!.crossAccount)
+        assertTrue(foreign.uiState.stagedFile()!!.crossAccount)
 
         val own = loadedWithFile(
             v2Json(originUserId = "user-1", originServerId = "srv-1"),
             uri = "backup:own",
         )
-        assertFalse(own.uiState.file!!.crossAccount)
+        assertFalse(own.uiState.stagedFile()!!.crossAccount)
 
         val unstamped = loadedWithFile(appearanceBackupJson(), uri = "backup:unstamped")
-        assertFalse(unstamped.uiState.file!!.crossAccount)
+        assertFalse(unstamped.uiState.stagedFile()!!.crossAccount)
     }
 
     // ---------------------------------------------------------------- secrets
@@ -839,15 +948,14 @@ class RestoreWizardViewModelTest {
             uri = "backup:secrets",
             assembler = assembler,
         )
-        val file = vm.uiState.file!!
-        assertTrue(file.hasSecrets)
-        assertNull(file.secretsUnlocked, "locked until the passphrase unlocks it")
+        val file = vm.uiState.stagedFile()!!
+        assertEquals(SecretsPhase.Locked, file.secrets, "locked until the passphrase unlocks it")
 
         vm.unlockSecrets("open-sesame-9".toCharArray())
-        awaitUntil("the unlock settles") { vm.uiState.file?.secretsUnlocked != null }
+        awaitUntil("the unlock settles") { vm.uiState.stagedFile()?.secrets is SecretsPhase.Unlocked }
 
-        assertEquals(2, vm.uiState.file?.secretsUnlocked?.servers)
-        assertEquals(1, vm.uiState.file?.secretsUnlocked?.arrServers)
+        assertEquals(2, vm.uiState.stagedFile()?.secrets?.summary?.servers)
+        assertEquals(1, vm.uiState.stagedFile()?.secrets?.summary?.arrServers)
         coVerify(exactly = 1) { assembler.summarize(any()) }
     }
 
@@ -859,9 +967,13 @@ class RestoreWizardViewModelTest {
         )
 
         vm.unlockSecrets("not-the-passphrase".toCharArray())
-        awaitUntil("the inline error surfaces") { vm.uiState.file?.secretsError == true }
+        awaitUntil("the inline error surfaces") { vm.uiState.stagedFile()?.secrets is SecretsPhase.UnlockFailed }
 
-        assertNull(vm.uiState.file?.secretsUnlocked, "a failed unlock must not stage anything")
+        assertEquals(
+            SecretsPhase.UnlockFailed,
+            vm.uiState.stagedFile()?.secrets,
+            "a failed unlock must not stage anything — the retry face is the whole phase",
+        )
     }
 
     @Test
@@ -880,7 +992,7 @@ class RestoreWizardViewModelTest {
         coVerify(exactly = 0) { assembler.apply(any()) }
 
         vm.unlockSecrets("open-sesame-9".toCharArray())
-        awaitUntil("the unlock settles") { vm.uiState.file?.secretsUnlocked != null }
+        awaitUntil("the unlock settles") { vm.uiState.stagedFile()?.secrets is SecretsPhase.Unlocked }
         collectBus()
         vm.applySecrets()
         awaitUntil("the secrets apply posts") { busMessages.isNotEmpty() }
@@ -892,7 +1004,7 @@ class RestoreWizardViewModelTest {
         vm.applySecrets()
         advanceUntilIdle()
         coVerify(exactly = 1) { assembler.apply(any()) }
-        assertFalse(vm.uiState.applying)
+        assertEquals(ApplyPhase.Idle, vm.uiState.applyPhase, "the secrets apply never rides the restore ladder")
     }
 
     @Test
@@ -905,7 +1017,8 @@ class RestoreWizardViewModelTest {
         val passphrase = "open-sesame-9".toCharArray()
         vm.unlockSecrets(passphrase)
         awaitUntil("the unlock settles") {
-            vm.uiState.file?.secretsUnlocked != null || vm.uiState.file?.secretsError == true
+            val phase = vm.uiState.stagedFile()?.secrets
+            phase is SecretsPhase.Unlocked || phase is SecretsPhase.UnlockFailed
         }
 
         assertTrue(passphrase.all { it == '\u0000' }, "the passphrase must be zeroed after the attempt")
@@ -919,7 +1032,7 @@ class RestoreWizardViewModelTest {
         vm.unlockSecrets(noEnvelope)
 
         assertTrue(noEnvelope.all { it == '\u0000' }, "the no-envelope return zeroes the passphrase")
-        assertFalse(vm.uiState.file!!.secretsUnlocking)
+        assertFalse(vm.uiState.stagedFile()!!.secrets is SecretsPhase.Unlocking)
 
         // Early return 2: an unlock is already in flight (parked inside the
         // gated codec call).
@@ -932,7 +1045,7 @@ class RestoreWizardViewModelTest {
             }
             stubImport("backup:again", v2Json(secrets = secretsEnvelope("open-sesame-9")))
             vm.loadBackupFile("backup:again")
-            awaitUntil("the secrets file stages") { vm.uiState.file?.hasSecrets == true }
+            awaitUntil("the secrets file stages") { vm.uiState.stagedFile()?.secrets == SecretsPhase.Locked }
 
             val inFlight = "open-sesame-9".toCharArray()
             vm.unlockSecrets(inFlight)
@@ -967,7 +1080,7 @@ class RestoreWizardViewModelTest {
             val second = "wrong-passphrase".toCharArray()
             vm.unlockSecrets(first)
             // The second confirmation must be refused synchronously — the busy
-            // flag is already up — not queue a second 600k KDF run.
+            // phase is already up — not queue a second 600k KDF run.
             vm.unlockSecrets(second)
 
             assertTrue(second.all { it == '\u0000' }, "the refused passphrase is zeroed before returning")
@@ -976,7 +1089,7 @@ class RestoreWizardViewModelTest {
             entryGate.complete(Unit)
             awaitUntil("the single unlock settles") { first.all { it == '\u0000' } }
             assertEquals(1, entries.get(), "two rapid confirmations must not queue two KDF runs")
-            assertTrue(vm.uiState.file!!.secretsUnlocked != null)
+            assertTrue(vm.uiState.stagedFile()!!.secrets is SecretsPhase.Unlocked)
         } finally {
             unmockkObject(BackupSecretsCodec)
         }
@@ -996,7 +1109,7 @@ class RestoreWizardViewModelTest {
                 }
                 stubImport("backup:A", v2Json(secrets = envelopeA))
                 val vm = viewModel(assembler).also { it.loadBackupFile("backup:A") }
-                awaitUntil("file A stages") { vm.uiState.file?.hasSecrets == true }
+                awaitUntil("file A stages") { vm.uiState.stagedFile()?.secrets == SecretsPhase.Locked }
 
                 val passA = "open-sesame-9".toCharArray()
                 vm.unlockSecrets(passA)
@@ -1005,16 +1118,18 @@ class RestoreWizardViewModelTest {
                 // file B carries no secrets at all.
                 stubImport("backup:B", appearanceBackupJson())
                 vm.loadBackupFile("backup:B")
-                awaitUntil("file B stages") { vm.uiState.file?.hasSecrets == false }
-                assertFalse(vm.uiState.file!!.secretsUnlocking)
+                awaitUntil("file B stages") { vm.uiState.stagedFile()?.secrets == SecretsPhase.Hidden }
+                assertFalse(vm.uiState.stagedFile()!!.secrets is SecretsPhase.Unlocking)
 
                 entryGate.complete(Unit)
                 awaitUntil("the parked decrypt settles") { passA.all { it == '\u0000' } }
 
-                val file = vm.uiState.file!!
-                assertFalse(file.hasSecrets, "no secrets card for the discarded envelope")
-                assertNull(file.secretsUnlocked, "the stale unlock must not resurrect a summary for A")
-                assertFalse(file.secretsError)
+                val file = vm.uiState.stagedFile()!!
+                assertEquals(
+                    SecretsPhase.Hidden,
+                    file.secrets,
+                    "no secrets card for the discarded envelope — the stale unlock must not resurrect a summary for A",
+                )
 
                 vm.applySecrets()
                 advanceUntilIdle()
@@ -1030,7 +1145,7 @@ class RestoreWizardViewModelTest {
     fun `snapshot diff classifies changed, added and removed and sub-groups prefs by domain`() = runTest(testDispatcher) {
         val vm = openSnapshotVm()
 
-        val groups = vm.uiState.snapshot!!.groups
+        val groups = vm.uiState.stagedSnapshot()!!.groups
         // Non-prefs namespaces sort by ns: cw first, then search.
         assertEquals(listOf("cw", "search"), groups.namespaces.map { it.id })
         val search = groups.namespaces.first { it.id == "search" }
@@ -1076,7 +1191,7 @@ class RestoreWizardViewModelTest {
         vm.toggle(WizardSelectionTarget.Namespace("search"))
         vm.toggle(WizardSelectionTarget.PrefDomain("appearance"))
         vm.restoreSelected()
-        awaitUntil("the snapshot apply completes") { vm.uiState.completed }
+        awaitUntil("the snapshot apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         // The fixture's rows all originate from the base profile: exactly ONE
         // call, riding profile = null (the base profile's wire form).
@@ -1122,17 +1237,17 @@ class RestoreWizardViewModelTest {
         )
         val vm = viewModel()
         vm.start(uri = null, snapshotId = "s-mp")
-        awaitUntil("the multi-profile diff stages") { vm.uiState.snapshot != null }
+        awaitUntil("the multi-profile diff stages") { vm.uiState.diffStage is DiffStage.Snapshot }
         collectBus()
 
         assertEquals(
             2,
-            vm.uiState.snapshot!!.groups.namespaces.single().rows.size,
+            vm.uiState.stagedSnapshot()!!.groups.namespaces.single().rows.size,
             "base and overlay rows sharing an ns/key stay distinct diff rows",
         )
         vm.toggle(WizardSelectionTarget.Namespace("search"))
         vm.restoreSelected()
-        awaitUntil("the snapshot apply completes") { vm.uiState.completed }
+        awaitUntil("the snapshot apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         // One batch per ORIGIN profile: base rows under profile = null, the
         // overlay rows under their own profile — never collapsed into one.
@@ -1168,12 +1283,12 @@ class RestoreWizardViewModelTest {
         }
         val vm = viewModel()
         vm.start(uri = null, snapshotId = "s-big")
-        awaitUntil("the big diff stages") { vm.uiState.snapshot != null }
+        awaitUntil("the big diff stages") { vm.uiState.diffStage is DiffStage.Snapshot }
         collectBus()
 
         vm.toggle(WizardSelectionTarget.Namespace("search"))
         vm.restoreSelected()
-        awaitUntil("the chunked apply completes") { vm.uiState.completed }
+        awaitUntil("the chunked apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         assertEquals(listOf(200, 50), chunkSizes, "250 selected writes split at the 200-write page limit")
         coVerify(exactly = 2) { pluginApi.applySettings(any(), any(), any()) }
@@ -1192,11 +1307,13 @@ class RestoreWizardViewModelTest {
 
         vm.toggle(WizardSelectionTarget.Namespace("search"))
         vm.restoreSelected()
-        awaitUntil("the failure surfaces") { vm.uiState.applyError != null }
+        awaitUntil("the failure surfaces") { vm.uiState.applyPhase is ApplyPhase.Failed }
 
-        assertEquals("socket boom", vm.uiState.applyError)
-        assertFalse(vm.uiState.applying, "a failed apply releases the busy face")
-        assertFalse(vm.uiState.completed, "a failed apply must never claim success")
+        assertEquals(
+            ApplyPhase.Failed("socket boom"),
+            vm.uiState.applyPhase,
+            "the failure face carries the message — and it is neither the busy nor the success face",
+        )
         coVerify(exactly = 0) { syncRepository.requestSync() }
     }
 
@@ -1215,10 +1332,10 @@ class RestoreWizardViewModelTest {
 
         vm.restoreSelected()
         vm.restoreSelected() // the first apply is still parked — refused synchronously
-        assertTrue(vm.uiState.applying)
+        assertTrue(vm.uiState.applyPhase is ApplyPhase.Applying)
 
         applyGate.complete(Unit)
-        awaitUntil("the apply completes") { vm.uiState.completed }
+        awaitUntil("the apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
         coVerify(exactly = 1) { pluginApi.applySettings(any(), any(), any()) }
     }
 
@@ -1236,13 +1353,17 @@ class RestoreWizardViewModelTest {
         coEvery { pluginApi.exportSettings() } returns Result.failure(RuntimeException("socket"))
         val vm = viewModel()
         vm.start(uri = null, snapshotId = "s1")
-        awaitUntil("the load error surfaces") { vm.uiState.loadError }
+        awaitUntil("the load error surfaces") { vm.uiState.loadFailure != null }
 
         assertEquals(WizardStep.SOURCE, vm.uiState.step)
-        assertNull(vm.uiState.snapshot, "no diff may stage from an unreadable live state")
-        assertNull(vm.uiState.fullRestore)
-        assertTrue(vm.lastLoadErrorIsServer, "the server arm's own failure face")
-        assertTrue(vm.lastLoadErrorMessage!!.contains("socket"))
+        assertNull(vm.uiState.diffStage, "no diff may stage from an unreadable live state")
+        // Presence, message and arm identity land ATOMICALLY in one object —
+        // the side-channel pair this replaced split them across two writes.
+        assertEquals(
+            SourceLoadFailure.Server("socket"),
+            vm.uiState.loadFailure,
+            "the server arm's own failure face, co-located in one object",
+        )
     }
 
     @Test
@@ -1251,12 +1372,11 @@ class RestoreWizardViewModelTest {
         coEvery { pluginApi.getSnapshotContent("s-broken") } returns Result.failure(RuntimeException("500"))
         val vm = viewModel()
         vm.start(uri = null, snapshotId = "s-broken")
-        awaitUntil("the load error surfaces") { vm.uiState.loadError }
+        awaitUntil("the load error surfaces") { vm.uiState.loadFailure != null }
 
-        assertNull(vm.uiState.fullRestore, "a FAILED read is a load error, not the old-plugin degrade")
-        assertNull(vm.uiState.snapshot)
+        assertNull(vm.uiState.diffStage, "a FAILED read is a load error, not the old-plugin degrade")
         assertEquals(WizardStep.SOURCE, vm.uiState.step)
-        assertTrue(vm.lastLoadErrorIsServer)
+        assertEquals(SourceLoadFailure.Server("500"), vm.uiState.loadFailure)
     }
 
     @Test
@@ -1270,7 +1390,7 @@ class RestoreWizardViewModelTest {
         // Only "appearance" is selected — the removed live keys live in Other.
         vm.toggle(WizardSelectionTarget.PrefDomain("appearance"))
         vm.restoreSelected()
-        awaitUntil("the snapshot apply completes") { vm.uiState.completed }
+        awaitUntil("the snapshot apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         val writesSlot = slot<List<JellyPlaySettingWrite>>()
         coVerify(exactly = 1) {
@@ -1287,16 +1407,16 @@ class RestoreWizardViewModelTest {
         coEvery { pluginApi.getSnapshotContent("s-gone") } returns Result.success(null)
         val vm = viewModel()
         vm.start(uri = null, snapshotId = "s-gone")
-        awaitUntil("the degrade face stages") { vm.uiState.fullRestore != null }
+        awaitUntil("the degrade face stages") { vm.uiState.diffStage is DiffStage.Full }
 
-        assertNull(vm.uiState.snapshot)
+        assertIs<DiffStage.Full>(vm.uiState.diffStage, "the degrade face holds the slot alone")
         gateCaptureOk()
         coEvery { pluginApi.restoreSnapshot("s-gone") } returns Result.success(
             JellyPlaySettingsBatchResult(applied = listOf(JellyPlayAppliedSetting("prefs", "k", 1, 1))),
         )
         collectBus()
         vm.restoreSelected()
-        awaitUntil("the full restore completes") { vm.uiState.completed }
+        awaitUntil("the full restore completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         coVerify(exactly = 1) { pluginApi.restoreSnapshot("s-gone") }
         coVerify(exactly = 1) { syncRepository.requestSync() }
@@ -1340,12 +1460,12 @@ class RestoreWizardViewModelTest {
         )
         val vm = viewModel()
         vm.start(uri = null, snapshotId = "s1")
-        awaitUntil("the snapshot diff stages") { vm.uiState.snapshot != null }
+        awaitUntil("the snapshot diff stages") { vm.uiState.diffStage is DiffStage.Snapshot }
         collectBus()
 
         vm.toggle(WizardSelectionTarget.Namespace("search"))
         vm.restoreSelected()
-        awaitUntil("the apply completes") { vm.uiState.completed }
+        awaitUntil("the apply completes") { vm.uiState.applyPhase is ApplyPhase.Completed }
 
         awaitUntil("the summary lands on the bus") { busMessages.isNotEmpty() }
         val summary = busMessages.single()

@@ -91,14 +91,11 @@ class DetailFetchAuthLoopTest {
             }
         }
 
-        // The exact setUser sequence AuthApiClientImpl runs at restore/login:
-        // server adopted, authenticated client pushed, THEN user published.
-        engine.updateServer(serverInfo())
-        engine.updateApi(engine.jellyfin.createApi(
-            baseUrl = server.url("/").toString(),
-            accessToken = TOKEN,
-        ))
-        engine.updateUser(userInfo())
+        // The exact restore/login shape: the multi-write adopts the pair and
+        // rebuilds the client from the published pair in the same critical
+        // section (same address/token the old updateServer → updateApi →
+        // updateUser dance installed).
+        engine.updateSession(serverInfo(), userInfo())
 
         val client = LibraryApiClientImpl(engine, mockk<LyricsApi>(relaxed = true), SystemTimeSource())
         val result = client.getMediaDetail(itemId.toString())
@@ -120,12 +117,7 @@ class DetailFetchAuthLoopTest {
         val itemId = UUID.randomUUID()
         respondWith = { MockResponse().setResponseCode(401).setBody("Unauthorized") }
 
-        engine.updateServer(serverInfo())
-        engine.updateApi(engine.jellyfin.createApi(
-            baseUrl = server.url("/").toString(),
-            accessToken = TOKEN,
-        ))
-        engine.updateUser(userInfo())
+        engine.updateSession(serverInfo(), userInfo())
 
         val client = LibraryApiClientImpl(engine, mockk<LyricsApi>(relaxed = true), SystemTimeSource())
         val result = client.getMediaDetail(itemId.toString())

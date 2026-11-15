@@ -2009,23 +2009,53 @@ internal class PlaybackSession(
         loadCinemaIntro(intros.first())
     }
 
+    /**
+     * Loads [intro] as the LOAD task slot's occupant — the same
+     * cancel-and-replace choreography every other load arm rides
+     * ([initialize]'s pipeline, the mini-player reclaim). Riding the slot
+     * makes two races deterministic that the former plain `scope.launch`
+     * left open:
+     *
+     *  - a rapid skip tap ([advanceCinemaIntro]) cancels the previous intro
+     *    body before launching the next — latest-skip-wins, and at most one
+     *    intro load is in flight at a time (the slot's single-flight);
+     *  - an external [initialize] (SyncPlay `onLoadItem`, remote "Play On")
+     *    cancels the slot before its teardown clears [cinemaIntroContext] —
+     *    the intro body dies at its `loadMedia` suspension instead of
+     *    outliving the teardown and resurrecting the mirror + tracking
+     *    behind a dead `advanceCinemaIntro` (`cinemaIntroContext ?: return`).
+     *
+     * When invoked from [beginCinemaMode] — the pipeline's cinema gate — the
+     * slot's current occupant IS the calling pipeline coroutine; replacing it
+     * cancels that job. Safe by construction: the gate's remaining tail (the
+     * outcome hook + `SessionLoadPipeline.start`'s `finally` veil lift) is
+     * synchronous and completes before the cancellation is observed.
+     */
     private fun loadCinemaIntro(intro: MediaItem) {
-        val context = cinemaIntroContext ?: return
-        scope.launch {
-            uiMirrors.setCinemaIntroState(
-                CinemaIntroUiState(
-                    title = intro.name.ifBlank { "Intro" },
-                    currentIndex = context.currentIndex + 1,
-                    totalCount = context.intros.size,
+        if (cinemaIntroContext == null) return
+        sessionTasks.replace(LOAD) {
+            scope.launch {
+                // Belt-and-braces beyond the slot's cancellation (the
+                // resurrection guard): once the context is cleared — teardown
+                // or external initialize — no surviving intro body may write
+                // the mirror or re-bind tracking.
+                val current = cinemaIntroContext ?: return@launch
+                uiMirrors.setCinemaIntroState(
+                    CinemaIntroUiState(
+                        title = intro.name.ifBlank { "Intro" },
+                        currentIndex = current.currentIndex + 1,
+                        totalCount = current.intros.size,
+                    )
                 )
-            )
-            // Pre-roll intros are not part of the user's library history — skip
-            // server-side playback reporting (trackProgress = false) and the
-            // segment/next-episode/trickplay bookkeeping for them; the media
-            // session + position tracking still rebind so the notification and
-            // the seek bar track the intro.
-            playerSessionManager.loadMedia(intro.id, null, 0L)
-            rebindSessionTracking(intro.id, trackProgress = false)
+                // Pre-roll intros are not part of the user's library history — skip
+                // server-side playback reporting (trackProgress = false) and the
+                // segment/next-episode/trickplay bookkeeping for them; the media
+                // session + position tracking still rebind so the notification and
+                // the seek bar track the intro.
+                playerSessionManager.loadMedia(intro.id, null, 0L)
+                if (cinemaIntroContext == null) return@launch
+                rebindSessionTracking(intro.id, trackProgress = false)
+            }
         }
     }
 
@@ -2033,6 +2063,13 @@ internal class PlaybackSession(
      * Advance to the next pre-roll intro, or — once all intros are exhausted —
      * resume normal playback of the main feature. Idempotent: callers may invoke
      * this on either an end-of-playback callback or an explicit "skip" tap.
+     *
+     * Rapid taps single-flight through the LOAD task slot: each advance's
+     * [loadCinemaIntro] cancel-and-replaces the previous intro body, so the
+     * last tap's intro is the one that lands (a superseded body never loads
+     * its stale intro to completion). The exhausted arm supersedes too — the
+     * re-entrant [initialize] cancels the slot before its teardown clears
+     * [cinemaIntroContext].
      */
     internal fun advanceCinemaIntro() {
         val context = cinemaIntroContext ?: return

@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.formatDate
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -135,6 +136,22 @@ fun ServerManagementScreen(
         viewModel.addressOperationMessage?.let { msg ->
             bus.info(msg)
             viewModel.clearAddressOperationMessage()
+        }
+    }
+    // A failed switch used to settle the spinner with no feedback — the cards
+    // just re-enabled and nothing said the active server had NOT changed. The
+    // VM parks a UiMessage (exception text, or the localized fallback); the
+    // text resolves in composition (locale-correct), the effect posts it to
+    // the bus exactly once per failure and dismisses it.
+    val switchFailure = viewModel.switchServerFailure
+    val switchFailureText = switchFailure?.asText()
+    LaunchedEffect(switchFailure) {
+        switchFailure?.let {
+            // asText() is total over a non-null UiMessage, so the text is
+            // present here in practice — the ?. keeps a capture-order
+            // refactor from crashing instead of merely skipping the post.
+            switchFailureText?.let { text -> bus.info(text) }
+            viewModel.clearSwitchServerFailure()
         }
     }
     val certificateImportedText = stringResource(Res.string.settings_client_certificate_imported)

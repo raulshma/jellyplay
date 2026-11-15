@@ -66,27 +66,32 @@ class MusicHomeViewModel(
      * The state-container coordinator with the screen's multi-field uiState
      * kept hand-rolled beside it (`Unit` content — the sections aggregate
      * stays in [_uiState], published by the fetch body): this screen needs
-     * the three decisions the generic interface deliberately removed the
-     * mode parameter for — the loud fetch publishes PARTIAL sections (a
-     * dropped sub-fetch fails the load for the re-arm while publishing what
-     * it got), its failures stay quiet past the offline gate (which fails
+     * the three decisions the generic publish policy deliberately left to
+     * its hosts — the loud fetch publishes PARTIAL sections (a dropped
+     * sub-fetch fails the load for the re-arm while publishing what it
+     * got), its failures stay quiet past the offline gate (which fails
      * by re-arm alone, never an error surface), and the loud error reset
      * happens past that gate so an offline retry keeps the error screen it
-     * retries from. [fetchSections] recovers the loud/silent split from the
-     * phase the loud entry publishes (see there).
+     * retries from. Those decisions key off the loud/silent mode, which the
+     * coordinator now hands the fetch explicitly (the mode-aware [fetch]
+     * arity) instead of the body inferring it from the loading phase the
+     * loud entry publishes (see [fetchSections]).
      */
     private val fetchCoordinator = DeferredFetchCoordinator<Unit, Unit>(
         userDataChanges = userDataChanges.userDataChanges,
         scope = scope,
-        fetch = { _, _ -> fetchSections() },
+        fetch = { _, _, isSilent -> fetchSections(loud = !isSilent) },
     )
 
     /**
      * Whether the next fetch body may serve the cached section aggregate
      * (the construction-time entry load's fresh-entry fast path, see
-     * [fetchSections]). Main-confined like the coordinator it feeds and
-     * overwritten by every [loadSections] — a cancelled entry load can
-     * never leak the grant into a later load.
+     * [fetchSections]). A ONE-SHOT LATCH, kept beside the coordinator rather
+     * than folded into its fetch mode: it arms a cache grant, not a
+     * loud/silent decision — the next fetch body invocation consumes it
+     * (clears it before the cache read, hit or miss). Main-confined like the
+     * coordinator it feeds and overwritten by every [loadSections] — a
+     * cancelled entry load can never leak the grant into a later load.
      */
     private var serveCacheOnNextFetch = false
 
@@ -106,7 +111,11 @@ class MusicHomeViewModel(
             // the one load allowed to serve the sections TTL snapshot (see
             // [fetchSections]). Every later collector-triggered load is a
             // regeneration (return-online after offline) or a user action
-            // and re-fetches.
+            // and re-fetches. A ONE-SHOT LATCH: flipped false after the
+            // first online emission and never reset, so the cache grant
+            // rides exactly one load for this ViewModel's lifetime (kept
+            // out of the fetch mode — it arms a cache grant, not a
+            // loud/silent decision).
             var firstOnlineLoad = true
             offlineModeManager.offlineMode.collect { mode ->
                 _uiState.update { it.copy(offlineMode = mode) }
@@ -140,8 +149,10 @@ class MusicHomeViewModel(
      * The isLoading publish is synchronous, BEFORE
      * [DeferredFetchCoordinator.load]'s launch: the pull-to-refresh spinner
      * keys off isLoading, so the screen must read Loading the moment this
-     * returns — not after the scope dispatches. The fetch body keys its
-     * loud/silent decisions off the same phase (see [fetchSections]).
+     * returns — not after the scope dispatches. That publish is purely the
+     * spinner's render state — the fetch body's loud mode flows through
+     * [DeferredFetchCoordinator.load]'s explicit mode hand-off (see
+     * [fetchSections]), never from this boolean.
      */
     fun loadSections(serveFromCache: Boolean = false) {
         _uiState.update { it.copy(isLoading = true) }
@@ -150,17 +161,23 @@ class MusicHomeViewModel(
     }
 
     /**
-     * The fetch behind both load paths — the loud entry (which published
-     * `isLoading = true` synchronously in [loadSections]) and the
-     * coordinator's silent deferred regeneration (which only ever starts
-     * with no loud load in flight, so isLoading is false). The state
-     * container's interface carries no mode, so the body reads the phase at
-     * entry as the loud marker: single-flight guarantees a silent body
-     * cannot start behind a loud load's spinner, and every loud terminal —
-     * this body's own paths included — clears it. It is the one state bit
-     * that differs between the two paths at fetch time.
+     * The fetch behind both load paths — [loud] is the mode the entry path
+     * passed EXPLICITLY, never a read of the uiState: the loud entries
+     * (pull-to-refresh, the error retry, the offline-mode collector's
+     * return-online regeneration, the fresh-entry cache-grant load — every
+     * [loadSections] caller) reach it through [DeferredFetchCoordinator.load],
+     * which invokes the fetch with the loud mode; the coordinator's silent
+     * deferred regeneration (the user-data change healed on screen re-entry)
+     * invokes it with the silent mode — the same truth the coordinator's
+     * single-flight slot tracks. The mode used to be inferred from
+     * [MusicHomeUiState.isLoading] at body entry — safe only while
+     * [loadSections]'s spinner write stayed the last write before this body
+     * ran, a one-dispatch-wide window any future isLoading writer would have
+     * silently corrupted into a mode flip; the spinner boolean is now purely
+     * a render concern (the pull-to-refresh spinner keying) and this body
+     * never reads it.
      *
-     * Loud-only decisions keyed off that marker: the spinner clear (and the
+     * Loud-only decisions keyed off [loud]: the spinner clear (and the
      * error reset — PAST the offline gate, so an offline retry keeps the
      * error screen it retries from), and the partial publish: a loud load
      * publishes what it got, while a silent refresh publishes only complete
@@ -183,8 +200,7 @@ class MusicHomeViewModel(
      * published (a non-[Exception] throwable is not a fetch failure either
      * — it skips the catch and surfaces as it always did).
      */
-    private suspend fun fetchSections() {
-        val loud = _uiState.value.isLoading
+    private suspend fun fetchSections(loud: Boolean) {
         // Offline can't regenerate — re-arm either way (returning online
         // fires a loud loadSections anyway, but while the app stays offline
         // the consumed flag must not strand the change the refresh was

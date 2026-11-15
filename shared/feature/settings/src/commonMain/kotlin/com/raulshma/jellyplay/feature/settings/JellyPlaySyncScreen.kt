@@ -206,7 +206,7 @@ fun JellyPlaySyncScreen(
                         enabledSubtitle = stringResource(Res.string.ss_jellyplay_sync_enabled_subtitle),
                         syncState = syncState,
                         thisDeviceId = uiState.thisDeviceId,
-                        status = uiState.status,
+                        status = uiState.status.dataOrNull,
                         onSyncEnabled = { enabled -> viewModel.setSyncEnabled(enabled) },
                         onSyncNow = { viewModel.syncNow() },
                     )
@@ -219,7 +219,7 @@ fun JellyPlaySyncScreen(
                         Modifier.padding(top = 8.dp, start = 4.dp),
                     ) }
                 val status = uiState.status
-                if (status == null) {
+                if (status !is SyncCapabilityState.Available) {
                     item(key = "usage_unavailable") {
                         QuietLine(stringResource(Res.string.settings_jellyplay_sync_usage_unavailable))
                     }
@@ -269,7 +269,7 @@ fun JellyPlaySyncScreen(
                                 },
                                 syncState = syncState,
                                 thisDeviceId = uiState.thisDeviceId,
-                                status = uiState.status,
+                                status = uiState.status.dataOrNull,
                                 onSyncEnabled = { enabled -> viewModel.setSyncEnabled(enabled) },
                                 onSyncNow = { viewModel.syncNow() },
                             )
@@ -407,13 +407,13 @@ private fun SyncStatusTabContent(
                 Modifier.padding(top = 4.dp, start = 4.dp),
             ) }
         val status = uiState.status
-        if (status == null) {
+        if (status !is SyncCapabilityState.Available) {
             // The 404 degrade — the quiet line, never an error.
             item(key = "usage_unavailable") {
                 QuietLine(stringResource(Res.string.settings_jellyplay_sync_usage_unavailable))
             }
         } else {
-            item(key = "quota_card") { QuotaCard(status) }
+            item(key = "quota_card") { QuotaCard(status.data) }
             items(uiState.namespaceRows, key = { "ns_${it.ns}" }, contentType = { row ->
                 if (row.toggleable) "namespaceToggle" else "namespaceInfo"
             }) { namespace ->
@@ -436,12 +436,12 @@ private fun SyncStatusTabContent(
                 }
             }
             val adminUsers = uiState.adminUsers
-            if (!adminUsers.isNullOrEmpty()) {
+            if (adminUsers is SyncCapabilityState.Available && adminUsers.data.isNotEmpty()) {
                 item(key = "admin_label") { SectionLabel(
                     stringResource(Res.string.settings_jellyplay_sync_admin_section),
                     Modifier.padding(top = 8.dp, start = 4.dp),
                 ) }
-                items(adminUsers, key = { "admin_${it.userId}" }, contentType = { "adminUser" }) { user ->
+                items(adminUsers.data, key = { "admin_${it.userId}" }, contentType = { "adminUser" }) { user ->
                     val formattedUsage = keysCountText(user.keys, user.bytes)
                     SettingInfoItem(
                         icon = Tabler.Outline.Users,
@@ -548,7 +548,7 @@ private fun SyncActivityTabContent(
             }
         }
         val status = uiState.status
-        if (status != null) {
+        if (status is SyncCapabilityState.Available) {
             item(key = "history_label") { SectionLabel(
                 stringResource(Res.string.settings_jellyplay_sync_history_title),
                 Modifier.padding(top = 4.dp, start = 4.dp),
@@ -566,7 +566,7 @@ private fun SyncActivityTabContent(
                 }
                 item(key = "history_retention") {
                     QuietLine(
-                        stringResource(Res.string.settings_jellyplay_sync_history_retention, status.historyRetentionDays),
+                        stringResource(Res.string.settings_jellyplay_sync_history_retention, status.data.historyRetentionDays),
                     )
                 }
             }
@@ -599,7 +599,7 @@ private fun SyncBackupTabContent(
     onRestoreWizard: () -> Unit,
 ) {
     SyncTabList(listState = listState, bottomPadding = bottomPadding) {
-        val snapshots = uiState.snapshots
+        val snapshots = uiState.snapshots.dataOrNull
         if (snapshots != null) {
             item(key = "snapshots_label") { SectionLabel(
                 stringResource(Res.string.settings_jellyplay_sync_snapshots_title),

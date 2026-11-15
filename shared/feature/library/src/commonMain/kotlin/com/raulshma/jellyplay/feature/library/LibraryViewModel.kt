@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import com.raulshma.jellyplay.core.data.util.FilterCodec
 import com.raulshma.jellyplay.core.data.util.loadListWithRetry
+import com.raulshma.jellyplay.core.concurrency.RestartableJob
 
 /** Projected slice used to derive the active library view mode. */
 private data class ViewModePrefs(
@@ -98,11 +99,28 @@ internal class LibraryViewModel(
     private val _folders = stateFlow<List<LibraryFolder>>(emptyList())
     val folders = _folders.flow
 
-    private val _isLoading = stateFlow(true)
-    val isLoading = _isLoading.flow
+    /**
+     * The folder fetch's load phase ([LibraryLoadPhase]) — the sealed successor
+     * of the former `_isLoading: StateFlow<Boolean>` + `_error: StateFlow<String?>`
+     * pair, whose flags could coexist and whose error write was conditional on
+     * the folder list being empty. One owner flow now; the four transition
+     * rules (initial → Loading, success → Ready, failure-with-empty-folders →
+     * Failed, failure-with-folders → stays Ready) are documented and pinned on
+     * the phase type.
+     */
+    private val _loadPhase = stateFlow<LibraryLoadPhase>(LibraryLoadPhase.Loading)
+    val loadPhase = _loadPhase.flow
 
-    private val _error = stateFlow<String?>(null)
-    val error = _error.flow
+    /**
+     * The folder fetch's cancel-and-replace slot ([RestartableJob]) — the
+     * serialization the former bare `launch` in [loadFolders] lacked: two
+     * concurrent loadFolders calls used to interleave their `_isLoading`
+     * writes, and a slow STALE fetch (a forced refresh answered after a newer
+     * trigger) could repaint older folders over newer ones — last-writer-wins
+     * with no epoch. A newer trigger now cancels the older in-flight fetch, so
+     * a superseded fetch never lands at all.
+     */
+    private val folderFetch = RestartableJob()
 
     // Genre/tag filter dimensions live on the shared core:data holder (the
     // library/search/editor triple); the public exposure shape is unchanged.
@@ -162,6 +180,11 @@ internal class LibraryViewModel(
      *
      * One flag with one meaning, replacing the old `_userViewModeOverride`
      * StateFlow (which conflated "the user touched it" with "here is the value").
+     *
+     * DELIBERATE as-is (declared during the sealed-phase migration): this
+     * stays a plain boolean latch — it is the documented race patch for the
+     * async store re-emission, not a load lifecycle, so the sealed-phase rule
+     * does not apply to it. Do not redesign it while the patch holds.
      */
     private var userTouchedViewMode: Boolean = false
 
@@ -472,26 +495,34 @@ internal class LibraryViewModel(
     }
 
     private fun loadFolders(force: Boolean = false) {
-        launch {
-            _isLoading.set(true)
+        folderFetch.launchIn(scope) {
+            _loadPhase.set(LibraryLoadPhase.Loading)
             libraryFeed.getLibraryFolders(force = force)
                 .onSuccess { folders ->
                     _folders.set(folders)
-                    // Clear any stale error once folders load successfully.
-                    _error.set(null)
+                    // Success is terminal: Ready clears any Failed phase, the
+                    // same way the former `_error.set(null)` did.
+                    _loadPhase.set(LibraryLoadPhase.Ready)
                 }
                 .onFailure { error ->
-                    // Don't blank the whole library: keep any already-loaded
-                    // folders so the user can still browse, and surface the error
-                    // as a non-blocking status (the screen shows ErrorScreen only
-                    // when there are also zero items). This stops a single failed
-                    // fetch — e.g. a transient 403 — from making the app unusable
-
-                    if (_folders.value.isNullOrEmpty()) {
-                        _error.set(UserErrorMessages.resolve(error, "${error::class.simpleName}"))
+                    // The preserved conditional: a failure only becomes the
+                    // Failed (error-screen) phase when there is nothing to
+                    // browse. With folders already loaded the failure is
+                    // non-blocking — the phase returns to Ready and the stale
+                    // folders stay up (the screen shows ErrorScreen only when
+                    // there are also zero items). This stops a single failed
+                    // fetch — e.g. a transient 403 — from making the app unusable.
+                    if (_folders.value.isEmpty()) {
+                        _loadPhase.set(
+                            LibraryLoadPhase.Failed(UserErrorMessages.resolve(error, "${error::class.simpleName}")),
+                        )
+                    } else {
+                        _loadPhase.set(LibraryLoadPhase.Ready)
                     }
                 }
-            _isLoading.set(false)
+            // No trailing "not loading" write: every terminal arm above lands
+            // a non-Loading phase (the former `_isLoading.set(false)` tail
+            // existed only because the flag was separate from the outcome).
         }
     }
 
@@ -608,6 +639,10 @@ internal class LibraryViewModel(
         launch {
             // Manual refresh bypasses the caches for the queries this screen
             // shows (folders + genres); tags are an uncached passthrough.
+            // The folder fetch itself rides the cancel-and-replace slot
+            // ([folderFetch]), so two back-to-back refreshes serialize: the
+            // newer fetch supersedes the older in-flight one instead of
+            // interleaving with it.
             loadFolders(force = true)
             filterDimensions.load(force = true)
             // Bump the pager generation (the host restarts the flatMapLatest

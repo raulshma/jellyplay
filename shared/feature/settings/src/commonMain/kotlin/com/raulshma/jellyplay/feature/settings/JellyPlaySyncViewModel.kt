@@ -93,19 +93,82 @@ sealed interface SnapshotActionPhase {
     data class Failed(val verb: SnapshotActionVerb) : SnapshotActionPhase
 }
 
+/**
+ * The whole-pull ladder ([JellyPlaySyncViewModel.refresh] is ONE bulk write —
+ * there is no per-section loading to observe). Replaces the former
+ * `isLoading: Boolean`, which was true only until the first refresh's bulk
+ * write landed and never re-entered true afterward.
+ */
+sealed interface SyncLoadPhase {
+    /** Before the first refresh lands. */
+    data object Loading : SyncLoadPhase
+
+    /** A refresh's bulk write has landed; later refreshes overwrite in place. */
+    data object Loaded : SyncLoadPhase
+}
+
+/**
+ * Why a server-side capability read has nothing to show. The former nullable
+ * sentinels conflated these causes into one null each; they are declared data
+ * now — while the screen's hide/show behavior is unchanged (only
+ * [SyncCapabilityState.Available] renders).
+ */
+enum class SyncCapabilityGap {
+    /** The sync gate closed — the plugin-gating contract's degrade (the whole pull collapses). */
+    GATE_CLOSED,
+
+    /** The read failed (transport error / plugin 5xx) — the section hides quietly, as every failure always did. */
+    READ_FAILED,
+}
+
+/**
+ * One server-side section's capability face: whether the plugin serves the
+ * capability at all ([Unsupported] — the 404 null; the admin overview's
+ * not-admin/old-plugin null), whether the read failed or the gate closed
+ * ([Unavailable], with its [SyncCapabilityGap]), or its data ([Available]).
+ * Replaces the former nullable sentinels on `status` / `adminUsers` /
+ * `snapshots`, whose nulls each conflated distinct causes the screen could
+ * not tell apart and hid the section either way.
+ */
+sealed interface SyncCapabilityState<out T> {
+    /** The payload when [Available], null otherwise (the payload-only readers, e.g. the sync-now line). */
+    val dataOrNull: T?
+
+    /** The plugin does not serve this capability — the quiet 404/not-admin degrade. */
+    data object Unsupported : SyncCapabilityState<Nothing> {
+        override val dataOrNull: Nothing? get() = null
+    }
+
+    /** The capability exists but this read has nothing to show — [SyncCapabilityGap] says why. */
+    data class Unavailable(val reason: SyncCapabilityGap) : SyncCapabilityState<Nothing> {
+        override val dataOrNull: Nothing? get() = null
+    }
+
+    /** The read landed — the section renders. */
+    data class Available<out T>(val data: T) : SyncCapabilityState<T> {
+        override val dataOrNull: T? get() = data
+    }
+}
+
 /** The sync screen's loaded state. */
 @Immutable
 data class JellyPlaySyncUiState(
-    val isLoading: Boolean = true,
+    /** The whole-pull ladder ([SyncLoadPhase]) — replaced the former `isLoading: Boolean`. */
+    val loadPhase: SyncLoadPhase = SyncLoadPhase.Loading,
     /**
-     * The server's sync usage payload. null = the server's plugin does not serve
-     * sync status (404) — the usage/history sections degrade quietly.
+     * The server's sync usage payload as a [SyncCapabilityState] — Unsupported
+     * when the server's plugin does not serve sync status (404); the
+     * usage/history sections degrade quietly either way.
      */
-    val status: JellyPlaySyncStatus? = null,
+    val status: SyncCapabilityState<JellyPlaySyncStatus> = SyncCapabilityState.Unsupported,
     val history: List<JellyPlaySyncHistoryEntry> = emptyList(),
     val devices: List<JellyPlaySyncDeviceRow> = emptyList(),
-    /** The admin overview's per-user rows; null = not an admin (or old plugin) — the card hides. */
-    val adminUsers: List<JellyPlaySyncAdminUser>? = null,
+    /**
+     * The admin overview's per-user rows as a [SyncCapabilityState] —
+     * Unsupported when the caller is not an admin (or the plugin predates the
+     * read) — the card hides.
+     */
+    val adminUsers: SyncCapabilityState<List<JellyPlaySyncAdminUser>> = SyncCapabilityState.Unsupported,
     /** This device's persisted sync identity — the "This device" badge's match key. */
     val thisDeviceId: String? = null,
     /** The expanded history row (its per-key diff below the row); null = none. */
@@ -113,11 +176,12 @@ data class JellyPlaySyncUiState(
     /** Per-seq diff details, fetched lazily on first expand and cached. */
     val historyKeyDetails: Map<Long, JellyPlaySyncHistoryKeyDetail> = emptyMap(),
     /**
-     * The server's rolling restore points, newest first. null = the server's
-     * plugin does not serve restore points (or the read failed / the gate
-     * closed) — the section hides quietly.
+     * The server's rolling restore points, newest first, as a
+     * [SyncCapabilityState] — Unsupported when the plugin does not serve
+     * them, Unavailable on a failed read or a closed gate — the section
+     * hides quietly either way.
      */
-    val snapshots: List<JellyPlaySnapshot>? = null,
+    val snapshots: SyncCapabilityState<List<JellyPlaySnapshot>> = SyncCapabilityState.Unsupported,
     /** The selective-sync + usage rows (server usage ∪ engine namespaces); built by [refresh]. */
     val namespaceRows: List<JellyPlaySyncNamespaceRow> = emptyList(),
     /**
@@ -183,20 +247,22 @@ class JellyPlaySyncViewModel(
     /**
      * One pull of every server-side face (usage, history, devices, admin
      * overview, snapshots) plus the device-local selective-sync flags. Fired
-     * by the screen on open and after each manual action. The usage/history
-     * reads degrade to null/empty on the 404; the admin read
-     * degrades on 403 (non-admin) the same way.
+     * by the screen on open and after each manual action. The capability
+     * reads land as ONE bulk write: a failed read → [SyncCapabilityState.Unavailable]
+     * ([SyncCapabilityGap.READ_FAILED]), a 404/null payload →
+     * [SyncCapabilityState.Unsupported] (the admin read degrades on 403
+     * (non-admin) the same way), a landed payload → [SyncCapabilityState.Available].
      */
     fun refresh() {
         scope.launch {
             if (!syncGateOpen()) {
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        status = null,
+                        loadPhase = SyncLoadPhase.Loaded,
+                        status = SyncCapabilityState.Unavailable(SyncCapabilityGap.GATE_CLOSED),
                         history = emptyList(),
-                        adminUsers = null,
-                        snapshots = null,
+                        adminUsers = SyncCapabilityState.Unavailable(SyncCapabilityGap.GATE_CLOSED),
+                        snapshots = SyncCapabilityState.Unavailable(SyncCapabilityGap.GATE_CLOSED),
                         namespaceRows = emptyList(),
                     )
                 }
@@ -204,11 +270,12 @@ class JellyPlaySyncViewModel(
             }
             val thisDeviceId = runCatchingRethrowingCancellation { syncRepository.currentDeviceId() }.getOrNull()
                 ?: _uiState.value.thisDeviceId
-            val status = pluginApiClient.getSyncStatus().getOrNull()
+            val statusResult = pluginApiClient.getSyncStatus()
+            val status = statusResult.getOrNull()
             val history = pluginApiClient.getSyncHistory(limit = HISTORY_LIMIT).getOrNull()
             val registryDevices = deviceRegistry.getDevices().getOrNull().orEmpty()
-            val adminUsers = pluginApiClient.adminSyncOverview().getOrNull()?.users
-            val snapshots = pluginApiClient.getSnapshots().getOrNull()
+            val adminResult = pluginApiClient.adminSyncOverview()
+            val snapshotsResult = pluginApiClient.getSnapshots()
             val namespaceEnabled = buildMap {
                 for (ns in activeNamespaces) {
                     put(ns, runCatchingRethrowingCancellation { syncRepository.namespaceEnabled(ns) }.getOrDefault(true))
@@ -217,13 +284,13 @@ class JellyPlaySyncViewModel(
 
             _uiState.update {
                 it.copy(
-                    isLoading = false,
+                    loadPhase = SyncLoadPhase.Loaded,
                     thisDeviceId = thisDeviceId,
-                    status = status,
+                    status = statusResult.toCapability { it },
                     history = history?.entries.orEmpty(),
                     devices = mergeDevices(registryDevices, status?.perDevice.orEmpty(), thisDeviceId),
-                    adminUsers = adminUsers,
-                    snapshots = snapshots,
+                    adminUsers = adminResult.toCapability { it.users },
+                    snapshots = snapshotsResult.toCapability { it },
                     namespaceRows = mergeNamespaces(
                         status?.namespaces.orEmpty(),
                         activeNamespaces,
@@ -523,4 +590,17 @@ class JellyPlaySyncViewModel(
             }
         }
     }
+}
+
+/**
+ * The capability read's one fold: a THROWN/FAILED [Result] lands
+ * [SyncCapabilityState.Unavailable] ([SyncCapabilityGap.READ_FAILED]), a
+ * success-null payload lands [SyncCapabilityState.Unsupported] (the 404 /
+ * not-admin degrade), and a landed payload is [SyncCapabilityState.Available]
+ * of [transform]'s projection. Private so the sentinels' meaning stays
+ * single-homed beside the state that carries them.
+ */
+private fun <P, T> Result<P?>.toCapability(transform: (P) -> T): SyncCapabilityState<T> = when {
+    isFailure -> SyncCapabilityState.Unavailable(SyncCapabilityGap.READ_FAILED)
+    else -> getOrNull()?.let { SyncCapabilityState.Available(transform(it)) } ?: SyncCapabilityState.Unsupported
 }

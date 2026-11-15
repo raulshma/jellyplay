@@ -85,7 +85,7 @@ class HomeDiscoveryStoreTest {
 
     /** Switches the active user through the production seam (`active_user_id`). */
     private suspend fun activate(userId: String) {
-        identityStore.setActiveUser(userId)
+        identityStore.setActiveSession("srv-1", userId)
     }
 
     /** Deterministic slice read: pure projection over the committed snapshot. */
@@ -1117,7 +1117,7 @@ class HomeDiscoveryStoreTest {
         store.setHomeMode(HomeMode.MUSIC)
         store.ensureNamespacedMigration("userB")
         dataStore.edit { it[stringPreferencesKey("home_mode")] = HomeMode.MUSIC.name }
-        // A user id containing "::" (setActiveUser input is unvalidated) must
+        // A user id containing "::" (setActiveSession's user-id input is unvalidated) must
         // not defeat the stripping: the canonical suffix sits after the LAST
         // separator, so this key parses as user "a::b" / canonical home_mode.
         dataStore.edit { it[stringPreferencesKey("u_a::b::home_mode")] = HomeMode.MUSIC.name }

@@ -8,22 +8,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The atomic-session flow trio of `JellyfinApiEngine` (jvmShared): `currentServer` / `currentUser` as
- * separate StateFlows plus the combined [session] published as ONE atomic
- * value, so a session transition is observed as a single step (stable pair →
- * stable pair, or →/from null) — never the synthetic `(newServer, oldUser)`
- * intermediate that `combine(currentServer, currentUser)` produces across a
- * two-step publish.
+ * The atomic-session flow trio behind the engine's session state
+ * (`JellyfinApiEngine` on jvmShared carries the platform twin): `currentServer` /
+ * `currentUser` as separate StateFlows plus the combined [session] published
+ * as ONE atomic value, so a session transition is observed as a single step
+ * (stable pair → stable pair, or →/from null) — never the synthetic
+ * `(newServer, oldUser)` intermediate that `combine(currentServer,
+ * currentUser)` produces across a two-step publish.
  *
- * Public since chunk 2: ONE instance is shared by the auth, library
- * and playback clients (the auth client publishes, the others derive
- * per-request base URL + token), so the DI module constructs it and hands it
- * to all three — internal would leak through their constructors.
- *
- * Callers must guard writes with their own mutex critical sections (the
- * engine uses `authMutex`; the auth client does too) — this class only
- * owns the publish collapsing, mirroring `JellyfinApiEngine.publishSession`:
- * a missing side collapses the session to null.
+ * The public surface is READ-ONLY. The former "callers must guard writes
+ * with their own mutex critical sections" caveat is retired: there are no
+ * public writes left to guard. The single write — [publishSessionState] —
+ * is the internal primitive the shared auth spine's mutex-held critical
+ * sections compose (via [AuthSessionStateStore]); the production holder is
+ * the engine, whose public multi-write (`updateSession`) wraps its own
+ * primitive with `authMutex`.
  *
  * Implements [AuthSessionStateStore] so the shared auth spine
  * ([AuthSessionCore]) can drive this holder directly.
@@ -44,30 +43,15 @@ class AtomicSessionState : AuthSessionStateStore {
     /** [AuthSessionStateStore] read for the shared auth spine ([AuthSessionCore]). */
     override fun currentSession(): ActiveSession? = session.value
 
-    /** Single-side server update, pairing with the current user. */
-    override fun updateServer(server: ServerInfo?) {
-        _currentServer.value = server
-        publishSession(server, _currentUser.value)
-    }
-
-    /** Single-side user update, pairing with the current server. */
-    fun updateUser(user: UserInfo?) {
-        _currentUser.value = user
-        publishSession(_currentServer.value, user)
-    }
-
     /**
-     * Atomically adopts BOTH sides in one step — the only shape login /
-     * switchUser / disconnect may publish from their critical sections.
+     * The raw session publish primitive — both sides + the collapsed session
+     * in one step. Caller holds the spine's mutex (see
+     * [AuthSessionStateStore]); module-internal so the spine and this
+     * module's tests can drive it.
      */
-    override fun updateSession(server: ServerInfo?, user: UserInfo?) {
+    override fun publishSessionState(server: ServerInfo?, user: UserInfo?) {
         _currentServer.value = server
         _currentUser.value = user
-        publishSession(server, user)
-    }
-
-    /** Publishes the combined session; a missing side collapses it to null. */
-    private fun publishSession(server: ServerInfo?, user: UserInfo?) {
         _session.value = if (server != null && user != null) ActiveSession(server, user) else null
     }
 }

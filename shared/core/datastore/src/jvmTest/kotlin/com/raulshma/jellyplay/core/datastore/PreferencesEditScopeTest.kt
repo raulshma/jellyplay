@@ -119,7 +119,7 @@ class PreferencesEditScopeTest {
         // HomeDiscovery prefs are user-scoped: a write no-ops without an
         // active user. Activate one through the production seam first
         // (HomeDiscoveryStoreTest's activate() pattern), then write via edit.
-        ServerIdentityStore(TestDataStoreProvider.get(), scope).setActiveUser("user-1")
+        ServerIdentityStore(TestDataStoreProvider.get(), scope).setActiveSession("srv-1", "user-1")
         editor.edit { homeDiscovery.setHomeMode(com.raulshma.jellyplay.core.model.HomeMode.MUSIC) }.join()
         assertEquals(
             com.raulshma.jellyplay.core.model.HomeMode.MUSIC,

@@ -224,27 +224,28 @@ class PlayerStateSlicesDefaultsTest {
         val state = SubtitleState()
         assertTrue(state.remoteSubtitles.isEmpty())
         assertTrue(state.subtitleCultures.isEmpty())
-        assertTrue(state.searchedSubtitles.isEmpty())
-        assertFalse(state.isSearchingSubtitles)
-        assertFalse(state.hasSearchedSubtitles)
-        assertNull(state.subtitleSearchError)
+        // Sealed adaptation: the former searchedSubtitles / isSearchingSubtitles
+        // / hasSearchedSubtitles / subtitleSearchError defaults collapse into
+        // the one Idle phase.
+        assertEquals(RemoteSubtitleSearchState.Idle, state.remoteSubtitleSearch)
         assertFalse(state.isUploadingSubtitle)
         assertFalse(state.isLoadingRemoteSubtitles)
         assertNull(state.remoteSubtitlesError)
         assertEquals("eng", state.defaultSearchLanguage)
         assertTrue(state.downloadingSubtitles.isEmpty())
         assertTrue(state.readySubtitles.isEmpty())
-        assertTrue(state.providerSearchResults.isEmpty())
-        assertTrue(state.providerSearchErrors.isEmpty())
+        // Sealed adaptation: the former providerSearchResults /
+        // providerSearchErrors defaults collapse into the one Idle phase.
+        assertEquals(ProviderSubtitleSearchState.Idle, state.providerSubtitleSearch)
         assertTrue(state.configuredSubtitleProviders.isEmpty())
 
         val updated = state.copy(
-            hasSearchedSubtitles = true,
+            remoteSubtitleSearch = RemoteSubtitleSearchState.Searching,
             downloadingSubtitles = mapOf(
                 "sub-1" to SubtitleDownloadStatus("sub-1", SubtitleDownloadState.DOWNLOADING),
             ),
         )
-        assertTrue(updated.hasSearchedSubtitles)
+        assertEquals(RemoteSubtitleSearchState.Searching, updated.remoteSubtitleSearch)
         assertEquals(SubtitleDownloadState.DOWNLOADING, updated.downloadingSubtitles["sub-1"]?.state)
     }
 

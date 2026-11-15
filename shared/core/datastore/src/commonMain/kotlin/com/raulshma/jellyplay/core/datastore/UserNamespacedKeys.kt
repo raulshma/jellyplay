@@ -15,7 +15,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
  * strings are the persisted contract (the jvmTest suites pin them raw).
  *
  * Recognition splits on the **LAST** `::`: no canonical name contains `::`,
- * but a user id might (`setActiveUser` input is unvalidated) — splitting on
+ * but a user id might (`setActiveSession` user-id input is unvalidated) — splitting on
  * the first separator would mis-parse `u_a::b::home_mode` as canonical
  * `b::home_mode`. lastIndexOf matches the construction side for every id,
  * `::`-containing or not.

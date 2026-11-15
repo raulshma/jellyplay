@@ -111,6 +111,20 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvUserSubtitleKey
 import kotlin.math.roundToLong
 
 /**
+ * Which subtitle field's free-form color picker dialog is open — the ONE
+ * exclusive slot ([SubtitleStyleControls], `null` = none). Folded from the
+ * former three parallel composition booleans: `showFontColorPicker` → [Font],
+ * `showBackgroundColorPicker` → [Background], `showEdgeColorPicker` → [Edge] —
+ * SAME FORM, THREE ENCODINGS → one (the [PlayerOverflowMenu] submenu-slot /
+ * language screen's `LanguageSettingsDialog` fold precedent). The dialogs
+ * could never meaningfully stack: opening one structurally replaces another
+ * (newest show wins), where the parallel booleans allowed all three dialogs
+ * open at once. Plain `remember` state — the slot unmounts with the form, so
+ * closing the sheet never leaves a picker armed.
+ */
+private enum class ColorPickerTarget { Font, Background, Edge }
+
+/**
  * Single source of truth for the subtitle style editing form. Shared by
  * [SubtitleStyleSheet] (player bottom sheet) and the standalone subtitle tester.
  *
@@ -125,6 +139,13 @@ import kotlin.math.roundToLong
  * re-syncs when the host mutates the style externally (reset, undo, preset
  * load). Touch sliders debounce via `onValueChangeFinished`; D-pad sliders
  * (discrete steps) and chips emit immediately.
+ *
+ * The free-form color pickers (font / background / edge) ride ONE exclusive
+ * slot ([ColorPickerTarget]?, `null` = none) — the former three parallel
+ * composition booleans folded, newest show wins (the [PlayerOverflowMenu]
+ * submenu-slot fold precedent). The slot is plain `remember` state: it
+ * unmounts with the form, so closing the sheet or an external reset never
+ * leaves a picker armed.
  *
  * @param currentStyle  Hoisted source of truth. Reads are controlled by this.
  * @param onStyleChange Emits the next style on every user action.
@@ -179,10 +200,12 @@ fun SubtitleStyleControls(
         mutableFloatStateOf(currentStyle.verticalPosition)
     }
 
-    // Free-form color picker dialog state (capability-gated entry below).
-    var showFontColorPicker by remember { mutableStateOf(false) }
-    var showBackgroundColorPicker by remember { mutableStateOf(false) }
-    var showEdgeColorPicker by remember { mutableStateOf(false) }
+    // Free-form color picker dialog state (capability-gated entry below). ONE
+    // exclusive slot (null = none) — the former showFontColorPicker /
+    // showBackgroundColorPicker / showEdgeColorPicker parallel booleans folded
+    // (see [ColorPickerTarget]); opening one picker structurally replaces
+    // another instead of stacking dialogs.
+    var colorPickerTarget by remember { mutableStateOf<ColorPickerTarget?>(null) }
 
     // Initial D-pad focus into the sheet's first focusable (toggle) on TV.
     val toggleFocusRequester = remember { FocusRequester() }
@@ -418,7 +441,7 @@ fun SubtitleStyleControls(
                     color = if (currentStyle.fontColorArgb != null) Color(currentStyle.fontColorArgb!!) else Color.Transparent,
                     isSelected = currentStyle.fontColorArgb != null,
                     enabled = true,
-                    onClick = { showFontColorPicker = true },
+                    onClick = { colorPickerTarget = ColorPickerTarget.Font },
                 )
             }
         }
@@ -450,7 +473,7 @@ fun SubtitleStyleControls(
                     color = if (currentStyle.backgroundColorArgb != null) Color(currentStyle.backgroundColorArgb!!) else Color.Transparent,
                     isSelected = currentStyle.backgroundColorArgb != null,
                     enabled = true,
-                    onClick = { showBackgroundColorPicker = true },
+                    onClick = { colorPickerTarget = ColorPickerTarget.Background },
                 )
             }
         }
@@ -534,7 +557,7 @@ fun SubtitleStyleControls(
                         color = if (currentStyle.edgeColorArgb != null) Color(currentStyle.edgeColorArgb!!) else Color.Transparent,
                         isSelected = currentStyle.edgeColorArgb != null,
                         enabled = true,
-                        onClick = { showEdgeColorPicker = true },
+                        onClick = { colorPickerTarget = ColorPickerTarget.Edge },
                     )
                 }
             }
@@ -681,45 +704,32 @@ fun SubtitleStyleControls(
         }
     }
 
-    // --- Free-form color picker dialogs (capability-gated entry points above) ---
-    SubtitleFreeFormColorPickerHost(
-        show = showFontColorPicker,
-        initialColor = currentStyle.fontColorArgb?.let(::Color) ?: Color(currentStyle.fontColor.value),
-        onDismiss = { showFontColorPicker = false },
-        onColorSelected = { picked -> onStyleChange(currentStyle.copy(fontColorArgb = picked)) },
-    )
-    SubtitleFreeFormColorPickerHost(
-        show = showBackgroundColorPicker,
-        initialColor = currentStyle.backgroundColorArgb?.let(::Color) ?: Color(currentStyle.backgroundColor.value),
-        onDismiss = { showBackgroundColorPicker = false },
-        onColorSelected = { picked -> onStyleChange(currentStyle.copy(backgroundColorArgb = picked)) },
-    )
-    SubtitleFreeFormColorPickerHost(
-        show = showEdgeColorPicker,
-        initialColor = currentStyle.edgeColorArgb?.let(::Color) ?: Color(currentStyle.edgeColor.value),
-        onDismiss = { showEdgeColorPicker = false },
-        onColorSelected = { picked -> onStyleChange(currentStyle.copy(edgeColorArgb = picked)) },
-    )
-}
-
-/**
- * Renders [SubtitleFreeFormColorPickerDialog] while [show] is set — the shared
- * gate for the font/background/edge picker entry points, which differ only in
- * the style field they read and write.
- */
-@Composable
-private fun SubtitleFreeFormColorPickerHost(
-    show: Boolean,
-    initialColor: Color,
-    onDismiss: () -> Unit,
-    onColorSelected: (Int) -> Unit,
-) {
-    if (!show) return
-    SubtitleFreeFormColorPickerDialog(
-        initialColor = initialColor,
-        onDismiss = onDismiss,
-        onColorSelected = onColorSelected,
-    )
+    // --- Free-form color picker dialogs (capability-gated entry points above).
+    // The exhaustive slot `when` replaces the former SubtitleFreeFormColorPickerHost
+    // boolean-gate helper (its `show` parameter was one of the three parallel
+    // booleans): the compiler, not a comment, enforces that every target gets
+    // exactly one dialog arm. Each arm reads/writes exactly its style field;
+    // cancel clears the slot, apply routes the picked ARGB through
+    // [onStyleChange] — the apply/cancel flows are unchanged from the boolean
+    // era.
+    when (colorPickerTarget) {
+        ColorPickerTarget.Font -> SubtitleFreeFormColorPickerDialog(
+            initialColor = currentStyle.fontColorArgb?.let(::Color) ?: Color(currentStyle.fontColor.value),
+            onDismiss = { colorPickerTarget = null },
+            onColorSelected = { picked -> onStyleChange(currentStyle.copy(fontColorArgb = picked)) },
+        )
+        ColorPickerTarget.Background -> SubtitleFreeFormColorPickerDialog(
+            initialColor = currentStyle.backgroundColorArgb?.let(::Color) ?: Color(currentStyle.backgroundColor.value),
+            onDismiss = { colorPickerTarget = null },
+            onColorSelected = { picked -> onStyleChange(currentStyle.copy(backgroundColorArgb = picked)) },
+        )
+        ColorPickerTarget.Edge -> SubtitleFreeFormColorPickerDialog(
+            initialColor = currentStyle.edgeColorArgb?.let(::Color) ?: Color(currentStyle.edgeColor.value),
+            onDismiss = { colorPickerTarget = null },
+            onColorSelected = { picked -> onStyleChange(currentStyle.copy(edgeColorArgb = picked)) },
+        )
+        null -> Unit
+    }
 }
 
 /**

@@ -22,7 +22,10 @@ class HomeUiStateTest {
         assertTrue(state.sections.isEmpty())
         assertTrue(state.isLoading)
         assertFalse(state.isRefreshing)
-        assertNull(state.error)
+        // The former `error == null` default is the phase's cold-start variant
+        // (no failure can be recorded in it).
+        assertEquals(HomeLoadPhase.ColdLoading, state.loadPhase)
+        assertFalse(state.fetchFailed)
         assertEquals(HomeMode.VIDEO, state.homeMode)
         assertTrue(state.appearance.dynamicTheming)
         assertFalse(state.appearance.oledMode)

@@ -92,6 +92,7 @@ fun UserStatisticsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val statisticsExport = rememberStatisticsExport()
     val bus = LocalUserMessageBus.current
+    val exportSharedMessage = stringResource(Res.string.user_stats_export_shared)
     var showSortMenu by remember { mutableStateOf(false) }
 
     // TV focus-on-launch: focus the first user card once data arrives so D-pad input lands on
@@ -103,12 +104,18 @@ fun UserStatisticsScreen(
         tag = "user_stats_init",
     )
 
-    if (state.shareRequested) {
-        val exportSharedMessage = stringResource(Res.string.user_stats_export_shared)
-        LaunchedEffect(state.shareRequested) {
+    // The CSV share request rides the VM's one-shot exportRequests channel
+    // (the codified StateManagementConventions §2 idiom) — the former
+    // shareRequested parked boolean + consumeExportRequest dance re-fired
+    // the share sheet on re-subscription (a StateFlow replays its current
+    // value to every new collector). Keyed on Unit: this collector lives for
+    // the screen's composition lifetime and consumes each request exactly
+    // once; the exported snapshot is the state's current rows (requestExport
+    // re-merged the fetched counts before emitting).
+    LaunchedEffect(Unit) {
+        viewModel.exportRequests.collect {
             statisticsExport.shareUserStatsCsv(state.users)
             bus.info(exportSharedMessage)
-            viewModel.consumeExportRequest()
         }
     }
 

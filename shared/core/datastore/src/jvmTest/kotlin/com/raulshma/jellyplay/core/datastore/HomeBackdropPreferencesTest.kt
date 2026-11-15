@@ -40,7 +40,7 @@ class HomeBackdropPreferencesTest {
             graph = createPreferenceSliceGraph(scope, dataStore)
             // Home-discovery keys are per-user; activate one so the write
             // tests below have a namespace to write into.
-            graph.identityStore.setActiveUser("backdrop-user")
+            graph.identityStore.setActiveSession("srv-1", "backdrop-user")
             graph.homeDiscoveryStore.homeDiscovery.first()
         }
     }

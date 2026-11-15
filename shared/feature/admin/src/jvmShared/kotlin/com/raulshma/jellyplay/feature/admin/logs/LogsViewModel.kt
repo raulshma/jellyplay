@@ -23,20 +23,89 @@ data class LogLine(
     val addedTime: Long = 0L,
 )
 
+/**
+ * The selected log file as ONE immutable value — replaces the former
+ * `selectedLogFileName` / `selectedLogFileContent` / `selectedLogFileLines`
+ * triple of independently-written state fields, whose mid-load window (new
+ * name + old content — or a stale fetch's content attaching to a newer
+ * selection) was observable as a torn render. Name, content and parsed lines
+ * are written together, atomically, or not at all.
+ */
+data class SelectedLogFile(
+    val name: String,
+    val content: String,
+    val lines: List<LogLine>,
+)
+
+/**
+ * The selected-log panel's phase — replaces the former `isLoadingLogContent`
+ * flag plus the file-load arm of the global `error` field (which the screen
+ * never rendered): those could co-derive "loading beside a shown error" and
+ * "spinner beside published content". The name rides every non-idle arm, so a
+ * publish can always check it against the selection it fetched for.
+ */
+sealed interface LogPanelPhase {
+    /** No file selected — the file list renders. */
+    data object Idle : LogPanelPhase
+
+    /** [fileName] was selected; its content is downloading + parsing off Main. */
+    data class Loading(val fileName: String) : LogPanelPhase
+
+    /** Content + parsed lines published together — one immutable [SelectedLogFile]. */
+    data class Loaded(val file: SelectedLogFile) : LogPanelPhase
+
+    /**
+     * [fileName]'s load failed — [message] is the former global `error` write
+     * (moved here: the screen never rendered the global field). The 5 s poll
+     * keeps running and its next success re-publishes [Loaded] (the self-heal).
+     */
+    data class Failed(val fileName: String, val message: String?) : LogPanelPhase
+}
+
 data class LogsState(
+    /**
+     * The initial screen-load ladder ([loadInto]) — the transitional §4 shape,
+     * out of this migration's scope (the screen does not render them yet).
+     */
     val isLoading: Boolean = true,
+    /** The initial screen-load ladder's error — see [isLoading]. */
     val error: String? = null,
     val logFiles: List<LogFile> = emptyList(),
     val activityEntries: List<ActivityLogEntry> = emptyList(),
     val activityTotalCount: Int = 0,
-    val selectedLogFileContent: String? = null,
-    val selectedLogFileName: String? = null,
-    val selectedLogFileLines: List<LogLine> = emptyList(),
+    /**
+     * The selected-log panel — ONE atomic phase, replacing the torn
+     * name/content/lines triple + the `isLoadingLogContent` flag (see
+     * [SelectedLogFile] / [LogPanelPhase]).
+     */
+    val panelPhase: LogPanelPhase = LogPanelPhase.Idle,
+    /**
+     * The user's pause toggle for the selected-file view-refresh poll (the
+     * [logFilePollCycle] round gate's user half). Genuinely two-state — a
+     * switch the user flips, not a lifecycle — deliberately a boolean.
+     */
     val isLogPollingActive: Boolean = true,
-    val isLoadingLogContent: Boolean = false,
-    /** True while a paginated activity fetch (an older page) is in flight. */
+    /**
+     * True while a paginated activity fetch (an older page) is in flight.
+     * Stays a plain flag on purpose: the stateless [PageAppender] guard reads
+     * it SYNCHRONOUSLY, and a phase would move it out of the guard's reach
+     * (the declared, pinned re-entry shape; `hasMore` is held true by the
+     * declared skip pager).
+     */
     val isLoadingMoreActivity: Boolean = false,
+    /**
+     * The active PrimaryTabRow index — a legitimate positional index into the
+     * tab list, not a lifecycle machine; a sealed tab phase would only
+     * re-derive the index at every render. Deliberately left as-is.
+     */
     val selectedTabIndex: Int = 0,
+    /**
+     * The live-socket collector's alive flag. TOGETHER WITH
+     * [isLogPollingActive] this pair is NOT a phase candidate: the two flags
+     * drive independent machines (the selected-file view-refresh poll vs the
+     * live activity socket), can hold any combination of on/off at once, and
+     * share no render decision — a shared phase would be a false coupling.
+     */
     val isLiveStreamActive: Boolean = false,
     val liveEntries: List<ActivityLogEntry> = emptyList(),
     val liveEntryIds: Set<Long> = emptySet(),
@@ -105,7 +174,10 @@ class LogsViewModel(
         scope = scope,
         poll = PollSpec(intervalMs = LOG_POLL_INTERVAL_MS),
         gate = {
-            _state.value.isLogPollingActive && _state.value.selectedLogFileName != null
+            // A file is "selected" in every non-idle panel phase — including
+            // Failed, whose poll round is the self-heal (a transient failure
+            // re-publishes Loaded on the next success).
+            _state.value.isLogPollingActive && _state.value.panelPhase != LogPanelPhase.Idle
         },
         fetch = { refreshSelectedLogFile() },
     )
@@ -159,12 +231,16 @@ class LogsViewModel(
         }
     }
 
+    /**
+     * Selects [fileName]: the panel goes [LogPanelPhase.Loading] and the poll
+     * is re-armed — DECLARED legacy behavior: selecting a file silently
+     * un-pauses a paused poll (the view-refresh is what keeps a live log
+     * honest; the pause stays a per-selection choice). The metadata cursor
+     * resets so the next poll round re-checks the file.
+     */
     fun loadLogFile(fileName: String) {
         _state.value = _state.value.copy(
-            isLoadingLogContent = true,
-            selectedLogFileName = fileName,
-            selectedLogFileContent = null,
-            selectedLogFileLines = emptyList(),
+            panelPhase = LogPanelPhase.Loading(fileName),
             isLogPollingActive = true
         )
         lastLogSize = -1L
@@ -191,15 +267,26 @@ class LogsViewModel(
                         LogLine(index = from + i, text = text, isNew = false, addedTime = 0L)
                     }
                 }
+                // ONE atomic write — name, content and lines land together, and
+                // re-checked inside the write so a file switch that landed
+                // during the off-Main parse cannot attach this content to the
+                // newer selection (the torn window is unrepresentable).
                 _state.value = _state.value.copy(
-                    selectedLogFileContent = content,
-                    selectedLogFileLines = lines,
-                    isLoadingLogContent = false
+                    panelPhase = when (val p = _state.value.panelPhase) {
+                        is LogPanelPhase.Loading if p.fileName == fileName ->
+                            LogPanelPhase.Loaded(SelectedLogFile(fileName, content, lines))
+                        else -> p
+                    },
                 )
             }.onFailure { e ->
+                // A file switch landing mid-fetch must not fail the NEW
+                // selection — the Failed arm names the file it failed.
                 _state.value = _state.value.copy(
-                    error = e.message,
-                    isLoadingLogContent = false
+                    panelPhase = when (val p = _state.value.panelPhase) {
+                        is LogPanelPhase.Loading if p.fileName == fileName ->
+                            LogPanelPhase.Failed(fileName, e.message)
+                        else -> p
+                    },
                 )
             }
         }
@@ -210,10 +297,18 @@ class LogsViewModel(
      * nothing else runs), then the changed-file content fetch + diff. The
      * parse/diff runs off Main — the continuation here resumes on the
      * main-immediate VM scope, and a multi-MB `lines()` split or prefix walk
-     * on it is the frame-drop source this wrap exists for.
+     * on it is the frame-drop source this wrap exists for. Publishes only
+     * over a same-name [LogPanelPhase.Loaded] / [LogPanelPhase.Failed] arm
+     * (Loading belongs to the explicit load's own settle; Idle has nothing to
+     * publish into), and the publish is ONE atomic [SelectedLogFile] write.
      */
     private suspend fun refreshSelectedLogFile() {
-        val fileName = _state.value.selectedLogFileName ?: return
+        val fileName = when (val p = _state.value.panelPhase) {
+            is LogPanelPhase.Loading -> p.fileName
+            is LogPanelPhase.Loaded -> p.file.name
+            is LogPanelPhase.Failed -> p.fileName
+            LogPanelPhase.Idle -> return
+        }
         val meta = fetchLogMeta(fileName)
         if (meta != null && meta.size == lastLogSize && meta.dateModified == lastLogModified) return
         val result = adminRepository.getLogFileContent(fileName)
@@ -222,16 +317,28 @@ class LogsViewModel(
                 lastLogSize = meta.size
                 lastLogModified = meta.dateModified
             }
-            // A file switch/clear landing mid-fetch must not publish into the
-            // new selection (the old loop's while-condition check).
-            if (_state.value.selectedLogFileName != fileName) return@onSuccess
-            val oldLines = _state.value.selectedLogFileLines
+            // The pre-parse bail: a file switch/clear landing mid-fetch must
+            // not pay the multi-MB diff for a stale selection (the old loop's
+            // while-condition check).
+            val oldLines = when (val p = _state.value.panelPhase) {
+                is LogPanelPhase.Loaded -> p.file.lines.takeIf { p.file.name == fileName }
+                is LogPanelPhase.Failed -> emptyList<LogLine>().takeIf { p.fileName == fileName }
+                else -> null // Idle: nothing selected; Loading: the explicit load settles itself
+            } ?: return@onSuccess
             val diffed = withContext(parseDispatcher) {
                 diffAgainst(oldLines, content)
             } ?: return@onSuccess
+            // ONE atomic write — re-checked inside the write so a switch or
+            // clear that landed during the off-Main parse cannot attach this
+            // content to another file (the torn window is unrepresentable).
             _state.value = _state.value.copy(
-                selectedLogFileContent = content,
-                selectedLogFileLines = diffed,
+                panelPhase = when (val p = _state.value.panelPhase) {
+                    is LogPanelPhase.Loaded if p.file.name == fileName ->
+                        LogPanelPhase.Loaded(SelectedLogFile(fileName, content, diffed))
+                    is LogPanelPhase.Failed if p.fileName == fileName ->
+                        LogPanelPhase.Loaded(SelectedLogFile(fileName, content, diffed))
+                    else -> p
+                },
             )
         }
     }
@@ -329,9 +436,7 @@ class LogsViewModel(
 
     fun clearSelectedLogFile() {
         _state.value = _state.value.copy(
-            selectedLogFileContent = null,
-            selectedLogFileName = null,
-            selectedLogFileLines = emptyList(),
+            panelPhase = LogPanelPhase.Idle,
             isLogPollingActive = true
         )
     }

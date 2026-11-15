@@ -168,7 +168,7 @@ internal fun launchDesktopStartup(
         onAppIconDecoded(desktopAppIconOrNull())
     }
 
-    // Desktop identity prewarm: ServerIdentityStore.identity is
+    // Desktop identity prewarm: ServerIdentityStore.deviceId is
     // stateIn(Eagerly) on Dispatchers.Default, and DesktopNetworkModule's
     // `?: runBlocking { ensureDeviceId() }` fallback blocks the resolving
     // thread on a first-launch DataStore read+write whenever the network
@@ -176,9 +176,9 @@ internal fun launchDesktopStartup(
     // either way, DataStore serializes the write), so resolving it here —
     // off the EDT, before anything touches the network module — makes the
     // runBlocking branch unreachable in practice, exactly like the Android
-    // Application.onCreate prewarm. Not a plain `identity.first()`: a
+    // Application.onCreate prewarm. Not a plain `deviceId.first()`: a
     // stateIn(Eagerly) StateFlow always has its initial value available, so
-    // a plain first() returns the all-null placeholder instantly during the
+    // a plain first() returns the null placeholder instantly during the
     // DataStore-read window and closes nothing; and a bare
     // `first { deviceId != null }` would hang forever on a fresh install
     // (nothing writes DEVICE_ID until ensureDeviceId runs). BOUNDED like
@@ -192,7 +192,7 @@ internal fun launchDesktopStartup(
             withTimeoutOrNull(DEVICE_ID_PREWARM_TIMEOUT_MS) {
                 val store = koinApp.koin.get<ServerIdentityStore>()
                 store.ensureDeviceId()
-                store.identity.first { !it.deviceId.isNullOrEmpty() }
+                store.deviceId.first { !it.isNullOrEmpty() }
             }
         }
     }

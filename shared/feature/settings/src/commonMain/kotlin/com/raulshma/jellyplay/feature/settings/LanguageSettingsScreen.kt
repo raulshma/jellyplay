@@ -110,15 +110,32 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trac
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ui_label
 
 /**
- * Residual custom dialog tag. Most language/subtitle pickers flow through the
- * shared `PickerState` dispatcher; the subtitle-background sheet (colour list
- * + opacity slider) and the subtitle-text-color sheet (colour list + custom
- * hex entry) stay here because neither fits a `PickerState` variant.
+ * The language screen's ONE overlay slot. Most language/subtitle pickers flow
+ * through the shared `PickerState` dispatcher; the overlays that don't fit a
+ * `PickerState` variant all park here — the subtitle-background sheet (colour
+ * list + opacity slider), the subtitle-text-color sheet (colour list + custom
+ * hex entry), and the three track-selection editor sheets, folded in from the
+ * former parallel composition booleans (`showAudioOrderEditor` /
+ * `showSubtitleOrderEditor` / `showRulesEditor`) that sat beside this enum:
+ * SAME SCREEN, TWO ENCODINGS → one. Opening any arm structurally replaces the
+ * others (newest show() wins; the modal overlays could never actually
+ * coexist, the parallel encodings just allowed the combination to be
+ * represented), and all arms render from the screen's single post-scaffold
+ * block.
  */
 sealed class LanguageSettingsDialog {
     object None : LanguageSettingsDialog()
     object SubtitleBgColorPicker : LanguageSettingsDialog()
     object SubtitleTextColorPicker : LanguageSettingsDialog()
+
+    /** The track-selection ordered audio-languages editor (the former `showAudioOrderEditor`). */
+    object AudioOrderEditor : LanguageSettingsDialog()
+
+    /** The track-selection ordered subtitle-languages editor (the former `showSubtitleOrderEditor`). */
+    object SubtitleOrderEditor : LanguageSettingsDialog()
+
+    /** The track-selection advanced-rules editor (the former `showRulesEditor`). */
+    object RulesEditor : LanguageSettingsDialog()
 }
 
 /** Which subtitle row's free-form hex dialog the sheet handed off to. */
@@ -295,9 +312,6 @@ fun LanguageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val rules = preferences.languageRules
-                    var showAudioOrderEditor by remember { mutableStateOf(false) }
-                    var showSubtitleOrderEditor by remember { mutableStateOf(false) }
-                    var showRulesEditor by remember { mutableStateOf(false) }
                     val langDefaultFallback = stringResource(Res.string.settings_lang_default)
                     // Derived by rowTotalFor from the track-selection group
                     // declaration (every row declares Always, so the strict
@@ -347,7 +361,7 @@ fun LanguageSettingsScreen(
                             trailingText = rules.audioLanguages.joinToString(", ") { languageNameByCode[it] ?: it }
                                 .ifEmpty { langDefaultFallback },
                             highlighted = highlightSettingId == TrackSelectionRows.TrackAudioLanguages.id,
-                            onClick = { showAudioOrderEditor = true },
+                            onClick = { activeDialog = LanguageSettingsDialog.AudioOrderEditor },
                         )
                         SettingListItem(
                             icon = Tabler.Outline.ArrowsHorizontal,
@@ -356,7 +370,7 @@ fun LanguageSettingsScreen(
                             trailingText = rules.subtitleLanguages.joinToString(", ") { languageNameByCode[it] ?: it }
                                 .ifEmpty { langDefaultFallback },
                             highlighted = highlightSettingId == TrackSelectionRows.TrackSubtitleLanguages.id,
-                            onClick = { showSubtitleOrderEditor = true },
+                            onClick = { activeDialog = LanguageSettingsDialog.SubtitleOrderEditor },
                         )
                         // Advanced rules: applies-to / title-pattern /
                         // language / mode cards, capped at 10.
@@ -366,46 +380,7 @@ fun LanguageSettingsScreen(
                             subtitle = rowSubtitle(TrackSelectionRows.TrackRules),
                             trailingText = stringResource(Res.string.settings_track_rules_count, rules.rules.size),
                             highlighted = highlightSettingId == TrackSelectionRows.TrackRules.id,
-                            onClick = { showRulesEditor = true },
-                        )
-                    }
-                    if (showAudioOrderEditor) {
-                        OrderedLanguagesEditorSheet(
-                            title = rowTitle(TrackSelectionRows.TrackAudioLanguages),
-                            ordered = preferences.languageRules.audioLanguages,
-                            onDismiss = { showAudioOrderEditor = false },
-                            onChange = { ordered ->
-                                viewModel.edit { scope ->
-                                    scope.subtitle.setTrackSelectionRules(
-                                        preferences.languageRules.copy(audioLanguages = ordered),
-                                    )
-                                }
-                            },
-                        )
-                    }
-                    if (showSubtitleOrderEditor) {
-                        OrderedLanguagesEditorSheet(
-                            title = rowTitle(TrackSelectionRows.TrackSubtitleLanguages),
-                            ordered = preferences.languageRules.subtitleLanguages,
-                            onDismiss = { showSubtitleOrderEditor = false },
-                            onChange = { ordered ->
-                                viewModel.edit { scope ->
-                                    scope.subtitle.setTrackSelectionRules(
-                                        preferences.languageRules.copy(subtitleLanguages = ordered),
-                                    )
-                                }
-                            },
-                        )
-                    }
-                    if (showRulesEditor) {
-                        TrackRulesEditorSheet(
-                            rules = preferences.languageRules,
-                            onDismiss = { showRulesEditor = false },
-                            onChange = { updated ->
-                                viewModel.edit { scope ->
-                                    scope.subtitle.setTrackSelectionRules(updated)
-                                }
-                            },
+                            onClick = { activeDialog = LanguageSettingsDialog.RulesEditor },
                         )
                     }
                 }
@@ -750,6 +725,51 @@ fun LanguageSettingsScreen(
                 )
             }
         }
+    }
+
+    // ── Track-selection editors — the former three composition booleans
+    // (`showAudioOrderEditor` / `showSubtitleOrderEditor` / `showRulesEditor`),
+    // folded into [LanguageSettingsDialog] and rendered from the screen's ONE
+    // post-scaffold block beside the two color sheets above (bodies unchanged,
+    // dismissal retargeted to the slot).
+    if (activeDialog is LanguageSettingsDialog.AudioOrderEditor) {
+        OrderedLanguagesEditorSheet(
+            title = rowTitle(TrackSelectionRows.TrackAudioLanguages),
+            ordered = preferences.languageRules.audioLanguages,
+            onDismiss = { activeDialog = LanguageSettingsDialog.None },
+            onChange = { ordered ->
+                viewModel.edit { scope ->
+                    scope.subtitle.setTrackSelectionRules(
+                        preferences.languageRules.copy(audioLanguages = ordered),
+                    )
+                }
+            },
+        )
+    }
+    if (activeDialog is LanguageSettingsDialog.SubtitleOrderEditor) {
+        OrderedLanguagesEditorSheet(
+            title = rowTitle(TrackSelectionRows.TrackSubtitleLanguages),
+            ordered = preferences.languageRules.subtitleLanguages,
+            onDismiss = { activeDialog = LanguageSettingsDialog.None },
+            onChange = { ordered ->
+                viewModel.edit { scope ->
+                    scope.subtitle.setTrackSelectionRules(
+                        preferences.languageRules.copy(subtitleLanguages = ordered),
+                    )
+                }
+            },
+        )
+    }
+    if (activeDialog is LanguageSettingsDialog.RulesEditor) {
+        TrackRulesEditorSheet(
+            rules = preferences.languageRules,
+            onDismiss = { activeDialog = LanguageSettingsDialog.None },
+            onChange = { updated ->
+                viewModel.edit { scope ->
+                    scope.subtitle.setTrackSelectionRules(updated)
+                }
+            },
+        )
     }
 
     hexPickerTarget?.let { target ->

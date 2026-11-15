@@ -135,7 +135,11 @@ fun LogsScreen(
     // content, not the navigation drawer. Resets when the user switches tabs.
     val listFocusRequester = remember { FocusRequester() }
     val activeItemCount = when (state.selectedTabIndex) {
-        0 -> if (state.selectedLogFileName == null) state.logFiles.size else state.selectedLogFileLines.size
+        0 -> when (val panel = state.panelPhase) {
+            LogPanelPhase.Idle -> state.logFiles.size
+            is LogPanelPhase.Loaded -> panel.file.lines.size
+            else -> 0
+        }
         else -> state.activityEntries.size
     }
     TvGrabInitialFocus(
@@ -210,20 +214,25 @@ fun LogsScreen(
             val query = searchQuery.trim()
             when (state.selectedTabIndex) {
                 0 -> {
+                    // The selected file as ONE atomic value — name, content and
+                    // lines change together (the former name/content/lines
+                    // triple could tear mid-load), so keying the filter on the
+                    // instance covers every publish.
+                    val loadedFile = (state.panelPhase as? LogPanelPhase.Loaded)?.file
                     // The O(n) message filter over the retained line window
                     // runs off Main after a typing pause — per-keystroke
                     // main-thread filtering of thousands of lines is the
                     // jank source. Each edit restarts this effect (cancel
                     // and replace), which IS the debounce; the file-name
                     // filter is a tiny list and stays inline.
-                    var filteredLines by remember { mutableStateOf(state.selectedLogFileLines) }
-                    LaunchedEffect(state.selectedLogFileLines, query) {
+                    var filteredLines by remember(loadedFile) { mutableStateOf(loadedFile?.lines.orEmpty()) }
+                    LaunchedEffect(loadedFile, query) {
                         if (query.isEmpty()) {
-                            filteredLines = state.selectedLogFileLines
+                            filteredLines = loadedFile?.lines.orEmpty()
                         } else {
                             delay(LOG_SEARCH_DEBOUNCE_MS)
                             filteredLines = withContext(Dispatchers.Default) {
-                                state.selectedLogFileLines.filter { query in it.text }
+                                (loadedFile?.lines.orEmpty()).filter { query in it.text }
                             }
                         }
                     }
@@ -233,9 +242,8 @@ fun LogsScreen(
                     }
                     LogFilesTab(
                         logFiles = filteredFiles,
-                        selectedLogFileName = state.selectedLogFileName,
-                        selectedLogFileLines = filteredLines,
-                        isLoadingContent = state.isLoadingLogContent,
+                        panelPhase = state.panelPhase,
+                        lines = filteredLines,
                         isPollingActive = state.isLogPollingActive,
                         onTogglePolling = { viewModel.toggleLogPolling() },
                         onFileClick = { viewModel.loadLogFile(it) },
@@ -278,9 +286,8 @@ fun LogsScreen(
 @Composable
 private fun LogFilesTab(
     logFiles: List<LogFile>,
-    selectedLogFileName: String?,
-    selectedLogFileLines: List<LogLine>,
-    isLoadingContent: Boolean,
+    panelPhase: LogPanelPhase,
+    lines: List<LogLine>,
     isPollingActive: Boolean,
     onTogglePolling: () -> Unit,
     onFileClick: (String) -> Unit,
@@ -288,7 +295,18 @@ private fun LogFilesTab(
     bottomPadding: androidx.compose.ui.unit.Dp,
     listFocusRequester: FocusRequester,
 ) {
-    if (selectedLogFileName != null || isLoadingContent) {
+    // The panel phase is the ONE decision: every non-idle arm names its file
+    // (the old `selectedLogFileName ?: loading` fallback was the torn
+    // triple's tell), only Loading draws the progress bar, and only Loaded
+    // carries the list / pause toggle / line count.
+    if (panelPhase != LogPanelPhase.Idle) {
+        val activeFileName = when (val panel = panelPhase) {
+            is LogPanelPhase.Loading -> panel.fileName
+            is LogPanelPhase.Loaded -> panel.file.name
+            is LogPanelPhase.Failed -> panel.fileName
+            LogPanelPhase.Idle -> null
+        }
+        val isLoaded = panelPhase is LogPanelPhase.Loaded
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
@@ -311,14 +329,14 @@ private fun LogFilesTab(
                 }
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    selectedLogFileName ?: stringResource(Res.string.admin_loading),
+                    activeFileName ?: stringResource(Res.string.admin_loading),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (!isLoadingContent && selectedLogFileLines.isNotEmpty()) {
+                if (isLoaded && lines.isNotEmpty()) {
                     val pollingFocusState = rememberTvFocusState()
                     IconButton(
                         onClick = onTogglePolling,
@@ -331,7 +349,7 @@ private fun LogFilesTab(
                         )
                     }
                     Spacer(Modifier.width(8.dp))
-                    val lineCount = selectedLogFileLines.size
+                    val lineCount = lines.size
                     Box(
                         modifier = Modifier
                             .clip(ShapeCache.smoothPill)
@@ -346,7 +364,7 @@ private fun LogFilesTab(
                     }
                 }
             }
-            if (isLoadingContent) {
+            if (panelPhase is LogPanelPhase.Loading) {
                 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
                 JellyPlayLinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
@@ -354,25 +372,25 @@ private fun LogFilesTab(
             } else {
                 val listState = rememberLazyListState()
 
-                var hasInitialScrolled by remember(selectedLogFileName) { mutableStateOf(false) }
+                var hasInitialScrolled by remember(activeFileName) { mutableStateOf(false) }
                 // Follow-mode scroll policy: the engage (initial open, or
                 // resuming a paused poll) gets one animated jump to the tail;
                 // every subsequent automatic poll tick snaps. An animated
                 // scroll across thousands of lines per 5 s tick fights any
                 // user scroll in flight and burns frames for no benefit.
-                var animateNextFollow by remember(selectedLogFileName) { mutableStateOf(true) }
+                var animateNextFollow by remember(activeFileName) { mutableStateOf(true) }
 
-                LaunchedEffect(selectedLogFileLines.size, isPollingActive) {
-                    if (selectedLogFileLines.isNotEmpty()) {
+                LaunchedEffect(lines.size, isPollingActive) {
+                    if (lines.isNotEmpty()) {
                         if (!hasInitialScrolled) {
-                            listState.scrollToItem(selectedLogFileLines.lastIndex)
+                            listState.scrollToItem(lines.lastIndex)
                             hasInitialScrolled = true
                         } else if (isPollingActive) {
                             if (animateNextFollow) {
-                                listState.animateScrollToItem(selectedLogFileLines.lastIndex)
+                                listState.animateScrollToItem(lines.lastIndex)
                                 animateNextFollow = false
                             } else {
-                                listState.scrollToItem(selectedLogFileLines.lastIndex)
+                                listState.scrollToItem(lines.lastIndex)
                             }
                         } else {
                             // Paused: re-arm the animated jump for the next resume.
@@ -390,12 +408,12 @@ private fun LogFilesTab(
                         .padding(horizontal = 8.dp),
                 ) {
                     items(
-                        items = selectedLogFileLines,
+                        items = lines,
                         key = { line -> line.index },
                         contentType = { "logLine" },
                     ) { line ->
                         val annotatedLine = remember(line.text) { annotatedLogLine(parseLogLineSpans(line.text)) }
-                        
+
                         var isHighlighted by remember(line.index, line.addedTime) {
                             mutableStateOf(line.isNew)
                         }
@@ -410,7 +428,7 @@ private fun LogFilesTab(
                             animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
                             label = "lineHighlightAlpha"
                         )
-                        
+
                         Text(
                             text = annotatedLine,
                             style = MaterialTheme.typography.bodySmall.copy(

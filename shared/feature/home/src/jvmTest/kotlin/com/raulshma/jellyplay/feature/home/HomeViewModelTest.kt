@@ -91,7 +91,6 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -537,7 +536,7 @@ class HomeViewModelTest {
         runCurrent()
 
         assertNull(viewModel.uiState.value.statsCard)
-        assertNull(viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.fetchFailed)
     }
 
     @Test
@@ -958,7 +957,10 @@ class HomeViewModelTest {
         signIn("u1")
         runCurrent()
 
-        assertEquals("Connection timeout", viewModel.uiState.value.error)
+        assertEquals(
+            "Connection timeout",
+            (viewModel.uiState.value.loadPhase as HomeLoadPhase.Failed).message,
+        )
         assertFalse(viewModel.uiState.value.isLoading)
     }
 
@@ -1172,7 +1174,7 @@ class HomeViewModelTest {
         signIn("u1")
         runCurrent()
         assertEquals(OfflineMode.ONLINE, viewModel.uiState.value.offlineMode)
-        assertNotNull(viewModel.uiState.value.error)
+        assertTrue(viewModel.uiState.value.fetchFailed)
         assertEquals(HomeRenderSource.Offline.Implicit, viewModel.uiState.value.renderSource)
 
         coEvery {

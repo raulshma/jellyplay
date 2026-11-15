@@ -535,6 +535,36 @@ class SyncPlayViewModelTest {
     }
 
     @Test
+    fun groupLeft_event_clears_membership_mirror_and_rearms_the_poll() = runTest(mainDispatcher) {
+        joinActive("g1")
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.joinGroup("g1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isInGroup)
+        assertEquals("g1", viewModel.uiState.value.currentGroup?.groupId)
+        coVerify(exactly = 1) { mediaRepository.getSyncPlayGroups() } // the init load only
+
+        eventsFlow.tryEmit(SyncPlayEvent.GroupLeft)
+        advanceUntilIdle()
+
+        // The dedicated ejection event clears the mirror even without a
+        // coincident empty GroupUpdate (the outside-grace arm's exact shape).
+        assertFalse(viewModel.uiState.value.isInGroup)
+        assertNull(viewModel.uiState.value.currentGroup)
+        // The screen's LifecycleStartEffect(isInGroup) restarts on the flip,
+        // re-arming the group-list poll from the base gap (the leaveGroup path's
+        // restart semantics — the poll start/stop pattern above).
+        viewModel.startGroupAutoRefresh()
+        mainDispatcher.scheduler.advanceTimeBy(5_000)
+        mainDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 2) { mediaRepository.getSyncPlayGroups() }
+        viewModel.stopGroupAutoRefresh()
+        mainDispatcher.scheduler.advanceUntilIdle()
+        coVerify(exactly = 2) { mediaRepository.getSyncPlayGroups() } // nothing further
+    }
+
+    @Test
     fun notification_event_emits_raw_message() = runTest(mainDispatcher) {
         joinActive("g1")
         val viewModel = newViewModel()

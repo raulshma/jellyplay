@@ -5,13 +5,17 @@ import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_username_required
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_login_failed
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_auth
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_check_availability
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_not_enabled
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_timeout
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +26,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -218,5 +223,130 @@ class AuthViewModelTest {
             "expected Idle, was ${viewModel.quickConnectState.value}",
             viewModel.quickConnectState.value is QuickConnectUiState.Idle
         )
+    }
+
+    // ------------------------------------------- login phase machine (LoginScreen)
+
+    /**
+     * Pins the VM-owned login machine that replaced LoginScreen's
+     * `isLoggingIn` rememberSaveable flag — whose only writer lived in the
+     * result callback, so a process death mid-login restored a stuck `true`
+     * that disabled the submit button forever (the recorded `pinVerifying`
+     * bug shape, worse because saveable PERSISTED it).
+     */
+
+    @Test
+    fun freshViewModel_constructsIdleWithNoError() {
+        // The process-death proxy: a brand-new AuthViewModel is the state a
+        // recreated process boots with — never a stuck Submitting.
+        assertEquals(LoginPhase.Idle, viewModel.loginPhase.value)
+        assertNull(viewModel.loginError.value)
+    }
+
+    @Test
+    fun login_failure_parksTypedServerError_andSettlesPhaseToIdle() = runTest(testDispatcher) {
+        coEvery { authRepository.login("http://server", "u", "p") } returns
+            Result.failure(RuntimeException("bad creds"))
+        var result: Result<Unit>? = null
+
+        viewModel.login("http://server", "u", "p") { result = it }
+        advanceUntilIdle()
+
+        assertEquals(LoginPhase.Idle, viewModel.loginPhase.value)
+        assertEquals(
+            LoginError(LoginFieldError.SERVER, UiMessage.Raw("bad creds")),
+            viewModel.loginError.value,
+        )
+        assertTrue("failure must reach the callback", result!!.isFailure)
+    }
+
+    @Test
+    fun login_failureWithoutMessage_usesLocalizedFallback() = runTest(testDispatcher) {
+        coEvery { authRepository.login("http://server", "u", "p") } returns
+            Result.failure(IllegalStateException())
+
+        viewModel.login("http://server", "u", "p") {}
+        advanceUntilIdle()
+
+        assertEquals(
+            LoginError(LoginFieldError.SERVER, UiMessage.Resource(Res.string.auth_login_failed)),
+            viewModel.loginError.value,
+        )
+    }
+
+    @Test
+    fun login_thrownRepositoryRead_foldsToFailure_andSettlesPhase() = runTest(testDispatcher) {
+        // The getUsersForServer eternal-spinner class: a thrown read must not
+        // strand the machine in Submitting forever — it folds into the
+        // failure path so the phase settles and the error surfaces.
+        coEvery { authRepository.login("http://server", "u", "p") } throws RuntimeException("db gone")
+        var result: Result<Unit>? = null
+
+        viewModel.login("http://server", "u", "p") { result = it }
+        advanceUntilIdle()
+
+        assertEquals(LoginPhase.Idle, viewModel.loginPhase.value)
+        assertEquals(
+            LoginError(LoginFieldError.SERVER, UiMessage.Raw("db gone")),
+            viewModel.loginError.value,
+        )
+        assertTrue(result!!.isFailure)
+    }
+
+    @Test
+    fun login_success_settlesPhaseBeforeCallback() = runTest(testDispatcher) {
+        coEvery { authRepository.login("http://server", "u", "p") } returns Result.success(mockk<UserInfo>())
+        var phaseAtCallback: LoginPhase? = null
+        var errorAtCallback: LoginError? = null
+
+        viewModel.login("http://server", "u", "p") {
+            phaseAtCallback = viewModel.loginPhase.value
+            errorAtCallback = viewModel.loginError.value
+        }
+        advanceUntilIdle()
+
+        // The callback's navigation must land with the machine already
+        // settled — a fresh screen never mounts mid-spinner.
+        assertEquals(LoginPhase.Idle, phaseAtCallback)
+        assertNull(errorAtCallback)
+    }
+
+    @Test
+    fun login_submitWhileSubmitting_isDropped() = runTest(testDispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        coEvery { authRepository.login("http://server", "u", "p") } coAnswers {
+            gate.await()
+            Result.success(mockk<UserInfo>())
+        }
+
+        viewModel.login("http://server", "u", "p") {}
+        advanceUntilIdle()
+        assertEquals(LoginPhase.Submitting, viewModel.loginPhase.value)
+
+        // A second submit while one is in flight: dropped before reaching the
+        // repository (the strict mockk would throw on the unstubbed call).
+        viewModel.login("http://server", "u", "OTHER") {}
+        advanceUntilIdle()
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(LoginPhase.Idle, viewModel.loginPhase.value)
+        coVerify(exactly = 1) { authRepository.login(any(), any(), any()) }
+    }
+
+    @Test
+    fun loginError_setAndClear_byScreenIntents() = runTest(testDispatcher) {
+        viewModel.setLoginFieldError(
+            LoginFieldError.USERNAME,
+            UiMessage.Resource(Res.string.auth_error_username_required),
+        )
+        assertEquals(
+            LoginError(LoginFieldError.USERNAME, UiMessage.Resource(Res.string.auth_error_username_required)),
+            viewModel.loginError.value,
+        )
+
+        viewModel.clearLoginError()
+        assertNull(viewModel.loginError.value)
     }
 }

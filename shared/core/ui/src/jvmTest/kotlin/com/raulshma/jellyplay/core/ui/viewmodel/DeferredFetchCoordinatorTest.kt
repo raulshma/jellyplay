@@ -8,8 +8,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -637,6 +639,41 @@ class DeferredFetchCoordinatorTest {
             listOf("item-1" to false, "item-1" to true, "item-1" to true),
             log.calls,
             "loud carries the load's force flag; the silent regeneration is always forced",
+        )
+    }
+
+    @Test
+    fun `fetch receives the loud or silent mode per path, fixed at the entry call`() = runTest {
+        val changes = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
+        val modes = mutableListOf<Boolean>()
+        // StandardTestDispatcher instead of the suite's unconfined scope: the
+        // fetch body runs a dispatch AFTER the entry call returns — the gap
+        // the hosts' former phase-inference at body entry was hostage to. The
+        // mode must already be bound when the body finally runs, whatever the
+        // host publishes in between (the music home's body used to recover
+        // loud/silent from the loading phase the loud entry wrote).
+        val coordinator = DeferredFetchCoordinator<String, String>(
+            userDataChanges = changes,
+            scope = CoroutineScope(StandardTestDispatcher(testScheduler)),
+            fetch = { _, _, isSilent ->
+                modes += isSilent
+                "value"
+            },
+        )
+
+        coordinator.load("item-1")
+        advanceUntilIdle()
+        changes.tryEmit(change("item-1"))
+        // StandardTestDispatcher: the change collector runs at the advance,
+        // not inline at the emit — arm the pending flag before activating.
+        advanceUntilIdle()
+        coordinator.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(false, true),
+            modes,
+            "load hands the fetch the loud mode; the deferred regeneration hands it the silent mode",
         )
     }
 

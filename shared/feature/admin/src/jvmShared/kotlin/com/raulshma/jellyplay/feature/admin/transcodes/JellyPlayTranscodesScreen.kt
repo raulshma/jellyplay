@@ -91,12 +91,20 @@ fun JellyPlayTranscodesScreen(
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
 
+    // The rows as the phase holds them right now — a refresh keeps the stale
+    // list visible underneath (the Refreshing arm carries it).
+    val rowsNow: List<TranscodeRow> = when (val phase = state.loadPhase) {
+        is TranscodesLoadPhase.Loaded -> phase.rows
+        is TranscodesLoadPhase.Refreshing -> phase.staleRows
+        else -> emptyList()
+    }
+
     // TV focus-on-launch: focus the first transcode row once they land so
     // D-pad input lands on content, not the navigation drawer.
     val listFocusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = listFocusRequester,
-        itemCount = state.rows.size,
+        itemCount = rowsNow.size,
         tag = "jellyplay_transcodes_init",
     )
 
@@ -144,35 +152,56 @@ fun JellyPlayTranscodesScreen(
         },
     ) {
         when {
-            state.isLoading -> {
-                ScreenLoadingState(modifier = Modifier.fillMaxSize())
-            }
+            // The gate face wins over the phase: while the gate is off no load
+            // ever ran (the phase stays its unobserved initial).
             state.gate == JellyPlayCapabilityState.Unavailable -> {
                 GatedOffState(modifier = Modifier.fillMaxSize())
             }
-            state.error != null -> {
-                ErrorScreen(
-                    message = state.error ?: stringResource(Res.string.admin_unknown_error),
-                    onRetry = { viewModel.refresh() },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            state.rows.isEmpty() -> {
-                EmptyTranscodesState(modifier = Modifier.fillMaxSize())
-            }
-            else -> {
-                TranscodesList(
-                    state = state,
-                    contentPadding = PaddingValues(
-                        start = adaptiveInfo.contentPadding(false),
-                        end = adaptiveInfo.contentPadding(false),
-                        top = 8.dp,
-                        bottom = adaptiveInfo.bottomPadding(isTv),
-                    ),
-                    onCancel = viewModel::showCancelDialog,
-                    focusRequester = listFocusRequester,
-                    modifier = Modifier.fillMaxSize(),
-                )
+            else -> when (val phase = state.loadPhase) {
+                TranscodesLoadPhase.Loading -> {
+                    ScreenLoadingState(modifier = Modifier.fillMaxSize())
+                }
+                is TranscodesLoadPhase.Failed -> {
+                    ErrorScreen(
+                        message = phase.message ?: stringResource(Res.string.admin_unknown_error),
+                        onRetry = { viewModel.refresh() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                // Loaded and Refreshing render through the same arms — the
+                // stale rows a refresh carries stay visible underneath.
+                is TranscodesLoadPhase.Loaded -> if (phase.rows.isEmpty()) {
+                    EmptyTranscodesState(modifier = Modifier.fillMaxSize())
+                } else {
+                    TranscodesList(
+                        rows = phase.rows,
+                        contentPadding = PaddingValues(
+                            start = adaptiveInfo.contentPadding(false),
+                            end = adaptiveInfo.contentPadding(false),
+                            top = 8.dp,
+                            bottom = adaptiveInfo.bottomPadding(isTv),
+                        ),
+                        onCancel = viewModel::showCancelDialog,
+                        focusRequester = listFocusRequester,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                is TranscodesLoadPhase.Refreshing -> if (phase.staleRows.isEmpty()) {
+                    EmptyTranscodesState(modifier = Modifier.fillMaxSize())
+                } else {
+                    TranscodesList(
+                        rows = phase.staleRows,
+                        contentPadding = PaddingValues(
+                            start = adaptiveInfo.contentPadding(false),
+                            end = adaptiveInfo.contentPadding(false),
+                            top = 8.dp,
+                            bottom = adaptiveInfo.bottomPadding(isTv),
+                        ),
+                        onCancel = viewModel::showCancelDialog,
+                        focusRequester = listFocusRequester,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
     }
@@ -180,7 +209,7 @@ fun JellyPlayTranscodesScreen(
 
 @Composable
 private fun TranscodesList(
-    state: TranscodesState,
+    rows: List<TranscodeRow>,
     contentPadding: PaddingValues,
     onCancel: (TranscodeRow) -> Unit,
     focusRequester: FocusRequester,
@@ -193,7 +222,7 @@ private fun TranscodesList(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(state.rows, key = { it.sessionId }) { row ->
+        items(rows, key = { it.sessionId }) { row ->
             TranscodeRowCard(row = row, onCancel = onCancel)
         }
     }

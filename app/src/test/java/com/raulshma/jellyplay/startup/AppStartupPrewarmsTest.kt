@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
-import com.raulshma.jellyplay.core.datastore.identity.ServerIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
@@ -88,9 +87,9 @@ class AppStartupPrewarmsTest {
             tag("identity.ensureDeviceId")
             "device-1"
         }
-        every { identity } answers {
+        every { deviceId } answers {
             tag("identity.await")
-            MutableStateFlow(ServerIdentity(deviceId = "device-1"))
+            MutableStateFlow("device-1")
         }
     }
     private val securityStore: SecurityStore = mockk(relaxed = true) {

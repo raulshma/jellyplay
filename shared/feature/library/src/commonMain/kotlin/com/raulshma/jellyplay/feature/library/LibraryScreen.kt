@@ -142,8 +142,16 @@ internal fun LibraryScreen(
     viewModel: LibraryViewModel = koinViewModel(),
 ) {
     val folders by viewModel.folders.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
+    // One sealed load phase replaces the former isLoading/error pair (whose
+    // flags could coexist — see [LibraryLoadPhase]). The two scalars the pure
+    // seams below still consume ([computeLibrarySurface]'s error and the
+    // header's loading/error inputs) are derived ONCE, here, from the phase:
+    // [LibraryLoadPhase.Failed] is the only error-carrying phase, so a
+    // non-null `error` means exactly what the former `_error` meant, and
+    // Loading/Ready map to the former `_isLoading` false/true reads.
+    val loadPhase by viewModel.loadPhase.collectAsStateWithLifecycle()
+    val isLoading = loadPhase is LibraryLoadPhase.Loading
+    val error = (loadPhase as? LibraryLoadPhase.Failed)?.message
 
     DeferredRefreshEffect(viewModel.deferredRefresher)
 

@@ -9,10 +9,14 @@ import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ClientCertificateImport
 import com.raulshma.jellyplay.core.model.ClientCertificateStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.ui.message.UiMessage
+import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_switch_failed
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -240,6 +244,83 @@ class ServerManagementViewModelTest {
         advanceUntilIdle()
 
         assertFalse(completed, "a failed switch must not navigate")
+        assertEquals(false, vm.isSwitching)
+    }
+
+    @Test
+    fun `switchServer failure parks a message for the bus and it dismisses`() = runTest(testDispatcher) {
+        // DECLARED FIX pin: a failed switch used to settle the spinner with no
+        // feedback — the cards just re-enabled and nothing said the active
+        // server had NOT changed. The VM now parks a UiMessage the screen
+        // posts to the UserMessageBus exactly once.
+        coEvery { authRepository.switchServer("s3") } returns Result.failure(RuntimeException("unreachable"))
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.switchServer("s3") {}
+        advanceUntilIdle()
+
+        assertEquals(UiMessage.Raw("unreachable"), vm.switchServerFailure)
+
+        vm.clearSwitchServerFailure()
+        assertNull(vm.switchServerFailure)
+    }
+
+    @Test
+    fun `switchServer failure without a message falls back to the localized resource`() = runTest(testDispatcher) {
+        coEvery { authRepository.switchServer("s3") } returns Result.failure(IllegalStateException())
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.switchServer("s3") {}
+        advanceUntilIdle()
+
+        assertEquals(
+            UiMessage.Resource(Res.string.settings_server_switch_failed),
+            vm.switchServerFailure,
+        )
+    }
+
+    @Test
+    fun `a new switch attempt clears the parked failure`() = runTest(testDispatcher) {
+        coEvery { authRepository.switchServer("s3") } returns Result.failure(RuntimeException("down"))
+        coEvery { authRepository.switchServer("s2") } returns Result.success(Unit)
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.switchServer("s3") {}
+        advanceUntilIdle()
+        assertEquals(UiMessage.Raw("down"), vm.switchServerFailure)
+
+        vm.switchServer("s2") {}
+        advanceUntilIdle()
+
+        assertNull(vm.switchServerFailure)
+        assertEquals(false, vm.isSwitching)
+    }
+
+    @Test
+    fun `switchServer re-entry while switching is dropped`() = runTest(testDispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        coEvery { authRepository.switchServer("s2") } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { authRepository.switchServer("s3") } returns Result.success(Unit)
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.switchServer("s2") {}
+        advanceUntilIdle()
+        assertTrue(vm.isSwitching, "the first switch must be in flight")
+
+        vm.switchServer("s3") {}
+        advanceUntilIdle()
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { authRepository.switchServer("s3") }
         assertEquals(false, vm.isSwitching)
     }
 

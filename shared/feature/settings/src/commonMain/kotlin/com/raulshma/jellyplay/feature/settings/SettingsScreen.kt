@@ -370,10 +370,17 @@ fun SettingsScreen(
     ) { paddingValues ->
         val bus = LocalUserMessageBus.current
 
-        LaunchedEffect(viewModel.messageSentEvent) {
-            viewModel.messageSentEvent?.let { msg ->
-                bus.info(msg)
-                viewModel.clearMessageEvent()
+        // One-shot feedback rides the VM's SettingsUserMessage channel (the
+        // codified StateManagementConventions §2 idiom) — the former
+        // messageSentEvent parked field + clearMessageEvent dance re-fired
+        // the snackbar on re-subscription (a StateFlow replays its current
+        // value to every new collector). Keyed on Unit: this collector lives
+        // for the screen's composition lifetime and consumes each message
+        // exactly once; the bus text folds off the arm, never off a string
+        // prefix.
+        LaunchedEffect(Unit) {
+            viewModel.messages.collect { message ->
+                bus.info(message.busText())
             }
         }
 

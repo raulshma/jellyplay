@@ -11,12 +11,14 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_login_failed
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_auth
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_check_availability
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_initiate
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_not_enabled
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_polling
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_timeout
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -37,6 +39,50 @@ sealed class QuickConnectUiState {
     data class Error(val message: AuthMessage) : QuickConnectUiState()
 }
 
+/**
+ * Which credential field (if any) a login error is attached to. Ambiguous auth
+ * failures (e.g. HTTP 401) use [SERVER] so neither field is reddened while the
+ * message still surfaces in the error banner.
+ *
+ * Lives beside the login machine in [AuthViewModel] (it used to sit in
+ * LoginScreen.kt): the VM owns the whole attempt machine, the screen only
+ * dispatches intents and renders. Same package, so the move is invisible to
+ * every reader.
+ */
+enum class LoginFieldError { USERNAME, PASSWORD, SERVER }
+
+/**
+ * The login-attempt lifecycle for [LoginScreen] — a sealed phase replacing
+ * the former screen-local `isLoggingIn` rememberSaveable flag, whose only
+ * writer lived inside the ViewModel's result callback: a process death
+ * mid-login restored a stuck `true` that disabled the submit button forever
+ * (the recorded `pinVerifying` bug shape, worse because saveable PERSISTED
+ * it across recreation). VM-owned now:
+ *
+ *  - process death → a fresh [AuthViewModel] constructs at [Idle] with no
+ *    [LoginError] — a consistent blank slate;
+ *  - config change → the surviving VM keeps the phase (the saveable pair's
+ *    preservation behavior, minus the stringly-typed enum-name encoding).
+ */
+sealed interface LoginPhase {
+    /** Form idle — submit and Quick Connect are enabled. */
+    data object Idle : LoginPhase
+
+    /** A login attempt is in flight — submit and Quick Connect are disabled. */
+    data object Submitting : LoginPhase
+}
+
+/**
+ * Typed login error: which field is at fault + the message for the banner.
+ * `null` [AuthViewModel.loginError] means no error; non-null MEANS the banner
+ * is on screen (the `PlaybackErrorUi?` shape — silent-error and a blank
+ * banner are unrepresentable). The message is a [UiMessage] so the
+ * exception-vs-fallback fold happens VM-side (the same fold the former
+ * `UserErrorMessages.resolve(it, loginFailedError)` call rendered) and
+ * resolution stays at the render edge under locale changes.
+ */
+data class LoginError(val field: LoginFieldError, val message: UiMessage)
+
 class AuthViewModel(
     private val authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
@@ -49,8 +95,11 @@ class AuthViewModel(
 
     val currentServerUsers: StateFlow<List<UserInfo>> = authRepository.currentServerUsers
 
-    private val _isLoading = stateFlow(false)
-    val isLoading = _isLoading.flow
+    private val _loginPhase = stateFlow<LoginPhase>(LoginPhase.Idle)
+    val loginPhase = _loginPhase.flow
+
+    private val _loginError = stateFlow<LoginError?>(null)
+    val loginError = _loginError.flow
 
     private val _quickConnectState = stateFlow<QuickConnectUiState>(QuickConnectUiState.Idle)
     val quickConnectState = _quickConnectState.flow
@@ -121,9 +170,64 @@ class AuthViewModel(
         }
     }
 
+    /**
+     * The screen's form-validation intent (the username-required check happens
+     * composable-side where the field state lives): parks the error into the
+     * same typed state the login attempt writes, so [LoginScreen] renders one
+     * error surface from one owner.
+     */
+    fun setLoginFieldError(field: LoginFieldError, message: UiMessage) {
+        _loginError.set(LoginError(field, message))
+    }
+
+    /** Clears the parked login error (field edits dispatch this). */
+    fun clearLoginError() {
+        _loginError.set(null)
+    }
+
+    /**
+     * Runs the login attempt as the VM-owned [LoginPhase] machine. The
+     * observable outcomes match the former screen-local flag exactly — the
+     * spinner face, the failure banner, the success callback — with two
+     * declared differences:
+     *
+     *  - **Re-entry guard** (phase-typed `!is Submitting`, the
+     *    SnapshotActionPhase precedent): a second submit while one is in
+     *    flight is dropped. The screen disables the button; this guards the
+     *    paths that bypass it.
+     *  - **A thrown repository read folds into the failure** instead of
+     *    skipping [onResult]: an exception would otherwise strand the machine
+     *    in [LoginPhase.Submitting] forever — the eternal-spinner class
+     *    [getUsersForServer]'s KDoc records. Cancellation still propagates
+     *    (the caller is going away; the VM is cleared with it).
+     *
+     * The phase settles to [LoginPhase.Idle] BEFORE [onResult] runs, so the
+     * callback's navigation lands with the machine already settled. Failures
+     * park a [LoginError] (field [LoginFieldError.SERVER], exception message
+     * or the localized `auth_login_failed` fallback — the same resolution the
+     * former screen-side `UserErrorMessages.resolve` call rendered).
+     */
     fun login(serverAddress: String, username: String, password: String, onResult: (Result<Unit>) -> Unit) {
+        if (_loginPhase.value is LoginPhase.Submitting) return
         launch {
-            val result = authRepository.login(serverAddress, username, password).map {}
+            _loginPhase.set(LoginPhase.Submitting)
+            _loginError.set(null)
+            val result = try {
+                authRepository.login(serverAddress, username, password).map {}
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                Result.failure(t)
+            }
+            result.onFailure { failure ->
+                _loginError.set(
+                    LoginError(
+                        LoginFieldError.SERVER,
+                        UiMessage.of(failure, Res.string.auth_login_failed),
+                    )
+                )
+            }
+            _loginPhase.set(LoginPhase.Idle)
             onResult(result)
         }
     }

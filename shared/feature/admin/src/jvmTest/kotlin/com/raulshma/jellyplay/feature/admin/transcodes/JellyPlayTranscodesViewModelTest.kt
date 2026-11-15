@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.admin.transcodes
 
+import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
 import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.network.api.JellyPlayActiveTranscode
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilities
@@ -10,7 +12,11 @@ import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlayTranscodesRoutes
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
+import io.mockk.slot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,6 +68,14 @@ class JellyPlayTranscodesViewModelTest {
     private lateinit var sessionCacheRegistry: SessionCacheRegistry
     private lateinit var statusStore: JellyPlayPluginStatusStore
 
+    /**
+     * The store's registered identity-reset action, captured from the relaxed
+     * registry mock — firing it IS the production identity reset (user switch
+     * / plugin reinstall): it flips the store back to UNKNOWN so the next
+     * [JellyPlayTranscodesViewModel.start] re-probes into a fresh gate-on.
+     */
+    private val resetAction = slot<suspend (HomeSessionTransition) -> Unit>()
+
     private val transcoding = JellyPlayActiveTranscode(
         sessionId = "s-1",
         userName = "alice",
@@ -92,7 +106,13 @@ class JellyPlayTranscodesViewModelTest {
         pluginApi = mockk()
         capabilitiesApi = mockk()
         sessionCacheRegistry = mockk(relaxed = true)
+        every { sessionCacheRegistry.registerAction(any(), capture(resetAction)) } just runs
         statusStore = JellyPlayPluginStatusStore(capabilitiesApi, sessionCacheRegistry)
+    }
+
+    /** Fires the store's captured identity-reset action — the gate drops to Unknown. */
+    private suspend fun simulateIdentityReset() {
+        resetAction.captured.invoke(HomeSessionTransition.UserSwitched(SessionIdentity("srv-1", "user-2")))
     }
 
     @AfterTest
@@ -133,7 +153,10 @@ class JellyPlayTranscodesViewModelTest {
         advanceUntilIdle()
 
         assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
-        assertFalse(viewModel.uiState.value.isLoading)
+        // The screen renders the gate face; no load ever ran, so the phase
+        // never left its unobserved initial (adapted from the former
+        // `assertFalse(isLoading)` — the phase machine has no flag to clear).
+        assertTrue(viewModel.uiState.value.loadPhase is TranscodesLoadPhase.Loading)
         coVerify(exactly = 0) { pluginApi.getActiveTranscodes() }
     }
 
@@ -154,7 +177,8 @@ class JellyPlayTranscodesViewModelTest {
         advanceUntilIdle()
 
         assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
-        assertFalse(viewModel.uiState.value.isLoading)
+        // Unobserved initial phase (adapted from the former `assertFalse(isLoading)`).
+        assertTrue(viewModel.uiState.value.loadPhase is TranscodesLoadPhase.Loading)
         coVerify(exactly = 0) { capabilitiesApi.getCapabilities() }
         coVerify(exactly = 0) { pluginApi.getActiveTranscodes() }
     }
@@ -168,11 +192,10 @@ class JellyPlayTranscodesViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals(JellyPlayCapabilityState.Available, state.gate)
-        assertFalse(state.isLoading)
-        assertNull(state.error)
-        assertEquals(2, state.rows.size)
+        val rows = (state.loadPhase as TranscodesLoadPhase.Loaded).rows
+        assertEquals(2, rows.size)
 
-        val transcodingRow = state.rows[0]
+        val transcodingRow = rows[0]
         assertEquals("s-1", transcodingRow.sessionId)
         assertEquals("alice", transcodingRow.userName)
         assertEquals("Living Room TV", transcodingRow.deviceName)
@@ -185,7 +208,7 @@ class JellyPlayTranscodesViewModelTest {
         assertEquals(listOf("VideoCodecNotSupported", "AudioBitrateNotSupported"), transcodingRow.transcodeReasons)
         assertFalse(transcodingRow.isPaused)
 
-        val directRow = state.rows[1]
+        val directRow = rows[1]
         assertFalse(directRow.isTranscoding)
         assertEquals(TranscodePlayMethod.DIRECT, directRow.playMethod)
         assertTrue(directRow.isPaused)
@@ -200,9 +223,11 @@ class JellyPlayTranscodesViewModelTest {
         val viewModel = JellyPlayTranscodesViewModel(pluginApi, statusStore)
         advanceUntilIdle()
 
-        assertEquals("offline", viewModel.uiState.value.error)
-        assertFalse(viewModel.uiState.value.isLoading)
-        assertTrue(viewModel.uiState.value.rows.isEmpty())
+        // Adapted from the former `error` field + `assertFalse(isLoading)` +
+        // `assertTrue(rows.isEmpty())`: the Failed arm carries all three facts.
+        val phase = viewModel.uiState.value.loadPhase
+        assertTrue(phase is TranscodesLoadPhase.Failed)
+        assertEquals("offline", (phase as TranscodesLoadPhase.Failed).message)
     }
 
     @Test
@@ -255,7 +280,9 @@ class JellyPlayTranscodesViewModelTest {
             viewModel.stop()
             advanceUntilIdle() // a stopped loop schedules nothing further
             coVerify(exactly = 3) { pluginApi.getActiveTranscodes() }
-            assertEquals(listOf("s-1"), viewModel.uiState.value.rows.map { it.sessionId })
+            // Adapted: rows live on the Loaded phase arm.
+            val rows = (viewModel.uiState.value.loadPhase as TranscodesLoadPhase.Loaded).rows
+            assertEquals(listOf("s-1"), rows.map { it.sessionId })
         }
 
     @Test
@@ -269,9 +296,44 @@ class JellyPlayTranscodesViewModelTest {
         runCurrent()
         viewModel.stop()
 
-        assertEquals(2, viewModel.uiState.value.rows.size)
-        assertNull(viewModel.uiState.value.error)
-        assertFalse(viewModel.uiState.value.isRefreshing)
+        // Adapted from the former `assertEquals(2, rows)` + `assertNull(error)` +
+        // `assertFalse(isRefreshing)`: the phase is untouched by the failed poll.
+        val phase = viewModel.uiState.value.loadPhase
+        assertTrue(phase is TranscodesLoadPhase.Loaded)
+        assertEquals(2, (phase as TranscodesLoadPhase.Loaded).rows.size)
+    }
+
+    // ── gate re-arm (the load latch) ──
+
+    @Test
+    fun `a gate drop re-arms the load - the next gate-on reloads`() = runTest(mainDispatcher) {
+        makeStoreAvailable()
+        val viewModel = loadedViewModel() // visit 1: rows loaded, latch raised
+
+        // Identity reset (user switch / plugin reinstall): the store's
+        // registered action flips the status back to UNKNOWN — the gate
+        // follows and the VM must re-arm its load latch.
+        simulateIdentityReset()
+        advanceUntilIdle()
+        assertEquals(JellyPlayCapabilityState.Unknown, viewModel.uiState.value.gate)
+
+        // The next visit's arm re-probes into a fresh gate-on (start also
+        // starts the auto-refresh cycle — advance only to 1s, the tick is at
+        // 5s, so the loop cannot fire mid-test).
+        coEvery { pluginApi.getActiveTranscodes() } returns Result.success(listOf(transcoding))
+        viewModel.start()
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        assertEquals(JellyPlayCapabilityState.Available, viewModel.uiState.value.gate)
+        val rows = (viewModel.uiState.value.loadPhase as TranscodesLoadPhase.Loaded).rows
+        assertEquals(listOf("s-1"), rows.map { it.sessionId })
+        // Before the fix the latch stayed set forever: this reload never
+        // fired and the screen showed the first visit's rows.
+        coVerify(exactly = 2) { pluginApi.getActiveTranscodes() }
+
+        viewModel.stop() // kill the auto-refresh cycle before the test closes
+        advanceUntilIdle()
     }
 
     @Test
@@ -312,7 +374,7 @@ class JellyPlayTranscodesViewModelTest {
         val viewModel = loadedViewModel()
         coEvery { pluginApi.cancelTranscode("s-1") } returns Result.success(Unit)
 
-        viewModel.showCancelDialog(viewModel.uiState.value.rows[0])
+        viewModel.showCancelDialog((viewModel.uiState.value.loadPhase as TranscodesLoadPhase.Loaded).rows[0])
         assertTrue(viewModel.cancelConfirmation.isPending)
 
         viewModel.cancelTranscode()
@@ -344,7 +406,7 @@ class JellyPlayTranscodesViewModelTest {
         val gate = CompletableDeferred<Unit>()
         coEvery { pluginApi.cancelTranscode("s-1") } coAnswers { gate.await(); Result.success(Unit) }
 
-        viewModel.showCancelDialog(viewModel.uiState.value.rows[0])
+        viewModel.showCancelDialog((viewModel.uiState.value.loadPhase as TranscodesLoadPhase.Loaded).rows[0])
         viewModel.cancelTranscode()
         runCurrent() // run the launch until it suspends on the gate
         assertTrue(viewModel.uiState.value.isCancelling)
@@ -368,7 +430,7 @@ class JellyPlayTranscodesViewModelTest {
         val gate = CompletableDeferred<Unit>()
         coEvery { pluginApi.cancelTranscode("s-1") } coAnswers { gate.await(); Result.success(Unit) }
 
-        viewModel.showCancelDialog(viewModel.uiState.value.rows[0])
+        viewModel.showCancelDialog((viewModel.uiState.value.loadPhase as TranscodesLoadPhase.Loaded).rows[0])
         viewModel.cancelTranscode()
         runCurrent()
         assertTrue(viewModel.uiState.value.isCancelling)

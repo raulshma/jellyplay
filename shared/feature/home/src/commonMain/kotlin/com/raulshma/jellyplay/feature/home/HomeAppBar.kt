@@ -705,10 +705,31 @@ private fun CollapsedDockContent(
 }
 
 /**
+ * Which platform's user-switcher menu the app-bar chip has open, if any: the
+ * touch [DropdownMenu] idiom ([Touch]) or the TV [TvSafeSheet] ([Tv]). ONE
+ * nullable slot behind the former `menuExpanded` / `showTvMenu` boolean fork
+ * — two independent flags, so a mid-session TV-mode flip could leave both
+ * armed (a flip doesn't close the other platform's flag; each flag only
+ * guarded its own renderer). The fork stays at the RENDER site — which arm
+ * renders per [LocalTvMode] (the `!isTv` dropdown arm, the `isTv &&` sheet
+ * arm, both preserved verbatim) — not in the state, so both-armed is now
+ * unrepresentable: the chip's single open path arms exactly one variant of
+ * one slot per the mode it observes, and the dismiss paths all null it. The
+ * flip edge is structurally moot as a result: a flip mid-open leaves the
+ * now-foreign arm unrendered (its platform guard fails) and the slot inert
+ * until the next chip click re-arms it with the current mode — the same
+ * nothing-renders outcome the old guards produced, minus the state that
+ * could describe both menus open at once.
+ */
+internal enum class AppBarMenu { Touch, Tv }
+
+/**
  * The home app-bar quick user switcher chip. Renders the current user's
  * initials avatar + name; tapping opens a [DropdownMenu] (mobile) or a
  * [TvSafeSheet] (TV) listing every persisted user for the server. Mirrors the
- * `DetailTopBar` overflow-menu idiom (single shared option list, dual renderer).
+ * `DetailTopBar` overflow-menu idiom (single shared option list, dual
+ * renderer); which of the two renders is the [AppBarMenu] slot's arm, chosen
+ * at the chip's single open path per the current mode.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -718,8 +739,9 @@ private fun UserSwitcherChip(
     onUserSwitch: (String) -> Unit,
 ) {
     val isTv = LocalTvMode.current
-    var menuExpanded by remember { mutableStateOf(false) }
-    var showTvMenu by remember { mutableStateOf(false) }
+    // Which menu is open — ONE [AppBarMenu] slot (newest arm wins; every
+    // open path arms exactly one variant and every dismissal nulls it).
+    var activeMenu by remember { mutableStateOf<AppBarMenu?>(null) }
 
     val colorScheme = MaterialTheme.colorScheme
     val (containerTriplet, onContainerTriplet) = remember(colorScheme) {
@@ -749,7 +771,7 @@ private fun UserSwitcherChip(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) {
-                    if (isTv) showTvMenu = true else menuExpanded = true
+                    activeMenu = if (isTv) AppBarMenu.Tv else AppBarMenu.Touch
                 }
                 .padding(horizontal = 6.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -772,13 +794,13 @@ private fun UserSwitcherChip(
 
         if (!isTv) {
             DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
+                expanded = activeMenu == AppBarMenu.Touch,
+                onDismissRequest = { activeMenu = null },
             ) {
                 val options = rememberUserSwitchOptions(
                     users = users,
                     currentUserId = currentUser.id,
-                    onClose = { menuExpanded = false },
+                    onClose = { activeMenu = null },
                     onUserSwitch = onUserSwitch,
                 )
                 options.forEach { option -> UserSwitchDropdownItem(option) }
@@ -786,15 +808,15 @@ private fun UserSwitcherChip(
         }
     }
 
-    if (isTv && showTvMenu) {
+    if (isTv && activeMenu == AppBarMenu.Tv) {
         val options = rememberUserSwitchOptions(
             users = users,
             currentUserId = currentUser.id,
-            onClose = { showTvMenu = false },
+            onClose = { activeMenu = null },
             onUserSwitch = onUserSwitch,
         )
         TvSafeSheet(
-            onDismissRequest = { showTvMenu = false },
+            onDismissRequest = { activeMenu = null },
             title = stringResource(Res.string.home_switch_user),
         ) {
             options.forEach { option -> UserSwitchTvRow(option) }

@@ -1,15 +1,21 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
  * Pins the audio player's sheet admission fold + back ladder (the
- * `ReaderSheetStack` precedent): ONE `open` predicate behind the seven
- * sheet/dialog flags, the lyrics arm DECLARED non-sheet (a persisted
- * preference — back navigates away without hiding them), the self-dismissing
- * menu, and the menu-item open cascade (`showFromMenu`).
+ * `ReaderSheetStack` precedent): ONE `current` slot behind `open` (replacing
+ * the seven parallel `showX` booleans whose implicit stack let sheets pile
+ * up and let one back press discard the whole pile), the sticky confirmation
+ * rule (a list/browser sheet must not silently replace an open DeleteConfirm
+ * — the former swipe-up-over-confirm stacking bug), the lyrics arm DECLARED
+ * non-sheet (a persisted preference — back navigates away without hiding
+ * them), the self-dismissing menu, and the menu-item open cascade
+ * (`showFromMenu`).
  */
 class AudioPlayerSheetStackTest {
 
@@ -23,6 +29,8 @@ class AudioPlayerSheetStackTest {
         AudioPlayerSheet.DeleteConfirm,
     )
 
+    private val replaceableSheetArms = sheetArms.filter { it != AudioPlayerSheet.DeleteConfirm }
+
     @Test
     fun `no sheet or dialog means not open`() {
         assertFalse(AudioPlayerSheetStack().open)
@@ -31,11 +39,76 @@ class AudioPlayerSheetStackTest {
     @Test
     fun `every sheet alone holds the screen`() {
         sheetArms.forEach { sheet ->
-            assertTrue(
-                AudioPlayerSheetStack().apply { show(sheet) }.open,
-                "$sheet must hold the screen",
+            val stack = AudioPlayerSheetStack().apply { show(sheet) }
+            assertTrue(stack.open, "$sheet must hold the screen")
+            assertEquals(sheet, stack.current, "$sheet must be the one open sheet")
+        }
+    }
+
+    @Test
+    fun `show while the delete confirm is open is a no-op`() {
+        // The swipe-up queue gesture used to open the queue OVER the delete
+        // confirmation (parallel booleans; z-order was declaration order in
+        // the screen). The sticky rule makes the confirmation un-replaceable
+        // by show() — every sheet arm bounces off it.
+        replaceableSheetArms.forEach { sheet ->
+            val stack = AudioPlayerSheetStack().apply { show(AudioPlayerSheet.DeleteConfirm) }
+            stack.show(sheet)
+            assertEquals(
+                AudioPlayerSheet.DeleteConfirm,
+                stack.current,
+                "$sheet must not replace the open confirmation",
             )
         }
+        // Re-showing the confirmation itself is idempotent.
+        val confirm = AudioPlayerSheetStack().apply { show(AudioPlayerSheet.DeleteConfirm) }
+        confirm.show(AudioPlayerSheet.DeleteConfirm)
+        assertEquals(AudioPlayerSheet.DeleteConfirm, confirm.current)
+    }
+
+    @Test
+    fun `the sticky gate guards the slot only — lyrics stay togglable`() {
+        // The declared non-sheet arms never touch the slot, so they are
+        // exempt from the sticky rule (a preference flip is not a sheet
+        // competing with the confirmation).
+        val stack = AudioPlayerSheetStack().apply { show(AudioPlayerSheet.DeleteConfirm) }
+        stack.show(AudioPlayerSheet.Lyrics)
+        assertTrue(stack.showLyrics, "the lyrics arm is exempt from the sticky gate")
+        assertEquals(AudioPlayerSheet.DeleteConfirm, stack.current)
+        stack.hide(AudioPlayerSheet.Lyrics)
+        assertFalse(stack.showLyrics)
+    }
+
+    @Test
+    fun `showing another sheet replaces the open one`() {
+        // The former parallel booleans stacked (several true at once); the
+        // slot holds exactly one — the last show wins.
+        val stack = AudioPlayerSheetStack().apply { show(AudioPlayerSheet.Queue) }
+        stack.show(AudioPlayerSheet.Equalizer)
+        assertEquals(AudioPlayerSheet.Equalizer, stack.current, "exactly the new sheet is open")
+        assertTrue(stack.open)
+    }
+
+    @Test
+    fun `hide closes exactly the named sheet`() {
+        // A hide of a sheet that isn't the open one is a no-op — with one
+        // slot there is nothing else to close.
+        val stack = AudioPlayerSheetStack().apply { show(AudioPlayerSheet.Equalizer) }
+        stack.hide(AudioPlayerSheet.Queue)
+        assertEquals(AudioPlayerSheet.Equalizer, stack.current)
+        stack.hide(AudioPlayerSheet.Equalizer)
+        assertNull(stack.current)
+        assertFalse(stack.open)
+    }
+
+    @Test
+    fun `the effects-to-equalizer hand-off leaves exactly the equalizer open`() {
+        // The sheet's "Open equalizer" cascade (`hide(Effects); show(Equalizer)`)
+        // rides hide + show; the slot must end on the equalizer alone.
+        val stack = AudioPlayerSheetStack().apply { show(AudioPlayerSheet.Effects) }
+        stack.hide(AudioPlayerSheet.Effects)
+        stack.show(AudioPlayerSheet.Equalizer)
+        assertEquals(AudioPlayerSheet.Equalizer, stack.current)
     }
 
     @Test
@@ -60,51 +133,38 @@ class AudioPlayerSheetStackTest {
     }
 
     @Test
-    fun `every sheet alone consumes back exactly once`() {
+    fun `consumeBack pops exactly the one open sheet`() {
         sheetArms.forEach { sheet ->
             val stack = AudioPlayerSheetStack().apply { show(sheet) }
             assertTrue(stack.consumeBack(), "$sheet must consume back")
+            assertNull(stack.current)
             assertFalse(stack.open)
             assertFalse(stack.consumeBack(), "second back is a navigation")
         }
     }
 
     @Test
-    fun `back closes all seven sheets at once`() {
+    fun `back with nothing open returns false`() {
+        // Even with the declared non-sheet arms set — they never hold the
+        // screen, so back still navigates away.
         val stack = AudioPlayerSheetStack().apply {
-            sheetArms.forEach { show(it) }
+            show(AudioPlayerSheet.Lyrics)
+            showMenu = true
         }
-        assertTrue(stack.consumeBack())
-        assertFalse(stack.showQueue)
-        assertFalse(stack.showSpeedPicker)
-        assertFalse(stack.showEqualizer)
-        assertFalse(stack.showEffectsSheet)
-        assertFalse(stack.showLyricsSearch)
-        assertFalse(stack.showSleepTimer)
-        assertFalse(stack.showDeleteConfirm)
+        assertFalse(stack.consumeBack())
     }
 
     @Test
-    fun `back never touches the lyrics preference`() {
+    fun `back never touches the lyrics preference or the menu`() {
         val stack = AudioPlayerSheetStack().apply {
             show(AudioPlayerSheet.Queue)
             show(AudioPlayerSheet.Lyrics)
+            showMenu = true
         }
         assertTrue(stack.consumeBack())
-        assertFalse(stack.showQueue)
-        assertTrue(stack.showLyrics)
-    }
-
-    @Test
-    fun `show opens exactly one arm and hides exactly one arm`() {
-        // Overlaps must be preserved: the loose flags never cross-closed.
-        val stack = AudioPlayerSheetStack().apply { show(AudioPlayerSheet.Queue) }
-        stack.show(AudioPlayerSheet.Equalizer)
-        assertTrue(stack.showQueue, "the queue stays open underneath")
-        assertTrue(stack.showEqualizer)
-        stack.hide(AudioPlayerSheet.Equalizer)
-        assertFalse(stack.showEqualizer)
-        assertTrue(stack.showQueue, "hiding one arm leaves the others alone")
+        assertNull(stack.current, "the one open sheet is popped")
+        assertTrue(stack.showLyrics, "the persisted preference survives back")
+        assertTrue(stack.showMenu, "the self-dismissing menu survives back")
     }
 
     @Test
@@ -119,6 +179,7 @@ class AudioPlayerSheetStackTest {
             stack.showFromMenu(sheet)
             assertFalse(stack.showMenu, "the menu dismisses before the sheet opens")
             assertTrue(stack.open)
+            assertEquals(sheet, stack.current)
         }
     }
 

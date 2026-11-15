@@ -13,6 +13,9 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.user_stats_sort_name
 import com.raulshma.jellyplay.feature.admin.generated.resources.user_stats_sort_plays
 import com.raulshma.jellyplay.feature.admin.generated.resources.user_stats_sort_time
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -34,7 +37,6 @@ data class UserStatisticsState(
     val totalPlays: Int = 0,
     val pluginStatus: PlaybackReportingStatus = PlaybackReportingStatus.UNKNOWN,
     val sort: UserStatisticsSort = UserStatisticsSort.PLAYS,
-    val shareRequested: Boolean = false,
 )
 
 class UserStatisticsViewModel(
@@ -43,6 +45,24 @@ class UserStatisticsViewModel(
 
     private val _state = stateFlow(UserStatisticsState())
     val state = _state.flow
+
+    /**
+     * The CSV export's share request ([requestExport]) — the buffered
+     * never-replayed Channel that replaced the former `shareRequested`
+     * parked uiState boolean + `consumeExportRequest()` consume dance (the
+     * codified StateManagementConventions §2 idiom: a StateFlow replays its
+     * current value to every new collector, so the parked boolean re-fired
+     * the share sheet on re-subscription for a request that happened once).
+     * [UserStatisticsScreen] collects this in a single
+     * [androidx.compose.runtime.LaunchedEffect] and opens the same share
+     * sheet it always has. The request carries no payload — the screen
+     * shares the already-published `state.users` (requestExport re-merges
+     * the fetched counts into the rows before emitting).
+     */
+    private val exportRequestChannel = Channel<Unit>(Channel.BUFFERED)
+
+    /** The one-shot share-request stream; each request is delivered exactly once. */
+    val exportRequests: Flow<Unit> = exportRequestChannel.receiveAsFlow()
 
     /**
      * The per-user play counts fetched so far this session, keyed by userId.
@@ -214,19 +234,16 @@ class UserStatisticsViewModel(
                 }.awaitAll()
             }
             // Re-merge so rows fetched here (and rows fetched since) carry
-            // their counts in the exported snapshot.
+            // their counts in the exported snapshot, then hand the share
+            // request to the one-shot channel — no parked boolean to consume.
             val withCounts = _state.value.users.withCachedCounts()
             _state.update {
                 it.copy(
                     users = withCounts,
                     totalPlays = withCounts.sumOf { user -> user.totalPlayCount },
-                    shareRequested = true,
                 )
             }
+            exportRequestChannel.trySend(Unit)
         }
-    }
-
-    fun consumeExportRequest() {
-        _state.update { it.copy(shareRequested = false) }
     }
 }

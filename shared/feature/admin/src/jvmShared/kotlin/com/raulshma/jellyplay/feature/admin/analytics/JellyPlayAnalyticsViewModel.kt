@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.analytics
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityGate
 import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
@@ -17,7 +18,6 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.admin.transcodes.TranscodePlayMethod
 import com.raulshma.jellyplay.feature.admin.transcodes.formatBitrate
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -100,29 +100,73 @@ data class AnalyticsSessionRow(
     val startedAt: Long = 0,
 )
 
+/**
+ * The analytics dashboard's load phase — the sealed machine that replaced the
+ * former `isLoading` / `isRefreshing` / `error` / `overview` / `overviewDegraded`
+ * boolean-and-nullable soup (convention §1): those five fields could hold
+ * combinations the screen never meant to render (`isLoading` beside a stale
+ * `overview`, an `error` under fresh content) and every render site re-derived
+ * which one won. One phase, one render decision.
+ */
+@Immutable
+sealed interface AnalyticsLoadPhase {
+    /**
+     * The gate is unresolved ([JellyPlayCapabilityState.Unknown], pre-probe) or
+     * the gate-on initial load is in flight — the full-screen spinner. While
+     * the gate is OFF the screen renders the gate face and this phase is
+     * unobserved (no load ever ran, so it stays here).
+     */
+    data object Loading : AnalyticsLoadPhase
+
+    /**
+     * A manual refresh burst is in flight — the pre-refresh content face
+     * ([staleOverview] / [staleDegraded]) stays visible underneath (the
+     * refresh-failure idiom: a failed refresh keeps the stale data). Raised
+     * ONLY from [Loaded]; a retry from [Failed] keeps the error face until the
+     * overview settles, matching the former behavior where `isRefreshing`
+     * never displaced a shown error.
+     */
+    data class Refreshing(
+        val staleOverview: AnalyticsOverviewUi?,
+        val staleDegraded: Boolean,
+    ) : AnalyticsLoadPhase
+
+    /**
+     * A load (or later silent overview fetch) settled: real content
+     * ([overview]) or the quiet 404 degrade — the plugin predates the analytics
+     * routes, [overview] null + [degraded] true, never an error banner.
+     */
+    data class Loaded(
+        val overview: AnalyticsOverviewUi?,
+        /** The overview route answered 404 (plugin predates analytics or the key is absent). */
+        val degraded: Boolean,
+    ) : AnalyticsLoadPhase
+
+    /** The gate-on initial load failed — the only surfaced error; [refresh] retries it. */
+    data class Failed(val message: String?) : AnalyticsLoadPhase
+}
+
 @Immutable
 data class AnalyticsState(
-    val isLoading: Boolean = true,
-    val isRefreshing: Boolean = false,
-    val error: String? = null,
     val gate: JellyPlayCapabilityState = JellyPlayCapabilityState.Unknown,
+    val loadPhase: AnalyticsLoadPhase = AnalyticsLoadPhase.Loading,
     /** The selected window (the 7/30/90 chips; the overview fetch's `days`). */
     val days: Int = 30,
-    /** null = no overview loaded yet; the screen shows its quiet degraded state. */
-    val overview: AnalyticsOverviewUi? = null,
-    /**
-     * True when the overview route answered 404 (plugin predates analytics or
-     * the key is absent) — a QUIET degrade, never an error banner.
-     */
-    val overviewDegraded: Boolean = false,
     val sessions: List<AnalyticsSessionRow> = emptyList(),
     /** The active per-user sessions filter (null = all users). */
     val selectedUserId: String? = null,
-    /** True while a sessions (re)fetch is in flight — the section's spinner. */
+    /**
+     * True while a sessions (re)fetch is in flight — the section's spinner.
+     * Deliberately NOT part of [AnalyticsLoadPhase]: this and the two fields
+     * below are the sessions LEDGER's second (pagination) machine —
+     * in-flight facts over a list surface that outlives any single load,
+     * where [isLoadingSessions] / [isLoadingMore] are the two
+     * mutually-exclusive legs of one fetch, not a lifecycle.
+     */
     val isLoadingSessions: Boolean = false,
-    /** True while a Load-more page is in flight. */
+    /** True while a Load-more page is in flight (the appending leg — see [isLoadingSessions]). */
     val isLoadingMore: Boolean = false,
-    /** True when the last sessions page came back full — a Load more affordance exists. */
+    /** True when the last sessions page came back full — a Load more affordance exists (the declared "full page means more" inference). */
     val hasMoreSessions: Boolean = false,
 )
 
@@ -143,11 +187,13 @@ data class AnalyticsState(
  * Loading — unlike the transcodes monitor there is NO auto-refresh loop (the
  * aggregates move on day boundaries, not seconds); [start] re-arms the probe
  * when the screen becomes visible and [stop] is the visibility idiom's
- * symmetry half. The initial load rides the gate's Available transition and
- * is the only fetch whose overview failure surfaces an error; sessions
+ * symmetry half. The initial load rides the gate's Available transition — and
+ * RE-ARMS when the gate drops (identity reset / plugin reinstall), so the
+ * next gate-on reloads instead of showing the first visit's data forever —
+ * and is the only fetch whose overview failure surfaces an error; sessions
  * failures and refresh/pagination failures are silent (the stale list stays —
  * the refresh-failure idiom). A 404 (null payload) degrades quietly:
- * [AnalyticsState.overviewDegraded], never an error.
+ * [AnalyticsLoadPhase.Loaded]'s degraded payload, never an error.
  */
 class JellyPlayAnalyticsViewModel(
     private val pluginApiClient: JellyPlayAnalyticsRoutes,
@@ -172,11 +218,30 @@ class JellyPlayAnalyticsViewModel(
      */
     private val capabilityGate = statusStore?.let { JellyPlayCapabilityGate(it, scope) }
 
-    /** Whether the initial gated load has been kicked off (exactly once per gate-on). */
+    /**
+     * Whether the initial gated load has been kicked off for the CURRENT
+     * gate-on stretch (exactly once per gate-on). The gate collector CLEARS
+     * this whenever the gate leaves Available — an identity reset / plugin
+     * reinstall re-arms the store's probe, the next gate-on is a fresh
+     * stretch, and the dashboard must reload rather than show the first
+     * visit's data forever.
+     */
     private var initialLoadStarted = false
 
-    /** The in-flight sessions fetch — a re-filter/pagination burst supersedes it. */
-    private var sessionsJob: Job? = null
+    /**
+     * The keyed cancel-and-replace slot ([TaskBundle]) holding the in-flight
+     * sessions fetch — replaces the former bare `private var sessionsJob:
+     * Job?` pair. ONE slot on purpose: [refresh]'s session reset and a user
+     * re-filter ([selectUser]) both occupy it, so the two writers SERIALIZE —
+     * a refresh landing mid-flight is cancelled-and-replaced (or itself
+     * replaces, capturing the then-current filter) and a late refresh write
+     * can no longer land old-filter rows under the new chip. [stop] cancels
+     * whatever occupies the slot.
+     */
+    private val sessionsTasks = TaskBundle(scope)
+
+    /** The single [sessionsTasks] slot key — the in-flight sessions fetch. */
+    private object SessionsFetchKey
 
     init {
         observeGate()
@@ -191,21 +256,41 @@ class JellyPlayAnalyticsViewModel(
         capabilityGate?.arm()
     }
 
-    /** Symmetry half of [start]: cancels the in-flight sessions load (no loop — analytics is not live). */
+    /** Symmetry half of [start]: cancels the in-flight sessions task (no loop — analytics is not live). */
     fun stop() {
-        sessionsJob?.cancel()
-        sessionsJob = null
+        sessionsTasks.cancel(SessionsFetchKey)
     }
 
-    /** Manual refresh (scaffold action): silent on failure — the stale data stays; success clears a shown error. */
+    /**
+     * Manual refresh (scaffold action): silent on failure — the stale data
+     * stays; success clears a shown error. The overview leg rides this launch
+     * and settles the phase ([fetchOverview]); the SESSION leg is routed
+     * through the [sessionsTasks] slot ([loadSessionsPage]) — the same slot a
+     * user re-filter occupies — so a [selectUser] landing mid-refresh
+     * cancels-and-replaces the refresh's fetch (or is itself replaced,
+     * capturing the then-current filter): the two writers cannot interleave a
+     * wrong-filter page under the new chip, and [stop] can cancel the burst.
+     */
     fun refresh() {
         capabilityGate?.arm()
         if (_uiState.value.gate != JellyPlayCapabilityState.Available) return
         launch {
-            _uiState.update { it.copy(isRefreshing = true) }
-            fetchOverview()
-            fetchSessionsPage(reset = true)
-            _uiState.update { it.copy(isRefreshing = false) }
+            val priorPhase = _uiState.value.loadPhase
+            if (priorPhase is AnalyticsLoadPhase.Loaded) {
+                _uiState.update {
+                    it.copy(loadPhase = AnalyticsLoadPhase.Refreshing(priorPhase.overview, priorPhase.degraded))
+                }
+            }
+            val overviewResult = fetchOverview()
+            if (overviewResult.isFailure) {
+                // The refresh-failure idiom: restore the pre-refresh face —
+                // unless a concurrent writer (a window-chip refetch) already
+                // moved the phase past Refreshing on its own.
+                _uiState.update { s ->
+                    if (s.loadPhase is AnalyticsLoadPhase.Refreshing) s.copy(loadPhase = priorPhase) else s
+                }
+            }
+            loadSessionsPage(reset = true, initial = false)
         }
     }
 
@@ -213,26 +298,31 @@ class JellyPlayAnalyticsViewModel(
      * The gate collector — the shared capability gate's verdict (the
      * transcodes monitor's exact shape). The first load rides the Available
      * transition (never before — a gated-off screen must not touch the plugin
-     * routes), so the screen opens on data rather than on a wasted 404.
+     * routes), so the screen opens on data rather than on a wasted 404 — and
+     * the load latch RE-ARMS whenever the gate leaves Available, so a gate
+     * drop + re-gate-on (identity reset / plugin reinstall) reloads.
      */
     private fun observeGate() {
         val gateFlow = capabilityGate?.state(JellyPlayPluginFeatures.Analytics, featureGate)
         if (gateFlow == null) {
             // Direct-construction without the plugin seam: gated off, final.
-            _uiState.update { it.copy(gate = JellyPlayCapabilityState.Unavailable, isLoading = false) }
+            // The phase is unobserved here (the screen renders the gate face).
+            _uiState.update { it.copy(gate = JellyPlayCapabilityState.Unavailable) }
             return
         }
         launch {
             gateFlow.collect { gate ->
-                _uiState.update {
-                    it.copy(
-                        gate = gate,
-                        isLoading = if (gate == JellyPlayCapabilityState.Unknown) it.isLoading else false,
-                    )
-                }
-                if (gate == JellyPlayCapabilityState.Available && !initialLoadStarted) {
-                    initialLoadStarted = true
-                    loadAll()
+                _uiState.update { it.copy(gate = gate) }
+                if (gate == JellyPlayCapabilityState.Available) {
+                    if (!initialLoadStarted) {
+                        initialLoadStarted = true
+                        loadAll()
+                    }
+                } else {
+                    // Gate dropped (Unknown after an identity reset, or
+                    // Unavailable): re-arm the latch — the next Available
+                    // transition is a fresh stretch and must reload.
+                    initialLoadStarted = false
                 }
             }
         }
@@ -246,20 +336,21 @@ class JellyPlayAnalyticsViewModel(
     private fun loadAll() {
         launch {
             loadInto(
-                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                start = { _uiState.update { it.copy(loadPhase = AnalyticsLoadPhase.Loading) } },
                 fetch = { pluginApiClient.getAnalyticsOverview(_uiState.value.days) },
                 onSuccess = { overview ->
                     _uiState.update {
                         it.copy(
-                            overview = overview?.let(::toOverviewUi),
-                            overviewDegraded = overview == null,
-                            isLoading = false,
+                            loadPhase = AnalyticsLoadPhase.Loaded(
+                                overview = overview?.let(::toOverviewUi),
+                                degraded = overview == null,
+                            ),
                         )
                     }
                 },
                 onFailure = { e ->
                     Log.e("JellyPlayAnalytics", "Failed to fetch analytics overview", e)
-                    _uiState.update { it.copy(error = e.message, isLoading = false) }
+                    _uiState.update { it.copy(loadPhase = AnalyticsLoadPhase.Failed(e.message)) }
                 },
             )
         }
@@ -299,10 +390,7 @@ class JellyPlayAnalyticsViewModel(
         if (initial) {
             _uiState.update { it.copy(isLoadingSessions = true) }
         }
-        sessionsJob?.cancel()
-        sessionsJob = launch {
-            fetchSessionsPage(reset = reset)
-        }
+        sessionsTasks.replace(SessionsFetchKey) { launch { fetchSessionsPage(reset = reset) } }
     }
 
     /**
@@ -350,21 +438,29 @@ class JellyPlayAnalyticsViewModel(
             }
     }
 
-    /** The silent overview fetch behind the chips ([selectDays]) and [refresh]. */
-    private suspend fun fetchOverview() {
-        pluginApiClient.getAnalyticsOverview(_uiState.value.days)
+    /**
+     * The silent overview fetch behind the chips ([selectDays]) and [refresh]:
+     * a success settles the phase to [AnalyticsLoadPhase.Loaded] (clearing a
+     * shown [AnalyticsLoadPhase.Failed] — the former `error = null` write), a
+     * failure only logs and leaves the phase to the caller's settle rule.
+     */
+    private suspend fun fetchOverview(): Result<JellyPlayAnalyticsOverview?> {
+        val result = pluginApiClient.getAnalyticsOverview(_uiState.value.days)
+        result
             .onSuccess { overview ->
                 _uiState.update {
                     it.copy(
-                        overview = overview?.let(::toOverviewUi),
-                        overviewDegraded = overview == null,
-                        error = null,
+                        loadPhase = AnalyticsLoadPhase.Loaded(
+                            overview = overview?.let(::toOverviewUi),
+                            degraded = overview == null,
+                        ),
                     )
                 }
             }
             .onFailure { e ->
                 Log.w("JellyPlayAnalytics", "Analytics overview fetch failed", e)
             }
+        return result
     }
 
     override fun onCleared() {

@@ -56,6 +56,7 @@ internal class PlaybackSessionTestGraph private constructor(
     val hooks: SessionLifecycleHooks,
     initialItem: String?,
     initialPlaySessionId: String?,
+    useRealHooks: Boolean = false,
 ) {
     /** Scheduler-linked variant: virtual time (watchdog, seek coalescing) works. */
     constructor(
@@ -63,11 +64,20 @@ internal class PlaybackSessionTestGraph private constructor(
         hooks: SessionLifecycleHooks,
         initialItem: String?,
         initialPlaySessionId: String?,
+        /**
+         * Leave the hooks override empty so the session runs its OWN
+         * [SessionLifecycleHooks] implementation (the production shape): the
+         * tests that pin teardown-HALF semantics (the cinema latch clear +
+         * the uiState rebuild) need the real half, not a recording double
+         * that only pins the call order.
+         */
+        useRealHooks: Boolean = false,
     ) : this(
         sessionScope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScope.testScheduler)),
         hooks = hooks,
         initialItem = initialItem,
         initialPlaySessionId = initialPlaySessionId,
+        useRealHooks = useRealHooks,
     )
 
     /** Scheduler-less variant: plain Unconfined session scope (real-time suites). */
@@ -249,7 +259,7 @@ internal class PlaybackSessionTestGraph private constructor(
         progressReporterOverride = progressReporter,
         sessionLoadPipelineOverride = pipeline,
         mediaSessionControllerOverride = mediaSessionController,
-        hooksOverride = hooks,
+        hooksOverride = if (useRealHooks) null else hooks,
         // Identity: the fallback-chain tests capture the RAW error text.
         directPlayFallbackNotice = { it },
         platform = SessionTestPlatform,

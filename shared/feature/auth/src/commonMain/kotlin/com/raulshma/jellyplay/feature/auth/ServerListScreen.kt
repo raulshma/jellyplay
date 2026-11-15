@@ -54,7 +54,6 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.Res
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_add_server
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_app_name
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_cancel
-import com.raulshma.jellyplay.feature.auth.generated.resources.auth_loading
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_no_servers_added_desc
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_no_servers_added_title
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_remove
@@ -76,7 +75,6 @@ import com.raulshma.jellyplay.core.ui.components.DotLabel
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
-import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -97,7 +95,6 @@ fun ServerListScreen(
     viewModel: AuthViewModel = koinViewModel(),
 ) {
     val servers by viewModel.servers.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val serverHealth by viewModel.serverHealth.collectAsStateWithLifecycle()
 
     val isSynthwave = LocalIsSynthwave.current
@@ -136,9 +133,7 @@ fun ServerListScreen(
         val spacing = adaptiveInfo.itemSpacing(isTv)
 
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (isLoading) {
-                ScreenLoadingState(message = stringResource(Res.string.auth_loading))
-            } else if (servers.isEmpty()) {
+            if (servers.isEmpty()) {
                 ScreenEmptyState(
                     icon = Tabler.Outline.Server,
                     title = stringResource(Res.string.auth_no_servers_added_title),

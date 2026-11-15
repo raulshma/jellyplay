@@ -50,6 +50,7 @@ import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Users
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
+import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -119,12 +120,20 @@ fun JellyPlayAnalyticsScreen(
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
 
+    // The overview as the phase holds it right now — a refresh keeps the
+    // stale one visible underneath (the Refreshing arm carries it).
+    val overviewNow: AnalyticsOverviewUi? = when (val phase = state.loadPhase) {
+        is AnalyticsLoadPhase.Loaded -> phase.overview
+        is AnalyticsLoadPhase.Refreshing -> phase.staleOverview
+        else -> null
+    }
+
     // TV focus-on-launch: the dashboard list exists once the overview lands
     // (empty/gated states are plain text, so focus falls back to the drawer).
     val listFocusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = listFocusRequester,
-        itemCount = if (state.overview != null) 1 else 0,
+        itemCount = if (overviewNow != null) 1 else 0,
         tag = "jellyplay_analytics_init",
     )
 
@@ -154,51 +163,94 @@ fun JellyPlayAnalyticsScreen(
         },
     ) {
         when {
-            state.isLoading -> {
-                ScreenLoadingState(modifier = Modifier.fillMaxSize())
-            }
+            // The gate face wins over the phase: while the gate is off no load
+            // ever ran (the phase stays its unobserved initial).
             state.gate == JellyPlayCapabilityState.Unavailable -> {
                 GatedOffState(modifier = Modifier.fillMaxSize())
             }
-            state.error != null -> {
-                ErrorScreen(
-                    message = state.error ?: stringResource(Res.string.admin_unknown_error),
-                    onRetry = { viewModel.refresh() },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            state.overviewDegraded -> {
-                DegradedState(modifier = Modifier.fillMaxSize())
-            }
-            // A local read (the delegated `state` refuses a smart cast): the
-            // overview rides the gate-on load, so null here means an empty
-            // window rather than a mid-load gap.
-            state.overview == null || state.overview?.totals?.plays == 0L -> {
-                EmptyAnalyticsState(modifier = Modifier.fillMaxSize())
-            }
-            else -> {
-                AnalyticsContent(
+            else -> when (val phase = state.loadPhase) {
+                AnalyticsLoadPhase.Loading -> {
+                    ScreenLoadingState(modifier = Modifier.fillMaxSize())
+                }
+                is AnalyticsLoadPhase.Failed -> {
+                    ErrorScreen(
+                        message = phase.message ?: stringResource(Res.string.admin_unknown_error),
+                        onRetry = { viewModel.refresh() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                is AnalyticsLoadPhase.Loaded -> DashboardFace(
                     state = state,
-                    contentPadding = PaddingValues(
-                        start = adaptiveInfo.contentPadding(false),
-                        end = adaptiveInfo.contentPadding(false),
-                        top = 8.dp,
-                        bottom = adaptiveInfo.bottomPadding(isTv),
-                    ),
+                    overview = phase.overview,
+                    degraded = phase.degraded,
+                    adaptiveInfo = adaptiveInfo,
+                    isTv = isTv,
                     onSelectDays = viewModel::selectDays,
                     onSelectUser = viewModel::selectUser,
                     onLoadMore = viewModel::loadMoreSessions,
                     focusRequester = listFocusRequester,
-                    modifier = Modifier.fillMaxSize(),
+                )
+                is AnalyticsLoadPhase.Refreshing -> DashboardFace(
+                    state = state,
+                    overview = phase.staleOverview,
+                    degraded = phase.staleDegraded,
+                    adaptiveInfo = adaptiveInfo,
+                    isTv = isTv,
+                    onSelectDays = viewModel::selectDays,
+                    onSelectUser = viewModel::selectUser,
+                    onLoadMore = viewModel::loadMoreSessions,
+                    focusRequester = listFocusRequester,
                 )
             }
         }
     }
 }
 
+/**
+ * The content face behind a [AnalyticsLoadPhase.Loaded] /
+ * [AnalyticsLoadPhase.Refreshing] phase — the quiet degrade, the empty window,
+ * or the dashboard itself. The stale overview a refresh carries renders
+ * through the same arms (the refresh-failure idiom keeps it visible).
+ */
+@Composable
+private fun DashboardFace(
+    state: AnalyticsState,
+    overview: AnalyticsOverviewUi?,
+    degraded: Boolean,
+    adaptiveInfo: AdaptiveInfo,
+    isTv: Boolean,
+    onSelectDays: (Int) -> Unit,
+    onSelectUser: (String?) -> Unit,
+    onLoadMore: () -> Unit,
+    focusRequester: FocusRequester,
+) {
+    when {
+        degraded -> DegradedState(modifier = Modifier.fillMaxSize())
+        overview == null || overview.totals.plays == 0L -> {
+            EmptyAnalyticsState(modifier = Modifier.fillMaxSize())
+        }
+        else -> AnalyticsContent(
+            state = state,
+            overview = overview,
+            contentPadding = PaddingValues(
+                start = adaptiveInfo.contentPadding(false),
+                end = adaptiveInfo.contentPadding(false),
+                top = 8.dp,
+                bottom = adaptiveInfo.bottomPadding(isTv),
+            ),
+            onSelectDays = onSelectDays,
+            onSelectUser = onSelectUser,
+            onLoadMore = onLoadMore,
+            focusRequester = focusRequester,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
 @Composable
 private fun AnalyticsContent(
     state: AnalyticsState,
+    overview: AnalyticsOverviewUi,
     contentPadding: PaddingValues,
     onSelectDays: (Int) -> Unit,
     onSelectUser: (String?) -> Unit,
@@ -206,7 +258,6 @@ private fun AnalyticsContent(
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
-    val overview = state.overview ?: return
     // The user filter rides the sessions fetch AND the visible list — rows
     // loaded before the filter flipped stay honest while the next page is
     // in flight.

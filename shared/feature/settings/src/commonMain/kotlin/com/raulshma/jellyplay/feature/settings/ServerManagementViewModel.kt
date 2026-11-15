@@ -10,7 +10,10 @@ import com.raulshma.jellyplay.core.model.ClientCertificateImport
 import com.raulshma.jellyplay.core.model.ClientCertificateStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.normalizeServerAddress
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_switch_failed
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -51,6 +54,17 @@ class ServerManagementViewModel(
 
     private val _isSwitching = composeState(false)
     val isSwitching: Boolean get() = _isSwitching.value
+
+    /**
+     * One-shot switch-server failure outcome (the
+     * [CertificateUserMessage] pattern: the screen resolves the resource
+     * fallback and posts to the shared UserMessageBus). DECLARED FIX: a
+     * failed switch previously settled the spinner with no feedback — the
+     * cards just re-enabled and nothing told the user the active server had
+     * NOT changed. Cleared at the start of the next switch attempt.
+     */
+    private val _switchServerFailure = composeState<UiMessage?>(null)
+    val switchServerFailure: UiMessage? get() = _switchServerFailure.value
 
     private val _addressOperationMessage = composeState<String?>(null)
     val addressOperationMessage: String? get() = _addressOperationMessage.value
@@ -99,11 +113,27 @@ class ServerManagementViewModel(
         }
     }
 
+    /**
+     * Switches the active server. Failure parks [switchServerFailure] (the
+     * declared fix above) and settles the spinner exactly as before; success
+     * still fires [onSuccess] for the caller's navigation. A switch attempt
+     * clears any parked failure first.
+     *
+     * Re-entry guard: a second switch while one is in flight is dropped. The
+     * screen disables the whole server card while switching, so this guards
+     * the paths that bypass it.
+     */
     fun switchServer(serverId: String, onSuccess: () -> Unit) {
+        if (_isSwitching.value) return
         launch {
             _isSwitching.value = true
+            _switchServerFailure.value = null
             authRepository.switchServer(serverId)
                 .onSuccess { onSuccess() }
+                .onFailure {
+                    _switchServerFailure.value =
+                        UiMessage.of(it, Res.string.settings_server_switch_failed)
+                }
             _isSwitching.value = false
         }
     }
@@ -119,6 +149,11 @@ class ServerManagementViewModel(
             }
             pruneOrphanedTrustGrants()
         }
+    }
+
+    /** Dismisses a parked switch failure once the screen has surfaced it. */
+    fun clearSwitchServerFailure() {
+        _switchServerFailure.value = null
     }
 
     fun addServerAddress(serverId: String, address: String) {
