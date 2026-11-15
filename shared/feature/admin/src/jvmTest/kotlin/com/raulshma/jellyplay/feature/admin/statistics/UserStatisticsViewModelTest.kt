@@ -279,9 +279,17 @@ class UserStatisticsViewModelTest {
         advanceUntilIdle()
 
         // The share request fires after the bounded fan-out (one-shot off the
-        // exportRequests channel — no parked boolean), and the exported rows
-        // carry the fetched counts.
-        assertEquals(Unit, viewModel.exportRequests.first())
+        // exportRequests channel — no parked boolean), and the PAYLOAD is the
+        // exported snapshot itself: the fetched counts ride the payload, not
+        // a later read of the published state (the screen's composition state
+        // can lag the emission).
+        val exported = viewModel.exportRequests.first()
+        val countsByExportedRow = exported.associateBy { it.userId }
+        assertEquals(12, countsByExportedRow.getValue("u-1").totalPlayCount)
+        assertEquals(2, countsByExportedRow.getValue("u-2").totalPlayCount)
+        assertEquals(30, countsByExportedRow.getValue("u-3").totalPlayCount)
+        // The published state carries the same re-merged rows (the pills'
+        // visible values).
         val countsByUser = viewModel.state.value.users.associateBy { it.userId }
         assertEquals(12, countsByUser.getValue("u-1").totalPlayCount)
         assertEquals(2, countsByUser.getValue("u-2").totalPlayCount)
@@ -296,7 +304,7 @@ class UserStatisticsViewModelTest {
         val viewModel = UserStatisticsViewModel(repository)
         advanceUntilIdle()
 
-        val received = mutableListOf<Unit>()
+        val received = mutableListOf<List<UserStatistics>>()
         val collector = launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.exportRequests.take(2).toList(received)
         }
@@ -311,7 +319,7 @@ class UserStatisticsViewModelTest {
 
         // A LATE collector (the screen re-entering composition) receives
         // NOTHING: the buffered channel never replays a consumed request.
-        val late = mutableListOf<Unit>()
+        val late = mutableListOf<List<UserStatistics>>()
         val lateCollector = launch(start = CoroutineStart.UNDISPATCHED) {
             viewModel.exportRequests.collect { late += it }
         }

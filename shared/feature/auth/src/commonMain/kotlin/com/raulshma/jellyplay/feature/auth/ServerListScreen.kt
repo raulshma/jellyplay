@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.AddListRow
 import com.raulshma.jellyplay.core.ui.components.DotLabel
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
@@ -97,12 +98,17 @@ fun ServerListScreen(
     val servers by viewModel.servers.collectAsStateWithLifecycle()
     val serverHealth by viewModel.serverHealth.collectAsStateWithLifecycle()
 
+    // `servers` is null only until the first database emission lands (see
+    // AuthViewModel.servers) — the empty-list render below is reserved for a
+    // CONFIRMED-empty list, not the pre-emission window.
+    val savedServers = servers.orEmpty()
+
     val isSynthwave = LocalIsSynthwave.current
     val backgroundColorState = rememberScreenBackgroundColorState()
 
     // One-shot reachability ping per saved server on screen entry.
-    LaunchedEffect(servers.map { it.address }) {
-        viewModel.checkServersHealth(servers)
+    LaunchedEffect(savedServers.map { it.address }) {
+        viewModel.checkServersHealth(savedServers)
     }
 
     Scaffold(
@@ -133,7 +139,13 @@ fun ServerListScreen(
         val spacing = adaptiveInfo.itemSpacing(isTv)
 
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (servers.isEmpty()) {
+            if (servers == null) {
+                // First server-list emission still pending — neither the
+                // empty surface nor the list yet (the former emptyList()
+                // initial flashed the permanent "No servers added" state
+                // during this window before the rows replaced it).
+                ScreenLoadingState(modifier = Modifier.fillMaxSize())
+            } else if (savedServers.isEmpty()) {
                 ScreenEmptyState(
                     icon = Tabler.Outline.Server,
                     title = stringResource(Res.string.auth_no_servers_added_title),
@@ -158,7 +170,7 @@ fun ServerListScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(spacing),
                 ) {
-                    itemsIndexed(servers, key = { _, it -> it.id }, contentType = { _, _ -> "server" }) { index, server ->
+                    itemsIndexed(savedServers, key = { _, it -> it.id }, contentType = { _, _ -> "server" }) { index, server ->
                         val visible = remember { mutableStateOf(false) }
                         LaunchedEffect(Unit) { visible.value = true }
                         AnimatedVisibility(

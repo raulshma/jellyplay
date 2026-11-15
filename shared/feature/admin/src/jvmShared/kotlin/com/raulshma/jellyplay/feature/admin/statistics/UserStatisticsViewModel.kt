@@ -55,14 +55,19 @@ class UserStatisticsViewModel(
      * the share sheet on re-subscription for a request that happened once).
      * [UserStatisticsScreen] collects this in a single
      * [androidx.compose.runtime.LaunchedEffect] and opens the same share
-     * sheet it always has. The request carries no payload — the screen
-     * shares the already-published `state.users` (requestExport re-merges
-     * the fetched counts into the rows before emitting).
+     * sheet it always has. The request CARRIES THE EXPORTED ROW SNAPSHOT:
+     * the channel emission can be received before Compose has recomposed
+     * the published `state.users` with the re-merged counts, so sharing the
+     * composition state would export the PREVIOUS rows — the payload is the
+     * exact snapshot requestExport prepared.
      */
-    private val exportRequestChannel = Channel<Unit>(Channel.BUFFERED)
+    private val exportRequestChannel = Channel<List<UserStatistics>>(Channel.BUFFERED)
 
-    /** The one-shot share-request stream; each request is delivered exactly once. */
-    val exportRequests: Flow<Unit> = exportRequestChannel.receiveAsFlow()
+    /**
+     * The one-shot share-request stream; each request — with the exported
+     * rows as its payload — is delivered exactly once.
+     */
+    val exportRequests: Flow<List<UserStatistics>> = exportRequestChannel.receiveAsFlow()
 
     /**
      * The per-user play counts fetched so far this session, keyed by userId.
@@ -235,7 +240,9 @@ class UserStatisticsViewModel(
             }
             // Re-merge so rows fetched here (and rows fetched since) carry
             // their counts in the exported snapshot, then hand the share
-            // request to the one-shot channel — no parked boolean to consume.
+            // request to the one-shot channel — the SNAPSHOT itself rides as
+            // the payload (the screen's composition state can lag the publish,
+            // so the screen must share this list, not `state.users`).
             val withCounts = _state.value.users.withCachedCounts()
             _state.update {
                 it.copy(
@@ -243,7 +250,7 @@ class UserStatisticsViewModel(
                     totalPlays = withCounts.sumOf { user -> user.totalPlayCount },
                 )
             }
-            exportRequestChannel.trySend(Unit)
+            exportRequestChannel.trySend(withCounts)
         }
     }
 }

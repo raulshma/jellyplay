@@ -37,7 +37,7 @@ data class CapturedLoginState<S>(
 
 /**
  * The session mutation surface a platform injects into [AuthSessionCore] —
- * implemented by the two atomic state holders the auth clients already
+ * driven over the two atomic state holders the auth clients already
  * publish through (`JellyfinApiEngine` on jvmShared,
  * [AtomicSessionState] in this package), so the folded spine drives the SAME state
  * (and, via the injected [Mutex], excludes against the SAME critical
@@ -53,6 +53,14 @@ data class CapturedLoginState<S>(
  * public multi-write (`JellyfinApiEngine.updateSession`) wraps the primitive
  * with the engine's own mutex, and the single-side user flow rides the
  * engine's named `adoptUser` intent.
+ *
+ * Neither holder IMPLEMENTS this interface directly — a public class
+ * cannot carry an internal supertype without exposing the (deliberately
+ * hidden) write through its public declaration — so each holder keeps its
+ * raw read + publish as module-internal members and the injection site
+ * wraps them in [AuthSessionStateStoreAdapter]
+ * ([AtomicSessionState.asAuthSessionStateStore] here,
+ * `JellyfinApiEngine.asAuthSessionStateStore` on jvmShared).
  */
 internal interface AuthSessionStateStore {
     fun currentSession(): ActiveSession?
@@ -65,6 +73,23 @@ internal interface AuthSessionStateStore {
      * `mutex.withLock` critical section.
      */
     fun publishSessionState(server: ServerInfo?, user: UserInfo?)
+}
+
+/**
+ * [AuthSessionStateStore] wrapped around a holder's module-internal read +
+ * publish pair — the shape the public holders connect to the internal
+ * spine through (see the interface KDoc for why the holders cannot
+ * implement the interface themselves). Pure delegation: every call lands
+ * on the holder's own members, inside whatever critical section the spine
+ * is running.
+ */
+internal class AuthSessionStateStoreAdapter(
+    private val read: () -> ActiveSession?,
+    private val publish: (ServerInfo?, UserInfo?) -> Unit,
+) : AuthSessionStateStore {
+    override fun currentSession(): ActiveSession? = read()
+
+    override fun publishSessionState(server: ServerInfo?, user: UserInfo?) = publish(server, user)
 }
 
 /**

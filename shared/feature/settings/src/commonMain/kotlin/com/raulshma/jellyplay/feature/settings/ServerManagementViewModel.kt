@@ -121,20 +121,28 @@ class ServerManagementViewModel(
      *
      * Re-entry guard: a second switch while one is in flight is dropped. The
      * screen disables the whole server card while switching, so this guards
-     * the paths that bypass it.
+     * the paths that bypass it. The guard is checked-and-set SYNCHRONOUSLY,
+     * before the coroutine is queued — setting it inside the launched
+     * coroutine left a window (until the dispatcher ran the coroutine) where
+     * a second caller still read `false` and re-entered, so the documented
+     * single-flight behavior was unenforced. The coroutine owns every
+     * terminal clear (success, failure, cancellation — the `finally`).
      */
     fun switchServer(serverId: String, onSuccess: () -> Unit) {
         if (_isSwitching.value) return
+        _isSwitching.value = true
+        _switchServerFailure.value = null
         launch {
-            _isSwitching.value = true
-            _switchServerFailure.value = null
-            authRepository.switchServer(serverId)
-                .onSuccess { onSuccess() }
-                .onFailure {
-                    _switchServerFailure.value =
-                        UiMessage.of(it, Res.string.settings_server_switch_failed)
-                }
-            _isSwitching.value = false
+            try {
+                authRepository.switchServer(serverId)
+                    .onSuccess { onSuccess() }
+                    .onFailure {
+                        _switchServerFailure.value =
+                            UiMessage.of(it, Res.string.settings_server_switch_failed)
+                    }
+            } finally {
+                _isSwitching.value = false
+            }
         }
     }
 

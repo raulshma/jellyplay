@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.auth.AuthSessionStateStore
+import com.raulshma.jellyplay.core.network.auth.AuthSessionStateStoreAdapter
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +44,7 @@ class JellyfinApiEngine(
     private val okHttpClientLazy: LazyProvider<OkHttpClient>,
     private val deviceProfileProvider: DeviceProfileProvider,
     private val addressRouter: ServerAddressRouter,
-) : AuthSessionStateStore {
+) {
     val jellyfin: Jellyfin get() = jellyfinLazy.get()
     val okHttpClient: OkHttpClient get() = okHttpClientLazy.get()
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
@@ -69,11 +70,12 @@ class JellyfinApiEngine(
     val session: StateFlow<ActiveSession?> = _session.asStateFlow()
 
     /**
-     * [AuthSessionStateStore] read for the shared auth spine (commonMain
-     * `AuthSessionCore`) — reads the ATOMIC session value, never a combine
-     * of the two separate flows.
+     * The spine's read (through the internal
+     * [AuthSessionStateStoreAdapter] — see [asAuthSessionStateStore]):
+     * reads the ATOMIC session value, never a combine of the two separate
+     * flows.
      */
-    override fun currentSession(): ActiveSession? = session.value
+    internal fun currentSession(): ActiveSession? = session.value
 
     val authMutex = Mutex()
 
@@ -236,11 +238,11 @@ class JellyfinApiEngine(
      * dance, in one step. Caller MUST hold [authMutex] (the mutex injected
      * into [AuthSessionCore] — the spine's critical sections are the only
      * production caller; the public [updateSession] wraps this primitive
-     * with the mutex itself). Module-internal so the spine and this module's
-     * tests can drive it while the public surface stays
-     * updateSession/adoptUser only.
+     * with the mutex itself). Module-internal so the spine (via
+     * [asAuthSessionStateStore]) and this module's tests can drive it while
+     * the public surface stays updateSession/adoptUser only.
      */
-    override fun publishSessionState(server: ServerInfo?, user: UserInfo?) {
+    internal fun publishSessionState(server: ServerInfo?, user: UserInfo?) {
         _currentServer.value = server
         _currentUser.value = user
         collapseSession(server, user)
@@ -428,3 +430,16 @@ internal fun JellyfinApiEngine.currentCacheIdentity(): CacheIdentity {
     val session = session.value
     return CacheIdentity.ofOrNull(session?.server?.id, session?.user?.id)
 }
+
+/**
+ * The [AuthSessionStateStore] port over the engine's internal read +
+ * publish pair — how the auth clients' injection site connects the engine
+ * to the commonMain spine ([AuthSessionCore]) without this public class
+ * carrying an internal supertype (the public class cannot implement the
+ * module-private interface; see [AuthSessionStateStore]).
+ */
+internal fun JellyfinApiEngine.asAuthSessionStateStore(): AuthSessionStateStore =
+    AuthSessionStateStoreAdapter(
+        read = { currentSession() },
+        publish = { server, user -> publishSessionState(server, user) },
+    )

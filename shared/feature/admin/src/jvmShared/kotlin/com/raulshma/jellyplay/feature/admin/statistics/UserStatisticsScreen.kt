@@ -110,11 +110,13 @@ fun UserStatisticsScreen(
     // the share sheet on re-subscription (a StateFlow replays its current
     // value to every new collector). Keyed on Unit: this collector lives for
     // the screen's composition lifetime and consumes each request exactly
-    // once; the exported snapshot is the state's current rows (requestExport
-    // re-merged the fetched counts before emitting).
+    // once. The request carries the exported row snapshot as its payload —
+    // reading the composition `state` here would race the recomposition (the
+    // channel emission can land before the re-merged state recomposes) and
+    // export the PREVIOUS rows.
     LaunchedEffect(Unit) {
-        viewModel.exportRequests.collect {
-            statisticsExport.shareUserStatsCsv(state.users)
+        viewModel.exportRequests.collect { users ->
+            statisticsExport.shareUserStatsCsv(users)
             bus.info(exportSharedMessage)
         }
     }

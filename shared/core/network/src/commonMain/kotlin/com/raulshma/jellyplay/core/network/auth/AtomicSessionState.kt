@@ -20,14 +20,16 @@ import kotlinx.coroutines.flow.asStateFlow
  * with their own mutex critical sections" caveat is retired: there are no
  * public writes left to guard. The single write — [publishSessionState] —
  * is the internal primitive the shared auth spine's mutex-held critical
- * sections compose (via [AuthSessionStateStore]); the production holder is
- * the engine, whose public multi-write (`updateSession`) wraps its own
- * primitive with `authMutex`.
+ * sections compose (via the internal [AuthSessionStateStoreAdapter]);
+ * the production holder is the engine, whose public multi-write
+ * (`updateSession`) wraps its own primitive with `authMutex`.
  *
- * Implements [AuthSessionStateStore] so the shared auth spine
- * ([AuthSessionCore]) can drive this holder directly.
+ * Does NOT implement the internal [AuthSessionStateStore] directly — a
+ * public class cannot carry an internal supertype — so the shared auth
+ * spine ([AuthSessionCore]) drives this holder through
+ * [asAuthSessionStateStore].
  */
-class AtomicSessionState : AuthSessionStateStore {
+class AtomicSessionState {
 
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
     val currentServer: StateFlow<ServerInfo?> = _currentServer.asStateFlow()
@@ -40,8 +42,8 @@ class AtomicSessionState : AuthSessionStateStore {
     /** The combined session; `null` means no fully established identity. */
     val session: StateFlow<ActiveSession?> = _session.asStateFlow()
 
-    /** [AuthSessionStateStore] read for the shared auth spine ([AuthSessionCore]). */
-    override fun currentSession(): ActiveSession? = session.value
+    /** The spine's read (through [AuthSessionStateStoreAdapter]). */
+    internal fun currentSession(): ActiveSession? = session.value
 
     /**
      * The raw session publish primitive — both sides + the collapsed session
@@ -49,9 +51,21 @@ class AtomicSessionState : AuthSessionStateStore {
      * [AuthSessionStateStore]); module-internal so the spine and this
      * module's tests can drive it.
      */
-    override fun publishSessionState(server: ServerInfo?, user: UserInfo?) {
+    internal fun publishSessionState(server: ServerInfo?, user: UserInfo?) {
         _currentServer.value = server
         _currentUser.value = user
         _session.value = if (server != null && user != null) ActiveSession(server, user) else null
     }
 }
+
+/**
+ * The [AuthSessionStateStore] port over this holder's internal read +
+ * publish pair — how the auth spine's injection sites connect the holder
+ * to [AuthSessionCore] without the public class carrying an internal
+ * supertype (see [AuthSessionStateStore]).
+ */
+internal fun AtomicSessionState.asAuthSessionStateStore(): AuthSessionStateStore =
+    AuthSessionStateStoreAdapter(
+        read = { currentSession() },
+        publish = { server, user -> publishSessionState(server, user) },
+    )

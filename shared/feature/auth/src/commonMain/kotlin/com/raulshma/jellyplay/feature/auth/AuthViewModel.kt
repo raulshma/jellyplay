@@ -25,6 +25,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
 import kotlin.time.TimeSource
@@ -87,8 +88,18 @@ class AuthViewModel(
     private val authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
 
-    val servers = authRepository.servers
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /**
+     * The saved-server list. `null` ONLY until the first database emission
+     * lands: the `emptyList()` initial of a `List`-typed StateFlow made a
+     * signed-out user with saved servers observe an empty list during that
+     * pre-emission window, and ServerListScreen rendered its permanent
+     * "No servers added" surface (Add Server included) before the rows
+     * replaced it — the screen needs a loading phase, which this null is.
+     * Once a list has arrived it is never null again.
+     */
+    val servers: StateFlow<List<ServerInfo>?> = authRepository.servers
+        .map<List<ServerInfo>, List<ServerInfo>?> { it }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _serverHealth = stateFlow<Map<String, ServerHealth>>(emptyMap())
     val serverHealth = _serverHealth.flow

@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.auth.AuthSessionCore
 import com.raulshma.jellyplay.core.network.auth.AuthSessionSideEffects
 import com.raulshma.jellyplay.core.network.auth.RawLoginOutcome
+import com.raulshma.jellyplay.core.network.auth.asAuthSessionStateStore
 import com.raulshma.jellyplay.core.network.config.isTlsTrustFailure
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import kotlinx.coroutines.Dispatchers
@@ -50,17 +51,20 @@ class AuthApiClientImpl(
     /**
      * The shared auth session spine (capture/adopt/try/publish/restore,
      * connect-adopt, setServer, disconnect) — commonMain [AuthSessionCore]
-     * owns the invariant KDoc. Injected with the ENGINE's mutex and state so
-     * the folded paths exclude against setUser and failover's rebuildApiFor
-     * exactly like the private spine they replace. The side-effects port is
-     * the engine's ApiClient swap — the one platform side-channel, which
-     * must stay inside the spine's critical sections (a failover's
-     * mutex-held rebuildApiFor could otherwise rebuild from the old user's
-     * token on top of a new session; see AuthSessionCore's class KDoc).
+     * owns the invariant KDoc. Injected with the ENGINE's mutex and its
+     * state port (the internal adapter over the engine's read + publish
+     * pair — the public engine class cannot implement the module-private
+     * store interface directly) so the folded paths exclude against setUser
+     * and failover's rebuildApiFor exactly like the private spine they
+     * replace. The side-effects port is the engine's ApiClient swap — the
+     * one platform side-channel, which must stay inside the spine's
+     * critical sections (a failover's mutex-held rebuildApiFor could
+     * otherwise rebuild from the old user's token on top of a new session;
+     * see AuthSessionCore's class KDoc).
      */
     private val sessionCore = AuthSessionCore<ApiClient?>(
         mutex = engine.authMutex,
-        state = engine,
+        state = engine.asAuthSessionStateStore(),
         sideEffects = object : AuthSessionSideEffects<ApiClient?> {
             override fun captureSide(): ApiClient? = engine.api
             override fun publishSide(serverInfo: ServerInfo, userInfo: UserInfo) {
