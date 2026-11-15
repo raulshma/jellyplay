@@ -9,8 +9,8 @@ redistributing GPL-2.0-or-later works.
   Upstream source code:  https://github.com/mpv-player/mpv
   Windows build pipeline: mpv-winbuild (https://github.com/shinchiro/mpv-winbuild),
                          mirrored at https://github.com/dyphire/mpv-winbuild
-  Retrieved artifact:    mpv-dev-x86_64-20250930-git-05656cd.7z
-  Artifact sha256:       0f952998dac3ca767d9e859580f7ed49c387f410bce17e90921f00435f1b96b4
+  Retrieved artifact:    mpv-dev-x86_64-20261114-git-bb4823e5f0.7z
+  Artifact sha256:       5b06207d769862cad4cf5f39636bb4c5d23a18e010f932d88e0d42d715a3d12d
   License text:          https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
 
 The build that produced the bundled libmpv-2.dll also links FFmpeg

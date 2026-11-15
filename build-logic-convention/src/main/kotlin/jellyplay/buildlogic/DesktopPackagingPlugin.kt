@@ -46,27 +46,32 @@ class DesktopPackagingPlugin : Plugin<Project> {
         // observed serving byte-unstable responses. Both URLs and sha256s
         // are pinned; bump the build inside the URLs (and re-hash the
         // archives) to move to a newer mpv — deliberately: the engine's
-        // property semantics and the real-engine test expectations are
-        // live-probed against this v0.41-era build, and a newer git build can
-        // show `vf` readback drift in MpvDesktopEngineVideoTest.
-        // The dev archive carries only libmpv-2.dll; the PLAYER archive from
-        // the same build supplies lua51.dll, which this libmpv links
-        // dynamically (verified: the dll fails to load with "module not
-        // found" without it). -Pjellyplay.mpvDevUrl / -Pjellyplay.mpvPlayerUrl
+        // property semantics and the real-engine test expectations were
+        // live-probed against the original v0.41-era pin
+        // (mpv_own-2025-09-30, deleted upstream 2026-11), and a newer git
+        // build can show `vf` readback drift in MpvDesktopEngineVideoTest —
+        // re-probe on a machine with libmpv after a bump. Upstream purges
+        // old releases (oldest retained ~14 months), so every pin here rots
+        // and must be re-hashed onto a newer tag.
+        // The PLAYER archive from the same build supplies lua51.dll, which
+        // this libmpv links dynamically (verified: the dll fails to load
+        // with "module not found" without it); the current build also
+        // hard-imports vulkan-1.dll, which GPU drivers provide.
+        // -Pjellyplay.mpvDevUrl / -Pjellyplay.mpvPlayerUrl
         // override for experiments.
         val libmpvToolsDir = project.rootProject.layout.projectDirectory.dir("tools/mpv")
         val libmpvDevArchiveUrl = project.providers.gradleProperty("jellyplay.mpvDevUrl").orElse(
-            "https://github.com/dyphire/mpv-winbuild/releases/download/mpv_own-2025-09-30/" +
-                "mpv-dev-x86_64-20250930-git-05656cd.7z",
+            "https://github.com/dyphire/mpv-winbuild/releases/download/mpv_own-2026-11-14/" +
+                "mpv-dev-x86_64-20261114-git-bb4823e5f0.7z",
         )
         val libmpvDevArchiveSha256 =
-            "0f952998dac3ca767d9e859580f7ed49c387f410bce17e90921f00435f1b96b4"
+            "5b06207d769862cad4cf5f39636bb4c5d23a18e010f932d88e0d42d715a3d12d"
         val libmpvPlayerArchiveUrl = project.providers.gradleProperty("jellyplay.mpvPlayerUrl").orElse(
-            "https://github.com/dyphire/mpv-winbuild/releases/download/mpv_own-2025-09-30/" +
-                "mpv-x86_64-20250930-git-05656cd.7z",
+            "https://github.com/dyphire/mpv-winbuild/releases/download/mpv_own-2026-11-14/" +
+                "mpv-x86_64-20261114-git-bb4823e5f0.7z",
         )
         val libmpvPlayerArchiveSha256 =
-            "bbcba68f0be265b8bd341a0b75da18000c37bf030d341c69adaf8404940c251b"
+            "bae7a016ecd7141b823cae6bc49b957ca1e36edc32a5463b8542772ba70220b8"
 
         val fetchBundledLibmpv = project.tasks.register(
             "fetchBundledLibmpv",
