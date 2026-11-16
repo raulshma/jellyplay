@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.widget
 
 import android.content.Context
 import android.graphics.Bitmap
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.widget.skeleton.updateAllProviderWidgets
@@ -10,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -102,12 +104,15 @@ class NowPlayingWidgetUpdater (
         }
     }
 
-    fun stop() {
-        metadataJob?.cancel()
-        positionJob?.cancel()
+    /**
+     * Widget presence off. Tears the collectors down through
+     * [joinCollectorsAndResetGate] (cancel AND join BEFORE the gate clears —
+     * the stale-render-after-reset declared fix) and drops the job slots.
+     */
+    suspend fun stop() {
+        joinCollectorsAndResetGate(metadataJob, positionJob, pushGate)
         metadataJob = null
         positionJob = null
-        pushGate.reset()
     }
 
     private suspend fun observeMetadata() {
@@ -213,4 +218,31 @@ class NowPlayingWidgetUpdater (
         /** Widget progress granularity — matches the player's 1 s ticker. */
         private const val POSITION_TICK_MS = 1_000L
     }
+}
+
+/**
+ * The [NowPlayingWidgetUpdater.stop] choreography, extracted as the JVM pin
+ * seam (NowPlayingWidgetUpdaterStopChoreographyTest) exactly like the
+ * `ExternalPlayerHost`/`toExtrasMap` split. DECLARED FIX — cancel is
+ * asynchronous: the previous cancel-then-reset let a collector cancelled
+ * mid-[NowPlayingWidgetUpdater.loadArtwork] (Coil's suspend pipeline; a
+ * cancelled job runs its non-suspending tail to completion) land
+ * [WidgetPushGate.decideOnMetadata] AFTER the reset, re-poisoning the gate
+ * with the stale render snapshot that then survived into the next
+ * presence-on cycle (one wrong or miss-suppressed partial push). Both
+ * collectors are cancelled AND joined to completion before the gate clears —
+ * the `QueuePlaylistMirror.removingCurrentRow` / `AudioCrossfadeHandoff`
+ * teardown-bracket precedent. [runCatchingRethrowingCancellation] keeps a
+ * failed collector's join rethrow from aborting the teardown while still
+ * propagating the stop's own cancellation (the repo ratchet's compliant
+ * shape; a bare runCatching here would swallow it).
+ */
+internal suspend fun joinCollectorsAndResetGate(
+    metadataJob: Job?,
+    positionJob: Job?,
+    pushGate: WidgetPushGate,
+) {
+    runCatchingRethrowingCancellation { metadataJob?.cancelAndJoin() }
+    runCatchingRethrowingCancellation { positionJob?.cancelAndJoin() }
+    pushGate.reset()
 }

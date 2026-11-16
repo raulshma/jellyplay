@@ -55,18 +55,22 @@ fun DreamSlideshow(
     dimPercent: Int,
     modifier: Modifier = Modifier,
 ) {
-    var currentIndex by remember { mutableIntStateOf(0) }
-    var isAnimating by remember { mutableStateOf(true) }
-
+    // One advance machine keyed on the payload size (DECLARED FIX — cold
+    // path): the payload arrives via the dream service's async fetch, so the
+    // first composition always renders empty; keying the reset AND the
+    // advance loop on [images.size] means the fetch's 0 → N transition
+    // restarts the effect and STARTS the cadence. The former shape keyed the
+    // loop on a never-written `isAnimating` flag: its coroutine completed
+    // against the empty first frame and was never restarted — the dream was
+    // pinned to images[0] on the normal cold path. `isAnimating` had zero
+    // writers (grep-verified) and is deleted, not migrated: a flag with a
+    // reader and no writer is worse than flag soup (the recorded
+    // AuthViewModel.isLoading rule). Once images exist, the cadence (one
+    // advance per intervalMs) and the reset-on-size-change behavior are
+    // unchanged.
+    val advancer = remember { DreamSlideshowAdvancer(intervalMs) }
     LaunchedEffect(images.size) {
-        currentIndex = 0
-    }
-
-    LaunchedEffect(isAnimating) {
-        while (isAnimating && images.isNotEmpty()) {
-            delay(intervalMs)
-            currentIndex = (currentIndex + 1) % images.size
-        }
+        advancer.run(images.size)
     }
 
     // The dim scrim's timer runs on slideshow runtime; any wake tears the
@@ -90,7 +94,7 @@ fun DreamSlideshow(
             DreamEmptyState()
         } else {
             AnimatedContent(
-                targetState = currentIndex,
+                targetState = advancer.currentIndex,
                 transitionSpec = {
                     // Under the reduced-motion fold or a suppressed
                     // screensaver-motion row, collapse to a near-instant cut.
@@ -112,7 +116,7 @@ fun DreamSlideshow(
             }
 
             if (showTitle) {
-                val currentImage = images[currentIndex % images.size]
+                val currentImage = images[advancer.currentIndex % images.size]
                 DreamTitleOverlay(
                     title = currentImage.title,
                     categoryLabel = when (currentImage.type) {
@@ -156,6 +160,31 @@ internal class DreamDimState(private val dimAfterMs: Long) {
         if (dimAfterMs > 0) {
             delay(dimAfterMs)
             isActive = true
+        }
+    }
+}
+
+/**
+ * The slideshow advance machine (the [DreamDimState] pattern: pure
+ * coroutines over Compose state so the virtual-time test can drive it with
+ * no Android fixtures): owns the cursor, resets it on every (re)start, and
+ * advances one frame per [intervalMs] with wraparound while the payload is
+ * non-empty. The caller keys ONE LaunchedEffect on the payload size and runs
+ * [run] — restarting on the async fetch's 0 → N transition is what keeps the
+ * cadence alive across the empty first frame (see the composable's DECLARED
+ * FIX note). The interval is captured at machine creation (the pre-fix loop
+ * froze its first composition's intervalMs the same way), while the payload
+ * size is read per (re)start.
+ */
+internal class DreamSlideshowAdvancer(private val intervalMs: Long) {
+    var currentIndex: Int by mutableIntStateOf(0)
+        private set
+
+    suspend fun run(imageCount: Int) {
+        currentIndex = 0
+        while (imageCount > 0) {
+            delay(intervalMs)
+            currentIndex = (currentIndex + 1) % imageCount
         }
     }
 }

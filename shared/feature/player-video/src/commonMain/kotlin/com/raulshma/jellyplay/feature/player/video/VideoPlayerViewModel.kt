@@ -424,6 +424,18 @@ class VideoPlayerViewModel(
      * unchanged.
      */
     init {
+        // Defensive: CastManager is a process singleton whose background-cast
+        // handoff latch outlives this VM (the #145 defensive-clear-at-initialize
+        // treatment, copied from the PiP latches). A latch left true by an
+        // abnormally torn-down previous VM must never greet this one — the
+        // fresh screen's routing read (VideoPlayerScreen's
+        // LaunchedEffect(itemId, forceStream)) would see the stale true, SKIP
+        // Initialize entirely, and route this engine-less VM into the reattach
+        // no-op: a player that opens dead. The legit same-VM recreation that
+        // reattach serves never re-runs this constructor, so the clear cannot
+        // swallow a live handoff. Full machine pins:
+        // BackgroundCastHandoffLatchTest.
+        castManager.markBackgroundCasting(false)
         // A user-driven player open acquires the cast consumer; released in
         // the full teardown ([PlaybackSession.performRelease]).
         castManager.acquireConsumer()
@@ -1060,7 +1072,8 @@ class VideoPlayerViewModel(
     // The background-casting state lives on [CastManager]
     // (markBackgroundCasting / isBackgroundCasting) — reattach is a no-op
     // unless a detach armed it. The window session drives the pair through
-    // the DetachForBackgroundCast / ReattachFromBackgroundCast events.
+    // the DetachForBackgroundCast / ReattachFromBackgroundCast events; the
+    // constructor clears a stale latch (see init).
 
     /**
      * Hands the media session from the local engine to the cast receiver:
@@ -1078,7 +1091,9 @@ class VideoPlayerViewModel(
 
     /**
      * Rebuilds the local player session on return — a no-op unless a detach
-     * armed the background-casting flag, and without a bound engine.
+     * armed the background-casting flag, and without a bound engine. Its
+     * legitimate caller is the SAME VM's config-change recreation; a NEW VM
+     * never reaches this arm (the constructor cleared the latch first).
      */
     private fun reattachFromBackgroundCast() {
         if (!castManager.isBackgroundCasting) return

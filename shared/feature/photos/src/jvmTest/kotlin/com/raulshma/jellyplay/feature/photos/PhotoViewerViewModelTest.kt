@@ -2,6 +2,7 @@
 
 package com.raulshma.jellyplay.feature.photos
 
+import androidx.lifecycle.ViewModelStore
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
@@ -404,6 +405,34 @@ class PhotoViewerViewModelTest {
     }
 
     @Test
+    fun `the slideshow active flag cannot outlive its advance job`() = runTest {
+        // The lifecycle bracket pin: the job body runs inside try/finally, so
+        // EVERY exit that is not stopSlideshow's own synchronous clear (here:
+        // onCleared cancelling the parked advance job via the owner's
+        // ViewModelStore teardown) lands the flag false from inside the dying
+        // job. Before the bracket, a teardown-cancelled job stranded the flag
+        // true — a dead "active" slideshow whose Back ladder would stop
+        // nothing. (QueuePlaylistMirror.removingCurrentRow precedent.)
+        val vm = createViewModel()
+        loadViewerInAlbum(vm)
+
+        vm.startSlideshow()
+        assertTrue(vm.isSlideshowActive.value)
+        testScheduler.runCurrent() // the loop is parked on its first delay tick
+
+        // Tear the VM down WITHOUT stopSlideshow — its synchronous clear would
+        // mask the bracket. ViewModelStore.clear() is the owner's teardown
+        // path: it cancels the scope and runs onCleared, which cancels the job.
+        val store = ViewModelStore()
+        store.put("photo-viewer", vm)
+        store.clear()
+        runCurrent() // the cancelled job's finally runs on the Main test dispatcher
+
+        assertFalse(vm.isSlideshowActive.value)
+        assertEquals(1, vm.state.value.currentIndex) // last advanced position, untouched
+    }
+
+    @Test
     fun `setSlideshowInterval changes the delay between advances`() = runTest {
         val vm = createViewModel()
         loadViewerInAlbum(vm)
@@ -474,15 +503,15 @@ class PhotoViewerViewModelTest {
         vm.savePhotoToGallery()
         advanceUntilIdle()
 
-        assertEquals(SaveResult.Success, vm.saveResult.value)
-        assertFalse(vm.isSaving.value)
+        assertEquals(SavePhotoPhase.Succeeded, vm.savePhase.value)
+        assertFalse(vm.isSaving)
         coVerify(exactly = 1) {
             photoExport.saveToGallery("https://example.com/image.jpg", "Photo 2")
         }
     }
 
     @Test
-    fun `savePhotoToGallery maps an export throw into a SaveResult Error with the message`() = runTest {
+    fun `savePhotoToGallery maps an export throw into a Failed phase with the message`() = runTest {
         coEvery { photoExport.saveToGallery(any(), any()) } throws RuntimeException("disk full")
         val vm = createViewModel()
         loadViewerInAlbum(vm)
@@ -490,8 +519,8 @@ class PhotoViewerViewModelTest {
         vm.savePhotoToGallery()
         advanceUntilIdle()
 
-        assertEquals(SaveResult.Error("disk full"), vm.saveResult.value)
-        assertFalse(vm.isSaving.value)
+        assertEquals(SavePhotoPhase.Failed("disk full"), vm.savePhase.value)
+        assertFalse(vm.isSaving)
     }
 
     @Test
@@ -503,7 +532,7 @@ class PhotoViewerViewModelTest {
         vm.savePhotoToGallery()
         advanceUntilIdle()
 
-        assertEquals(SaveResult.Error("Failed to save photo"), vm.saveResult.value)
+        assertEquals(SavePhotoPhase.Failed("Failed to save photo"), vm.savePhase.value)
     }
 
     @Test
@@ -514,7 +543,8 @@ class PhotoViewerViewModelTest {
 
         vm.savePhotoToGallery()
         testScheduler.runCurrent() // first save parks inside the export call
-        assertTrue(vm.isSaving.value)
+        assertTrue(vm.isSaving)
+        assertEquals(SavePhotoPhase.Saving, vm.savePhase.value)
 
         vm.savePhotoToGallery() // re-entrant click must be swallowed
         advanceUntilIdle()
@@ -530,22 +560,48 @@ class PhotoViewerViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { photoExport.saveToGallery(any(), any()) }
-        assertNull(vm.saveResult.value)
-        assertFalse(vm.isSaving.value)
+        assertEquals(SavePhotoPhase.Idle, vm.savePhase.value)
+        assertFalse(vm.isSaving)
     }
 
     @Test
-    fun `clearSaveResult resets the save result state`() = runTest {
+    fun `clearSaveResult dismisses the terminal phase back to Idle`() = runTest {
         coEvery { photoExport.saveToGallery(any(), any()) } returns Unit
         val vm = createViewModel()
         loadViewerInAlbum(vm)
 
         vm.savePhotoToGallery()
         advanceUntilIdle()
-        assertEquals(SaveResult.Success, vm.saveResult.value)
+        assertEquals(SavePhotoPhase.Succeeded, vm.savePhase.value)
 
         vm.clearSaveResult()
-        assertNull(vm.saveResult.value)
+        assertEquals(SavePhotoPhase.Idle, vm.savePhase.value)
+        assertFalse(vm.isSaving)
+    }
+
+    @Test
+    fun `a fresh save lands Saving in one write - Saving excludes any result`() = runTest {
+        // DECLARED FIX pin: the legacy `_isSaving` flag + `_saveResult` pair
+        // raised the flag first and nulled the result second, so a fresh save
+        // published `isSaving=true && saveResult != null` — the previous
+        // save's terminal result standing beside the new in-flight flag. The
+        // phase is one value: the in-flight face is EXACTLY Saving, with no
+        // result beside it (unrepresentable by construction now).
+        coEvery { photoExport.saveToGallery(any(), any()) } returns Unit
+        val vm = createViewModel()
+        loadViewerInAlbum(vm)
+
+        vm.savePhotoToGallery()
+        advanceUntilIdle()
+        assertEquals(SavePhotoPhase.Succeeded, vm.savePhase.value)
+
+        // The next save parks mid-flight: the phase is Saving and nothing else.
+        coEvery { photoExport.saveToGallery(any(), any()) } coAnswers { awaitCancellation() }
+        vm.savePhotoToGallery()
+        testScheduler.runCurrent()
+
+        assertEquals(SavePhotoPhase.Saving, vm.savePhase.value)
+        assertTrue(vm.isSaving)
     }
 
     @Test

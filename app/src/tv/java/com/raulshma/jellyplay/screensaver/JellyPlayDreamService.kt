@@ -63,12 +63,25 @@ class JellyPlayDreamService : DreamService() {
     }
 
     private val dreamLifecycle = DreamLifecycleOwner()
-    private var serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // A fresh scope per dreaming window (created in onAttachedToWindow,
+    // cancelled in onDetachedFromWindow AND onDestroy — the
+    // JellyPlayTileService idiom): the scope lives exactly as long as the
+    // dream's window is attached, so no SupervisorJob + main-dispatcher
+    // association survives an attach cycle, and a re-attach never lands its
+    // fetch on a cancelled scope. DECLARED FIX: the scope used to be a
+    // construction-time field cancelled in onDetachedFromWindow with nothing
+    // re-creating it — on instance reuse (detach → re-attach without
+    // destroy) every subsequent fetchImages launch was a silent no-op on the
+    // dead scope (blank/stale screensaver).
+    private var dreamScope: CoroutineScope? = null
     private var images by mutableStateOf<List<DreamImage>>(emptyList())
     private var fetchJob: Job? = null
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        dreamScope = scope
         isInteractive = false
         isFullscreen = true
 
@@ -157,13 +170,27 @@ class JellyPlayDreamService : DreamService() {
         dreamLifecycle.dispatchEvent(Lifecycle.Event.ON_STOP)
         dreamLifecycle.dispatchEvent(Lifecycle.Event.ON_DESTROY)
         fetchJob?.cancel()
-        serviceScope.cancel()
+        fetchJob = null
+        dreamScope?.cancel()
+        dreamScope = null
         super.onDetachedFromWindow()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // DreamService instances are created/destroyed by the system; destroy
+        // can land without a final onDetachedFromWindow, so the per-window
+        // scope is cancelled here too (the JellyPlayTileService.onDestroy
+        // idiom). A no-op after a full detach — both fields are already null.
+        fetchJob?.cancel()
+        fetchJob = null
+        dreamScope?.cancel()
+        dreamScope = null
     }
 
     private fun fetchImages() {
         fetchJob?.cancel()
-        fetchJob = serviceScope.launch {
+        fetchJob = dreamScope?.launch {
             try {
                 authRepository.restoreSession()
                 val prefs = preferencesStore.screensaver.first()

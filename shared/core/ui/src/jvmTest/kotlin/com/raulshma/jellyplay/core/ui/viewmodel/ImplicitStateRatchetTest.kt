@@ -50,9 +50,12 @@ import kotlin.test.fail
  *    typed `String?` (or delegated `by composeState`) in state-carrier
  *    files: the banned "nullable message field + clear-after-handling"
  *    shape, conventions §2. Baseline [maxParkedOneShotMessageFields]
- *    (2026-11-15): `ServerManagementViewModel.addressOperationMessage`. The
- *    sanctioned Channel shape (`val messages = …receiveAsFlow()`) does not
- *    match — the ratchet bans reintroduction, not the migration target.
+ *    (2026-11-15): `ServerManagementViewModel.addressOperationMessage` —
+ *    migrated into `AddressOperationPhase` (2026-11-16), so the vocabulary
+ *    is EXTINCT and the ceiling is 0: any reintroduction fails outright.
+ *    The sanctioned shapes (a Channel exposed as `receiveAsFlow()`, or a
+ *    phase whose terminal face carries the message) do not match — the
+ *    ratchet bans reintroduction, not the migration targets.
  *
  * DECLARED DIVERGENCES ([declaredDivergences] — kept MINIMAL, populated only
  * where counting would be dishonest, each with file + reason + date):
@@ -94,8 +97,16 @@ class ImplicitStateRatchetTest {
     /** Parallel sheet/dialog/menu composition booleans (see class KDoc §2). */
     private val maxParallelSheetDialogMenuBooleans = 35
 
-    /** Parked one-shot message fields in state-carrier files (see class KDoc §3). */
-    private val maxParkedOneShotMessageFields = 1
+    /**
+     * Parked one-shot message fields in state-carrier files (see class KDoc §3).
+     * Lowered to 0 (2026-11-16): the last parked field (`ServerManagementViewModel.
+     * addressOperationMessage`) migrated into `AddressOperationPhase` — the
+     * vocabulary is EXTINCT; the zero ceiling means any reintroduction fails
+     * outright. With no residue left to match, the rot floor below is 0 by
+     * design and its check is trivially satisfied — the ceiling is the sole
+     * guard, and it is tight.
+     */
+    private val maxParkedOneShotMessageFields = 0
 
     // ── Regex-rot floors: if a scan or a regex stops matching the known residue
     // the ceilings above would pass vacuously (SharedModuleCiLaneGuardTest's
@@ -103,7 +114,14 @@ class ImplicitStateRatchetTest {
     // when slices migrate. ──
     private val spinnerRegexRotFloor = 50
     private val compositionRegexRotFloor = 30
-    private val parkedMessageRegexRotFloor = 1
+
+    /**
+     * Lowered to 0 (2026-11-16) together with [maxParkedOneShotMessageFields]
+     * when the last parked field migrated (the lower-when-migrated convention).
+     * An extinct vocabulary has no residue to re-find, so this floor can never
+     * fire again — the zero ceiling carries the whole guard.
+     */
+    private val parkedMessageRegexRotFloor = 0
 
     /** The scan itself must not pass vacuously: shared/ holds at least this many kt files. */
     private val minScannedKotlinFiles = 3_500

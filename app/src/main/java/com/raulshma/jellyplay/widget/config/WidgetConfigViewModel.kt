@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Backs [WidgetConfigActivity] with the current per-widget source
@@ -25,7 +27,26 @@ class WidgetConfigViewModel(
     private val widgetDataStore: WidgetDataStore,
 ) : ViewModel() {
 
+    /**
+     * The target AppWidget id for per-widget config, or the -1 INVALID
+     * sentinel meaning "the global default config" — which is also the
+     * un-initialized state: [initWidgetId] is a call-ordering convention
+     * ([WidgetConfigActivity] calls it in onCreate BEFORE any collection), so
+     * a setter arriving earlier would write the global store. Readers:
+     * [getWidgetConfig] and [update].
+     */
     private var appWidgetId: Int = -1
+
+    /**
+     * Serializes the read-copy-write persist in [update] — DECLARED FIX: two
+     * rapid setters previously interleaved across the [first] suspension and
+     * the suspending DataStore write, so the slower first write could land
+     * after the second and silently revert it (a lost update). Under the
+     * mutex each update's read-copy-write completes before the next begins;
+     * the last toggle wins. The [first] read's initial-snapshot quirk (pinned
+     * verbatim in WidgetConfigViewModelTest) is preserved unchanged.
+     */
+    private val updateMutex = Mutex()
 
     val state: StateFlow<WidgetConfig> = widgetDataStore.widgetConfig
         .stateIn(
@@ -88,11 +109,13 @@ class WidgetConfigViewModel(
      */
     private fun update(transform: (WidgetConfig) -> WidgetConfig) {
         viewModelScope.launch {
-            val updated = getWidgetConfig().first().let(transform)
-            if (appWidgetId != -1) {
-                widgetDataStore.setWidgetConfigForId(appWidgetId, updated)
-            } else {
-                widgetDataStore.setWidgetConfig(updated)
+            updateMutex.withLock {
+                val updated = getWidgetConfig().first().let(transform)
+                if (appWidgetId != -1) {
+                    widgetDataStore.setWidgetConfigForId(appWidgetId, updated)
+                } else {
+                    widgetDataStore.setWidgetConfig(updated)
+                }
             }
         }
     }

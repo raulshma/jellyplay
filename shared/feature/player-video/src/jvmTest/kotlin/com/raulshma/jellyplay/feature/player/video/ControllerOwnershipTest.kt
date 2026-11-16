@@ -210,9 +210,13 @@ class ControllerOwnershipTest {
         // performance-Level + Exo buffer-posture projections (the stats
         // overlay's Level row + Buffer rows and the playback sheet's
         // read-only Level line — expose-only pref mirrors over the
-        // appearance store and the aggregate). Lower the
+        // appearance store and the aggregate). Raised to 1_172 (2026-11-16)
+        // for the background-cast handoff latch's defensive clear at VM
+        // construction (the #145 PiP-latch treatment — a stale-true latch
+        // skipped Initialize and dead-aired the next player VM; pins in
+        // BackgroundCastHandoffLatchTest). Lower the
         // ceiling when a slice moves out; never raise it to admit growth.
-        val maxVideoPlayerViewModelLines = 1_160
+        val maxVideoPlayerViewModelLines = 1_172
         val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
         val lines = vm.sourceText().lineSequence().count()
         assertTrue(

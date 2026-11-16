@@ -332,9 +332,10 @@ class LiveTvPlayerViewModel(
             LivePlaybackEvent.ChannelLoadStarted ->
                 _state.value = _state.value.copy(isLoadingChannels = true)
             LivePlaybackEvent.ChannelLoadFailed ->
+                // The buffering chrome lifts through the state's derived error
+                // precedence (IDLE + error is not buffering) — no flag write.
                 _state.value = _state.value.copy(
                     isLoadingChannels = false,
-                    isBuffering = false,
                     errorMessage = UiMessage.Resource(Res.string.live_error_no_channels),
                 )
             is LivePlaybackEvent.ChannelsCommitted ->
@@ -353,8 +354,9 @@ class LiveTvPlayerViewModel(
                     isSwitchingChannel = true,
                 )
             is LivePlaybackEvent.TuneFailed ->
+                // The buffering chrome lifts through the state's derived error
+                // precedence — no flag write.
                 _state.value = _state.value.copy(
-                    isBuffering = false,
                     isSwitchingChannel = false,
                     errorMessage = event.message,
                 )
@@ -383,10 +385,10 @@ class LiveTvPlayerViewModel(
                 registerPipTransport()
             }
             is LivePlaybackEvent.EngineStateChanged -> {
+                // The buffering chrome needs no write here: it is derived
+                // from engineState + errorMessage (liveBufferingChrome).
                 _state.value = _state.value.copy(
                     engineState = event.state,
-                    isBuffering = event.state == LiveEngineState.BUFFERING ||
-                        event.state == LiveEngineState.IDLE,
                     errorMessage = event.errorMessage,
                     errorDetail = event.errorDetail,
                 )
@@ -420,15 +422,21 @@ class LiveTvPlayerViewModel(
             is LivePlaybackEvent.AtLiveEdgeChanged ->
                 _state.value = _state.value.copy(isAtLiveEdge = event.atLiveEdge)
             LivePlaybackEvent.BufferingWatchdogTimedOut ->
+                // The engine state stays BUFFERING (the session never
+                // rewrites it) — the chrome lifts through the derived error
+                // precedence (BUFFERING + error is not buffering), which is
+                // the byte-preserved encoding of the former stored-flag
+                // clear this arm performed.
                 _state.value = _state.value.copy(
-                    isBuffering = false,
                     errorMessage = UiMessage.Resource(
                         Res.string.live_error_buffering_timeout
                     ),
                 )
             is LivePlaybackEvent.TranscodeFallbackFailed ->
+                // Same precedence shape as the watchdog arm: the engine
+                // still holds BUFFERING through the failed fallback, and
+                // the error lifts the spinner.
                 _state.value = _state.value.copy(
-                    isBuffering = false,
                     errorMessage = event.message,
                     errorDetail = event.engineErrorDetail,
                 )
@@ -568,8 +576,18 @@ class LiveTvPlayerViewModel(
         _state.value = _state.value.copy(liveStreamOption = option)
         viewModelScope.launch {
             playbackStore.setLiveStreamOption(option)
+            // DECLARED FIX (the LiveTvPlayerUiState buffering-chrome
+            // migration): the former optimistic fold also raised the stored
+            // `isBuffering = true` here, which — with no engineState write —
+            // produced the drift combo `engineState=READY && isBuffering=true`
+            // (a spinner laid over the live picture, or over the previous
+            // error, until the reload's first EngineStateChanged landed).
+            // The flag is gone; the reload still clears any standing error
+            // (unchanged) and the spinner returns when the reload actually
+            // flips the engine to BUFFERING/IDLE, like every other buffering
+            // face (see liveBufferingChrome's declared-fix record and the
+            // `setLiveStreamOption` pins in LiveTvPlayerViewModelGapsTest).
             _state.value = _state.value.copy(
-                isBuffering = true,
                 errorMessage = null,
                 isSwitchingChannel = true,
             )

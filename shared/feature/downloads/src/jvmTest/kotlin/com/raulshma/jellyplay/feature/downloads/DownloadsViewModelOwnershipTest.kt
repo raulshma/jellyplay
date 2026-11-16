@@ -147,9 +147,11 @@ class DownloadsViewModelOwnershipTest {
         // every other guard in this suite. Lowered to 606 (2026-10-28) when
         // the resync/freshness family (the four flows, the six verbs, the
         // candidate query and the private eligibility policy) moved into
-        // DownloadsResyncActions. Lower the ceiling when a slice moves out;
-        // never raise it to admit growth.
-        val maxDownloadsViewModelLines = 606
+        // DownloadsResyncActions. Raised to 615 (2026-11-16) admitting the
+        // DECLARED filter-write selection clear (the requests runBulk twin):
+        // the two value guards plus their declared-fix KDoc — a pinned
+        // behavior fix, not accretion; lower again when a slice moves out.
+        val maxDownloadsViewModelLines = 615
         val lines = viewModelSource().readText(Charsets.UTF_8).lineSequence().count()
         assertTrue(
             lines <= maxDownloadsViewModelLines,

@@ -786,9 +786,10 @@ internal sealed interface LivePlaybackEvent {
 
     /**
      * The channel-list load failed or returned nothing → fold
-     * `isLoadingChannels = false`, `isBuffering = false` and the
-     * no-channels resource error (the list-empty error is list-UI state, so
-     * the ViewModel builds the message).
+     * `isLoadingChannels = false` and the no-channels resource error (the
+     * list-empty error is list-UI state, so the ViewModel builds the
+     * message; the buffering chrome lifts through the state's derived
+     * error precedence).
      */
     data object ChannelLoadFailed : LivePlaybackEvent
 
@@ -811,8 +812,9 @@ internal sealed interface LivePlaybackEvent {
     data class ChannelSelected(val index: Int, val channel: LiveTvChannel) : LivePlaybackEvent
 
     /**
-     * Source resolution failed for a tune → fold `isBuffering = false`,
-     * `isSwitchingChannel = false` and surface [message].
+     * Source resolution failed for a tune → fold `isSwitchingChannel = false`
+     * and surface [message] (the buffering chrome lifts through the state's
+     * derived error precedence).
      */
     data class TuneFailed(val message: LivePlayerMessage) : LivePlaybackEvent
 
@@ -840,9 +842,10 @@ internal sealed interface LivePlaybackEvent {
      * An engine state flip, with the message/detail already resolved (the
      * raw engine error or the generic fallback; the detail merged with the
      * rendered transcode reasons when the tune was a transcode) → fold
-     * `engineState`, the buffering spinner (`BUFFERING || IDLE`),
-     * `errorMessage` and `errorDetail`, plus the PiP auto-exit request when
-     * ERROR/ENDED lands while in PiP.
+     * `engineState`, `errorMessage` and `errorDetail` — the buffering
+     * chrome needs no separate write, it is derived from the phase + error
+     * precedence (`liveBufferingChrome`) — plus the PiP auto-exit request
+     * when ERROR/ENDED lands while in PiP.
      */
     data class EngineStateChanged(
         val state: LiveEngineState,
@@ -858,15 +861,18 @@ internal sealed interface LivePlaybackEvent {
 
     /**
      * The buffering watchdog timed out (the coordinator's only ShowError
-     * here) → fold `isBuffering = false` and surface the retryable
-     * buffering-timeout resource error.
+     * here) → surface the retryable buffering-timeout resource error; the
+     * spinner lifts through the state's derived error precedence (the
+     * engine state itself stays BUFFERING — the session never rewrites it).
      */
     data object BufferingWatchdogTimedOut : LivePlaybackEvent
 
     /**
-     * The engine-requested transcode fallback could not re-resolve → fold
-     * `isBuffering = false`, surface [message] and restore the originating
-     * [engineErrorDetail] the engine held through the failed fallback.
+     * The engine-requested transcode fallback could not re-resolve →
+     * surface [message] and restore the originating [engineErrorDetail] the
+     * engine held through the failed fallback (the spinner lifts through
+     * the state's derived error precedence — the engine still holds
+     * BUFFERING).
      */
     data class TranscodeFallbackFailed(
         val message: LivePlayerMessage,

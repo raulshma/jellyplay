@@ -145,4 +145,191 @@ class SubtitleDelayOverlayTest {
         composeTestRule.waitUntil(2_000) { reported.get() == 150L }
         assertEquals(150L, reported.get())
     }
+
+    // ── DECLARED FIX pins: the dispose final-flush (ReaderProgressReporter's
+    // exit-flush shape). The overlay's debounce used to die with the
+    // composition: closing inside the debounce window (✕, back, or the host's
+    // PiP/lock gates removing the overlay without onDismiss) silently dropped
+    // the LAST adjustment from the persisted per-item delay. The dispose hook
+    // now flushes a still-pending value synchronously — and only then, so a
+    // quiet close issues no redundant write (each delivery costs an
+    // ExoPlayer media reload).
+
+    /** The host-shaped removal gate: flipping it false drops the overlay. */
+    private val overlayVisible = androidx.compose.runtime.mutableStateOf(true)
+
+    private fun setContentFrozenClock(
+        currentDelayMs: Long,
+        onChange: (Long) -> Unit,
+    ) {
+        overlayVisible.value = true
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            MaterialTheme {
+                if (overlayVisible.value) {
+                    SubtitleDelayOverlay(
+                        currentDelayMs = currentDelayMs,
+                        onChange = onChange,
+                        onDismiss = {},
+                    )
+                }
+            }
+        }
+        advanceOneFrame()
+    }
+
+    /**
+     * One frame under a frozen main clock: state changes must be observed by
+     * layout/recomposition before the virtual clock advances (the
+     * TimedSkipPromptTest house pattern).
+     */
+    private fun advanceOneFrame() {
+        composeTestRule.waitForIdle()
+        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.waitForIdle()
+        composeTestRule.mainClock.advanceTimeBy(16)
+        composeTestRule.waitForIdle()
+    }
+
+    /**
+     * Removes the overlay the way the host does — the conditional composition
+     * gate flips false and the composable leaves composition (the onDispose
+     * path under test).
+     */
+    private fun removeOverlay() {
+        composeTestRule.runOnIdle { overlayVisible.value = false }
+        advanceOneFrame()
+    }
+
+    @Test
+    fun overlay_disposeInsideDebounceWindow_flushesLastAdjustment() {
+        val reported = java.util.concurrent.atomic.AtomicLong(0L)
+        setContentFrozenClock(currentDelayMs = 0L, onChange = { reported.set(it) })
+        composeTestRule.onNodeWithTag("subtitle_delay_plus").performClick()
+        advanceOneFrame()
+        // The debounce window is armed but frozen — nothing delivered yet.
+        assertEquals(0L, reported.get())
+        // Leaving composition inside the window must deliver the pending value.
+        removeOverlay()
+        assertEquals(50L, reported.get())
+    }
+
+    @Test
+    fun overlay_disposeInsideDebounceWindow_externalReseed_supersededAdjustmentNeverDelivered() {
+        val writes = java.util.concurrent.atomic.AtomicInteger(0)
+        val lastValue = java.util.concurrent.atomic.AtomicLong(-1L)
+        val externalDelay = androidx.compose.runtime.mutableLongStateOf(0L)
+        composeTestRule.mainClock.autoAdvance = false
+        overlayVisible.value = true
+        composeTestRule.setContent {
+            MaterialTheme {
+                if (overlayVisible.value) {
+                    SubtitleDelayOverlay(
+                        currentDelayMs = externalDelay.longValue,
+                        onChange = { lastValue.set(it); writes.incrementAndGet() },
+                        onDismiss = {},
+                    )
+                }
+            }
+        }
+        advanceOneFrame()
+        composeTestRule.onNodeWithTag("subtitle_delay_plus").performClick()
+        advanceOneFrame()
+        // An external write (hub reset / engine hydration) lands mid-debounce:
+        // the guarded re-seed drops the dirty bit WITH the superseded
+        // adjustment — the external value IS the persisted state, so the
+        // dispose flush must deliver NOTHING (the first cut re-delivered the
+        // already-current 100 here, a redundant engine media reload).
+        composeTestRule.runOnIdle { externalDelay.longValue = 100L }
+        advanceOneFrame()
+        // The re-seed committed (readout shows the external value).
+        composeTestRule.onNodeWithText("100 ms").assertIsDisplayed()
+        removeOverlay()
+        assertEquals(0, writes.get())
+        assertEquals(-1L, lastValue.get())
+    }
+
+    @Test
+    fun overlay_externalReseed_midDebounce_pendingFlushDropped() {
+        // The guarded re-seed CANCELS the armed debounce: an external write
+        // mid-window wins outright, so neither the debounce nor the dispose
+        // flush may deliver anything afterwards — the superseded +50 can
+        // never reach onChange, not even re-labelled as the re-seeded 100
+        // (the pre-fix debounce delivered that redundant write).
+        val writes = java.util.concurrent.atomic.AtomicInteger(0)
+        val lastValue = java.util.concurrent.atomic.AtomicLong(-1L)
+        val externalDelay = androidx.compose.runtime.mutableLongStateOf(0L)
+        composeTestRule.mainClock.autoAdvance = false
+        overlayVisible.value = true
+        composeTestRule.setContent {
+            MaterialTheme {
+                if (overlayVisible.value) {
+                    SubtitleDelayOverlay(
+                        currentDelayMs = externalDelay.longValue,
+                        onChange = { lastValue.set(it); writes.incrementAndGet() },
+                        onDismiss = {},
+                    )
+                }
+            }
+        }
+        advanceOneFrame()
+        composeTestRule.onNodeWithTag("subtitle_delay_plus").performClick()
+        advanceOneFrame()
+        composeTestRule.runOnIdle { externalDelay.longValue = 100L }
+        advanceOneFrame()
+        composeTestRule.onNodeWithText("100 ms").assertIsDisplayed()
+        // Unfreeze and run the clock well past the debounce window: the
+        // cancelled job must not have delivered through any path.
+        composeTestRule.mainClock.autoAdvance = true
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+        assertEquals(0, writes.get())
+        assertEquals(-1L, lastValue.get())
+    }
+
+    @Test
+    fun overlay_disposeAfterDebounceDelivered_noDuplicateWrite() {
+        val writes = java.util.concurrent.atomic.AtomicInteger(0)
+        overlayVisible.value = true
+        composeTestRule.setContent {
+            MaterialTheme {
+                if (overlayVisible.value) {
+                    SubtitleDelayOverlay(
+                        currentDelayMs = 0L,
+                        onChange = { writes.incrementAndGet() },
+                        onDismiss = {},
+                    )
+                }
+            }
+        }
+        composeTestRule.onNodeWithTag("subtitle_delay_plus").performClick()
+        // Let the debounce deliver on its own.
+        composeTestRule.waitUntil(2_000) { writes.get() == 1 }
+        // Closing afterwards must NOT re-deliver (a redundant write costs an
+        // engine media reload).
+        removeOverlay()
+        composeTestRule.waitForIdle()
+        assertEquals(1, writes.get())
+    }
+
+    @Test
+    fun overlay_disposeWithoutAdjustments_noWrite() {
+        val writes = java.util.concurrent.atomic.AtomicInteger(0)
+        overlayVisible.value = true
+        composeTestRule.setContent {
+            MaterialTheme {
+                if (overlayVisible.value) {
+                    SubtitleDelayOverlay(
+                        currentDelayMs = 0L,
+                        onChange = { writes.incrementAndGet() },
+                        onDismiss = {},
+                    )
+                }
+            }
+        }
+        composeTestRule.waitForIdle()
+        removeOverlay()
+        composeTestRule.waitForIdle()
+        assertEquals(0, writes.get())
+    }
 }

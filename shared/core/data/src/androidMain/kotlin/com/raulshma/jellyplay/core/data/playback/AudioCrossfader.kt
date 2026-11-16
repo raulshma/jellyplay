@@ -34,6 +34,15 @@ class AudioCrossfader(
     private val crossfadeDurationMsProvider: () -> Long,
     private val isCrossfadingProvider: () -> Boolean,
     private val isCrossfadingSetter: (Boolean) -> Unit,
+    /**
+     * The cancel edge's volume restore: [cancel] always lands the live primary
+     * back at full volume (`1f` — the mid-fade ramp is unwound), so this fires
+     * right after that write. The handoff wires the manager's mute reconcile
+     * here — the explicit mute state ends exactly as the former `volume > 0f`
+     * inference verdict would. Default no-op (the test harness constructs the
+     * crossfader without the manager).
+     */
+    private val onPrimaryVolumeRestored: () -> Unit = {},
     private val exoPlayerProvider: () -> ExoPlayer?,
     private val queueSizeProvider: () -> Int,
     private val onGetNextItem: (Int) -> AudioQueueItem?,
@@ -59,6 +68,10 @@ class AudioCrossfader(
         }
         crossfadePlayer = null
         exoPlayerProvider()?.volume = 1.0f
+        // The restore write above is an engine-volume edge (the live primary
+        // is audible again regardless of the pre-fade level) — let the owner
+        // reconcile the state that used to be inferred from it.
+        onPrimaryVolumeRestored()
     }
 
     fun maybeStart() {

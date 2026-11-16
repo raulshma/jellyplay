@@ -30,6 +30,10 @@ import org.robolectric.annotation.Config
  *  - the result arm consumes the stash exactly once, folds the returned
  *    extras through the resolved player's contract and reports stopped;
  *  - a result with no stash is a complete no-op;
+ *  - the supersede window: a second launch before the first result settles
+ *    the stale stash with a stop report (through its own contract, the
+ *    canonical no-result extras) before the new session starts, while a
+ *    resolve failure does NOT settle it;
  *  - targeting: a preferred player that resolves installed starts its
  *    component intent directly and records the resolved app on the
  *    stash; an uninstalled one falls back to the chooser (resolvedApp
@@ -63,6 +67,8 @@ class ExternalPlayerHostTest {
     private class Harness(
         built: ExternalPlayerLaunch?,
         private val resolvedComponent: ComponentName? = null,
+        /** What the SECOND build returns — the supersede-window drives. */
+        secondBuilt: ExternalPlayerLaunch? = built,
     ) {
         val calls = mutableListOf<String>()
         val resolvedArgs = mutableListOf<ExternalPlayerRequest>()
@@ -77,7 +83,7 @@ class ExternalPlayerHostTest {
             buildLaunch = { request ->
                 calls += "build"
                 resolvedArgs += request
-                built
+                if (resolvedArgs.size == 2) secondBuilt else built
             },
             resolveComponent = { app ->
                 calls += "resolve:${app.name}"
@@ -213,6 +219,83 @@ class ExternalPlayerHostTest {
         harness.host.launch(request, startChooser = harness.quietStart)
 
         assertEquals(listOf(request), harness.resolvedArgs)
+    }
+
+    // ── the supersede window ───────────────────────────────────────────────
+
+    @Test
+    fun `a second launch before the first result settles the stale stash before the new one`() = runTest {
+        val harness = Harness(
+            built = launchOf("item-1", startPositionTicks = 120_000_000L),
+            secondBuilt = launchOf("item-2"),
+        )
+
+        harness.host.launch(ExternalPlayerRequest("item-1"), startChooser = harness.recordingStart)
+        harness.host.launch(ExternalPlayerRequest("item-2"), startChooser = harness.recordingStart)
+
+        // DECLARED FIX pin: the overwrite window — the first hand-off's stash
+        // would silently have been replaced, orphaning its server-side stop
+        // report. It is settled exactly the way onResult completes a
+        // legitimate result: consumed once, folded through its contract with
+        // the canonical no-result extras (chooser arm → Cancelled), BEFORE
+        // the new session is reported started.
+        assertEquals(
+            listOf(
+                "build",
+                "report-start",
+                "resolve:SYSTEM_CHOOSER",
+                "start",
+                "build",
+                "report-stopped:item-1:Cancelled(startPositionTicks=120000000)",
+                "report-start",
+                "resolve:SYSTEM_CHOOSER",
+                "start",
+            ),
+            harness.calls,
+        )
+        assertEquals("item-2", harness.host.pendingLaunch!!.itemId)
+    }
+
+    @Test
+    fun `a superseded targeted stash settles through its own contract`() = runTest {
+        val component = ComponentName(ExternalPlayerApp.MPV.packageName, ExternalPlayerApp.MPV.activity!!)
+        val harness = Harness(
+            built = launchOf("item-1", preferredApp = ExternalPlayerApp.MPV, startPositionTicks = 120_000_000L),
+            resolvedComponent = component,
+            secondBuilt = launchOf("item-2"),
+        )
+
+        harness.host.launch(ExternalPlayerRequest("item-1", startPositionTicks = 120_000_000L), startChooser = harness.quietStart)
+        harness.host.launch(ExternalPlayerRequest("item-2"), startChooser = harness.quietStart)
+
+        // The settle rides the same per-contract parse as a real result: the
+        // MPV contract's no-position answer (Completed), not the chooser
+        // alias arm's cancellation.
+        assertEquals(
+            "report-stopped:item-1:Completed(positionTicks=0)",
+            harness.calls.filter { it.startsWith("report-stopped") }.single(),
+        )
+    }
+
+    @Test
+    fun `a resolve failure does not settle the pending stash - the fix covers only the overwrite window`() = runTest {
+        val harness = Harness(
+            built = launchOf("item-1"),
+            secondBuilt = null, // the second resolve fails (the old short-circuit arm)
+        )
+
+        harness.host.launch(ExternalPlayerRequest("item-1"), startChooser = harness.quietStart)
+        harness.host.launch(ExternalPlayerRequest("item-2"), startChooser = harness.quietStart)
+
+        // No report-start for the failed second launch, and NO settle report
+        // for the first stash — its legitimate result must still credit it.
+        assertEquals(listOf("build", "report-start", "resolve:SYSTEM_CHOOSER", "build"), harness.calls)
+
+        harness.host.onResult(mapOf("position" to 5_000L))
+        assertEquals(
+            "report-stopped:item-1:StoppedAt(positionTicks=50000000)",
+            harness.calls.last(),
+        )
     }
 
     // ── preferred-player targeting ─────────────────────────────────────────

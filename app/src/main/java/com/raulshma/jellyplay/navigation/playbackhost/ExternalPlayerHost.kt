@@ -39,6 +39,11 @@ import com.raulshma.jellyplay.navigation.externalPlaybackOutcome
  *     player's contract: MPV/mpvKt, MX, VLC, or the chooser alias parse) and
  *     reports playback stopped; a result with no stash is a no-op.
  *
+ * The supersede window: a second [launch] while a stash is still pending
+ * settles the stale one FIRST (consumed once, folded through its contract
+ * with the canonical no-result extras) so its server-side stop report is
+ * never orphaned by the overwrite — see [launch]'s KDoc.
+ *
  * The shell keeps only wiring: the `remember` construction, the
  * ActivityResultLauncher whose callback feeds [onResult] with the two raw
  * extras, and the navigate-filter branch's one [launch] call inside its
@@ -70,8 +75,9 @@ internal class ExternalPlayerHost(
 
     /**
      * The stashed launch awaiting its ActivityResult — set by [launch],
-     * consumed by [onResult], cleared by the failure arm. Null when nothing
-     * is in flight.
+     * consumed by [onResult], cleared by the failure arm, settled by a
+     * superseding [launch] (the overwrite window). Null when nothing is in
+     * flight.
      */
     var pendingLaunch: ExternalPlayerLaunch? = null
         private set
@@ -83,12 +89,35 @@ internal class ExternalPlayerHost(
      * from it is the failure arm (step 5). The wrapper rethrows cancellation,
      * so a cancelled hand-off leaves the stash for a potential retry instead
      * of clearing it and firing the no-player-found error.
+     *
+     * DECLARED FIX (the supersede window, pinned by ExternalPlayerHostTest):
+     * a second launch before the first ActivityResult used to silently
+     * overwrite [pendingLaunch], orphaning the first hand-off's server-side
+     * stop report — the first player's session never closed. When a stash is
+     * still pending past the resolve gate (i.e. the overwrite is certain),
+     * this settles the stale launch exactly the way [onResult] completes a
+     * legitimate result: consumed once, folded through its own contract with
+     * the canonical no-result extras (emptyMap — the chooser arm parses a
+     * cancellation, a targeted contract its own no-position answer), all
+     * before the new session is reported started. Single-launch paths are
+     * byte-identical to the old protocol; only the overwrite window changed.
      */
     suspend fun launch(
         request: ExternalPlayerRequest,
         startChooser: (Intent) -> Unit,
     ) {
         val built = buildLaunch(request) ?: return
+        pendingLaunch?.let { stale ->
+            pendingLaunch = null
+            reportStopped(
+                stale,
+                externalPlaybackOutcome(
+                    resolvedApp = stale.resolvedApp,
+                    startPositionTicks = stale.startPositionTicks,
+                    extras = emptyMap(),
+                ),
+            )
+        }
         reportStart(built)
         // Targeting: a preferred player that resolves installed starts its
         // component directly (recorded on the stash for the result contract);

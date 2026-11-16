@@ -15,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +26,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -245,8 +247,86 @@ class AudioCrossfadeHandoffTest {
         verify(exactly = 0) { primaryPlayer.prepare() }
     }
 
+    // ── the swap-window bracket (the removingCurrentRow try/finally shape) ──
+
+    /**
+     * The swap runs with `_isCrossfading` up while the mirror built for the
+     * dying engine is still standing — a throw from any window step used to
+     * strand the flag `true` and permanently block the next crossfade arm
+     * (prepareAndCrossfade early-returns on it). The `finally` must land the
+     * flag low on EVERY exit path; these pins drive the failure and the
+     * cancellation exits (the success exit is the pinned tail-order row
+     * above). The suite cannot reach the production raise site (the
+     * crossfader's prepare), so the flag is armed through the internal test
+     * seam — the arm itself is not the assertion, the LANDING is.
+     */
+    @Test
+    fun `a throw mid-swap still lands the flag low`() = runBlocking {
+        val handoff = handoff(
+            commitTransitionOverride = { _, _, _ -> throw IllegalStateException("mid-swap") },
+        )
+        handoff.raiseIsCrossfadingForTest()
+        assertTrue(handoff.isCrossfading.value)
+
+        var thrown: Throwable? = null
+        try {
+            handoff.onCrossfadeTransition(secondaryPlayer, nextIndex = 1, nextItem = nextItem)
+        } catch (e: IllegalStateException) {
+            thrown = e
+        }
+
+        assertEquals("mid-swap", thrown?.message)
+        assertFalse("the bracket must lower the flag on the failure exit", handoff.isCrossfading.value)
+    }
+
+    @Test
+    fun `a cancellation out of the swap window still lands the flag low`() = runBlocking {
+        val handoff = handoff(
+            commitTransitionOverride = { _, _, _ -> throw CancellationException("scope died mid-swap") },
+        )
+        handoff.raiseIsCrossfadingForTest()
+        assertTrue(handoff.isCrossfading.value)
+
+        var thrown: Throwable? = null
+        try {
+            handoff.onCrossfadeTransition(secondaryPlayer, nextIndex = 1, nextItem = nextItem)
+        } catch (e: CancellationException) {
+            thrown = e
+        }
+
+        assertEquals("scope died mid-swap", thrown?.message)
+        assertFalse("the bracket must lower the flag on the cancellation exit", handoff.isCrossfading.value)
+    }
+
+    @Test
+    fun `the flag reads low before the pre-warm and the start report (the tail order)`() = runBlocking {
+        val flagAtPrewarm = mutableListOf<Boolean>()
+        var built: AudioCrossfadeHandoff? = null
+        every { queueMirror.prewarmAround(any(), any()) } answers {
+            flagAtPrewarm += built?.isCrossfading?.value ?: true
+        }
+        val handoff = handoff()
+        built = handoff
+
+        handoff.onCrossfadeTransition(secondaryPlayer, nextIndex = 1, nextItem = nextItem)
+
+        assertEquals("the flag must be down BEFORE the mirror pre-warm runs", listOf(false), flagAtPrewarm)
+    }
+
+    @Test
+    fun `the swap fires the engine-volume-restore edge once`() = runBlocking {
+        var volumeRestores = 0
+        val handoff = handoff(onEngineVolumeRestored = { volumeRestores++ })
+
+        handoff.onCrossfadeTransition(secondaryPlayer, nextIndex = 1, nextItem = nextItem)
+
+        assertEquals("the promoted secondary arrives at full volume — the restore edge fires", 1, volumeRestores)
+    }
+
     private fun handoff(
         exoPlayerProvider: () -> ExoPlayer? = { primaryPlayer },
+        commitTransitionOverride: ((nextIndex: Int, nextItem: AudioQueueItem, reapplyReplayGain: Boolean) -> Unit)? = null,
+        onEngineVolumeRestored: () -> Unit = {},
     ): AudioCrossfadeHandoff = AudioCrossfadeHandoff(
         scope = scope,
         context = context,
@@ -261,13 +341,14 @@ class AudioCrossfadeHandoffTest {
         queueMirror = queueMirror,
         state = state,
         playerListener = playerListener,
+        onEngineVolumeRestored = onEngineVolumeRestored,
         exoPlayerProvider = exoPlayerProvider,
         exoPlayerSetter = { swappedEngine = it },
         mediaSessionProvider = { oldSession },
         mediaSessionSetter = { replacedSession = it },
         audioBufferProvider = { 50_000 to 500_000 },
         dataSourceFactoryProvider = { mockk(relaxed = true) },
-        commitTransition = { nextIndex, nextItem, reapply ->
+        commitTransition = commitTransitionOverride ?: { nextIndex, nextItem, reapply ->
             callOrder += "commit"
             commits += Triple(nextIndex, nextItem, reapply)
         },

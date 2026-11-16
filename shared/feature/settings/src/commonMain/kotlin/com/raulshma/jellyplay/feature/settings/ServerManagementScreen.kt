@@ -132,10 +132,19 @@ fun ServerManagementScreen(
     var showAddAddressFor by remember { mutableStateOf<String?>(null) }
     var showCertificateImport by remember { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel.addressOperationMessage) {
-        viewModel.addressOperationMessage?.let { msg ->
-            bus.info(msg)
-            viewModel.clearAddressOperationMessage()
+    // The address operation's parked outcome posts to the bus exactly once
+    // and hands the phase back to Idle — the exhaustive when over the VM's
+    // AddressOperationPhase (the former parked-String one-shot's
+    // clear-after-handling, keyed on the phase object instead of the text).
+    LaunchedEffect(viewModel.addressOperationPhase) {
+        when (val phase = viewModel.addressOperationPhase) {
+            is AddressOperationPhase.Completed -> {
+                bus.info(phase.message)
+                viewModel.clearAddressOperationMessage()
+            }
+            AddressOperationPhase.Idle,
+            is AddressOperationPhase.Running,
+                -> Unit
         }
     }
     // A failed switch used to settle the spinner with no feedback — the cards

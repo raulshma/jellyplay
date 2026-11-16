@@ -13,8 +13,12 @@ import com.raulshma.jellyplay.core.model.WidgetConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -24,7 +28,11 @@ import kotlin.test.assertEquals
  * Exercises the widget cache sink: Library/Seerr widget item list round-trips,
  * the continue-watching payload, and the corrupt-JSON degrade — a malformed
  * blob must fall back to the empty placeholder, never throw into the
- * AppWidget render path.
+ * AppWidget render path. Also pins the corrupt-read ROUTING: the store reads
+ * through the module-wide `dataDegradingToDefaults` policy, so a failed file
+ * read degrades every snapshot/cold reader to its defaults instead of killing
+ * the eager collectors (widgets were stuck on the placeholder until process
+ * restart), while a healthy file round-trips identically.
  */
 class WidgetDataStoreTest {
 
@@ -253,5 +261,63 @@ class WidgetDataStoreTest {
         val coldStore = WidgetDataStore(dataStore, scope)
 
         assertEquals(items, coldStore.continueWatchingSnapshot())
+    }
+
+    // ── corrupt-read routing (DECLARED FIX pins; SliceStateFlowTest idiom) ──
+
+    /** A DataStore whose every read fails — the "corrupt read" stand-in. */
+    private class CorruptDataStore : DataStore<Preferences> {
+        override val data: Flow<Preferences> = flow {
+            throw CorruptReadException()
+        }
+
+        override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+            throw UnsupportedOperationException("read-only fake")
+    }
+
+    private class CorruptReadException : RuntimeException("simulated corrupt read")
+
+    @Test
+    fun `corrupt read degrades the eager widget snapshots to their defaults instead of dying`() = runTest {
+        val corruptStore = WidgetDataStore(CorruptDataStore(), backgroundScope)
+        // [runCurrent] (not just advanceUntilIdle) flushes the Eagerly-shared
+        // collectors in this fake's synchronous-throw shape.
+        runCurrent()
+        advanceUntilIdle()
+
+        // The four eager flows survive the failed read, degraded to their
+        // defaults (empty payloads / default config) — the former raw read
+        // killed them until process restart.
+        assertEquals(emptyList(), corruptStore.continueWatching.value)
+        assertEquals(emptyList(), corruptStore.libraryWidgetItems.value)
+        assertEquals(emptyList(), corruptStore.seerrWidgetItems.value)
+        assertEquals(WidgetConfig(), corruptStore.getWidgetConfigForIdSync(1))
+    }
+
+    @Test
+    fun `corrupt read degrades the cold readers to defaults instead of throwing`() = runTest {
+        val corruptStore = WidgetDataStore(CorruptDataStore(), backgroundScope)
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(WidgetConfig(), corruptStore.widgetConfig.first())
+        assertEquals(WidgetConfig(), corruptStore.getWidgetConfigForId(1).first())
+        assertEquals(
+            mapOf("widget_config" to null, "widget_configs" to null),
+            corruptStore.configSnapshot(),
+        )
+    }
+
+    @Test
+    fun `healthy file round-trips identically through the routed read`() = runTest {
+        val items = listOf(MediaItem("cw-routed", "Healthy", mediaType = MediaType.MOVIE))
+
+        store.setContinueWatching(items)
+
+        // The degrading arm is byte-preserving on healthy data: same keys,
+        // same defaults, same write path — the payload comes back verbatim
+        // through both the cold and the sync accessor.
+        assertEquals(items, store.continueWatching.first())
+        assertEquals(items, store.continueWatchingSnapshot())
     }
 }

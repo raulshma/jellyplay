@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
+import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.SyncAllowlist
 import com.raulshma.jellyplay.core.datastore.stringEntry
@@ -43,7 +44,23 @@ class WidgetDataStore constructor(
 ) {
     private val scope = externalScope
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
+    /**
+     * DECLARED FIX (corrupt-read routing): this previously read raw
+     * `dataStore.data`, so a failed read threw into every downstream
+     * consumer — the four Eagerly-shared widget flows
+     * ([continueWatching]/[libraryWidgetItems]/[seerrWidgetItems] and
+     * [widgetConfigSnapshot]) died on the application scope and the widgets
+     * sat on their empty placeholder until process restart, and the cold
+     * readers ([widgetConfig]/[getWidgetConfigForId]/[configSnapshot]) threw
+     * at their collectors. It now rides the module-wide
+     * [dataDegradingToDefaults] corrupt-read policy (see `SliceStateFlow.kt`):
+     * a failed read degrades to the all-defaults snapshot — placeholders for
+     * the payload keys, default configs for the config keys — the collectors
+     * survive, and a later successful read serves real data again.
+     * Byte-preserving on healthy data: same keys, same defaults (every
+     * projection's absent-key fallback), same write paths.
+     */
+    private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
     private val json = Json { ignoreUnknownKeys = true }
 
     // Per-flow JSON memo fields — one per eager widget-item flow, replacing

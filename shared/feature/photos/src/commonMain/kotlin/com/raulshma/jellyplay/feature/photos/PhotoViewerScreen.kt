@@ -210,8 +210,10 @@ fun PhotoViewerScreen(
     val error = viewerState.error
     val photoDetail = viewerState.photoDetail
     val isSlideshowActive by viewModel.isSlideshowActive
-    val isSaving by viewModel.isSaving
-    val saveResult by viewModel.saveResult
+    // The save machine's derived projection (a plain Boolean getter over the
+    // phase) — the save button's spinner gate reads it exactly as before.
+    val isSaving = viewModel.isSaving
+    val savePhase by viewModel.savePhase
     val showAdjustments by viewModel.showAdjustments
     val brightness by viewModel.brightness
     val contrast by viewModel.contrast
@@ -298,17 +300,21 @@ fun PhotoViewerScreen(
         }
     }
 
-    LaunchedEffect(saveResult) {
-        when (val result = saveResult) {
-            is SaveResult.Success -> {
+    // The save machine folds exhaustively over the phase — Idle/Saving are
+    // explicitly armless (no snackbar while no save ran or one is in flight),
+    // the terminal faces post to the bus and dismiss back to Idle.
+    LaunchedEffect(savePhase) {
+        when (val phase = savePhase) {
+            SavePhotoPhase.Idle -> Unit
+            SavePhotoPhase.Saving -> Unit
+            SavePhotoPhase.Succeeded -> {
                 bus.info(photoSavedMessage)
                 viewModel.clearSaveResult()
             }
-            is SaveResult.Error -> {
-                bus.error(result.message)
+            is SavePhotoPhase.Failed -> {
+                bus.error(phase.message)
                 viewModel.clearSaveResult()
             }
-            else -> {}
         }
     }
 
