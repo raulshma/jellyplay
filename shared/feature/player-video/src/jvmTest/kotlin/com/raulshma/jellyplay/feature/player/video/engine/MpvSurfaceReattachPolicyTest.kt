@@ -118,4 +118,32 @@ class MpvSurfaceReattachPolicyTest {
         )
         assertEquals(MpvSurfaceReattachDecision.LibraryInitialLoad, decision)
     }
+
+    @Test
+    fun initialLoadWindow_armedPlayFile_whilePaused_stillDelegates() {
+        // The 8-combo truth table, (T,F,T): a destroy→create INSIDE the armed
+        // window of a READY-paused session still delegates — the lib's
+        // pending one-shot must not be bypassed by the paused state. The
+        // engine compensates the delegate arm's missing vo restore (its
+        // loadfile arm has no `vo = voInUse`) via the voAtSurfaceLoss stash.
+        val decision = policy.onSurfaceCreated(
+            awaitingInitialStartFile = true,
+            hasEverStartedFile = false,
+            paused = true,
+        )
+        assertEquals(MpvSurfaceReattachDecision.LibraryInitialLoad, decision)
+    }
+
+    @Test
+    fun initialLoadWindow_armedPlayFileOnAUsedHandle_whilePaused_stillDelegates() {
+        // The 8-combo truth table, (T,T,T): item 2 on the same handle, armed
+        // window, paused. Delegation wins over the paused kick — same
+        // reasoning as the unpaused sibling above.
+        val decision = policy.onSurfaceCreated(
+            awaitingInitialStartFile = true,
+            hasEverStartedFile = true,
+            paused = true,
+        )
+        assertEquals(MpvSurfaceReattachDecision.LibraryInitialLoad, decision)
+    }
 }

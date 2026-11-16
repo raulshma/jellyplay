@@ -160,6 +160,14 @@ class HomeRefresherTest {
     private var drainGate: CompletableDeferred<Unit>? = null
 
     /**
+     * While set, the mocked [HomeFeed.getHomeSections] parks on it — parks a
+     * fetch mid-flight (the R3 test asserts the loader phase while a PTR
+     * fetch is in flight). The handshake's own fetch reads the same seam:
+     * tests must clear it before releasing a parked drain.
+     */
+    private var fetchGate: CompletableDeferred<Result<HomeSectionsResult>>? = null
+
+    /**
      * While set, the fake TOC cache's getToc parks — parks the fetch's
      * book-fraction decode, the fetch's LAST suspension before the
      * roll-registry drain, so a dice-roll test can land a roll strictly
@@ -608,6 +616,70 @@ class HomeRefresherTest {
 
         assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         coVerify(exactly = 1) { homeFeed.getHomeSections(any(), any()) }
+        assertTrue(refresher.state.value.sections.isNotEmpty())
+        refresher.stop()
+    }
+
+    @Test
+    fun pullToRefresh_duringTheHandshake_keepsTheFullScreenLoader() = runTest {
+        // The R3 end-to-end pin (2026-11-17 regression analysis): PTR landing
+        // while a full-screen loader is up must keep the loader — the phase is
+        // a single value, and the former unconditional InlineRefreshing write
+        // DEMOTED the handshake's Handshaking phase at the preamble (isLoading
+        // flipped false while the refresh ran, despite the comment claiming
+        // "the full-screen loader untouched"). The transition rule keeps the
+        // loader phase; the inline-spinner contract stays reserved for the
+        // content-visible phases. Parent-faithful settle: when the PTR fetch
+        // itself lands (below), the guarded finally settles the phase — the
+        // former flag machine cleared isLoading at exactly that point too.
+        coEvery { homeFeed.getHomeSections(any(), any()) } coAnswers {
+            val gate = fetchGate
+            if (gate != null) gate.await() else Result.success(
+                HomeSectionsResult(
+                    sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
+                ),
+            )
+        }
+        val refresher = buildRefresher()
+        runCurrent()
+
+        // Get the handshake mid-flight: loader up, drain parked.
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        drainGate = CompletableDeferred()
+        offlineModeFlow.value = OfflineMode.ONLINE
+        runCurrent()
+        assertEquals(HomeLoadPhase.Handshaking, refresher.state.value.loadPhase)
+
+        // PTR mid-handshake: its preamble write must not demote the loader.
+        fetchGate = CompletableDeferred() // park the PTR fetch mid-flight
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+        assertEquals(
+            HomeLoadPhase.Handshaking,
+            refresher.state.value.loadPhase,
+            "PTR during a full-screen loader keeps the loader — the InlineRefreshing demotion was the R3 drift",
+        )
+
+        // The PTR fetch lands: the guarded finally settles the phase (the
+        // parent flag machine's settle point — Handshaking is one of the
+        // settled() spinner phases), and the handshake's own fetch later
+        // re-paints and re-settles to Ready.
+        fetchGate!!.complete(
+            Result.success(
+                HomeSectionsResult(
+                    sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("ptr")))),
+                ),
+            ),
+        )
+        runCurrent()
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
+
+        // The parked drain releases: the handshake completes cleanly on top.
+        fetchGate = null
+        drainGate!!.complete(Unit)
+        runCurrent()
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         assertTrue(refresher.state.value.sections.isNotEmpty())
         refresher.stop()
     }

@@ -26,6 +26,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -95,6 +96,22 @@ internal fun projectSheetRequest(
 ): SeerrRequestItem? =
     selectedRequestId?.let { id -> requests.firstOrNull { it.id == id } }
 
+/**
+ * The orphaned-slot rule for the detail-sheet slot: a parked [selectedRequestId]
+ * whose request no longer projects ([projectSheetRequest] returned null) must
+ * be CLEARED, not just rendered closed. Nothing else nulls the id when the
+ * sheet unrenders (the dismiss/approve callbacks can't fire while
+ * unrendered), so an id that left the list on a pull-to-refresh reload would
+ * stay parked — and a later re-insert of an item with the same id
+ * (paginating back, filter restore, poll re-add) would RE-OPEN the sheet
+ * with no user action. Pure so the rule is pinnable without composition.
+ */
+internal fun isSheetSlotOrphaned(
+    selectedRequestId: Int?,
+    requests: List<SeerrRequestItem>,
+): Boolean =
+    selectedRequestId != null && projectSheetRequest(selectedRequestId, requests) == null
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RequestsScreen(
@@ -115,6 +132,16 @@ fun RequestsScreen(
     // ([projectSheetRequest]; absent id closes the sheet, see its KDoc).
     var selectedRequestId by remember { mutableStateOf<Int?>(null) }
     val selectedRequest = projectSheetRequest(selectedRequestId, state.requests)
+
+    // An orphaned slot (the id's request left the list on a reload) must be
+    // cleared, not just rendered closed — otherwise a later re-insert of the
+    // same id (pagination, filter restore, poll re-add) re-opens the sheet
+    // uninvited ([isSheetSlotOrphaned]).
+    LaunchedEffect(selectedRequestId, state.requests) {
+        if (isSheetSlotOrphaned(selectedRequestId, state.requests)) {
+            selectedRequestId = null
+        }
+    }
 
     // TV focus-on-launch: focus the first request row once data arrives so D-pad input lands on
     // content, not the navigation drawer.

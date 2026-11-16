@@ -238,7 +238,7 @@ class AuthRepositoryImplTest {
         // Mechanical adaptation: restoreSession now reads the store's ONE
         // typed identity flow (the sealed PersistedIdentity machine) instead
         // of the two raw key flows.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ActiveSession("server-1", "user-1"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { userClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
@@ -265,7 +265,7 @@ class AuthRepositoryImplTest {
         // Mechanical adaptation: restoreSession now reads the store's ONE
         // typed identity flow (the sealed PersistedIdentity machine) instead
         // of the two raw key flows.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ActiveSession("server-1", "user-1"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { userClient.getCurrentUser() } returns Result.failure(
@@ -297,7 +297,7 @@ class AuthRepositoryImplTest {
         // Mechanical adaptation: restoreSession now reads the store's ONE
         // typed identity flow (the sealed PersistedIdentity machine) instead
         // of the two raw key flows.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ActiveSession("server-1", "user-1"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { userClient.getCurrentUser() } returns Result.failure(Exception("offline"))
@@ -315,7 +315,7 @@ class AuthRepositoryImplTest {
         // Mechanical adaptation: restoreSession now reads the store's ONE
         // typed identity flow (the sealed PersistedIdentity machine) instead
         // of the two raw key flows.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ActiveSession("server-1", "user-1"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { userClient.getCurrentUser() } returns Result.failure(
@@ -346,7 +346,7 @@ class AuthRepositoryImplTest {
         // Mechanical adaptation: restoreSession now reads the store's ONE
         // typed identity flow (the sealed PersistedIdentity machine) instead
         // of the two raw key flows.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ActiveSession("server-1", "user-1"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         // Slower than the ~2 s gate bound, so the on-gate validation times
@@ -399,7 +399,7 @@ class AuthRepositoryImplTest {
         // Mechanical adaptation: restoreSession now reads the store's ONE
         // typed identity flow (the sealed PersistedIdentity machine) instead
         // of the two raw key flows.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ActiveSession("server-1", "user-1"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { authClient.selectReachableAddress() } throws RuntimeException("probe blew up")
@@ -414,7 +414,7 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `restoreSession with no stored server succeeds without error`() = runTest {
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.NoSession)
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.NoSession
 
         val result = repository.restoreSession()
 
@@ -427,7 +427,7 @@ class AuthRepositoryImplTest {
         // Mechanical adaptation: restoreSession now reads the store's ONE
         // typed identity flow (the sealed PersistedIdentity machine) instead
         // of the two raw key flows.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ActiveSession("server-1", "user-1"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns null
 
         val result = repository.restoreSession()
@@ -443,7 +443,7 @@ class AuthRepositoryImplTest {
         // Mechanical adaptation: restoreSession now reads the store's ONE
         // typed identity flow (the sealed PersistedIdentity machine) instead
         // of the two raw key flows.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ActiveSession("server-1", "user-1"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns null
 
@@ -586,7 +586,7 @@ class AuthRepositoryImplTest {
         // The other half of the BUG 1 pin: after switching to a server with
         // no remembered user, the NEXT cold start must adopt THAT server (the
         // login flow opens on its user list) — not silently restore nothing.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ServerSelected("server-B"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ServerSelected("server-B")
         coEvery { serverDao.getServerById("server-B") } returns testServerEntity.copy(id = "server-B", name = "Server B")
 
         val result = repository.restoreSession()
@@ -607,7 +607,7 @@ class AuthRepositoryImplTest {
         // stored ciphertext. The former branch logged and stopped MID-RESTORE
         // (server adopted, identity fully populated) — a "persisted" session
         // that could never authenticate, resurrected by every cold start.
-        every { serverIdentityStore.identity } returns MutableStateFlow(PersistedIdentity.ActiveSession("server-1", "user-1"))
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         every { tokenCipher.decrypt(any()) } returns null

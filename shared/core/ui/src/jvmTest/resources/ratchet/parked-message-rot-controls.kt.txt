@@ -1,0 +1,40 @@
+// The parked one-shot message vocabulary's rot controls
+// (ImplicitStateRatchetTest.parkedMessageRegex_positiveAndNegativeControls).
+//
+// POSITIVE declaration lines below MUST match parkedMessageRegex; NEGATIVE
+// declaration lines must not. This file is the rot floor the production scan
+// cannot provide for the not-currently-matched shapes: a regex edit that
+// stops recognizing ANY banned shape fails here outright, even when the
+// tolerated production residue still matches (the 2026-11-17 regression
+// analysis's R4 finding — the parked-message ceiling/floor sat at 0/0 after
+// the last migration, so a rotted regex would have passed vacuously forever,
+// and the -Failure/-Error names plus the helper-seeded nullable-slot shape
+// were invisible to the old regex entirely).
+//
+// Deliberately outside the scan scope (src/*/kotlin): resources are never
+// counted into the production ceilings. Keep declaration lines comment-free
+// so the test's line-based parsing stays trivial.
+
+// ── POSITIVE CONTROLS (every declaration line below must match) ──
+
+val parkedStatus: String? = null
+var parkedMessage: String? = null
+val parkedEvent: String = ""
+val parkedFailure: String? = null
+val parkedError: String? = null
+val liveMessage by composeState
+val liveStatus by composeState
+val _loginError = stateFlow<LoginError?>(null)
+val _switchServerFailure = composeState<UiMessage?>(null)
+val _loadError = mutableStateOf<String?>(null)
+val _bridgeStatus = composeState<JellyPlaySeerrStatus?>(null)
+
+// ── NEGATIVE CONTROLS (no declaration line below may match) ──
+
+val itemCount = stateFlow<Int>(0)
+val _loginPhase = stateFlow<LoginPhase>(Idle)
+val isLoading: Boolean = false
+val errorText: String = "x"
+val text: String? = null
+val selectedId = mutableStateOf<Int?>(null)
+val _commandError = stateFlow<PlaylistCommandError>(initialError)

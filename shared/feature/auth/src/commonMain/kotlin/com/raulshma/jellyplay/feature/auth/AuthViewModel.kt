@@ -354,9 +354,21 @@ class AuthViewModel(
                     )
                     QuickConnectPollAnswer.Authenticated -> {
                         _quickConnectState.set(QuickConnectUiState.Authenticating)
-                        val loginResult = authRepository.loginWithQuickConnect(
-                            serverAddress, qcInfo.secret
-                        )
+                        // Same fold as the password leg (login): persistSession
+                        // throws through the repo's .onSuccess on a cipher
+                        // failure (wiped/rotated Keystore) — an uncaught throw
+                        // here would kill the polling coroutine and crash the
+                        // process exactly when Quick Connect visibly succeeded.
+                        // Cancellation still propagates.
+                        val loginResult = try {
+                            authRepository.loginWithQuickConnect(
+                                serverAddress, qcInfo.secret
+                            )
+                        } catch (c: CancellationException) {
+                            throw c
+                        } catch (t: Throwable) {
+                            Result.failure(t)
+                        }
                         _quickConnectState.set(
                             if (loginResult.isSuccess) {
                                 QuickConnectUiState.Success

@@ -106,7 +106,12 @@ class AutoDownloadCheck(
         // stack itself is server-scoped, so there is nothing to sweep or
         // enqueue "for another server" here).
         if (prefs.autoDownloadServers.isNotEmpty()) {
-            val activeServerId = serverIdentityStore.activeServerId.firstOrNull()
+            // Disk-backed one-shot read (see ServerIdentityStore.readIdentity)
+            // — the activeServerId projection derives from the eagerly-seeded
+            // identity StateFlow, whose NoSession seed is instantly readable
+            // during the DataStore-read window (the pass would skip despite a
+            // persisted selection).
+            val activeServerId = serverIdentityStore.readIdentity().serverId
             if (activeServerId == null || activeServerId !in prefs.autoDownloadServers) {
                 Log.i(TAG, "AutoDownload skipped: active server is not allow-listed")
                 return Outcome.Complete()

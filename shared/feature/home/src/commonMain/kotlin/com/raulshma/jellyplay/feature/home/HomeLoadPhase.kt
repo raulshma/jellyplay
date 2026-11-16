@@ -207,4 +207,29 @@ internal object HomeLoadPhaseTransitions {
      * conflict in the failure's favor.
      */
     fun failed(message: String?): HomeLoadPhase = HomeLoadPhase.Failed(message)
+
+    /**
+     * The pull-to-refresh preamble rule — the R3 fix from the 2026-11-17
+     * regression analysis: a PTR landing while a FULL-SCREEN loader is up
+     * ([HomeLoadPhase.ColdLoading] / [HomeLoadPhase.Handshaking]) must KEEP
+     * the loader. The phase is a single value, so the former unconditional
+     * `loadPhase = InlineRefreshing` write DEMOTED the loader mid-flight —
+     * `HomeUiState.isLoading` flipped false while the refresh was still
+     * running, despite the write site's comment claiming "the full-screen
+     * loader untouched". Reachable whenever PTR fires over a
+     * SWR-painted loading screen; the inline spinner's contract (content
+     * kept, no full-screen loader — see the phase's KDoc) applies only to
+     * the content-visible phases. [HomeLoadPhase.Failed] still demotes: a
+     * user-initiated refresh clears the recorded failure, as the former
+     * unconditional write did.
+     */
+    fun onPullToRefresh(phase: HomeLoadPhase): HomeLoadPhase = when (phase) {
+        HomeLoadPhase.ColdLoading,
+        HomeLoadPhase.Handshaking,
+        -> phase
+        HomeLoadPhase.Ready,
+        HomeLoadPhase.InlineRefreshing,
+        is HomeLoadPhase.Failed,
+        -> HomeLoadPhase.InlineRefreshing
+    }
 }

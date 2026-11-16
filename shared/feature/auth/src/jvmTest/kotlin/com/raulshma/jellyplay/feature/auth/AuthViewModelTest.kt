@@ -205,6 +205,35 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun quickConnect_loginThrows_foldsIntoAuthError_insteadOfCrashing() = runTest(testDispatcher) {
+        // The M2 pin (2026-11-17 regression analysis): persistSession throws
+        // IllegalStateException through the repo's .onSuccess on a cipher
+        // failure (wiped/rotated Keystore) — the network auth visibly
+        // succeeded, then the unhandled throw in the polling coroutine would
+        // crash the process. Same fold as the password leg: the throw lands
+        // in the existing Error arm instead of killing viewModelScope.
+        coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
+        coEvery { authRepository.initiateQuickConnect() } returns Result.success(
+            QuickConnectInfo(secret = "secret", code = "CODE")
+        )
+        coEvery { authRepository.pollQuickConnect("secret") } returns Result.success(
+            QuickConnectState(authenticated = true, secret = "secret")
+        )
+        coEvery { authRepository.loginWithQuickConnect("http://server", "secret") } throws
+            RuntimeException("keystore gone")
+
+        viewModel.startQuickConnect("http://server")
+
+        advanceUntilIdle()
+        val state = viewModel.quickConnectState.value
+        assertTrue("expected Error, was $state", state is QuickConnectUiState.Error)
+        assertEquals(
+            UiMessage.Raw("keystore gone"),
+            (state as QuickConnectUiState.Error).message,
+        )
+    }
+
+    @Test
     fun cancelQuickConnect_resetsToIdle() = runTest(testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.success(

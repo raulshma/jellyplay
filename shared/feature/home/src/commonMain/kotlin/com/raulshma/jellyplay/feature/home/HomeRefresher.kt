@@ -599,8 +599,15 @@ internal class HomeRefresher(
                 // The inline spinner over live content — the former
                 // `isRefreshing = true, error = null` (content kept, the
                 // full-screen loader untouched). Clearing the error rides
-                // the phase write: a prior Failed variant is replaced.
-                _state.update { it.copy(loadPhase = HomeLoadPhase.InlineRefreshing) }
+                // the phase write: a prior Failed variant is replaced. The
+                // transition rule keeps a COLD/handshake loader up instead
+                // of demoting it to the inline spinner (the phase is a
+                // single value; the unconditional write here once flipped
+                // isLoading false mid-loader — the R3 drift from the
+                // 2026-11-17 regression analysis).
+                _state.update {
+                    it.copy(loadPhase = HomeLoadPhaseTransitions.onPullToRefresh(it.loadPhase))
+                }
                 invalidateDiscoverCache()
             }
             RefreshTrigger.PrefsChanged -> replaceRefreshJob {

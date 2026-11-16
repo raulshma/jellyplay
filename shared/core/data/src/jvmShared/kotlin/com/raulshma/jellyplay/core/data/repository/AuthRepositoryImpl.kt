@@ -294,7 +294,12 @@ class AuthRepositoryImpl constructor(
      * `lastConnected`.
      */
     override suspend fun restoreSession(): Result<Unit> = runCatchingRethrowingCancellation {
-        when (val persisted = serverIdentityStore.identity.first()) {
+        // The disk-backed one-shot read, NOT `identity.first()` — a
+        // stateIn(Eagerly) StateFlow answers with its NoSession seed instantly
+        // during the DataStore-read window (no happens-before edge to the
+        // eager collector), which would silently skip the restore and drop the
+        // splash gate straight to NeedsAuth despite a valid persisted session.
+        when (val persisted = serverIdentityStore.readIdentity()) {
             PersistedIdentity.NoSession -> Unit
             is PersistedIdentity.ServerSelected -> restoreSelectedServer(persisted.serverId)
             is PersistedIdentity.ActiveSession -> restoreActiveSession(persisted.serverId, persisted.userId)
@@ -777,6 +782,16 @@ class AuthRepositoryImpl constructor(
      * lambdas the same way. One encryption serves both rows (user row +
      * server row's shadow token column): they used to carry two ciphertexts
      * of the same plaintext; the decrypt side is identical.
+     *
+     * **Known residue (deliberate, see the 2026-11-17 regression analysis):**
+     * the atomic login publishes the in-memory session BEFORE this persist
+     * runs, and nothing rolls it back on a persist failure — a cipher-failed
+     * login leaves a live, connected in-memory session behind the "login
+     * failed" error the caller surfaces (`isAuthenticated` stays true, the
+     * socket connects, the disk identity still names the previous session).
+     * The VM side folds the throw into the UI error (both login legs); only
+     * the in-memory residue is unhandled. Rollback would need to unwind the
+     * published session to the prior identity and is intentionally deferred.
      */
     private suspend fun persistSession(server: ServerInfo, user: UserInfo, fallbackUsername: String = "") {
         val cipheredToken = tokenCipher.encrypt(user.accessToken)

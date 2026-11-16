@@ -44,8 +44,12 @@ class UserDataSyncWorker(
     override suspend fun doWork(): Result {
         val prefs = playbackStore.playback.firstOrNull() ?: return Result.success()
         if (!prefs.userDataSyncEnabled) return Result.success()
-        // Don't run until the user has signed in at least once.
-        val activeUserId = serverIdentityStore.activeUserId.firstOrNull()
+        // Don't run until the user has signed in at least once. Disk-backed
+        // one-shot read, NOT a projection `.firstOrNull()` — the projections
+        // derive from the eagerly-seeded identity StateFlow, whose NoSession
+        // seed is instantly readable during the DataStore-read window (the
+        // worker would silently no-op despite a persisted session).
+        val activeUserId = serverIdentityStore.readIdentity().userId
         if (activeUserId.isNullOrBlank()) return Result.success()
 
         return runCatchingRethrowingCancellation {

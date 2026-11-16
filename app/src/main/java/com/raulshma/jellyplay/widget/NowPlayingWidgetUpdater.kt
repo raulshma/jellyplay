@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Bridges [AudioPlaybackManager] state into the [NowPlayingWidget].
@@ -64,11 +66,29 @@ class NowPlayingWidgetUpdater (
 ) {
     private val scope =
         CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Default)
+
+    /**
+     * Serializes the collector-lifecycle transitions. The job slots are plain
+     * vars on this unsupervised scope, and [stop]'s teardown SUSPENDS (the
+     * cancel-and-join) — so the former unsynchronized write order
+     * (join … then `metadataJob = null`) raced [start]: a start landing
+     * between the join's completion and the slot nulling launched fresh
+     * collectors, then the stop resumed and nulled the slots — dropping the
+     * new handles and leaking the collectors past every later stop. All slot
+     * reads and writes now happen under this one mutex, making each
+     * transition atomic with respect to the other.
+     */
+    private val lifecycleMutex = Mutex()
     private var metadataJob: Job? = null
     private var positionJob: Job? = null
     private val pushGate = WidgetPushGate()
 
     fun start() {
+        scope.launch { lifecycleMutex.withLock { startLocked() } }
+    }
+
+    /** The [start] body — callers must hold [lifecycleMutex]. */
+    private suspend fun startLocked() {
         if (metadataJob?.isActive == true) return
         // The helper returns the ids it refreshed; the return is this
         // site's presence check — nothing pinned means stay dormant.
@@ -92,14 +112,21 @@ class NowPlayingWidgetUpdater (
      * Widget presence may have changed (pin added/removed). Restarts the
      * collectors when a widget exists, tears them down when the last one is
      * gone. Cheap no-op when presence didn't actually change.
+     *
+     * The presence probe runs OUTSIDE the mutex (binder IPC must not widen a
+     * concurrent stop's join hold); the decision→transition itself is
+     * serialized, so two racing presence events land in mutex order with
+     * each computed against the post-transition state.
      */
     fun onWidgetPresenceChanged() {
         scope.launch {
             val hasWidgets = widgetIdsFor(context, NowPlayingWidget::class.java).isNotEmpty()
-            if (hasWidgets) {
-                start()
-            } else {
-                stop()
+            lifecycleMutex.withLock {
+                if (hasWidgets) {
+                    startLocked()
+                } else {
+                    stopLocked()
+                }
             }
         }
     }
@@ -108,8 +135,18 @@ class NowPlayingWidgetUpdater (
      * Widget presence off. Tears the collectors down through
      * [joinCollectorsAndResetGate] (cancel AND join BEFORE the gate clears —
      * the stale-render-after-reset declared fix) and drops the job slots.
+     *
+     * The join SUSPENDS while holding [lifecycleMutex]: a concurrent
+     * [start] waits, then runs [startLocked] against the post-teardown
+     * slots — the start-lands-mid-teardown leak the old write order had is
+     * structurally closed.
      */
     suspend fun stop() {
+        lifecycleMutex.withLock { stopLocked() }
+    }
+
+    /** The [stop] body — callers must hold [lifecycleMutex]. */
+    private suspend fun stopLocked() {
         joinCollectorsAndResetGate(metadataJob, positionJob, pushGate)
         metadataJob = null
         positionJob = null

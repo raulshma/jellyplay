@@ -7,6 +7,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -91,6 +93,38 @@ class ServerIdentityStoreTest {
             PersistedIdentity.ActiveSession("srv-1", "user-1"),
             PersistedIdentity.resolve("srv-1", "user-1"),
         )
+    }
+
+    @Test
+    fun `readIdentity answers disk truth while the eager collector is still parked on the seed`() = runTest {
+        // The M1 trap: identity is a stateIn(Eagerly, NoSession) StateFlow, so
+        // a plain identity.first() returns the NoSession seed instantly during
+        // the DataStore-read window — even when disk holds an ActiveSession.
+        // A restore (or fresh-process worker) reading it under startup
+        // dispatcher contention would silently skip the session restore. The
+        // disk-backed readIdentity() must answer disk truth in that window.
+        TestDataStoreProvider.get().edit { prefs ->
+            prefs[stringPreferencesKey("active_server_id")] = "srv-1"
+            prefs[stringPreferencesKey("active_user_id")] = "user-1"
+        }
+
+        // Build the store with its eager collector PARKED on the test
+        // scheduler: identity stays on the NoSession seed until the scheduler
+        // advances — the exact state a cold-start reader can observe.
+        val parkedScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
+        val parkedStore = ServerIdentityStore(TestDataStoreProvider.get(), parkedScope)
+        assertEquals(PersistedIdentity.NoSession, parkedStore.identity.value)
+
+        // readIdentity() bypasses the seeded StateFlow and suspends on the
+        // raw cold DataStore flows — disk truth, no scheduler advancement.
+        assertEquals(
+            PersistedIdentity.ActiveSession("srv-1", "user-1"),
+            parkedStore.readIdentity(),
+        )
+
+        // The seeded flow eventually catches up once its scope runs.
+        advanceUntilIdle()
+        assertEquals(PersistedIdentity.ActiveSession("srv-1", "user-1"), parkedStore.identity.value)
     }
 
     // ── Device id ──

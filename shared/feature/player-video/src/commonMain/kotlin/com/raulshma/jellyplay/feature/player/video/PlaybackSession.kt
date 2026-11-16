@@ -2029,7 +2029,8 @@ internal class PlaybackSession(
      * slot's current occupant IS the calling pipeline coroutine; replacing it
      * cancels that job. Safe by construction: the gate's remaining tail (the
      * outcome hook + `SessionLoadPipeline.start`'s `finally` veil lift) is
-     * synchronous and completes before the cancellation is observed.
+     * synchronous — the gate pins the no-suspension rule, and the replace does
+     * not join (the `cinemaIntroContext ?: return` re-checks are the guard).
      */
     private fun loadCinemaIntro(intro: MediaItem) {
         if (cinemaIntroContext == null) return

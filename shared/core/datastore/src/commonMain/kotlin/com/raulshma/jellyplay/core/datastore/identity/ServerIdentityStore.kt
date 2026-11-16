@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -156,6 +157,27 @@ class ServerIdentityStore constructor(
         combine(rawServerId, rawUserId) { serverId, userId ->
             PersistedIdentity.resolve(serverId, userId)
         }.stateIn(scope, SharingStarted.Eagerly, PersistedIdentity.NoSession)
+
+    /**
+     * One-shot, DISK-BACKED identity read — the cold-start-safe sibling of
+     * [identity]. Not a plain `identity.first()`: a stateIn(Eagerly) StateFlow
+     * always has its initial value available, so a plain first() returns the
+     * [PersistedIdentity.NoSession] seed instantly during the DataStore-read
+     * window — with no happens-before edge between the eagerly-started
+     * collector and the caller — and a cold-start reader (session restore,
+     * fresh-process workers) silently maps the seed to "nothing to restore"
+     * even when disk holds an ActiveSession. The same trap the deviceId read
+     * dodges in AppStartupPrewarms' critical prewarm. This read collects the
+     * RAW cold `dataStore.data` flows instead, suspending until the first
+     * disk read completes, so it always answers disk truth.
+     *
+     * [identity] stays the observer surface; call this for one-shot reads that
+     * must not race application startup.
+     */
+    suspend fun readIdentity(): PersistedIdentity =
+        combine(rawServerId, rawUserId) { serverId, userId ->
+            PersistedIdentity.resolve(serverId, userId)
+        }.first()
 
     /**
      * The device id's own eagerly-shared flow. Eager so a `.value` read never

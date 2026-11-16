@@ -46,16 +46,22 @@ import kotlin.test.fail
  *    mid-identifier rot (`showBottomSheetContent`) out. The sibling
  *    `show…Confirm` family is a DIFFERENT vocabulary and stays outside this
  *    ratchet.
- * 3. Parked one-shot message fields — `(val|var) <x>Status|xMessage|xEvent`
- *    typed `String?` (or delegated `by composeState`) in state-carrier
- *    files: the banned "nullable message field + clear-after-handling"
- *    shape, conventions §2. Baseline [maxParkedOneShotMessageFields]
- *    (2026-11-15): `ServerManagementViewModel.addressOperationMessage` —
- *    migrated into `AddressOperationPhase` (2026-11-16), so the vocabulary
- *    is EXTINCT and the ceiling is 0: any reintroduction fails outright.
- *    The sanctioned shapes (a Channel exposed as `receiveAsFlow()`, or a
- *    phase whose terminal face carries the message) do not match — the
- *    ratchet bans reintroduction, not the migration targets.
+ * 3. Parked one-shot message fields — the banned "nullable message field +
+ *    clear-after-handling" shape, conventions §2, in state-carrier files.
+ *    Widened (2026-11-17, the R4 finding): three alternations — (a)
+ *    `(val|var) <x>Status|xMessage|xEvent|xFailure|xError` typed `String?`,
+ *    (b) the same names delegated `by composeState`, (c) the helper-seeded
+ *    nullable-slot shape (`= stateFlow<T?>(null)` / `composeState<T?>(null)`
+ *    / `mutableStateOf<T?>(null)`) the old regex could not see. The
+ *    2026-11-16 extinction pin (ceiling 0, floor 0) passed vacuously forever
+ *    and the widened scan re-found 17 honest residue slots plus 8 immutable
+ *    UiState data-class fields (declared divergences below). The
+ *    [parkedMessageRegex_positiveAndNegativeControls] fixture is the
+ *    shape-level rot guard the 0/0 pin lacked — a regex edit that stops
+ *    recognizing any banned shape fails there outright. The sanctioned
+ *    shapes (a Channel exposed as `receiveAsFlow()`, or a phase whose
+ *    terminal face carries the message) still do not match — the ratchet
+ *    bans reintroduction, not the migration targets.
  *
  * DECLARED DIVERGENCES ([declaredDivergences] — kept MINIMAL, populated only
  * where counting would be dishonest, each with file + reason + date):
@@ -99,14 +105,26 @@ class ImplicitStateRatchetTest {
 
     /**
      * Parked one-shot message fields in state-carrier files (see class KDoc §3).
-     * Lowered to 0 (2026-11-16): the last parked field (`ServerManagementViewModel.
-     * addressOperationMessage`) migrated into `AddressOperationPhase` — the
-     * vocabulary is EXTINCT; the zero ceiling means any reintroduction fails
-     * outright. With no residue left to match, the rot floor below is 0 by
-     * design and its check is trivially satisfied — the ceiling is the sole
-     * guard, and it is tight.
+     *
+     * History: lowered to 0 (2026-11-16) when the last parked field
+     * (`ServerManagementViewModel.addressOperationMessage`) migrated into
+     * `AddressOperationPhase` — then RAISED to 17 (2026-11-17), the R4 fix
+     * from the regression analysis: the 0/0 ceiling+floor passed VACUOUSLY
+     * forever (a rotted regex had nothing to re-find), and the vocabulary had
+     * blind spots — `-Failure`/`-Error` names and the helper-seeded nullable
+     * slot shape (`= stateFlow<LoginError?>(null)` / `composeState<UiMessage?>(
+     * null)`) were invisible to the old regex, so genuine residue (the
+     * analysis's `_loginError` / `_switchServerFailure` exemplars, plus the
+     * music/settings tail) sat uncounted. The widened regex surfaced 25 raw
+     * hits: 17 honest parked-slot residue (counted here — the ceiling is
+     * exact-pinned by the rot floor below), and 8 immutable UiState
+     * data-class fields (`val grabError: String? = null` constructor params
+     * — rendered state, not parked-and-cleared slots) whose counting would
+     * be dishonest; those files sit in [declaredDivergences] instead. The
+     * rot-controls fixture (parkedMessageRegex_positiveAndNegativeControls)
+     * guards the regex's shape coverage itself.
      */
-    private val maxParkedOneShotMessageFields = 0
+    private val maxParkedOneShotMessageFields = 17
 
     // ── Regex-rot floors: if a scan or a regex stops matching the known residue
     // the ceilings above would pass vacuously (SharedModuleCiLaneGuardTest's
@@ -116,12 +134,14 @@ class ImplicitStateRatchetTest {
     private val compositionRegexRotFloor = 30
 
     /**
-     * Lowered to 0 (2026-11-16) together with [maxParkedOneShotMessageFields]
-     * when the last parked field migrated (the lower-when-migrated convention).
-     * An extinct vocabulary has no residue to re-find, so this floor can never
-     * fire again — the zero ceiling carries the whole guard.
+     * Raised to 17 (2026-11-17) together with [maxParkedOneShotMessageFields]
+     * when the vocabulary's blind spots closed: the widened regex re-finds
+     * real production residue, so this floor is live again — the 0 floor that
+     * followed the 2026-11-16 migration passed vacuously forever (the R4
+     * finding). Equals the ceiling: the residue is exact-pinned, and any
+     * slice migration must lower BOTH (the lower-when-migrated convention).
      */
-    private val parkedMessageRegexRotFloor = 0
+    private val parkedMessageRegexRotFloor = 17
 
     /** The scan itself must not pass vacuously: shared/ holds at least this many kt files. */
     private val minScannedKotlinFiles = 3_500
@@ -136,8 +156,19 @@ class ImplicitStateRatchetTest {
 
     private val parkedMessageRegex =
         Regex(
-            """(?:val|var)\s+\w+(?:Status|Message|Event)\s*:\s*String\??(?![A-Za-z])""" +
-                """|(?:val|var)\s+\w+(?:Status|Message|Event)\s+by\s+composeState""",
+            // A1/A2 — the original shape, widened (2026-11-17) with the
+            // -Failure/-Error name suffixes the analysis's evading exemplars
+            // (`_switchServerFailure`, `_loginError`) rode.
+            """(?:val|var)\s+\w+(?:Status|Message|Event|Failure|Error)\s*:\s*String\??(?![A-Za-z])""" +
+                """|(?:val|var)\s+\w+(?:Status|Message|Event|Failure|Error)\s+by\s+composeState""" +
+                // A3 — the helper-seeded nullable-slot shape: a one-shot parked
+                // as a nullable-typed, null-seeded stateFlow/composeState/
+                // mutableStateOf slot (the `stateFlow<LoginError?>(null)` /
+                // `composeState<UiMessage?>(null)` residue class). Non-nullable
+                // seeds (`stateFlow<LoginPhase>(Idle)`) and suffix-less names
+                // stay outside — the rot-controls fixture pins both edges.
+                """|(?:val|var)\s+\w+(?:Status|Message|Event|Failure|Error)\s*=\s*""" +
+                """(?:stateFlow|composeState|mutableStateOf)\s*<[^<>]*\?>\s*\(\s*null\s*\)""",
         )
 
     private val sourceSetRegex = Regex("""/src/[^/]+/kotlin/""")
@@ -182,6 +213,70 @@ class ImplicitStateRatchetTest {
                 "REPLACED seven parallel booleans with one `current` slot; its declared " +
                 "stragglers are the genuinely-two-state kind",
             date = "2026-11-15",
+        ),
+        // ── Parked-message exemptions (2026-11-17, the R4 widening): immutable
+        // UiState data-class fields (`val xError: String? = null` constructor
+        // params) the widened vocabulary matches but that are RENDERED STATE
+        // replaced wholesale per state emission — not parked-and-cleared
+        // one-shot slots. Counting them would be dishonest; each file still
+        // matches the vocabulary (the hygiene check enforces it), and a TRUE
+        // parked slot added to these files must migrate or raise honestly.
+
+        DeclaredDivergence(
+            pathSuffix =
+                "feature/admin/src/jvmShared/kotlin/com/raulshma/jellyplay/feature/admin/users/detail/UserDetailViewModel.kt",
+            pattern = patternParkedMessages,
+            reason = "the UserEditUiState data class's `auxError: String? = null` constructor " +
+                "field — rendered state on an immutable slice, not a parked one-shot",
+            date = "2026-11-17",
+        ),
+        DeclaredDivergence(
+            pathSuffix =
+                "feature/arrqueue/src/commonMain/kotlin/com/raulshma/jellyplay/feature/arrqueue/ReleaseSearchState.kt",
+            pattern = patternParkedMessages,
+            reason = "the ReleaseSearchState data class's `grabError: String? = null` constructor " +
+                "field — rendered state on an immutable slice, not a parked one-shot",
+            date = "2026-11-17",
+        ),
+        DeclaredDivergence(
+            pathSuffix =
+                "feature/editor/src/commonMain/kotlin/com/raulshma/jellyplay/feature/editor/EditorViewModel.kt",
+            pattern = patternParkedMessages,
+            reason = "the editor UiState data class's `actionError: String? = null` constructor " +
+                "field — the banner carrier rendered per state emission, not a parked one-shot",
+            date = "2026-11-17",
+        ),
+        DeclaredDivergence(
+            pathSuffix =
+                "feature/player-audio/src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/audio/AudioPlayerUiState.kt",
+            pattern = patternParkedMessages,
+            reason = "the two audio UiState slices' `playbackError: String? = null` constructor " +
+                "fields — rendered state on immutable slices, not parked one-shots",
+            date = "2026-11-17",
+        ),
+        DeclaredDivergence(
+            pathSuffix =
+                "feature/player-video/src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/state/SubtitleState.kt",
+            pattern = patternParkedMessages,
+            reason = "the SubtitleSettingsState data class's `remoteSubtitlesError: String? = null` " +
+                "constructor field — rendered state on an immutable slice, not a parked one-shot",
+            date = "2026-11-17",
+        ),
+        DeclaredDivergence(
+            pathSuffix =
+                "feature/requests/src/commonMain/kotlin/com/raulshma/jellyplay/feature/requests/RequestsViewModel.kt",
+            pattern = patternParkedMessages,
+            reason = "the requests UiState data class's `actionError: String? = null` constructor " +
+                "field — rendered state on an immutable slice, not a parked one-shot",
+            date = "2026-11-17",
+        ),
+        DeclaredDivergence(
+            pathSuffix =
+                "feature/settings/src/commonMain/kotlin/com/raulshma/jellyplay/feature/settings/DiscoverRowsViewModel.kt",
+            pattern = patternParkedMessages,
+            reason = "the DiscoverRowDraft data class's `previewError: String? = null` constructor " +
+                "field — rendered state on an immutable slice, not a parked one-shot",
+            date = "2026-11-17",
         ),
     )
 
@@ -405,6 +500,75 @@ class ImplicitStateRatchetTest {
                     "undoActionChannel() exemplars)",
             ),
         )
+    }
+
+    @Test
+    fun parkedMessageRegex_positiveAndNegativeControls() {
+        // The R4 rot control (2026-11-17): the production rot floor
+        // (parkedMessageRegexRotFloor) only proves the regex still finds the
+        // TOLERATED residue — the 2026-11-16 0/0 ceiling+floor could pass
+        // vacuously forever if the regex rotted off the vocabulary entirely,
+        // and the -Failure/-Error names plus the helper-seeded nullable-slot
+        // shape were invisible to the old regex without any test noticing.
+        // This fixture plants EVERY banned shape (all three alternations) and
+        // the shapes that must stay OUTSIDE the vocabulary, so a regex edit
+        // that stops recognizing any banned shape — or one that starts
+        // counting sanctioned state — fails here outright.
+        val fixtureText = javaClass.getResourceAsStream(
+            "/ratchet/parked-message-rot-controls.kt.txt",
+        )?.bufferedReader()?.readText()
+        assertTrue(
+            !fixtureText.isNullOrEmpty(),
+            "the rot-controls fixture (ratchet/parked-message-rot-controls.kt.txt) is missing " +
+                "from jvmTest resources — the parked-message vocabulary has no shape-level " +
+                "rot guard without it",
+        )
+
+        val positiveMarker = "── POSITIVE CONTROLS"
+        val negativeMarker = "── NEGATIVE CONTROLS"
+        assertTrue(
+            fixtureText.contains(positiveMarker) && fixtureText.contains(negativeMarker) &&
+                fixtureText.indexOf(positiveMarker) < fixtureText.indexOf(negativeMarker),
+            "fixture lost its POSITIVE/NEGATIVE CONTROLS markers",
+        )
+        // Everything before the negative marker (header + positive section):
+        // the header plants no val/var lines, so the line filter below picks
+        // exactly the positive declarations.
+        val positiveSection = fixtureText.substringBefore(negativeMarker)
+        val negativeSection = fixtureText.substringAfter(negativeMarker)
+
+        val positives = positiveSection.lineSequence()
+            .filter { it.startsWith("val ") || it.startsWith("var ") }
+            .toList()
+        val negatives = negativeSection.lineSequence()
+            .filter { it.startsWith("val ") || it.startsWith("var ") }
+            .toList()
+        assertTrue(
+            positives.size >= 11,
+            "the fixture's positive controls shrank (${positives.size} lines) — every banned " +
+                "shape (A1/A2 names incl. -Failure/-Error, A2 by-composeState, A3 " +
+                "helper-seeded nullable slots) must stay planted",
+        )
+        assertTrue(
+            negatives.size >= 7,
+            "the fixture's negative controls shrank (${negatives.size} lines) — the sanctioned " +
+                "shapes the vocabulary must keep excluding must stay planted",
+        )
+
+        for (line in positives) {
+            assertTrue(
+                parkedMessageRegex.containsMatchIn(line),
+                "positive control no longer matches the parked-message vocabulary: `$line` — " +
+                    "a regex/scope edit broke shape coverage; fix the regex, not the fixture",
+            )
+        }
+        for (line in negatives) {
+            assertTrue(
+                !parkedMessageRegex.containsMatchIn(line),
+                "negative control started matching the parked-message vocabulary: `$line` — " +
+                    "the regex now counts sanctioned state; tighten it (the fixture is the spec)",
+            )
+        }
     }
 
     @Test

@@ -81,4 +81,34 @@ class HomeLoadPhaseTransitionsTest {
         )
         assertIs<HomeLoadPhase.Failed>(HomeLoadPhaseTransitions.failed(null))
     }
+
+    // ── onPullToRefresh: the R3 rule — PTR keeps a full-screen loader up ─────
+
+    @Test
+    fun pullToRefresh_duringAFullScreenLoader_keepsTheLoader() {
+        // The R3 pin (2026-11-17 regression analysis): the phase is a single
+        // value, so the former unconditional InlineRefreshing write DEMOTED a
+        // ColdLoading/Handshaking loader mid-flight — isLoading flipped false
+        // while the refresh ran. PTR over a SWR-painted loading screen must
+        // leave the loader phase untouched.
+        assertEquals(HomeLoadPhase.ColdLoading, HomeLoadPhaseTransitions.onPullToRefresh(HomeLoadPhase.ColdLoading))
+        assertEquals(HomeLoadPhase.Handshaking, HomeLoadPhaseTransitions.onPullToRefresh(HomeLoadPhase.Handshaking))
+    }
+
+    @Test
+    fun pullToRefresh_overContentPhases_raisesTheInlineSpinner() {
+        // The content-visible phases get the inline spinner exactly as the
+        // unconditional write did: Ready (the common case), InlineRefreshing
+        // (idempotent re-pull), and Failed (a user-initiated refresh clears
+        // the recorded failure, as the former write did).
+        assertEquals(HomeLoadPhase.InlineRefreshing, HomeLoadPhaseTransitions.onPullToRefresh(HomeLoadPhase.Ready))
+        assertEquals(
+            HomeLoadPhase.InlineRefreshing,
+            HomeLoadPhaseTransitions.onPullToRefresh(HomeLoadPhase.InlineRefreshing),
+        )
+        assertEquals(
+            HomeLoadPhase.InlineRefreshing,
+            HomeLoadPhaseTransitions.onPullToRefresh(HomeLoadPhase.Failed("server down")),
+        )
+    }
 }

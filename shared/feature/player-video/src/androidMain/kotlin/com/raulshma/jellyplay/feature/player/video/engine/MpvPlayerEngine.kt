@@ -78,6 +78,11 @@ class MpvPlayerEngine(
         // The stall watchdog's pulse cadence — matches the position ticker's
         // 1 Hz default the watchdog's confirm windows were tuned against.
         private const val WATCHDOG_TICK_MS = 1_000L
+        // One-shot evidence probe for the reattach epoch's counter-semantics
+        // assumption (see reattachFrameEpoch's KDoc): displayed-frame-count
+        // re-read 5 s after the re-attach settles — a sample below the
+        // captured epoch proves the counter reset with the re-created VO.
+        private const val REATTACH_COUNTER_PROBE_DELAY_MS = 5_000L
         // The load-verification window: a healthy loadfile produces its
         // start-file well inside one second (the green runs: 0.5-1.2s);
         // past this, the surface-attach race consumed the lib's one-shot
@@ -495,6 +500,16 @@ class MpvPlayerEngine(
             voAtSurfaceLoss = runCatching { mpv.getPropertyString("vo") }
                 .getOrNull()
                 ?.takeUnless { it.isBlank() || it == "null" }
+            // Counter-semantics evidence (paired with the reattach-side probe):
+            // if the re-created VO resets displayed-frame-count, the
+            // destroy-side sample vs the attach-side sample settles it in one
+            // device log capture.
+            Log.d(
+                TAG,
+                "MPV surface destroyed: vo stash '${voAtSurfaceLoss ?: "<none>"}', " +
+                    "displayed-frame-count int=${runCatching { mpv.getPropertyInt("displayed-frame-count") }.getOrNull()} " +
+                    "str=${runCatching { mpv.getPropertyString("displayed-frame-count") }.getOrNull()}",
+            )
             super.surfaceDestroyed(holder)
         }
 
@@ -545,7 +560,29 @@ class MpvPlayerEngine(
                 paused = pausedMidFile,
             )
             when (decision) {
-                MpvSurfaceReattachDecision.LibraryInitialLoad -> super.surfaceCreated(holder)
+                MpvSurfaceReattachDecision.LibraryInitialLoad -> {
+                    super.surfaceCreated(holder)
+                    // After a real destroy, the lib's loadfile arm does NOT
+                    // restore vo (its `vo = voInUse` restore lives only in the
+                    // no-path arm of surfaceCreated — bytecode-verified), so a
+                    // destroy→create INSIDE the initial-load window would fire
+                    // the one-shot loadfile with runtime `vo` still null and
+                    // render audio over black — issue #220's BLACK half inside
+                    // the very window it was supposed to cover. Restore the
+                    // stashed driver AFTER delegating: the lib has attached
+                    // the new surface by now, and a runtime vo write re-inits
+                    // the VO and renders the current track (the same
+                    // choreography the Reattach arm relies on). Gated on the
+                    // stash so the virgin pre-playFile attach — where the
+                    // lib's own no-path restore applies — is not double-written.
+                    voAtSurfaceLoss?.let { stash ->
+                        // Same force-window the destroy half flipped to "no".
+                        runCatching { mpv.setOptionString("force-window", "yes") }
+                        runCatching { mpv.setPropertyString("vo", stash) }
+                            .onFailure { Log.w(TAG, "MPV initial-load reattach: vo restore failed", it) }
+                        Log.d(TAG, "MPV initial-load reattach: restored video output '$stash'")
+                    }
+                }
                 is MpvSurfaceReattachDecision.Reattach -> {
                     Log.i(
                         TAG,
@@ -575,6 +612,37 @@ class MpvPlayerEngine(
                     // pre-lock frames must not read as "frames presented".
                     reattachFrameEpoch =
                         runCatching { mpv.getPropertyInt("displayed-frame-count") }.getOrNull() ?: 0
+                    Log.d(TAG, "MPV reattach: captured presentation epoch=${reattachFrameEpoch}")
+                    // Counter-semantics evidence probe: the epoch ASSUMES
+                    // displayed-frame-count is cumulative for the mpv handle
+                    // (see reattachFrameEpoch's KDoc). Re-read 5 s after the
+                    // VO re-init settles — a sample below the captured epoch
+                    // proves the counter reset with the fresh VO (the
+                    // watchdog's re-baseline arm already neutralizes that
+                    // case). Main-thread read, serialized against release
+                    // like scheduleTrackRefresh's delayed slot.
+                    mainHandler.postDelayed(
+                        {
+                            if (core.released) return@postDelayed
+                            // Format-matrix probe (2026-11-17 device round): the
+                            // int read came back null on the POCO F1 — sample the
+                            // other mpv formats for the same property plus a
+                            // control property to settle whether the property is
+                            // absent from this build or only the int JNI path is
+                            // broken.
+                            val intSample = runCatching { mpv.getPropertyInt("displayed-frame-count") }.getOrNull()
+                            val stringSample = runCatching { mpv.getPropertyString("displayed-frame-count") }.getOrNull()
+                            val doubleSample = runCatching { mpv.getPropertyDouble("displayed-frame-count") }.getOrNull()
+                            val controlInt = runCatching { mpv.getPropertyInt("frame-drop-count") }.getOrNull()
+                            val controlString = runCatching { mpv.getPropertyString("frame-drop-count") }.getOrNull()
+                            Log.d(
+                                TAG,
+                                "MPV reattach +5s probe: int=$intSample str=$stringSample dbl=$doubleSample " +
+                                    "(epoch=${reattachFrameEpoch}); control frame-drop-count: int=$controlInt str=$controlString",
+                            )
+                        },
+                        REATTACH_COUNTER_PROBE_DELAY_MS,
+                    )
                     if (decision.rePresentFrame) {
                         val posMs = core.cachedPositionMs
                         if (posMs >= 0L) {
@@ -1037,15 +1105,26 @@ class MpvPlayerEngine(
      *
      * The stall watchdog's video-only wedge window treats
      * `displayed-frame-count > 0` as "the VO has presented a frame" — true
-     * forever after ANY frame was shown, because the counter is cumulative
+     * forever after ANY frame was shown, ASSUMING the counter is cumulative
      * for the mpv handle. A session that wedges ON the re-attached surface
      * (the fresh zero-copy hwdec pipeline is exactly the AImageReader wedge
-     * class) therefore reads as healthy: the pre-lock frames already made the
-     * count non-zero. The epoch makes the read delta-aware — "presenting"
-     * means the count ADVANCED past the re-attach checkpoint; the epoch
-     * retires the moment frames present again (back to the cheap flag-gated
-     * read) and resets per item with [load]. Main-thread only (the surface
-     * callback and the watchdog ticker share the main dispatcher).
+     * class) would read as healthy without the epoch: the pre-lock frames
+     * already made the count non-zero. The epoch makes the read delta-aware —
+     * "presenting" means the count ADVANCED past the re-attach checkpoint.
+     *
+     * **Semantics caveat (2026-11-17 regression analysis, M3):** the
+     * cumulative assumption is NOT device-verified. If the counter resets
+     * when the VO is destroyed/re-created inside the reattach arm, a stale
+     * epoch suppresses every post-reattach frame and false-fires the hwdec
+     * downgrade. Two guards cover it until the logs settle the semantics:
+     * the watchdog's consumption re-baselines the epoch whenever the count
+     * reads BELOW it (a no-op under the cumulative assumption, since a
+     * cumulative count is monotonic), and the reattach arm logs the counter
+     * at destroy, at capture, and 5 s after the VO re-init
+     * ([REATTACH_COUNTER_PROBE_DELAY_MS]) for one-shot device evidence. The
+     * epoch retires the moment frames present again (back to the cheap
+     * flag-gated read) and resets per item with [load]. Main-thread only (the
+     * surface callback and the watchdog ticker share the main dispatcher).
      */
     private var reattachFrameEpoch: Int? = null
 
@@ -1701,17 +1780,40 @@ class MpvPlayerEngine(
                     true
                 } else {
                     // Delta-aware when a re-attach epoch is open (the counter
-                    // is cumulative for the handle — the raw >0 check cannot
-                    // see a wedge that started ON the re-attached surface);
-                    // the epoch retires the moment frames present again.
+                    // is ASSUMED cumulative for the handle — the raw >0 check
+                    // cannot see a wedge that started ON the re-attached
+                    // surface); the epoch retires the moment frames present
+                    // again.
                     val count = runCatching { mpvView?.mpv?.getPropertyInt("displayed-frame-count") }.getOrNull() ?: 0
                     val epoch = reattachFrameEpoch
                     if (epoch == null) {
                         count > 0
                     } else if (count > epoch) {
+                        Log.d(TAG, "MPV reattach epoch retired: count=$count > epoch=$epoch — frame presented")
                         reattachFrameEpoch = null
                         true
+                    } else if (count < epoch) {
+                        // The counter went BACKWARDS: displayed-frame-count
+                        // reset with the re-created VO (or a JNI read glitch).
+                        // Holding the stale epoch would suppress every
+                        // post-reattach frame until the fresh count re-climbed
+                        // past it — forever on a paused+kicked session —
+                        // false-firing the video-only wedge window's
+                        // SwitchHwdecThenKick hwdec downgrade. Re-baseline to
+                        // the fresh counter. Under the cumulative assumption
+                        // this arm is unreachable (a cumulative count is
+                        // monotonic), so it is a no-op if the assumption
+                        // holds; the destroy/attach/+5s probe logs settle the
+                        // semantics on-device.
+                        Log.w(
+                            TAG,
+                            "MPV reattach: displayed-frame-count went backwards " +
+                                "(count=$count < epoch=$epoch) — counter reset on VO re-init; re-baselining epoch",
+                        )
+                        reattachFrameEpoch = count
+                        false
                     } else {
+                        Log.d(TAG, "MPV reattach epoch open: count=$count == epoch=$epoch — no frame presented yet")
                         false
                     }
                 }

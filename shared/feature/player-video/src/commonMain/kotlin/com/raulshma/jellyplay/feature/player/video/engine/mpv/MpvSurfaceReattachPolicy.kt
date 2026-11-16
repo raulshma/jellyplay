@@ -10,6 +10,13 @@ sealed interface MpvSurfaceReattachDecision {
      * one-shot initial loadfile. Both the pre-`playFile` attach (path null →
      * attach + the lib's own vo restore) and the armed initial load ride
      * this arm.
+     *
+     * NOTE the asymmetry the host must compensate for: the lib's vo restore
+     * lives ONLY in its no-path arm. The armed loadfile arm restores no vo
+     * (bytecode-verified), so when this arm is reached AFTER a real destroy
+     * (the engine's `voAtSurfaceLoss` stash is populated), the host restores
+     * the stashed driver after delegating — see the engine's delegated
+     * branch. A virgin pre-`playFile` attach (stash empty) is left untouched.
      */
     data object LibraryInitialLoad : MpvSurfaceReattachDecision
 
