@@ -58,7 +58,6 @@ fun SubtitlesStep(
             title = stringResource(Res.string.onboarding_subtitles_title),
             subtitle = stringResource(Res.string.onboarding_subtitles_subtitle),
             icon = Tabler.Outline.Subtitles,
-            onNext = {},
         ) {
             Box(
                 modifier = Modifier

@@ -46,7 +46,6 @@ fun HomeLayoutStep(
             title = stringResource(Res.string.onboarding_home_layout_title),
             subtitle = stringResource(Res.string.onboarding_home_layout_subtitle),
             icon = Tabler.Outline.LayoutGrid,
-            onNext = {},
         ) {
             Text(
                 text = stringResource(Res.string.onboarding_home_layout_home_mode),

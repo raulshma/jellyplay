@@ -77,7 +77,6 @@ fun SecurityStep(
             title = stringResource(Res.string.onboarding_security_title),
             subtitle = stringResource(Res.string.onboarding_security_subtitle),
             icon = Tabler.Outline.Lock,
-            onNext = {},
         ) {
             OnboardingToggleRow(
                 title = stringResource(Res.string.onboarding_security_pin_lock),

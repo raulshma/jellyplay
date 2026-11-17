@@ -4,6 +4,7 @@
 
     <string name="onboarding_skip">スキップ</string>
     <string name="onboarding_next">次へ</string>
+    <string name="onboarding_step_progress">ステップ %1$d / %2$d</string>
     <string name="onboarding_completion_title">設定完了！</string>
     <string name="onboarding_completion_subtitle">JellyPlayの設定が完了し、利用できる状態になりました。これらの設定は後からいつでも変更できます。</string>
     <string name="onboarding_completion_start_watching">視聴を開始</string>

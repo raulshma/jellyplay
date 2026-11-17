@@ -47,4 +47,19 @@ class OnboardingStepTest {
         // The inclusive upper bound setStep coerces into.
         assertEquals(OnboardingStep.count - 1, OnboardingStep.COMPLETION.index)
     }
+
+    @Test
+    fun progress_fraction_counts_the_current_step_and_reaches_full_on_completion() {
+        val step = 1f / OnboardingStep.count.toFloat()
+
+        assertEquals(step, OnboardingStep.progressFraction(0))
+        assertEquals(step * 4, OnboardingStep.progressFraction(3))
+        assertEquals(1f, OnboardingStep.progressFraction(OnboardingStep.COMPLETION.index))
+    }
+
+    @Test
+    fun progress_fraction_coerces_pages_outside_the_wizard() {
+        assertEquals(OnboardingStep.progressFraction(0), OnboardingStep.progressFraction(-4))
+        assertEquals(1f, OnboardingStep.progressFraction(OnboardingStep.count + 3))
+    }
 }

@@ -4,6 +4,7 @@
 
     <string name="onboarding_skip">건너뛰기</string>
     <string name="onboarding_next">다음</string>
+    <string name="onboarding_step_progress">%2$d단계 중 %1$d단계</string>
     <string name="onboarding_completion_title">모든 준비 완료!</string>
     <string name="onboarding_completion_subtitle">JellyPlay가 구성되어 사용할 준비가 되었습니다. 이 설정은 나중에 언제든지 변경할 수 있습니다.</string>
     <string name="onboarding_completion_start_watching">시청 시작</string>

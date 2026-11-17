@@ -141,7 +141,6 @@ fun SeerrStep(
             title = stringResource(Res.string.onboarding_seerr_title),
             subtitle = stringResource(Res.string.onboarding_seerr_subtitle),
             icon = Tabler.Outline.Puzzle,
-            onNext = {},
         ) {
             Text(
                 text = stringResource(Res.string.onboarding_seerr_connection),

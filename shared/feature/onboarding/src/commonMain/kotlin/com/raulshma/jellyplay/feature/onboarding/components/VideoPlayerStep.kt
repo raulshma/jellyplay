@@ -56,7 +56,6 @@ fun VideoPlayerStep(
             title = stringResource(Res.string.onboarding_video_title),
             subtitle = stringResource(Res.string.onboarding_video_subtitle),
             icon = Tabler.Outline.Video,
-            onNext = {},
         ) {
             Text(
                 text = stringResource(Res.string.onboarding_video_player_engine),
