@@ -26,7 +26,6 @@
 # <me@raulshma.xyz>.
 Categories:
   - Multimedia
-  - Online Media Player
 License: GPL-3.0-only
 # LICENSE is plain GNU GPL v3 with zero occurrences of "or later"
 # (verified by grep against the repo LICENSE file) → GPL-3.0-only, NOT GPL-3.0+.
