@@ -115,13 +115,14 @@ fun OnboardingScreen(
                 pageCount = OnboardingStep.count,
                 onBack = { navigateToPage(pagerState.currentPage - 1) },
                 onSkip = {
-                    // Skip now jumps to the review/finish step (CompletionStep)
-                    // instead of instantly completing — see OnboardingViewModel
-                    // .skipOnboarding. Animate the pager there and let the user
-                    // confirm via "Start Watching"; do NOT call onComplete() here
-                    // or an accidental Skip permanently dismisses the wizard.
-                    viewModel.skipOnboarding()
-                    navigateToPage(lastPage)
+                    // Skip exits onboarding from any page. Land the pending
+                    // debounced Seerr write first so the last keystroke isn't
+                    // lost; the wizard can be re-run from Settings → Setup wizard.
+                    scope.launch {
+                        viewModel.seerrEditActions.flushPendingFieldWrites()
+                        viewModel.completeOnboarding()
+                        onComplete()
+                    }
                 },
             )
 

@@ -41,10 +41,9 @@ import org.jetbrains.compose.resources.stringResource
  * the label gives sighted and TalkBack users the same exact position, and back
  * is reachable with one tap instead of only the system gesture.
  *
- * The back slot is absent on the first page (there is nowhere to go) and the
- * skip action is absent on the completion page (there is nothing left to
- * skip). [pageCount] is the total number of wizard pages, not a zero-based
- * index.
+ * The back slot is absent on the first page (there is nowhere to go); skip is
+ * present on every page so the wizard can be left at any point. [pageCount] is
+ * the total number of wizard pages, not a zero-based index.
  */
 @Composable
 fun OnboardingProgressHeader(
@@ -55,7 +54,6 @@ fun OnboardingProgressHeader(
     modifier: Modifier = Modifier,
 ) {
     val canGoBack = currentPage > 0
-    val canSkip = currentPage < pageCount - 1
     val backFocusState = rememberTvFocusState(focusedScale = 1.04f)
     val skipFocusState = rememberTvFocusState(focusedScale = 1.04f)
 
@@ -93,20 +91,18 @@ fun OnboardingProgressHeader(
                 modifier = Modifier.weight(1f),
             )
 
-            AnimatedVisibility(visible = canSkip, enter = fadeIn(), exit = fadeOut()) {
-                TextButton(
-                    onClick = onSkip,
-                    modifier = Modifier
-                        .then(skipFocusState.focusModifier)
-                        .tvFocusIndicator(skipFocusState, ShapeCache.smooth12),
-                ) {
-                    Text(
-                        text = stringResource(Res.string.onboarding_skip),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            TextButton(
+                onClick = onSkip,
+                modifier = Modifier
+                    .then(skipFocusState.focusModifier)
+                    .tvFocusIndicator(skipFocusState, ShapeCache.smooth12),
+            ) {
+                Text(
+                    text = stringResource(Res.string.onboarding_skip),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
