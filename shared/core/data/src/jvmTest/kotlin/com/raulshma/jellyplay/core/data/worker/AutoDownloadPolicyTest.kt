@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.identity.PersistedIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -55,7 +56,7 @@ class AutoDownloadPolicyTest {
         coEvery { policyStore.seriesPolicies(any()) } returns emptyMap()
         coEvery { policyStore.recordAutoDownloadSuggestions(any()) } returns 0
         coEvery { downloadIntake.startSeries(any(), any(), any()) } returns Result.success(emptyList())
-        every { serverIdentityStore.activeServerId } returns MutableStateFlow("srv-1")
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ServerSelected("srv-1")
     }
 
     private fun check() = AutoDownloadCheck(
@@ -342,7 +343,7 @@ class AutoDownloadPolicyTest {
 
     @Test
     fun `an empty allow-list means all servers`() = runTest {
-        every { serverIdentityStore.activeServerId } returns MutableStateFlow(null)
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.NoSession
         givenSnapshot(episodeInSeason("ep-1", "season-1", 1))
 
         check().checkOnce(attempt = 0)

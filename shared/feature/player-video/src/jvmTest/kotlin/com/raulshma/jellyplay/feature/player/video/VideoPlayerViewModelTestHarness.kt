@@ -90,9 +90,28 @@ open class VideoPlayerViewModelHarness {
         ),
     )
 
+    /**
+     * The castManager seam mock, hoisted out of the construction call so the
+     * background-cast handoff suite can stub the latch BEFORE the VM
+     * constructor runs — the defensive-clear pin reads construction-time
+     * behavior, and a subclass @Before runs only after [setUpHarness] has
+     * already built the VM. Stub it from [preConstructStubs]. Internal (not
+     * protected) so the handoff suite's verify blocks can read it without
+     * extending the harness.
+     */
+    internal val castManager: CastManager = mockk(relaxed = true)
+
+    /**
+     * Subclass hook for stubs that must be in place BEFORE the VM is
+     * constructed. Runs at the top of [setUpHarness], ahead of the
+     * [VideoPlayerViewModel] construction. Default: nothing.
+     */
+    protected open fun preConstructStubs() {}
+
     @Before
     fun setUpHarness() {
         Dispatchers.setMain(testDispatcher)
+        preConstructStubs()
 
         detailFeed = mockk(relaxed = true)
         playbackRepository = mockk(relaxed = true)
@@ -266,7 +285,7 @@ open class VideoPlayerViewModelHarness {
             // getImageUrl answers "" (mockk's relaxed String default), the
             // exact URL shape the pre-tag seams produced.
             artworkUrls = DefaultArtworkUrls(imageUrlProviderMock),
-            castManager = mockk(relaxed = true),
+            castManager = castManager,
             syncPlayManager = syncPlayManager,
             activePlayerController = activePlayerController,
             pipController = pipController,

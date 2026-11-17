@@ -8,6 +8,7 @@
     <!-- OnboardingScreen bottom bar -->
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_next">Next</string>
+    <string name="onboarding_step_progress">Step %1$d of %2$d</string>
 
     <!-- CompletionStep -->
     <string name="onboarding_completion_title">All Set!</string>

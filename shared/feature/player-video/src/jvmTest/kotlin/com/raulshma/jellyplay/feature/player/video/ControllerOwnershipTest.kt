@@ -210,9 +210,13 @@ class ControllerOwnershipTest {
         // performance-Level + Exo buffer-posture projections (the stats
         // overlay's Level row + Buffer rows and the playback sheet's
         // read-only Level line — expose-only pref mirrors over the
-        // appearance store and the aggregate). Lower the
+        // appearance store and the aggregate). Raised to 1_172 (2026-11-16)
+        // for the background-cast handoff latch's defensive clear at VM
+        // construction (the #145 PiP-latch treatment — a stale-true latch
+        // skipped Initialize and dead-aired the next player VM; pins in
+        // BackgroundCastHandoffLatchTest). Lower the
         // ceiling when a slice moves out; never raise it to admit growth.
-        val maxVideoPlayerViewModelLines = 1_160
+        val maxVideoPlayerViewModelLines = 1_172
         val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
         val lines = vm.sourceText().lineSequence().count()
         assertTrue(
@@ -252,9 +256,14 @@ class ControllerOwnershipTest {
         // construction-wiring raise shape as the 2026-10-28 entry). Raised to
         // 3_020 (2026-11-03) for the §5.8 tuning slice in the engine-config
         // build (the uiPrefs-mirrored tuning the runtime rebuild folds).
+        // Raised to 3_056 (2026-11-15) for the cinema-intro reliability fix:
+        // the intro load body rides the LOAD task slot (cancel-and-replace
+        // single-flight across rapid skips + external initializes) with the
+        // resurrection guards at its two write sites, and the slot
+        // choreography documented at [PlaybackSession.loadCinemaIntro].
         // Lower the ceiling when a cluster moves out; never raise it to admit
         // growth.
-        val maxPlaybackSessionLines = 3_020
+        val maxPlaybackSessionLines = 3_056
         val session = mainSources().first { it.name == "PlaybackSession.kt" }
         val lines = session.sourceText().lineSequence().count()
         assertTrue(

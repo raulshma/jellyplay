@@ -92,8 +92,17 @@ data class HomeUiState(
      * map and the gate of this one.
      */
     val offlineBookProgressFractions: Map<String, Float> = emptyMap(),
-    val isLoading: Boolean = true,
-    val isRefreshing: Boolean = false,
+    /**
+     * The load/refresh lifecycle as ONE mutually-exclusive phase, mirrored
+     * from [HomeRefreshState.loadPhase] (the refresher is its sole writer,
+     * like [sections]). The sealed migration of the former
+     * `isLoading`/`isRefreshing`/`error` flag trio — see [HomeLoadPhase] for
+     * what it replaced and the No-Content-flash invariant it makes
+     * structurally impossible. The screen never reads flag combinations:
+     * the verdicts below ([isLoading], [isRefreshing], [fetchFailed],
+     * [isHardError]) are compiler-forced `when`s over this single carrier.
+     */
+    val loadPhase: HomeLoadPhase = HomeLoadPhase.ColdLoading,
     /**
      * True while a user-initiated offline→online transition is in progress,
      * so the Go-online affordances can show an inline spinner instead of
@@ -101,7 +110,6 @@ data class HomeUiState(
      * [com.raulshma.jellyplay.core.data.offline.OfflineModeManager.goingOnline].
      */
     val isGoingOnline: Boolean = false,
-    val error: String? = null,
     /** Non-blocking notice shown when some (not all) home sections failed to load. */
     val partialLoadError: Boolean = false,
     val homeMode: HomeMode = HomeMode.VIDEO,
@@ -296,18 +304,50 @@ data class HomeUiState(
     val imageReloadEpoch: Long = 0L,
 ) {
     /**
+     * The full-screen-loader verdict, decided by a compiler-forced `when`
+     * over [loadPhase]: the two phases that deliberately park a full-screen
+     * spinner over the screen ([HomeLoadPhase.ColdLoading] — cold start,
+     * manual refresh, identity reset — and [HomeLoadPhase.Handshaking] — the
+     * going-online handshake). The content list renders it as the
+     * DelayedLoadingScreen only while `sections` is empty, exactly as the
+     * former `isLoading` flag behaved (a spinner phase whose SWR snapshot
+     * paint has re-filled sections renders the rows, not the loader).
+     */
+    val isLoading: Boolean
+        get() = when (loadPhase) {
+            HomeLoadPhase.ColdLoading, HomeLoadPhase.Handshaking -> true
+            HomeLoadPhase.Ready, HomeLoadPhase.InlineRefreshing -> false
+            is HomeLoadPhase.Failed -> false
+        }
+
+    /**
+     * The pull-to-refresh indicator verdict over [loadPhase] — true only for
+     * [HomeLoadPhase.InlineRefreshing], the single phase that raises the
+     * inline spinner.
+     */
+    val isRefreshing: Boolean
+        get() = when (loadPhase) {
+            HomeLoadPhase.InlineRefreshing -> true
+            HomeLoadPhase.ColdLoading,
+            HomeLoadPhase.Ready,
+            HomeLoadPhase.Handshaking,
+            -> false
+            is HomeLoadPhase.Failed -> false
+        }
+
+    /**
      * The refresher's verdict — the ONE meaning of "the fetch failed"
      * (the single-carrier rule), the same derivation as
      * [HomeRefreshState.fetchFailed] carried through the refresher fold.
      * Readers (the header status chip) consume this named verdict instead of
-     * restating `error != null` from the raw field.
+     * restating a flag check from the raw phase.
      */
     val fetchFailed: Boolean
-        get() = error != null
+        get() = loadPhase is HomeLoadPhase.Failed
 
     /**
      * The hard-error surface verdict, computed ONCE here — the fold's output,
-     * where [renderSource], [sections] and [error] are consistent in one
+     * where [renderSource], [sections] and [loadPhase] are consistent in one
      * snapshot — instead of re-derived at each branch: the failed fetch over a
      * confirmed-empty feed that renders [HomeSurface.HardError]. The
      * offline-render corners stay excluded because [HomeRenderSource] already

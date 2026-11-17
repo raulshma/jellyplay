@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.network.library.LibraryItemsQuerySpec
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
@@ -60,8 +61,10 @@ class LibraryItemsQueryExecutorsTest {
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = router,
         )
-        engine.updateServer(testServer)
-        engine.updateUser(testUser)
+        // Full-arity createApi stub: the multi-write (updateSession) rebuilds
+        // the client inside its critical section (see AuthApiClientTest's note).
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returns mockk(relaxed = true)
+        runBlocking { engine.updateSession(testServer, testUser) }
     }
 
     /**

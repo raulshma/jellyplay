@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.security
 
+import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
 import com.raulshma.jellyplay.core.model.wallNowMillis
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -40,8 +41,19 @@ class PinRateLimiter constructor(
     // synchronous [getPinLockoutState] can read the latest value without
     // suspending — the same shape as `UserPreferencesStore.getPinLockoutState`
     // reading `preferences.value`.
+    //
+    // DECLARED FIX (corrupt-read routing): the snapshot previously read raw
+    // `dataStore.data`, so a failed read threw into this Eagerly-shared
+    // collector on the application scope — the LOCKOUT read (a gate-adjacent
+    // consumer) died with it, taking the whole rate-limit surface down instead
+    // of degrading. It now rides the module-wide
+    // [dataDegradingToDefaults] corrupt-read policy (see `SliceStateFlow.kt`):
+    // a failed read emits the all-defaults snapshot (unlocked), the collector
+    // survives, and the next successful read serves real data again.
+    // Byte-preserving on healthy data: same keys, same
+    // `emptyPreferences()` seed, same sharing shape, same write paths.
     private val snapshot: StateFlow<Preferences> =
-        dataStore.data
+        dataStore.dataDegradingToDefaults()
             .stateIn(externalScope, SharingStarted.Eagerly, emptyPreferences())
 
     /**

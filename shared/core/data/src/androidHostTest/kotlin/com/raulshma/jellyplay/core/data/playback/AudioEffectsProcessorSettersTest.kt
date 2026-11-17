@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import androidx.media3.exoplayer.ExoPlayer
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import org.junit.Assert.assertEquals
@@ -95,5 +96,29 @@ class AudioEffectsProcessorSettersTest {
         processor.setEqualizerBand(0, 600)
         assertEquals(600, processor.equalizerSettings.value.bandLevels[0])
         assertEquals(EqualizerPreset.CUSTOM, processor.equalizerPreset.value)
+    }
+
+    @Test
+    fun `applyNightMode fires the volume-write port after either arm's engine write`() {
+        // REVIEW FIX (defect cohort): both applyNightMode arms rewrite the
+        // engine level (the enable arm's night level, the disable arm's `1f`
+        // unwind); the port fires AFTER the write so the manager's mute
+        // reconcile sees the post-write level. The loudness-enhancer attach is
+        // session-id-guarded (the relaxed player reports unset) so this stays
+        // JVM-safe.
+        val player = io.mockk.mockk<ExoPlayer>(relaxed = true)
+        val playerVolume = floatArrayOf(1f)
+        io.mockk.every { player.setVolume(any<Float>()) } answers { playerVolume[0] = firstArg() }
+        processor.playerProvider = { player }
+        val portFires = intArrayOf(0)
+        processor.onNightModeVolumeWrite = { portFires[0]++ }
+
+        processor.setNightModeEnabled(true)
+        assertEquals("the enable arm fired the port after its write", 1, portFires[0])
+        assertTrue("the night level is audible — the reconcile must see it", playerVolume[0] > 0f)
+
+        processor.setNightModeEnabled(false)
+        assertEquals("the disable arm fired the port after its write", 2, portFires[0])
+        assertEquals("the unwind restored full volume", 1f, playerVolume[0])
     }
 }

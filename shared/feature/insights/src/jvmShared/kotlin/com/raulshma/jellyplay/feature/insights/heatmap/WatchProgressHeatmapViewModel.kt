@@ -15,7 +15,10 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Semaphore
 import java.time.LocalDate
 import java.time.ZoneId
@@ -29,7 +32,6 @@ data class WatchProgressHeatmapUiState(
     val dailyActivities: List<DailyWatchActivity> = emptyList(),
     val streakInfo: StreakInfo = StreakInfo(0, 0, 0),
     val selectedDay: SelectedDayInfo? = null,
-    val shareRequested: Boolean = false,
     val isPluginAvailable: Boolean = false,
     val minActivityDate: LocalDate? = null,
     val error: String? = null,
@@ -55,8 +57,11 @@ sealed interface HeatmapEvent {
     data class SetFilter(val filter: HeatmapFilter) : HeatmapEvent
     data class SelectDay(val date: LocalDate?) : HeatmapEvent
     data object DismissDayDetail : HeatmapEvent
-    data object RequestShare : HeatmapEvent
-    data object ShareConsumed : HeatmapEvent
+    // The former RequestShare / ShareConsumed arms lived only to toggle the
+    // retired `shareRequested` parked UiState boolean; the share request now
+    // rides the VM's one-shot [WatchProgressHeatmapViewModel.shareRequests]
+    // channel via [WatchProgressHeatmapViewModel.requestShare]
+    // (StateManagementConventions §2).
 }
 
 class WatchProgressHeatmapViewModel(
@@ -73,6 +78,28 @@ class WatchProgressHeatmapViewModel(
 
     private val _uiState = stateFlow(WatchProgressHeatmapUiState())
     val uiState: StateFlow<WatchProgressHeatmapUiState> = _uiState.flow
+
+    /**
+     * The heatmap image's share request ([requestShare]) — the buffered
+     * never-replayed Channel that replaced the former `shareRequested` parked
+     * UiState boolean + the `HeatmapEvent.ShareConsumed` consume event (the
+     * codified StateManagementConventions §2 idiom: a StateFlow replays its
+     * current value to every new collector, so the parked boolean re-fired
+     * the share sheet on re-subscription for a request that happened once).
+     * [WatchProgressHeatmapScreen] collects this in a single
+     * [androidx.compose.runtime.LaunchedEffect] and snapshots the same
+     * capture layer it always has. The request carries no payload — the
+     * share seam snapshots the grid's own capture layer.
+     */
+    private val shareRequestChannel = Channel<Unit>(Channel.BUFFERED)
+
+    /** The one-shot share-request stream; each request is delivered exactly once. */
+    val shareRequests: Flow<Unit> = shareRequestChannel.receiveAsFlow()
+
+    /** Queues one share-sheet delivery (the share icon's command). */
+    fun requestShare() {
+        shareRequestChannel.trySend(Unit)
+    }
 
     private var cachedResolvedItems = mutableMapOf<String, ResolvedMediaItem>()
 
@@ -100,8 +127,6 @@ class WatchProgressHeatmapViewModel(
             }
             is HeatmapEvent.SelectDay -> selectDay(event.date)
             is HeatmapEvent.DismissDayDetail -> _uiState.update { it.copy(selectedDay = null) }
-            is HeatmapEvent.RequestShare -> _uiState.update { it.copy(shareRequested = true) }
-            is HeatmapEvent.ShareConsumed -> _uiState.update { it.copy(shareRequested = false) }
         }
     }
 

@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.datastore.SeerrSecrets
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.ServerEntrySecret
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.datastore.identity.ServerIdentity
+import com.raulshma.jellyplay.core.datastore.identity.PersistedIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
@@ -29,8 +29,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -70,7 +72,7 @@ class SettingsViewModelSecretsExportTest {
     private lateinit var assembler: SecretsBackupAssembler
     private lateinit var serverIdentityStore: ServerIdentityStore
 
-    private val identity = MutableStateFlow(ServerIdentity(activeServerId = "srv-1", activeUserId = "user-1"))
+    private val identity = MutableStateFlow<PersistedIdentity>(PersistedIdentity.ActiveSession("srv-1", "user-1"))
 
     @BeforeTest
     fun setUp() {
@@ -145,6 +147,23 @@ class SettingsViewModelSecretsExportTest {
         advanceUntilIdle()
     }
 
+    /**
+     * Drains the VM's one-shot [SettingsUserMessage] channel into a list for
+     * asserting. Unconfined-on-test-scheduler is load-bearing: the secrets
+     * KDF hops to the REAL [Dispatchers.Default] (virtual time does not
+     * advance it), and an unconfined collector delivers `trySend` the moment
+     * it lands from that thread. (The ManageSeriesViewModelTest
+     * sinkMessagesFrom convention; backgroundScope still auto-cancels at
+     * test end.)
+     */
+    private fun TestScope.sinkMessagesFrom(viewModel: SettingsViewModel): MutableList<SettingsUserMessage> {
+        val received = mutableListOf<SettingsUserMessage>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.messages.collect { received += it }
+        }
+        return received
+    }
+
     private var writtenPayload: String? = null
 
     private fun stubWrite(uri: String) {
@@ -163,11 +182,14 @@ class SettingsViewModelSecretsExportTest {
             seerr = SeerrSecrets(apiKey = "seerr-key"),
         )
         val vm = viewModel()
+        val received = sinkMessagesFrom(vm)
 
         vm.exportSettings("backup:secrets", includeSecrets = true, passphrase = "correct horse battery".toCharArray())
-        awaitUntil("the export completes") { vm.backupRestoreStatus != null }
+        awaitUntil("the export completes") { received.isNotEmpty() }
 
-        assertEquals("Settings exported successfully", vm.backupRestoreStatus)
+        // Exactly ONE typed outcome message (the former parked
+        // backupRestoreStatus String is retired).
+        assertEquals(SettingsUserMessage.BackupExported, received.single())
         // Raw wire shape: the opted-in export carries ALL THREE secrets keys.
         val raw = writtenPayload.orEmpty()
         for (key in listOf("\"secrets\"", "\"originUserId\"", "\"originServerId\"")) {
@@ -188,9 +210,11 @@ class SettingsViewModelSecretsExportTest {
     fun `export without opt-in writes no secrets block and never calls the assembler`() = vmTest {
         stubWrite("backup:plain")
         val vm = viewModel()
+        val received = sinkMessagesFrom(vm)
 
         vm.exportSettings("backup:plain")
-        awaitUntil("the export completes") { vm.backupRestoreStatus != null }
+        awaitUntil("the export completes") { received.isNotEmpty() }
+        assertEquals(SettingsUserMessage.BackupExported, received.single())
 
         val raw = writtenPayload.orEmpty()
         // Raw wire shape: a PLAIN export must not carry any of the three
@@ -211,11 +235,13 @@ class SettingsViewModelSecretsExportTest {
         stubWrite("backup:zeroed")
         coEvery { assembler.gather() } returns BackupSecrets()
         val vm = viewModel()
+        val received = sinkMessagesFrom(vm)
 
         val passphrase = "wipe-me-please".toCharArray()
         vm.exportSettings("backup:zeroed", includeSecrets = true, passphrase = passphrase)
-        awaitUntil("the export completes") { vm.backupRestoreStatus != null }
+        awaitUntil("the export completes") { received.isNotEmpty() }
 
+        assertEquals(SettingsUserMessage.BackupExported, received.single())
         assertTrue(passphrase.all { it == '\u0000' }, "the passphrase must be zeroed after use")
     }
 
@@ -223,11 +249,14 @@ class SettingsViewModelSecretsExportTest {
     fun `export with secrets without the assembler seam fails instead of crashing`() = vmTest {
         stubWrite("backup:noseam")
         val vm = viewModel(assemblerOverride = null)
+        val received = sinkMessagesFrom(vm)
 
         vm.exportSettings("backup:noseam", includeSecrets = true, passphrase = "pw-12345678".toCharArray())
-        awaitUntil("the failure surfaces") { vm.backupRestoreStatus != null }
+        awaitUntil("the failure surfaces") { received.isNotEmpty() }
 
-        assertTrue("Export failed" in vm.backupRestoreStatus.orEmpty(), "got: ${vm.backupRestoreStatus}")
+        // The typed failure arm carries the assembler-absent reason — the
+        // exact payload the former "Export failed: <reason>" string baked in.
+        assertEquals(SettingsUserMessage.BackupExportFailed("Secrets export is unavailable"), received.single())
         assertNull(writtenPayload, "nothing may be written when the seam is absent")
     }
 }

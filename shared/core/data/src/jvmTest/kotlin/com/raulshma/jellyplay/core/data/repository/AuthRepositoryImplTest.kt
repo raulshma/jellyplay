@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
+import com.raulshma.jellyplay.core.datastore.identity.PersistedIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -38,6 +39,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.AfterTest
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -233,8 +235,10 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `restoreSession with valid stored credentials`() = runTest {
-        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        // Mechanical adaptation: restoreSession now reads the store's ONE
+        // typed identity flow (the sealed PersistedIdentity machine) instead
+        // of the two raw key flows.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { userClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
@@ -258,8 +262,10 @@ class AuthRepositoryImplTest {
         // every live call 401s, and detail screens show "You don't have
         // access to this item." A definitive 401 at restore must instead
         // land on the login screen.
-        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        // Mechanical adaptation: restoreSession now reads the store's ONE
+        // typed identity flow (the sealed PersistedIdentity machine) instead
+        // of the two raw key flows.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { userClient.getCurrentUser() } returns Result.failure(
@@ -288,8 +294,10 @@ class AuthRepositoryImplTest {
         // working from cache, and an authenticated-but-forbidden user keeps
         // the session (permission demotion has its own path in
         // refreshCurrentUser).
-        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        // Mechanical adaptation: restoreSession now reads the store's ONE
+        // typed identity flow (the sealed PersistedIdentity machine) instead
+        // of the two raw key flows.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { userClient.getCurrentUser() } returns Result.failure(Exception("offline"))
@@ -304,8 +312,10 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `restoreSession keeps the session on 403 from token validation`() = runTest {
-        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        // Mechanical adaptation: restoreSession now reads the store's ONE
+        // typed identity flow (the sealed PersistedIdentity machine) instead
+        // of the two raw key flows.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { userClient.getCurrentUser() } returns Result.failure(
@@ -333,8 +343,10 @@ class AuthRepositoryImplTest {
         // definitive 401 from the deferred pass still tears the session down
         // through disconnect + clearSession — the path the shell's
         // isAuthenticated collection turns into the shell → login swap.
-        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        // Mechanical adaptation: restoreSession now reads the store's ONE
+        // typed identity flow (the sealed PersistedIdentity machine) instead
+        // of the two raw key flows.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         // Slower than the ~2 s gate bound, so the on-gate validation times
@@ -384,8 +396,10 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `restoreSession tolerates address selection failures`() = runTest {
-        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        // Mechanical adaptation: restoreSession now reads the store's ONE
+        // typed identity flow (the sealed PersistedIdentity machine) instead
+        // of the two raw key flows.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { authClient.selectReachableAddress() } throws RuntimeException("probe blew up")
@@ -400,8 +414,7 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `restoreSession with no stored server succeeds without error`() = runTest {
-        every { serverIdentityStore.activeServerId } returns flowOf(null)
-        every { serverIdentityStore.activeUserId } returns flowOf(null)
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.NoSession
 
         val result = repository.restoreSession()
 
@@ -411,27 +424,35 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `restoreSession clears preferences when server not found in DB`() = runTest {
-        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        // Mechanical adaptation: restoreSession now reads the store's ONE
+        // typed identity flow (the sealed PersistedIdentity machine) instead
+        // of the two raw key flows.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns null
 
         val result = repository.restoreSession()
 
         assertTrue(result.isSuccess)
-        coVerify { serverIdentityStore.setActiveSession("", "") }
+        // Mechanical adaptation: the blank-sentinel write collapsed into the
+        // store's canonical key-removal clear.
+        coVerify { serverIdentityStore.clearSession() }
     }
 
     @Test
     fun `restoreSession clears user when user not found in DB`() = runTest {
-        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        // Mechanical adaptation: restoreSession now reads the store's ONE
+        // typed identity flow (the sealed PersistedIdentity machine) instead
+        // of the two raw key flows.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns null
 
         val result = repository.restoreSession()
 
         assertTrue(result.isSuccess)
-        coVerify { serverIdentityStore.setActiveUser("") }
+        // Mechanical adaptation: the blank-sentinel write collapsed into the
+        // store's canonical key-removal clear (server selection survives).
+        coVerify { serverIdentityStore.clearUser() }
     }
 
     @Test
@@ -487,6 +508,7 @@ class AuthRepositoryImplTest {
         coVerify { authClient.setUser(any()) }
         coVerify { authClient.disconnect() }
         coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
+        coVerify(exactly = 0) { serverIdentityStore.setSelectedServer(any()) }
     }
 
     @Test
@@ -522,6 +544,7 @@ class AuthRepositoryImplTest {
         coVerify { authClient.setUser(any()) }
         coVerify { authClient.disconnect() }
         coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
+        coVerify(exactly = 0) { serverIdentityStore.setSelectedServer(any()) }
     }
 
     @Test
@@ -537,15 +560,108 @@ class AuthRepositoryImplTest {
         coVerify { serverIdentityStore.setActiveSession("server-1", "user-1") }
     }
 
+    // ── Declared BUG 1 fix pins: switching to a server with no remembered
+    // user persists the ServerSelected phase, and the next cold start
+    // restores THAT server. ──
+
     @Test
-    fun `removeUser deletes user and disconnects if current user`() = runTest {
+    fun `switchServer to a server with no remembered user persists ServerSelected before success`() = runTest {
+        // BUG 1 (declared fix): the former early return re-pointed the client
+        // in memory and wrote NOTHING — the DataStore still named the OLD
+        // server, so the next cold start restored the previous session.
+        coEvery { serverDao.getServerById("server-B") } returns testServerEntity.copy(id = "server-B", name = "Server B")
+        coEvery { userDao.getMostRecentUserForServer("server-B") } returns null
+
+        val result = repository.switchServer("server-B")
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 0) { authClient.setUser(any()) }
+        coVerify { serverIdentityStore.setSelectedServer("server-B") }
+        coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
+        coVerify(exactly = 0) { serverIdentityStore.clearSession() }
+    }
+
+    @Test
+    fun `cold start with a persisted ServerSelected identity adopts that server`() = runTest {
+        // The other half of the BUG 1 pin: after switching to a server with
+        // no remembered user, the NEXT cold start must adopt THAT server (the
+        // login flow opens on its user list) — not silently restore nothing.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ServerSelected("server-B")
+        coEvery { serverDao.getServerById("server-B") } returns testServerEntity.copy(id = "server-B", name = "Server B")
+
+        val result = repository.restoreSession()
+
+        assertTrue(result.isSuccess)
+        coVerify { authClient.setServer(match { it.id == "server-B" }) }
+        coVerify(exactly = 0) { authClient.setUser(any()) }
+        coVerify(exactly = 0) { serverIdentityStore.clearSession() }
+    }
+
+    // ── Declared BUG 2 fix pins (shape (a)): persistSession aborts on cipher
+    // failure with the previous identity intact; a cipher-failed user row
+    // restores as NoSession, never a half-adopted server-with-identity. ──
+
+    @Test
+    fun `restoreSession with a cipher-failed user row restores NoSession, never a half-adopted session`() = runTest {
+        // The identity said logged-in but the Keystore was wiped under the
+        // stored ciphertext. The former branch logged and stopped MID-RESTORE
+        // (server adopted, identity fully populated) — a "persisted" session
+        // that could never authenticate, resurrected by every cold start.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity
+        every { tokenCipher.decrypt(any()) } returns null
+
+        val result = repository.restoreSession()
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 0) { authClient.setUser(any()) }
+        // Clean teardown — no half-adopted server lingers behind the cleared
+        // identity.
+        coVerify { authClient.disconnect() }
+        coVerify { serverIdentityStore.clearSession() }
+        coVerify(exactly = 0) { serverIdentityStore.clearUser() }
+    }
+
+    @Test
+    fun `login with a failing cipher aborts the persist and leaves the previous identity intact`() = runTest {
+        // Shape (a): encrypt-null is a persist failure — no DB row, no
+        // identity write (the former `?: ""` stored an empty-token row and
+        // STILL wrote the identity: the zombie's birthplace). The failure
+        // surfaces exactly like the persist path's other failures (Room /
+        // DataStore I/O): as a thrown exception through the caller's
+        // onSuccess lambda.
+        every { tokenCipher.encrypt(any()) } returns null
+        coEvery { serverDao.getServerByAddress(testServerEntity.address) } returns testServerEntity
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery {
+            authClient.authenticateUser(any<ServerInfo>(), "testuser", "pass")
+        } returns Result.success(testUser)
+        every { authClient.currentServer } returns flowOf(testServer)
+
+        assertFailsWith<IllegalStateException> {
+            repository.login(testServerEntity.address, "testuser", "pass")
+        }
+
+        coVerify(exactly = 0) { userDao.insertUser(any()) }
+        coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
+        coVerify(exactly = 0) { serverIdentityStore.setSelectedServer(any()) }
+    }
+
+    @Test
+    fun `removeUser deletes user, disconnects, and leaves ServerSelected (server selection survives)`() = runTest {
         every { authClient.currentUser } returns flowOf(testUser)
 
         repository.removeUser("user-1")
 
         coVerify { userDao.deleteUserById("user-1") }
         coVerify { authClient.disconnect() }
-        coVerify { serverIdentityStore.setActiveUser("") }
+        // Only the user key is cleared — the server selection survives as the
+        // ServerSelected phase (store-level pin: clearUser lands
+        // ServerSelected when a server key remains).
+        coVerify { serverIdentityStore.clearUser() }
+        coVerify(exactly = 0) { serverIdentityStore.clearSession() }
+        coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
     }
 
     @Test
@@ -575,7 +691,7 @@ class AuthRepositoryImplTest {
     }
 
     @Test
-    fun `revokeServerSession revokes on server, deletes user, and clears session`() = runTest {
+    fun `revokeServerSession revokes on server, deletes user, and clears to NoSession`() = runTest {
         every { authClient.currentUser } returns flowOf(testUser)
         coEvery { authClient.revokeServerSession() } returns Result.success(Unit)
         val serverWithUser = testServerEntity.copy(userId = "user-1", accessToken = "token-123")
@@ -586,7 +702,12 @@ class AuthRepositoryImplTest {
         coVerify { authClient.revokeServerSession() }
         coVerify { userDao.deleteUserById("user-1") }
         coVerify { authClient.disconnect() }
+        // The full clear — revocation ends the whole session (NoSession), not
+        // a server-only selection. (The inner removeUser step legitimately
+        // runs clearUser first; the trailing clearSession is the final phase.)
         coVerify { serverIdentityStore.clearSession() }
+        coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
+        coVerify(exactly = 0) { serverIdentityStore.setSelectedServer(any()) }
     }
 
     @Test

@@ -123,7 +123,11 @@ internal fun EditorScreen(
                 ConfirmAction(
                     text = stringResource(Res.string.editor_save),
                     tone = ConfirmTone.PRIMARY,
-                    onClick = { viewModel.onEvent(EditorUiEvent.SaveMetadata) },
+                    onClick = {
+                        // A dialog must never outlive the command it launched.
+                        showDiscardDialog = false
+                        viewModel.onEvent(EditorUiEvent.SaveMetadata)
+                    },
                 )
             } else {
                 null

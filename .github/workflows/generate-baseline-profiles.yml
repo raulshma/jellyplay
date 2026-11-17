@@ -6,10 +6,11 @@
 # presence. Keeping that tree fresh is this lane's job.
 #
 # Refresh cadence: weekly cron (Sunday 04:00 UTC — offset from
-# startup-benchmark.yml's 03:00 so the two GMD lanes never contend) commits
-# to the default branch, plus workflow_dispatch so a human can refresh any
-# branch on demand (the recovery recipe when the release lane's hard gate
-# fires). Store APK profiles can therefore trail main by at most a week;
+# startup-benchmark.yml's 03:00 so the two GMD lanes never contend) opens a
+# refresh PR against the default branch for a human to merge (ruleset
+# potec-base blocks direct pushes there), plus workflow_dispatch so a human
+# can refresh any branch on demand (the recovery recipe when the release
+# lane's hard gate fires). Store APK profiles can therefore trail main by at most a week;
 # stale rules are simply dropped at profile-compile time, and F-Droid
 # reproducibility is unaffected — its lane builds from the same committed
 # tree on both sides of the byte-compare.
@@ -28,7 +29,11 @@ on:
     - cron: '0 4 * * 0'
 
 permissions:
+  # contents: push the refresh branch; pull-requests: let `gh` create and
+  # squash-merge the refresh PR (GraphQL needs the explicit scope — contents
+  # alone gets a 403 "Resource not accessible by integration").
   contents: write
+  pull-requests: write
 
 jobs:
   generate-and-commit:
@@ -80,14 +85,33 @@ jobs:
             exit 1
           fi
 
-      - name: Commit Generated Profiles
+      # main is under ruleset potec-base ("changes must be made through a pull
+      # request", no bypass actors), so a direct push dies with GH013 — the
+      # Nov-2026 cron failure. Land the refresh as a bot PR instead: the
+      # ruleset demands 0 approvals and no required checks, so it is safe to
+      # merge on sight. [skip ci] on the head commit keeps the repo's PR-lane
+      # CI off the refresh PR (profile data only); on the squash subject it
+      # keeps push-lane CI off the base branch when it merges — what the old
+      # direct-push [skip ci] bought. Dispatching on a branch refreshes that
+      # branch; the PR lands wherever the run started.
+      - name: Commit Profiles and Open Refresh PR
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add app/src/phoneStoreRelease/generated/baselineProfiles/
           if git diff --cached --quiet; then
             echo "Generated profiles are identical to the committed ones — nothing to commit."
-          else
-            git commit -m "chore(baselineprofile): refresh committed phone release profiles [skip ci]"
-            git push
+            exit 0
           fi
+          branch="baseline-profiles/refresh-$(date -u +%Y%m%d-%H%M%S)"
+          git checkout -b "$branch"
+          git commit -m "chore(baselineprofile): refresh committed phone release profiles [skip ci]"
+          git push origin "$branch"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh pr create \
+            --base "$GITHUB_REF_NAME" \
+            --head "$branch" \
+            --title "chore(baselineprofile): refresh committed phone release profiles [skip ci]" \
+            --body "Automated baseline-profile refresh from [run $GITHUB_RUN_ID]($run_url). Profile data only — CI skips this PR by design ([skip ci] head commit); review the diff and merge. Squash keeps the [skip ci] subject on the base branch."

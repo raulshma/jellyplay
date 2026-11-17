@@ -18,7 +18,9 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.model.subtitle.externalSubtitleIndices
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.state.ProviderSubtitleSearchState
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
+import com.raulshma.jellyplay.feature.player.video.state.RemoteSubtitleSearchState
 import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
 import com.raulshma.jellyplay.feature.player.video.state.providerSubtitleEngineId
 import com.raulshma.jellyplay.feature.player.video.state.providerSubtitleRowKey
@@ -156,6 +158,10 @@ internal class SubtitleManager(
      * fast "fr" query used to overwrite the latter's results, surfacing
      * stale results for the wrong language. Cancel the prior search before
      * starting a new one.
+     *
+     * Its state writes ride [SubtitleState.remoteSubtitleSearch] alone — the
+     * multi-provider machine's phase ([SubtitleState.providerSubtitleSearch])
+     * is a separate value this job never touches.
      */
     private var searchJob: Job? = null
 
@@ -567,14 +573,10 @@ internal class SubtitleManager(
         remoteSubtitlesJob?.cancel()
         _state.update {
             it.copy(
-                searchedSubtitles = emptyList(),
-                hasSearchedSubtitles = false,
-                isSearchingSubtitles = false,
-                subtitleSearchError = null,
+                remoteSubtitleSearch = RemoteSubtitleSearchState.Idle,
                 subtitleCultures = emptyList(),
                 downloadingSubtitles = emptyMap(),
-                providerSearchResults = emptyList(),
-                providerSearchErrors = emptyMap(),
+                providerSubtitleSearch = ProviderSubtitleSearchState.Idle,
                 readySubtitles = emptyMap(),
                 remoteSubtitlesError = null,
             )
@@ -645,28 +647,38 @@ internal class SubtitleManager(
      * Language-scoped remote subtitle search (OpenSubtitles via the server).
      * Results populate the Search tab and are kept separate from the Download
      * tab's server-default list. A failure surfaces as
-     * [SubtitleState.subtitleSearchError] (distinct from an empty result) so
-     * the UI can invite retry rather than implying "no subtitles exist".
+     * [RemoteSubtitleSearchState.Failed] (distinct from
+     * [RemoteSubtitleSearchState.Done] with empty results) so the UI can invite
+     * retry rather than implying "no subtitles exist" — the former
+     * `subtitleSearchError` field, now the arm's payload.
+     *
+     * Writes ride [SubtitleState.remoteSubtitleSearch] ALONE: this machine and
+     * the multi-provider one ([searchAllProviders]) used to share one
+     * isSearching/hasSearched flag pair, and either machine's start or
+     * completion rewrote the other's flags mid-flight. The states are separate
+     * values now, so settling here cannot touch the provider machine's phase —
+     * and its job is never cancelled by a provider search either (see
+     * `providerSearchJob`).
      */
     fun searchRemoteSubtitles(language: String) {
         val itemId = getCurrentItemId() ?: return
         searchJob?.cancel()
         _state.update {
-            it.copy(isSearchingSubtitles = true, hasSearchedSubtitles = false, searchedSubtitles = emptyList(), subtitleSearchError = null)
+            it.copy(remoteSubtitleSearch = RemoteSubtitleSearchState.Searching)
         }
         searchJob = scope.launch {
             playbackRepository.searchRemoteSubtitles(itemId, language).fold(
                 onSuccess = { subs ->
                     _state.update {
-                        it.copy(searchedSubtitles = subs, isSearchingSubtitles = false, hasSearchedSubtitles = true, subtitleSearchError = null)
+                        it.copy(remoteSubtitleSearch = RemoteSubtitleSearchState.Done(subs))
                     }
                 },
                 onFailure = { e ->
                     _state.update {
                         it.copy(
-                            isSearchingSubtitles = false,
-                            hasSearchedSubtitles = false,
-                            subtitleSearchError = UserErrorMessages.resolve(e, "Search failed"),
+                            remoteSubtitleSearch = RemoteSubtitleSearchState.Failed(
+                                UserErrorMessages.resolve(e, "Search failed"),
+                            ),
                         )
                     }
                 },
@@ -692,12 +704,27 @@ internal class SubtitleManager(
      * Concurrent cross-provider search: Jellyfin (server-scoped by itemId +
      * language) + every configured external provider (Wyzie/OpenSubtitles,
      * searched by TMDB/IMDb/title from the item's provider ids). Results are
-     * merged into [SubtitleState.providerSearchResults] with per-provider
-     * error chips in [SubtitleState.providerSearchErrors] — one bad key
-     * never blanks the others.
+     * merged into [ProviderSubtitleSearchState.Results] with per-provider
+     * error chips in the [ProviderSubtitleSearchState.Results.errors] map —
+     * one bad key never blanks the others.
+     *
+     * Writes ride [SubtitleState.providerSubtitleSearch] ALONE: this machine
+     * and the legacy one ([searchRemoteSubtitles]) used to share one
+     * isSearching/hasSearched flag pair, and a completion here cleared the
+     * legacy machine's spinner mid-flight (the reported sheet bug — the
+     * spinner dropped while provider results were still streaming in). The
+     * states are separate values now, so settling here cannot touch the
+     * legacy machine's phase.
      *
      * A separate job from [searchJob] so the two search paths (legacy
-     * Jellyfin-only vs. multi-provider) can't cancel each other.
+     * Jellyfin-only vs. multi-provider) can't cancel each other — deliberate:
+     * either machine may still be streaming when the other starts or settles.
+     * Since the sealed-state migration that property no longer rides on
+     * discipline alone: the machines write disjoint state values
+     * ([SubtitleState.remoteSubtitleSearch] vs
+     * [SubtitleState.providerSubtitleSearch]), so one machine's completion
+     * cannot rewrite the other's spinner/"searched" flags even though neither
+     * job cancels the other.
      */
     private var providerSearchJob: Job? = null
 
@@ -705,12 +732,7 @@ internal class SubtitleManager(
         val itemId = getCurrentItemId() ?: return
         providerSearchJob?.cancel()
         _state.update {
-            it.copy(
-                isSearchingSubtitles = true,
-                hasSearchedSubtitles = false,
-                providerSearchResults = emptyList(),
-                providerSearchErrors = emptyMap(),
-            )
+            it.copy(providerSubtitleSearch = ProviderSubtitleSearchState.Searching())
         }
         providerSearchJob = scope.launch {
             // Prefer the in-memory detail snapshot held by the VM (loaded at
@@ -734,8 +756,9 @@ internal class SubtitleManager(
                 ?: SubtitleQuery(query = null)
 
             // Centralized Jellyfin + external merge + sort. Streaming: each
-            // provider's results/errors land in state the instant it resolves, so
-            // a slow/retrying provider can no longer gate its siblings.
+            // provider's results/errors land on the Searching arm the instant
+            // it resolves, so a slow/retrying provider can no longer gate its
+            // siblings.
             val merged = subtitleProviderRepository.searchAllStreaming(
                 query.copy(languages = listOf(language)),
                 itemId,
@@ -743,17 +766,19 @@ internal class SubtitleManager(
             ) { partial ->
                 _state.update {
                     it.copy(
-                        providerSearchResults = partial.results,
-                        providerSearchErrors = partial.errors,
+                        providerSubtitleSearch = ProviderSubtitleSearchState.Searching(
+                            partialResults = partial.results,
+                            partialErrors = partial.errors,
+                        ),
                     )
                 }
             }
             _state.update {
                 it.copy(
-                    isSearchingSubtitles = false,
-                    hasSearchedSubtitles = true,
-                    providerSearchResults = merged.results,
-                    providerSearchErrors = merged.errors,
+                    providerSubtitleSearch = ProviderSubtitleSearchState.Results(
+                        results = merged.results,
+                        errors = merged.errors,
+                    ),
                 )
             }
         }

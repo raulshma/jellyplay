@@ -204,16 +204,20 @@ class LogsViewModelTest {
             Result.success("line1\nline2")
 
         vm.loadLogFile("server.log")
-        assertTrue(vm.state.isLoadingLogContent)
-        assertEquals("server.log", vm.state.selectedLogFileName)
+        // Adapted from the former isLoadingLogContent + selectedLogFileName pair:
+        // the Loading arm names the file it is loading.
+        assertEquals(LogPanelPhase.Loading("server.log"), vm.state.panelPhase)
 
         testScheduler.runCurrent()
 
-        assertFalse(vm.state.isLoadingLogContent)
-        assertEquals("line1\nline2", vm.state.selectedLogFileContent)
+        // Adapted from the former content + lines pair: ONE immutable
+        // SelectedLogFile, name and content from the same write.
+        val phase = vm.state.panelPhase as LogPanelPhase.Loaded
+        assertEquals("server.log", phase.file.name)
+        assertEquals("line1\nline2", phase.file.content)
         assertEquals(
             listOf(LogLine(index = 0, text = "line1"), LogLine(index = 1, text = "line2")),
-            vm.state.selectedLogFileLines,
+            phase.file.lines,
         )
     }
 
@@ -257,7 +261,8 @@ class LogsViewModelTest {
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
 
-        val lines = vm.state.selectedLogFileLines
+        // Adapted: the diffed lines publish inside the same SelectedLogFile.
+        val lines = (vm.state.panelPhase as LogPanelPhase.Loaded).file.lines
         assertEquals(listOf("line1", "line2", "line3"), lines.map { it.text })
         assertEquals(listOf(false, false, true), lines.map { it.isNew })
         assertEquals(listOf(0, 1, 2), lines.map { it.index })
@@ -292,9 +297,8 @@ class LogsViewModelTest {
 
         vm.clearSelectedLogFile()
 
-        assertNull(vm.state.selectedLogFileName)
-        assertNull(vm.state.selectedLogFileContent)
-        assertEquals(emptyList(), vm.state.selectedLogFileLines)
+        // Adapted from the former name/content/lines triple: ONE phase back to Idle.
+        assertEquals(LogPanelPhase.Idle, vm.state.panelPhase)
         // The polling flag resets so the next selection starts live.
         assertTrue(vm.state.isLogPollingActive)
         // Completes only because the cycle is stopped — otherwise the 5s
@@ -381,4 +385,87 @@ class LogsViewModelTest {
             coVerify(exactly = 2) { adminRepository.getActivityLogEntries(startIndex = 50, limit = 50) }
             assertEquals(50, vm.state.activityEntries.size)
         }
+
+    // ── selected-log panel phase (the atomic SelectedLogFile) ──
+
+    @Test
+    fun `the panel phases run idle - loading - loaded and clear returns to idle`() = runTest(mainDispatcher) {
+        val vm = loadedViewModel()
+        coEvery { adminRepository.getLogFileContent("server.log") } returns Result.success("line1")
+
+        assertEquals(LogPanelPhase.Idle, vm.state.panelPhase)
+
+        vm.loadLogFile("server.log")
+        assertEquals(LogPanelPhase.Loading("server.log"), vm.state.panelPhase)
+
+        testScheduler.runCurrent()
+        val phase = vm.state.panelPhase
+        assertTrue(phase is LogPanelPhase.Loaded)
+        assertEquals("server.log", (phase as LogPanelPhase.Loaded).file.name)
+
+        vm.clearSelectedLogFile()
+        assertEquals(LogPanelPhase.Idle, vm.state.panelPhase)
+    }
+
+    @Test
+    fun `a failed file load lands the panel phase in Failed with the message`() = runTest(mainDispatcher) {
+        val vm = loadedViewModel()
+        coEvery { adminRepository.getLogFileContent("server.log") } returns
+            Result.failure(RuntimeException("boom"))
+
+        vm.loadLogFile("server.log")
+        assertEquals(LogPanelPhase.Loading("server.log"), vm.state.panelPhase)
+        advanceUntilIdle()
+
+        // The former global `error` write moved onto the Failed arm.
+        assertEquals(LogPanelPhase.Failed("server.log", "boom"), vm.state.panelPhase)
+    }
+
+    @Test
+    fun `a stale fetch landing after a file switch never attaches its content to the newer selection`() =
+        runTest(mainDispatcher) {
+            val vm = loadedViewModel()
+
+            // Park server.log's content fetch mid-flight.
+            val parked = CompletableDeferred<Unit>()
+            coEvery { adminRepository.getLogFileContent("server.log") } coAnswers {
+                parked.await()
+                Result.success("line1\nline2")
+            }
+            vm.loadLogFile("server.log")
+            testScheduler.runCurrent()
+            assertEquals(LogPanelPhase.Loading("server.log"), vm.state.panelPhase)
+
+            // A switch lands while the first fetch is still in flight: the
+            // panel phase moves atomically to Loading(other.log) — the torn
+            // window the former three-field state allowed (new name + old
+            // content) is unrepresentable.
+            coEvery { adminRepository.getLogFileContent("other.log") } returns Result.success("other")
+            vm.loadLogFile("other.log")
+
+            parked.complete(Unit)
+            advanceUntilIdle()
+
+            val phase = vm.state.panelPhase
+            assertTrue(phase is LogPanelPhase.Loaded)
+            // Name + content + lines are ONE instance from ONE write — the
+            // stale server.log content never attached to other.log.
+            assertEquals("other.log", (phase as LogPanelPhase.Loaded).file.name)
+            assertEquals("other", phase.file.content)
+            assertEquals(listOf(LogLine(index = 0, text = "other")), phase.file.lines)
+        }
+
+    @Test
+    fun `selecting a file un-pauses a paused poll - the declared legacy behavior`() = runTest(mainDispatcher) {
+        val vm = loadedViewModel()
+        vm.toggleLogPolling()
+        assertFalse(vm.state.isLogPollingActive)
+
+        vm.loadLogFile("server.log")
+
+        assertTrue(vm.state.isLogPollingActive)
+        vm.stopLogPolling()
+        vm.clearSelectedLogFile()
+        advanceUntilIdle()
+    }
 }

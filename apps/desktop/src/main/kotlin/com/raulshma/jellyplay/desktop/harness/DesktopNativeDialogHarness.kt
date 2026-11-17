@@ -13,7 +13,9 @@ import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
 import com.raulshma.jellyplay.desktop.DesktopPaths
 import com.raulshma.jellyplay.feature.settings.RestoreWizardViewModel
 import com.raulshma.jellyplay.feature.settings.SettingsBackupIo
+import com.raulshma.jellyplay.feature.settings.SettingsUserMessage
 import com.raulshma.jellyplay.feature.settings.SettingsViewModel
+import com.raulshma.jellyplay.feature.settings.busText
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -21,7 +23,9 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -50,8 +54,9 @@ import kotlinx.serialization.json.jsonPrimitive
  *     pre-created workspace location and presses Enter.
  *  2. EXPORT_VM_WRITES — the picked file's `file:` URI goes through the
  *     production callback body ([SettingsViewModel.exportSettings]); the step
- *     passes only when the VM reports "Settings exported successfully" AND
- *     the file exists on disk AND its JSON carries the v2 envelope
+ *     passes only when the VM's one-shot channel reports
+ *     [SettingsUserMessage.BackupExported] AND the file exists on disk AND
+ *     its JSON carries the v2 envelope
  *     (schemaVersion == [SettingsBackup.CURRENT_SCHEMA_VERSION], non-empty
  *     slices). The file is the observable, asserted from outside the dialog
  *     machinery.
@@ -248,11 +253,14 @@ object DesktopNativeDialogHarness {
             val exportVmOk = !fatalStop && runner.step("EXPORT_VM_WRITES") {
                 val uri = exportTargetFile.toURI().toString()
                 vm.exportSettings(uri)
-                check(runner.awaitUntil(15_000) { vm.backupRestoreStatus != null }) {
-                    "backupRestoreStatus never settled after exportSettings"
-                }
-                check(vm.backupRestoreStatus == "Settings exported successfully") {
-                    "unexpected export status: '${vm.backupRestoreStatus}'"
+                // The outcome rides the VM's one-shot SettingsUserMessage
+                // channel (StateManagementConventions §2) — the former
+                // backupRestoreStatus parked field replayed on every
+                // re-subscription. Consume exactly one message: the export's
+                // own.
+                val message = withTimeoutOrNull(15_000) { vm.messages.first() }
+                check(message is SettingsUserMessage.BackupExported) {
+                    "unexpected export outcome: $message"
                 }
                 check(exportTargetFile.isFile) { "export file missing: $exportTargetFile" }
                 val bytes = exportTargetFile.readBytes()
@@ -267,7 +275,7 @@ object DesktopNativeDialogHarness {
                 check(!slices.isNullOrEmpty()) { "exported JSON has no non-empty slices" }
                 mapOf(
                     "uri" to uri,
-                    "vmStatus" to vm.backupRestoreStatus.orEmpty(),
+                    "vmStatus" to message.busText(),
                     "bytes" to bytes.size.toString(),
                     "schemaVersion" to schemaVersion.toString(),
                     "sliceKeys" to slices.keys.sorted().joinToString(","),
@@ -304,19 +312,21 @@ object DesktopNativeDialogHarness {
                 // file diff, then a confirmed restore of every category with
                 // the security gate off — the exact calls the wizard makes.
                 wizard.loadBackupFile(uri)
-                check(runner.awaitUntil(15_000) { wizard.uiState.file != null || wizard.uiState.loadError }) {
+                check(runner.awaitUntil(15_000) { wizard.uiState.diffStage != null || wizard.uiState.loadFailure != null }) {
                     "the export was never parsed by the restore wizard"
                 }
-                check(!wizard.uiState.loadError) { "restore wizard failed to load: ${wizard.lastLoadErrorMessage}" }
-                val file = wizard.uiState.file
+                check(wizard.uiState.loadFailure == null) {
+                    "restore wizard failed to load: ${wizard.uiState.loadFailure?.message}"
+                }
+                val file = (wizard.uiState.diffStage as? com.raulshma.jellyplay.feature.settings.DiffStage.File)?.state
                 check(file != null) { "the wizard staged no file diff" }
                 check(!file.versionMismatch) {
                     "version mismatch on our own fresh export (schema ${file.schemaVersion})"
                 }
                 wizard.toggle(com.raulshma.jellyplay.feature.settings.WizardSelectionTarget.AllCategories)
                 wizard.restoreSelected()
-                check(runner.awaitUntil(15_000) { wizard.uiState.completed }) {
-                    "restore never completed (applying=${wizard.uiState.applying} error=${wizard.uiState.applyError})"
+                check(runner.awaitUntil(15_000) { wizard.uiState.applyPhase is com.raulshma.jellyplay.feature.settings.ApplyPhase.Completed }) {
+                    "restore never completed (phase=${wizard.uiState.applyPhase})"
                 }
                 mapOf(
                     "stagedSchemaVersion" to file.schemaVersion.toString(),
@@ -328,7 +338,6 @@ object DesktopNativeDialogHarness {
             // ── 5. the native cancel shape, live (ESC leaves VM untouched) ──
             if (!fatalStop) {
                 runner.step("DIALOG_CANCEL_ESC") {
-                    val statusBefore = vm.backupRestoreStatus
                     val picked = driveAndPick(
                         title = "Import settings",
                         save = false,
@@ -338,13 +347,18 @@ object DesktopNativeDialogHarness {
                         shotName = "dialog-cancel-esc",
                     )
                     check(picked == null) { "ESC left a pick behind: ${picked?.path}" }
-                    check(vm.backupRestoreStatus == statusBefore) {
-                        "VM state moved on a cancelled dialog (callback fired without a pick?)"
+                    // A cancelled pick fires no production callback, so the
+                    // VM's one-shot message channel must stay silent — the
+                    // channel-side equivalent of the former parked-field
+                    // unchanged check (the channel never replays step 2's
+                    // consumed message, so an empty drain proves silence).
+                    val stray = withTimeoutOrNull(500) { vm.messages.first() }
+                    check(stray == null) {
+                        "VM emitted a message on a cancelled dialog: $stray"
                     }
                     mapOf(
                         "picked" to "null",
                         "vmStateUnchanged" to "true",
-                        "statusBefore" to (statusBefore ?: "null"),
                     )
                 }
             }

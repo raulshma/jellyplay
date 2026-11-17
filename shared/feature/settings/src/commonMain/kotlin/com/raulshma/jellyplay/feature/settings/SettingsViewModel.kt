@@ -16,11 +16,14 @@ import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.HomeScreenPreferences
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.time.Clock
@@ -105,9 +108,6 @@ class SettingsViewModel(
         private set
 
     var currentServerUsers by composeState<List<UserInfo>>(emptyList())
-        private set
-
-    var isLoadingUsers by composeState(false)
         private set
 
     val currentServerAddress = authRepository.currentServer
@@ -291,8 +291,21 @@ class SettingsViewModel(
     var isLoadingSessions by composeState(false)
         private set
 
-    var messageSentEvent by composeState<String?>(null)
-        private set
+    /**
+     * One-shot user feedback ([SettingsUserMessage]) — the buffered
+     * never-replayed Channel that replaced the former `messageSentEvent` +
+     * `backupRestoreStatus` parked nullable fields and their
+     * clear-it-after-handling calls (the codified StateManagementConventions
+     * §2 idiom: a StateFlow replays its current value to every new collector,
+     * so the parked fields re-fired the snackbar on re-subscription for an
+     * action that happened once). The consuming screens collect [messages] in
+     * a single [androidx.compose.runtime.LaunchedEffect] and post the same
+     * bus texts they always have ([SettingsUserMessage.busText]).
+     */
+    private val messageChannel = Channel<SettingsUserMessage>(Channel.BUFFERED)
+
+    /** The one-shot feedback stream; each message is delivered exactly once. */
+    val messages: Flow<SettingsUserMessage> = messageChannel.receiveAsFlow()
 
     /**
      * The 30s `/Sessions` poll cycle, registered once — the hand-rolled
@@ -332,7 +345,6 @@ class SettingsViewModel(
         launch {
             authRepository.currentServerUsers.collect { users ->
                 currentServerUsers = users
-                isLoadingUsers = false
             }
         }
     }
@@ -406,16 +418,12 @@ class SettingsViewModel(
         launch {
             serverAdminActions.sendMessageToSession(sessionId, header, text)
                 .onSuccess {
-                    messageSentEvent = "Message sent successfully"
+                    messageChannel.trySend(SettingsUserMessage.MessageSent)
                 }
                 .onFailure {
-                    messageSentEvent = "Failed to send message"
+                    messageChannel.trySend(SettingsUserMessage.MessageSendFailed)
                 }
         }
-    }
-
-    fun clearMessageEvent() {
-        messageSentEvent = null
     }
 
     /**
@@ -450,9 +458,6 @@ class SettingsViewModel(
         editor.clearAllPreferences()
     }
 
-    var backupRestoreStatus by composeState<String?>(null)
-        private set
-
     /**
      * Exports the v2 backup to [uri]. With [includeSecrets] the secrets block rides along: the payload is gathered from the secure
      * stores + server list, encrypted under [passphrase]
@@ -464,6 +469,11 @@ class SettingsViewModel(
      * [passphrase] is consumed and zeroed before this returns; it is never
      * persisted anywhere. The KDF runs on [Dispatchers.Default] — a
      * 600,000-iteration PBKDF2 must not pin the main thread.
+     *
+     * The outcome rides the one-shot [messages] channel — [SettingsUserMessage.BackupExported]
+     * / [SettingsUserMessage.BackupExportFailed] — never a parked state field
+     * (convention §2: a StateFlow replays its current value to every new
+     * collector).
      */
     fun exportSettings(
         uri: String,
@@ -471,7 +481,6 @@ class SettingsViewModel(
         passphrase: CharArray? = null,
     ) {
         launch {
-            backupRestoreStatus = null
             runCatching {
                 // v2 export: snapshot every domain slice + app-runtime extras.
                 // No buildUserPreferences round-trip — the per-store slices are
@@ -490,8 +499,11 @@ class SettingsViewModel(
                         val identity = serverIdentityStore?.identity?.value
                         backup = backup.copy(
                             secrets = envelope,
-                            originUserId = identity?.activeUserId?.takeIf { it.isNotBlank() },
-                            originServerId = identity?.activeServerId?.takeIf { it.isNotBlank() },
+                            // The typed identity's projections are blank-free
+                            // (the store's uniform blank==absent rule) — the
+                            // former `takeIf { isNotBlank }` guards are dead.
+                            originUserId = identity?.userId,
+                            originServerId = identity?.serverId,
                         )
                     } finally {
                         // Zero the passphrase material regardless of outcome.
@@ -503,15 +515,12 @@ class SettingsViewModel(
                 if (!settingsBackupIo.writeExportPayload(uri, jsonString)) {
                     throw IllegalStateException("Cannot open output stream")
                 }
-                backupRestoreStatus = "Settings exported successfully"
+            }.onSuccess {
+                messageChannel.trySend(SettingsUserMessage.BackupExported)
             }.onFailure {
-                backupRestoreStatus = "Export failed: ${it.message}"
+                messageChannel.trySend(SettingsUserMessage.BackupExportFailed(it.message))
             }
         }
-    }
-
-    fun clearBackupRestoreStatus() {
-        backupRestoreStatus = null
     }
 
     /** The session poll's cadence. */

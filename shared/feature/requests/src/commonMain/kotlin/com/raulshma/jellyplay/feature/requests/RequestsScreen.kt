@@ -26,6 +26,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,46 @@ import com.raulshma.jellyplay.feature.requests.generated.resources.requests_titl
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
+/**
+ * The detail-sheet slot's projection: the parked [selectedRequestId] read
+ * against the CURRENT request list. Returns the live [SeerrRequestItem]
+ * while that request is still listed — the sheet tracks the VM's refreshed
+ * object instead of the tap-time snapshot — and null when the slot is
+ * closed OR the request has left the list. Pure so the slot's rules are
+ * pinnable without composition.
+ *
+ * The sheet used to park the whole tap-time OBJECT; the VM's refreshes
+ * (filter writes, debounced search, pull-to-refresh, post-action reloads)
+ * produce fresh item objects, so the sheet rendered the stale copy
+ * indefinitely — including offering Approve on a request that had left the
+ * list. Absent-id CLOSES the sheet (documented choice over a last-known
+ * snapshot fallback: the slot keeps ONE meaning — id = "the user opened
+ * this request", null = closed — with no second snapshot holder, and a
+ * refresh that drops the open request stops offering actions on it); the
+ * happy path (request still listed) is pixel-identical.
+ */
+internal fun projectSheetRequest(
+    selectedRequestId: Int?,
+    requests: List<SeerrRequestItem>,
+): SeerrRequestItem? =
+    selectedRequestId?.let { id -> requests.firstOrNull { it.id == id } }
+
+/**
+ * The orphaned-slot rule for the detail-sheet slot: a parked [selectedRequestId]
+ * whose request no longer projects ([projectSheetRequest] returned null) must
+ * be CLEARED, not just rendered closed. Nothing else nulls the id when the
+ * sheet unrenders (the dismiss/approve callbacks can't fire while
+ * unrendered), so an id that left the list on a pull-to-refresh reload would
+ * stay parked — and a later re-insert of an item with the same id
+ * (paginating back, filter restore, poll re-add) would RE-OPEN the sheet
+ * with no user action. Pure so the rule is pinnable without composition.
+ */
+internal fun isSheetSlotOrphaned(
+    selectedRequestId: Int?,
+    requests: List<SeerrRequestItem>,
+): Boolean =
+    selectedRequestId != null && projectSheetRequest(selectedRequestId, requests) == null
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RequestsScreen(
@@ -86,7 +127,21 @@ fun RequestsScreen(
     // produces a new Map reference — invalidates only the one row whose
     // info changed, not the whole screen body.
 
-    var selectedRequest by remember { mutableStateOf<SeerrRequestItem?>(null) }
+    // The detail sheet parks the tap-time ID, not the item object — the
+    // live item is projected from state.requests each recomposition
+    // ([projectSheetRequest]; absent id closes the sheet, see its KDoc).
+    var selectedRequestId by remember { mutableStateOf<Int?>(null) }
+    val selectedRequest = projectSheetRequest(selectedRequestId, state.requests)
+
+    // An orphaned slot (the id's request left the list on a reload) must be
+    // cleared, not just rendered closed — otherwise a later re-insert of the
+    // same id (pagination, filter restore, poll re-add) re-opens the sheet
+    // uninvited ([isSheetSlotOrphaned]).
+    LaunchedEffect(selectedRequestId, state.requests) {
+        if (isSheetSlotOrphaned(selectedRequestId, state.requests)) {
+            selectedRequestId = null
+        }
+    }
 
     // TV focus-on-launch: focus the first request row once data arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -188,7 +243,7 @@ fun RequestsScreen(
                                 val onClick = remember(request, selectionMode) {
                                     {
                                         if (selectionMode) viewModel.toggleSelection(request)
-                                        else selectedRequest = request
+                                        else selectedRequestId = request.id
                                     }
                                 }
                                 val onLongClick = remember(request) { { viewModel.toggleSelection(request) } }
@@ -303,30 +358,30 @@ fun RequestsScreen(
                     onRemoveFromQueue = { b, s ->
                         viewModel.removeQueueItem(request.media.tmdbId, b, s)
                     },
-                    onDismiss = { selectedRequest = null },
+                    onDismiss = { selectedRequestId = null },
                     onApprove = {
                         viewModel.approveRequest(request.id)
-                        selectedRequest = null
+                        selectedRequestId = null
                     },
                     onDecline = {
                         viewModel.declineRequest(request.id)
-                        selectedRequest = null
+                        selectedRequestId = null
                     },
                     onRetry = {
                         viewModel.retryRequest(request.id)
-                        selectedRequest = null
+                        selectedRequestId = null
                     },
                     onDelete = {
                         viewModel.deleteRequest(request.id)
-                        selectedRequest = null
+                        selectedRequestId = null
                     },
                     onRemoveFromService = {
                         viewModel.removeFromService(request.media.id, request.is4k)
-                        selectedRequest = null
+                        selectedRequestId = null
                     },
                     onNavigateToDetail = { tmdbId, mediaType ->
                         onNavigateToDetail(tmdbId, mediaType)
-                        selectedRequest = null
+                        selectedRequestId = null
                     },
                 )
             }

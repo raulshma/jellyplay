@@ -54,7 +54,7 @@ class ShortcutsStoreTest {
         ShortcutDefinition(id = id, kind = ShortcutTargetKind.SCREEN, targetId = target)
 
     private suspend fun activate(userId: String) {
-        identityStore.setActiveUser(userId)
+        identityStore.setActiveSession("srv-1", userId)
     }
 
     // ------------------------------------------------------------------

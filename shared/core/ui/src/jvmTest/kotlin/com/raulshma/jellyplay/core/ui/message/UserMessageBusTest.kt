@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.ui.message
 
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -21,6 +23,11 @@ import kotlin.test.assertTrue
  * subscribing after the stream was drained receives NO replay. Also pins the
  * [UserMessage.severity] mapping table (Info→Info, Error→Error) and the
  * `String` convenience factories wrapping dynamic text as [UiText.Raw].
+ *
+ * Drop observability (DECLARED FIX): a [Channel.trySend] into a FULL buffer
+ * fails without throwing — the drop is reported through the module's
+ * `logUiWarning` seam (stderr on the JVM, the [UiLogJvmTest capture idiom])
+ * instead of vanishing silently, and a successful post stays silent.
  */
 class UserMessageBusTest {
 
@@ -127,5 +134,57 @@ class UserMessageBusTest {
         bus.emit(posted)
 
         assertEquals(posted, bus.messages.first())
+    }
+
+    // ── drop observability (DECLARED FIX pins) ──────────────────────────
+
+    /** Captures stderr for the duration of [block] (the UiLogJvmTest idiom). */
+    private fun withCapturedStderr(block: () -> Unit): String {
+        val originalErr = System.err
+        val errBuffer = ByteArrayOutputStream()
+        System.setErr(PrintStream(errBuffer, true, Charsets.UTF_8))
+        try {
+            block()
+        } finally {
+            System.setErr(originalErr)
+        }
+        return errBuffer.toString(Charsets.UTF_8)
+    }
+
+    @Test
+    fun `a full-buffer trySend does not throw and records the drop`() {
+        val bus = UserMessageBus()
+        // Fill the bus's Channel(Channel.BUFFERED) with no collector attached.
+        // OVERFILL far past any capacity the factory default resolves to: the
+        // Channel.BUFFERED constant is the magic sentinel -2 (and its resolved
+        // capacity is not a public constant), so the row does not bake one in —
+        // 10k emissions guarantee a full buffer and an unobservable drop.
+        repeat(10_000) { bus.emit(UserMessage.Info(UiText.Raw("fill $it"))) }
+
+        // The overflow post must not throw even though the channel is full —
+        // and the dropped message is OBSERVABLE: logged through logUiWarning,
+        // whose JVM actual writes the W/<tag> line to stderr.
+        val stderr = withCapturedStderr { bus.error("the dropped one") }
+
+        assertTrue(
+            stderr.contains("W/UserMessageBus"),
+            "a failed trySend must be observable through the logging seam, got: $stderr",
+        )
+        assertTrue(
+            stderr.contains("dropped user message"),
+            "the drop log must name the dropped message, got: $stderr",
+        )
+    }
+
+    @Test
+    fun `a successful post stays silent`() {
+        val bus = UserMessageBus()
+        // Far below capacity: every post succeeds and must log nothing.
+        val stderr = withCapturedStderr {
+            bus.info("delivered later")
+            bus.error("delivered later too")
+        }
+
+        assertEquals("", stderr, "a successful post must not pollute the warning stream")
     }
 }

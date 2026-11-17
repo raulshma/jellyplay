@@ -58,13 +58,9 @@ class AuthSessionCoreTest {
         val currentUser: UserInfo? get() = state.currentUser.value
         val session: ActiveSession? get() = state.session.value
         override fun currentSession(): ActiveSession? = state.session.value
-        override fun updateServer(server: ServerInfo?) {
-            events.add("updateServer(${server?.id},locked=${mutex.isLocked})")
-            state.updateServer(server)
-        }
-        override fun updateSession(server: ServerInfo?, user: UserInfo?) {
-            events.add("updateSession(${server?.id},${user?.id},locked=${mutex.isLocked})")
-            state.updateSession(server, user)
+        override fun publishSessionState(server: ServerInfo?, user: UserInfo?) {
+            events.add("publishSessionState(${server?.id},${user?.id},locked=${mutex.isLocked})")
+            state.publishSessionState(server, user)
         }
     }
 
@@ -113,9 +109,9 @@ class AuthSessionCoreTest {
             listOf(
                 "captureSide(side-initial,locked=true)",
                 // the signed-out adopt, inside the capture critical section
-                "updateSession(s2,null,locked=true)",
+                "publishSessionState(s2,null,locked=true)",
                 "publishSide(u2,locked=true)", // the side effect BEFORE the state write…
-                "updateSession(s2,u2,locked=true)", // …and both under the lock
+                "publishSessionState(s2,u2,locked=true)", // …and both under the lock
             ),
             events,
         )
@@ -156,9 +152,9 @@ class AuthSessionCoreTest {
         assertEquals(
             listOf(
                 "captureSide(side-published-u1,locked=true)",
-                // NO adopt updateSession here — that is the point
+                // NO adopt publishSessionState here — that is the point
                 "restoreSide(side-published-u1,locked=true)",
-                "updateSession(s1,u1,locked=true)",
+                "publishSessionState(s1,u1,locked=true)",
             ),
             events,
         )
@@ -166,14 +162,14 @@ class AuthSessionCoreTest {
 
     @Test
     fun `a concurrent publish between capture and restore wins over the restore`() = runTest {
-        store.updateSession(server("s1"), user("u1"))
+        store.publishSessionState(server("s1"), user("u1"))
         events.clear()
 
         assertFailsWith<Exception> {
             core.atomicLogin(server("s2")) {
                 // The round-trip runs UNLOCKED: a concurrent auth flow may
                 // publish its own (server, user) pair in the meantime…
-                mutex.withLock { store.updateSession(server("s3"), user("u3")) }
+                mutex.withLock { store.publishSessionState(server("s3"), user("u3")) }
                 throw IllegalStateException("round-trip failed after the concurrent publish")
             }
         }
@@ -185,8 +181,8 @@ class AuthSessionCoreTest {
         assertEquals(
             listOf(
                 "captureSide(side-initial,locked=true)",
-                "updateSession(s3,u3,locked=true)",
-                // no restoreSide, no restore updateSession — nothing to undo
+                "publishSessionState(s3,u3,locked=true)",
+                // no restoreSide, no restore publishSessionState — nothing to undo
             ),
             events,
         )
@@ -194,7 +190,7 @@ class AuthSessionCoreTest {
 
     @Test
     fun `both validation failures restore the captured session`() = runTest {
-        store.updateSession(server("s1"), user("u1"))
+        store.publishSessionState(server("s1"), user("u1"))
 
         val noToken = assertFailsWith<Exception> {
             core.atomicLogin(server("s2")) {
@@ -217,7 +213,7 @@ class AuthSessionCoreTest {
 
     @Test
     fun `the failure restore survives caller cancellation`() = runTest {
-        store.updateSession(server("s1"), user("u1"))
+        store.publishSessionState(server("s1"), user("u1"))
         events.clear()
 
         val job = launch {
@@ -239,7 +235,7 @@ class AuthSessionCoreTest {
             listOf(
                 "captureSide(side-initial,locked=true)",
                 "restoreSide(side-initial,locked=true)",
-                "updateSession(s1,u1,locked=true)",
+                "publishSessionState(s1,u1,locked=true)",
             ),
             events,
         )
@@ -247,7 +243,7 @@ class AuthSessionCoreTest {
 
     @Test
     fun `disconnect clears the side state and the pair inside one lock`() = runTest {
-        store.updateSession(server("s1"), user("u1"))
+        store.publishSessionState(server("s1"), user("u1"))
         events.clear()
 
         core.disconnect()
@@ -259,7 +255,7 @@ class AuthSessionCoreTest {
         assertEquals(
             listOf(
                 "clearSide(locked=true)", // side state dropped first…
-                "updateSession(null,null,locked=true)", // …then the pair, atomically
+                "publishSessionState(null,null,locked=true)", // …then the pair, atomically
             ),
             events,
         )
@@ -270,13 +266,16 @@ class AuthSessionCoreTest {
         core.setServer(server("s1"))
         assertEquals(server("s1"), store.currentServer)
         assertNull(store.session, "a server without a user is no identity")
-        assertEquals(listOf("updateServer(s1,locked=true)"), events)
+        // setServer republishes through the SAME raw primitive as every other
+        // spine write, pairing with the ATOMIC session's user (null here —
+        // the fresh store has no published identity to keep).
+        assertEquals(listOf("publishSessionState(s1,null,locked=true)"), events)
 
         events.clear()
         core.adoptServer(server("s2"))
         assertEquals(server("s2"), store.currentServer, "the adopt replaces the server")
         assertNull(store.currentUser, "the adopt drops any signed-in user")
         assertNull(store.session, "no synthetic (newServer, oldUser) intermediate")
-        assertEquals(listOf("updateSession(s2,null,locked=true)"), events)
+        assertEquals(listOf("publishSessionState(s2,null,locked=true)"), events)
     }
 }

@@ -120,10 +120,11 @@ fun AudioPlayerScreen(
     val effects by viewModel.effectsState.collectAsStateWithLifecycle()
     val playlistPicker by viewModel.playlistPicker.state.collectAsStateWithLifecycle()
 
-    // The ONE sheet admission fold (ReaderSheetStack precedent): every
-    // sheet/dialog flag lives here behind `sheets.open`, routed through the
-    // AudioPlayerSheet vocabulary. Lyrics and the menu are declared
-    // non-sheet arms inside (persisted preference / self-dismissing dropdown).
+    // The ONE sheet admission fold (ReaderSheetStack precedent): the single
+    // `current` slot holds the one open sheet/dialog (the former seven
+    // parallel `showX` booleans), routed through the AudioPlayerSheet
+    // vocabulary. Lyrics and the menu are declared non-sheet arms inside
+    // (persisted preference / self-dismissing dropdown).
     val sheets = remember { AudioPlayerSheetStack() }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -744,7 +745,7 @@ fun AudioPlayerScreen(
     // The queue sheet collects its own slice inside the visibility branch, so
     // the sheet-closed scope never reads the queue (a queue mutation while the
     // sheet is hidden cannot reach this scope).
-    if (sheets.showQueue) {
+    if (sheets.current == AudioPlayerSheet.Queue) {
         val sheetQueueState by slices.queueState.collectAsStateWithLifecycle()
         if (sheetQueueState.queue.isNotEmpty()) {
             val radioState by viewModel.radioState.collectAsStateWithLifecycle()
@@ -764,7 +765,7 @@ fun AudioPlayerScreen(
         }
     }
 
-    if (sheets.showSpeedPicker) {
+    if (sheets.current == AudioPlayerSheet.SpeedPicker) {
         SpeedPickerSheet(
             currentSpeed = transport.speed,
             onSelect = { viewModel.onEvent(AudioPlayerUiEvent.ChangePlaybackSpeed(it)) },
@@ -772,7 +773,7 @@ fun AudioPlayerScreen(
         )
     }
 
-    if (sheets.showEqualizer) {
+    if (sheets.current == AudioPlayerSheet.Equalizer) {
         EqualizerSheet(
             enabled = effects.equalizerEnabled,
             bandLevels = effects.equalizerSettings.bandLevels,
@@ -786,7 +787,7 @@ fun AudioPlayerScreen(
         )
     }
 
-    if (sheets.showLyricsSearch) {
+    if (sheets.current == AudioPlayerSheet.LyricsSearch) {
         LyricsSearchSheet(
             artist = trackMeta.artist,
             title = trackMeta.title,
@@ -798,7 +799,7 @@ fun AudioPlayerScreen(
         )
     }
 
-    if (sheets.showSleepTimer) {
+    if (sheets.current == AudioPlayerSheet.SleepTimer) {
         val sleepTimerRemainingMs by viewModel.sleepTimerRemainingMs.collectAsStateWithLifecycle()
         AudioSleepTimerSheet(
             isActive = sleepTimer.active,
@@ -870,7 +871,7 @@ fun AudioPlayerScreen(
         }
     }
 
-    if (sheets.showEffectsSheet) {
+    if (sheets.current == AudioPlayerSheet.Effects) {
         AudioEffectsSheet(
             state = effects,
             onDismiss = { sheets.hide(AudioPlayerSheet.Effects) },
@@ -894,7 +895,7 @@ fun AudioPlayerScreen(
         )
     }
 
-    if (sheets.showDeleteConfirm) {
+    if (sheets.current == AudioPlayerSheet.DeleteConfirm) {
         ConfirmDialog(
             title = stringResource(Res.string.audio_download_delete_title),
             message = stringResource(Res.string.audio_download_delete_message),

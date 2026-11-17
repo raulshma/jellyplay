@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.identity.PersistedIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import io.mockk.coEvery
@@ -19,7 +20,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -99,7 +99,7 @@ class DownloadTransferGateTest {
 
     @BeforeTest
     fun setUp() {
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { userDao.getUserById("user-1") } returns userEntity(accessToken = storedTokenCipherText)
         every { tokenCipher.decrypt(storedTokenCipherText) } returns "plain-token"
         every { downloadsStore.downloads } returns MutableStateFlow(slice(downloadConnections = 4))
@@ -145,7 +145,7 @@ class DownloadTransferGateTest {
 
     @Test
     fun `no active user skips the token lookup entirely`() = runTest {
-        every { serverIdentityStore.activeUserId } returns flowOf(null)
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.NoSession
 
         val preparation = prepare()
 

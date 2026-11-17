@@ -30,7 +30,7 @@ import kotlin.test.assertTrue
  * temp-file DataStore mirror — the `hidden/{itemId}` keying, the mirror-based
  * dirty/deleted detection, and both delete directions (the plan's roaming
  * removals). The store's user activation rides the production
- * [ServerIdentityStore.setActiveUser] seam; the Eagerly-cached
+ * [ServerIdentityStore.setActiveSession] seam; the Eagerly-cached
  * [HomeDiscoveryStore.homeDiscovery] StateFlow the adapter reads is settled
  * with bounded waits so its `.value` reads are deterministic.
  */
@@ -60,7 +60,7 @@ class JellyPlayCwSyncAdapterTest {
                 homeDiscoveryStore = homeStore,
                 mirrorStore = mirrorStore,
             )
-            identityStore.setActiveUser(USER)
+            identityStore.setActiveSession("srv-1", USER)
             settle()
         }
     }

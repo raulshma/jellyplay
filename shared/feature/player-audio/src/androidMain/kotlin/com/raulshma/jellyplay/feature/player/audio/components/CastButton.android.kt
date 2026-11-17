@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.audio.components
 
 import android.app.AlertDialog
+import android.content.DialogInterface
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -60,6 +61,7 @@ actual fun CastButton(
 
     if (showDialog) {
         CastDeviceDialog(
+            showDialog = showDialog,
             devices = discoveredDevices,
             onSelect = { device ->
                 castController.connect(device)
@@ -90,8 +92,28 @@ actual fun CastButton(
     }
 }
 
+/**
+ * The Android platform (AlertDialog.Builder) device picker. The dialog is a
+ * pure render of `(showDialog, devices)`: a USER dismissal (device tap,
+ * Cancel / OK, back / outside touch) writes back into composition state via
+ * [onSelect]/[onDismiss], but an EFFECT-TEARDOWN dismissal — the
+ * [DisposableEffect] restarting because `devices` changed, or the dialog
+ * leaving composition — must never write one. Discovery rewrites
+ * [AudioPlayerCast.discoveredDeviceNames] on every mDNS/SSDP scan cycle and
+ * sessions push, so propagating a teardown as a user dismissal would close
+ * the picker mid-browse (and permanently: the empty→populated upgrade would
+ * dismiss the picker before the first device ever rendered). The
+ * `programmaticDismiss` flag separates the two: only a dismissal that did
+ * not come from effect teardown may call [onDismiss].
+ *
+ * [showDialog] is passed solely as an effect key (belt-and-braces — the
+ * caller composes this only under its `if (showDialog)`, so leaving
+ * composition already disposes the effect; keying on it pins the effect
+ * lifecycle to the wanted-state even if that guard is ever refactored).
+ */
 @Composable
 private fun CastDeviceDialog(
+    showDialog: Boolean,
     devices: List<String>,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -103,13 +125,22 @@ private fun CastDeviceDialog(
     val castToDevice = stringResource(Res.string.audio_cast_to_device)
     val castCancel = stringResource(Res.string.audio_cancel)
 
-    DisposableEffect(devices) {
+    DisposableEffect(showDialog, devices) {
+        var programmaticDismiss = false
+
+        // The arms dismiss in place before reporting; the listener must not
+        // echo that dismissal back as a user one.
+        fun dismissDialog(dialog: DialogInterface) {
+            programmaticDismiss = true
+            dialog.dismiss()
+        }
+
         val dialog = if (devices.isEmpty()) {
             AlertDialog.Builder(context)
                 .setTitle(castTitle)
                 .setMessage(castNoDevices)
-                .setPositiveButton(castOk) { dialog, _ -> dialog.dismiss(); onDismiss() }
-                .setOnDismissListener { onDismiss() }
+                .setPositiveButton(castOk) { dialog, _ -> dismissDialog(dialog); onDismiss() }
+                .setOnDismissListener { if (!programmaticDismiss) onDismiss() }
                 .create()
         } else {
             val deviceNames = devices.toTypedArray()
@@ -117,13 +148,16 @@ private fun CastDeviceDialog(
                 .setTitle(castToDevice)
                 .setItems(deviceNames) { dialog, which ->
                     onSelect(devices[which])
-                    dialog.dismiss()
+                    dismissDialog(dialog)
                 }
-                .setNegativeButton(castCancel) { dialog, _ -> dialog.dismiss(); onDismiss() }
-                .setOnDismissListener { onDismiss() }
+                .setNegativeButton(castCancel) { dialog, _ -> dismissDialog(dialog); onDismiss() }
+                .setOnDismissListener { if (!programmaticDismiss) onDismiss() }
                 .create()
         }
         dialog.show()
-        onDispose { dialog.dismiss() }
+        onDispose {
+            programmaticDismiss = true
+            dialog.dismiss()
+        }
     }
 }

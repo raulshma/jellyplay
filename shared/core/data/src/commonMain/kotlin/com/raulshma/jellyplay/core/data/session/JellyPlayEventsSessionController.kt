@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.JellyPlayPluginEvent
 import com.raulshma.jellyplay.core.data.repository.JellyPushRepository
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -46,6 +47,15 @@ import kotlinx.coroutines.launch
  *    phone/desktop, one-shot, server-supplied text);
  *  - SessionStarted / PlaybackStarted / UserLockedOut / Unknown → log only
  *    for now (no consumer surface yet).
+ *
+ * Lifecycle truth is the [JellyPlayEventsSessionPhase] machine
+ * ([JellyPlayEventsSessionMachine] — the pure transition table, jvmTest-pinned)
+ * since the recorded Tier-3 migration: the phases used to be ENCODED BY which
+ * of the three `Job?` slots were live, with the stop/start races on the
+ * null-checks held together by comment discipline. The jobs below are the
+ * phase's EXECUTION now — the guards read the phase, and every phase write
+ * sits at the same code position whose side effects it describes, so what
+ * runs, when, and the cancellation order are byte-identical.
  */
 class JellyPlayEventsSessionController(
     private val authRepository: AuthRepository,
@@ -70,30 +80,59 @@ class JellyPlayEventsSessionController(
 
     private val appScope = scope
 
-    /** The process-lifetime auth collector. */
+    /**
+     * The session machine's phase — the ONE truth (the jobs below are its
+     * execution, not its truth). Written only through
+     * [JellyPlayEventsSessionMachine]'s transitions, each at the code position
+     * whose side effects it describes. Writers: [start] (once per process,
+     * possibly off-main — the app startup prewarm) and the auth collector
+     * ([startSession]/[stopSession] thereafter) — the same single-writer
+     * discipline the former job slots had. REVIEW FIX (defect cohort):
+     * `@Volatile` — the former truth-check read `sessionJob?.isActive`,
+     * which rode the Job's thread-safe internals; a plain var written from
+     * [start]'s caller thread and read/written inside the app-scope
+     * collectors needs the visibility guarantee to keep that comparison
+     * honest.
+     */
+    @Volatile
+    private var phase: JellyPlayEventsSessionPhase = JellyPlayEventsSessionPhase.Frozen
+
+    /**
+     * The process-lifetime auth collector's handle (the `Frozen`→armed edge's
+     * execution). Never cancelled and never read for truth — the phase guard
+     * in [start] is the idempotence now; the collector lives and dies with
+     * the application scope, as before.
+     */
     private var sessionJob: Job? = null
 
     /**
-     * The CURRENT signed-in session's gate collector. Cancelled by
+     * The CURRENT signed-in session's gate collector (the
+     * [JellyPlayEventsSessionPhase.ProbePending] /
+     * [JellyPlayEventsSessionPhase.GateClosed] /
+     * [JellyPlayEventsSessionPhase.EventsRunning] execution). Cancelled by
      * [stopSession] and replaced (cancel-then-launch) by a re-auth, so
      * sessions never stack duplicate gate collectors.
      */
     private var sessionGateJob: Job? = null
 
     /**
-     * The start-stream + event-mapping job, owned by the gate: launched on
-     * every open edge, cancelled (with [JellyPlayEventsRepository.stop]) on
-     * every closed edge — the toggle-off teardown path.
+     * The start-stream + event-mapping job (the
+     * [JellyPlayEventsSessionPhase.EventsRunning] execution), owned by the
+     * gate: launched on every open edge, cancelled (with
+     * [JellyPlayEventsRepository.stop]) on every closed edge — the toggle-off
+     * teardown path.
      */
     private var eventsRunJob: Job? = null
 
     /**
      * Arms the auth-edge collector on the application scope. Safe to call
-     * repeatedly (idempotent — the previous lifecycle job is left running;
-     * the Koin `createdAtStart` wiring calls this exactly once per process).
+     * repeatedly (idempotent — [JellyPlayEventsSessionPhase.Frozen] is the
+     * only admission, the former live-job check; the Koin `createdAtStart`
+     * wiring calls this exactly once per process).
      */
     fun start() {
-        if (sessionJob?.isActive == true) return
+        if (phase != JellyPlayEventsSessionPhase.Frozen) return
+        phase = JellyPlayEventsSessionMachine.onStart(phase)
         sessionJob = appScope.launch {
             // StateFlow already conflates + dedupes — distinctUntilChanged here
             // is a no-op the compiler flags (and this module fails on warnings).
@@ -112,12 +151,19 @@ class JellyPlayEventsSessionController(
      * [stopSession] cancels the collector and the stream together.
      */
     private fun startSession() {
+        // The auth-true edge: the phase leaves whatever session face it was in
+        // and rides the probe window (the cancel-then-launch below is its
+        // execution — same cancels, same order, as before).
+        phase = JellyPlayEventsSessionMachine.onAuthTrue(phase)
         sessionGateJob?.cancel()
         eventsRunJob?.cancel()
         eventsRunJob = null
         sessionGateJob = appScope.launch {
             statusStore.refresh()
-            if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) return@launch
+            if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
+                phase = JellyPlayEventsSessionMachine.onProbeUnavailable(phase)
+                return@launch
+            }
 
             // Push arms with the SESSION, not the events gate: its repository
             // rides its OWN `push` gate (ADR 0010 — one key per feature), so
@@ -127,6 +173,9 @@ class JellyPlayEventsSessionController(
             // are upserts of the same device record — whichever order they
             // land in, the push half survives.
             pushRepository.start()
+            // Probe AVAILABLE: the gate collector is armed on the reactive
+            // gate, the stream not yet up.
+            phase = JellyPlayEventsSessionMachine.onProbeAvailable(phase)
 
             featureGate.isAvailable(JellyPlayPluginFeatures.Events).collect { available ->
                 if (available) {
@@ -137,16 +186,25 @@ class JellyPlayEventsSessionController(
                         eventsRepository.start()
                         eventsRepository.events.collect(::present)
                     }
+                    phase = JellyPlayEventsSessionMachine.onGateOpened(phase)
                 } else {
                     eventsRunJob?.cancel()
                     eventsRunJob = null
                     eventsRepository.stop()
+                    phase = JellyPlayEventsSessionMachine.onGateClosed(phase)
                 }
             }
         }
     }
 
+    /**
+     * Sign-out (the auth-false edge): the recorded teardown — gate collector
+     * cancelled, both repositories stopped, phase `TornDown` (a false edge
+     * with nothing ever serviced keeps `Unauthenticated`; the executor's
+     * stops run idempotently either way, byte-identically).
+     */
     private fun stopSession() {
+        phase = JellyPlayEventsSessionMachine.onAuthFalse(phase)
         sessionGateJob?.cancel()
         sessionGateJob = null
         eventsRunJob?.cancel()

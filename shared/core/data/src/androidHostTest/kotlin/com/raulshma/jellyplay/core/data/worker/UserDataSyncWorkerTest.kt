@@ -10,6 +10,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
+import com.raulshma.jellyplay.core.datastore.identity.PersistedIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -61,7 +62,11 @@ class UserDataSyncWorkerTest {
             Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
         )
         every { playbackStore.playback } returns MutableStateFlow(PlaybackSlice(userDataSyncEnabled = true))
-        every { serverIdentityStore.activeUserId } returns MutableStateFlow("user-1")
+        // The worker reads the DISK-BACKED one-shot (the M1 fix — a projection
+        // .firstOrNull() answers the eagerly-seeded NoSession seed instantly
+        // during the DataStore-read window), so the store stub rides it.
+        coEvery { serverIdentityStore.readIdentity() } returns
+            PersistedIdentity.ActiveSession("server-1", "user-1")
         coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = emptyList()))
     }
@@ -103,7 +108,7 @@ class UserDataSyncWorkerTest {
 
     @Test
     fun `no active user short-circuits success`() = runTest {
-        every { serverIdentityStore.activeUserId } returns MutableStateFlow(null)
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.NoSession
 
         val result = buildWorker().doWork()
 
@@ -113,7 +118,10 @@ class UserDataSyncWorkerTest {
 
     @Test
     fun `blank active user short-circuits success`() = runTest {
-        every { serverIdentityStore.activeUserId } returns MutableStateFlow("  ")
+        // A blank raw user key reads as ServerSelected (blank == absent), whose
+        // userId projection is null — the same short-circuit the old blank
+        // MutableStateFlow stub exercised through the projection.
+        coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ServerSelected("server-1")
 
         val result = buildWorker().doWork()
 

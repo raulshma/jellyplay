@@ -87,16 +87,184 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_set_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_slide_to_unlock
 
 /**
- * Custom (non-picker) dialogs only. Picker sheets (auto-lock timer, …) flow
- * through the shared `PickerState` dispatcher instead of this enum — keeping
- * the residual sealed-class role narrow: tagging genuinely bespoke dialogs
- * (`PickerState` has no variant for a PIN entry or a QuickConnect auth flow).
+ * How a bespoke dialog exited — the input for
+ * [SecurityDialogRules.exitClearsPinInput]'s survivor table.
  */
-sealed class SecuritySettingsDialog {
-    object None : SecuritySettingsDialog()
-    object PinDialog : SecuritySettingsDialog()
-    object PinDisableAuth : SecuritySettingsDialog()
-    object QuickConnectAuthorize : SecuritySettingsDialog()
+internal enum class DialogExit {
+    /** Scrim tap / system back — the dialog's `onDismissRequest`. */
+    Scrim,
+
+    /** The dialog's Cancel (dismissButton) press. */
+    Cancel,
+
+    /** The dialog's affirmative action succeeded and closed it itself. */
+    ConfirmSuccess,
+}
+
+/**
+ * The security screen's bespoke dialog machines. ONE slot phase behind the
+ * former `SecuritySettingsDialog` enum + its seven hand-settled satellite
+ * `remember` fields (`pinConfirm` / `pinError` / `pinDisableAuthError` /
+ * `verifyingDisablePin` / `qcCode` / `qcError` / `qcLoading` — the typed
+ * `pinInput` buffer survives beside the slot, see its KDoc), whose clears
+ * were pairwise hand-written at FIVE dismiss/confirm sites — each a
+ * different subset. Now each dialog's
+ * ephemeral state lives INSIDE its slot arm, so leaving the arm destroys it:
+ * a forgotten clear at an exit is unrepresentable. Picker sheets (auto-lock
+ * timer, …) still flow through the shared `PickerState` dispatcher, not this
+ * slot — keeping its role narrow: genuinely bespoke dialogs (`PickerState`
+ * has no variant for a PIN entry or a QuickConnect auth flow).
+ */
+sealed interface SecurityDialogPhase {
+    /** No bespoke dialog open. */
+    data object Closed : SecurityDialogPhase
+
+    /**
+     * The set-PIN dialog. Its confirm buffer + validation error live inside
+     * the arm: every exit folds to [Closed] (the three former sites cleared
+     * the identical set), so neither can outlive the dialog. The typed PIN
+     * itself rides the screen's shared `pinInput` buffer — its per-exit
+     * survivor table is [SecurityDialogRules.exitClearsPinInput].
+     */
+    data class SetPin(val confirm: String, val error: String?) : SecurityDialogPhase
+
+    /**
+     * The disable-PIN authorization dialog. Its error dies with the arm —
+     * the former code cleared it on EVERY exit, scrim included — while the
+     * typed PIN rides the shared buffer (the scrim exit's lone survivor:
+     * reopening the dialog showed the retained entry, and still does).
+     */
+    data class DisablePinAuth(val error: String?) : SecurityDialogPhase
+
+    /**
+     * The Quick Connect authorize dialog; its machine is
+     * [QuickConnectAuthorizePhase] (this screen's long-unmigrated twin of
+     * the landed `SeerrBridgeQuickConnectPhase`). Dismissal is refused
+     * exactly while the machine is Authorizing
+     * ([SecurityDialogRules.qcDismissAllowed] — the former `if (!qcLoading)`
+     * scrim guard).
+     */
+    data class QuickConnectAuthorize(val qc: QuickConnectAuthorizePhase) : SecurityDialogPhase
+}
+
+/**
+ * The Quick Connect authorize machine — one sealed phase where the former
+ * `qcCode`/`qcError`/`qcLoading` trio settled by hand (their illegal
+ * combos — loading beside an error banner, loading beside a half-typed
+ * code — are unrepresentable now). Shape mirrors the landed
+ * `SeerrBridgeQuickConnectPhase`: an idle is this slot simply not being in
+ * the QuickConnectAuthorize arm (the machine never exists without its
+ * dialog), the in-code arms carry the typed code, and the failure face
+ * KEEPS the code for the inline retry — exactly which arms keep the banner
+ * vs clear it is preserved byte-for-byte (the confirm press cleared the
+ * banner entering the in-flight arm; typing cleared it entering a fresh
+ * entry arm; only the failure answer re-raised it).
+ */
+sealed interface QuickConnectAuthorizePhase {
+    /** The typed code — carried by EVERY open arm (empty on a fresh dialog). */
+    val code: String
+
+    /** Dialog open, entry enabled, no banner — code may be empty or partial. */
+    data class Entering(override val code: String) : QuickConnectAuthorizePhase
+
+    /** The authorize call is in flight: entry disabled, dismiss refused, banner cleared at entry. */
+    data class Authorizing(override val code: String) : QuickConnectAuthorizePhase
+
+    /** The call answered failure: banner shows [error], [code] kept for the retry, entry re-enabled. */
+    data class Failed(override val code: String, val error: String) : QuickConnectAuthorizePhase
+}
+
+/**
+ * The pure decision rules for [SecurityDialogPhase] — the decision object
+ * beside the phase types (StateManagementConventions §3), so the hand-settled
+ * clear-sets the former five fields trusted to five different call sites are
+ * pinned by tests (SecurityDialogSlotTest) instead of comments. This module
+ * has no Compose screen harness; what is NOT unit-pinned is the composition
+ * wiring itself (which callback fires which rule, the dialogs' modality and
+ * render order, the disable-PIN verify latch's positional reset — flagged at
+ * its declaration).
+ */
+internal object SecurityDialogRules {
+
+    /** The PIN fields' input filter, byte-identical: up to 4 digits. */
+    fun isLegalPin(input: String): Boolean = input.length <= 4 && input.all { it.isDigit() }
+
+    /** The QC code's input filter, byte-identical: up to 6 digits. */
+    fun isLegalQcCode(input: String): Boolean = input.length <= 6 && input.all { it.isDigit() }
+
+    /**
+     * The set-PIN confirm fork, in the former `when`'s order: a short PIN
+     * wins over a mismatch (the length check ran first); `null` = proceed.
+     */
+    fun setPinViolation(
+        input: String,
+        confirm: String,
+        lengthText: String,
+        mismatchText: String,
+    ): String? = when {
+        input.length != 4 -> lengthText
+        input != confirm -> mismatchText
+        else -> null
+    }
+
+    /**
+     * Whether an exit route clears the SHARED typed-PIN buffer: the set-PIN
+     * arm clears on every exit (all three former sites cleared it); the
+     * disable-PIN arm's scrim/back exit alone keeps it (the lone survivor —
+     * the former scrim handler cleared only the error, so reopening the
+     * dialog showed the retained entry, which the Cancel and confirm-success
+     * exits cleared). Any other arm (nothing bespoke open, or the QC dialog
+     * — which never touched the PIN buffer) keeps it trivially.
+     */
+    fun exitClearsPinInput(arm: SecurityDialogPhase, exit: DialogExit): Boolean = when (arm) {
+        is SecurityDialogPhase.SetPin -> true
+        is SecurityDialogPhase.DisablePinAuth -> exit != DialogExit.Scrim
+        SecurityDialogPhase.Closed, is SecurityDialogPhase.QuickConnectAuthorize -> false
+    }
+
+    /** Typing in the set-PIN dialog's new-PIN field: the shared banner clears (the buffer write rides with it). */
+    fun setPinInputChanged(phase: SecurityDialogPhase): SecurityDialogPhase =
+        (phase as? SecurityDialogPhase.SetPin)?.copy(error = null) ?: phase
+
+    /** Typing in the set-PIN dialog's confirm field: the buffer updates and the shared banner clears. */
+    fun setPinConfirmChanged(phase: SecurityDialogPhase, confirm: String): SecurityDialogPhase =
+        (phase as? SecurityDialogPhase.SetPin)?.copy(confirm = confirm, error = null) ?: phase
+
+    /** Typing in the disable-PIN dialog's current-PIN field: its banner clears (the buffer write rides with it). */
+    fun disableAuthInputChanged(phase: SecurityDialogPhase): SecurityDialogPhase =
+        (phase as? SecurityDialogPhase.DisablePinAuth)?.copy(error = null) ?: phase
+
+    /** Whether the QC code field + the dialog's exits are enabled — refused exactly while authorizing. */
+    fun qcEntryEnabled(qc: QuickConnectAuthorizePhase): Boolean =
+        qc !is QuickConnectAuthorizePhase.Authorizing
+
+    /** Whether the QC confirm button is enabled — the former `!qcLoading && qcCode.length == 6`. */
+    fun qcConfirmEnabled(qc: QuickConnectAuthorizePhase): Boolean =
+        qc !is QuickConnectAuthorizePhase.Authorizing && qc.code.length == 6
+
+    /**
+     * Whether the QC dialog may dismiss (scrim/back/Cancel) — EXACTLY the
+     * former `if (!qcLoading)` refusal: refused only while the authorize
+     * call is in flight, allowed from Entering and from a Failed retry face.
+     */
+    fun qcDismissAllowed(qc: QuickConnectAuthorizePhase): Boolean =
+        qc !is QuickConnectAuthorizePhase.Authorizing
+
+    /** Typing in the QC code field: every entry arm lands a fresh Entering (the banner clears on typing); in-flight is a no-op. */
+    fun qcEntryChanged(qc: QuickConnectAuthorizePhase, code: String): QuickConnectAuthorizePhase =
+        when (qc) {
+            is QuickConnectAuthorizePhase.Authorizing -> qc
+            is QuickConnectAuthorizePhase.Entering -> QuickConnectAuthorizePhase.Entering(code)
+            is QuickConnectAuthorizePhase.Failed -> QuickConnectAuthorizePhase.Entering(code)
+        }
+
+    /** The confirm press: the banner clears entering the in-flight arm, which carries the typed code. */
+    fun qcStart(qc: QuickConnectAuthorizePhase): QuickConnectAuthorizePhase =
+        QuickConnectAuthorizePhase.Authorizing(qc.code)
+
+    /** The authorize call answered failure: the banner raises with [error] and the typed code is KEPT for the retry. */
+    fun qcFailed(qc: QuickConnectAuthorizePhase, error: String): QuickConnectAuthorizePhase =
+        QuickConnectAuthorizePhase.Failed(qc.code, error)
 }
 
 /**
@@ -142,17 +310,49 @@ fun SecuritySettingsScreen(
 ) {
     val preferences by viewModel.securityPreferences.collectAsStateWithLifecycle()
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
-    var activeDialog by remember { mutableStateOf<SecuritySettingsDialog>(SecuritySettingsDialog.None) }
+    var activeDialog by remember { mutableStateOf<SecurityDialogPhase>(SecurityDialogPhase.Closed) }
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
+
+    /**
+     * The typed-PIN buffer, shared by the set-PIN and disable-PIN dialogs'
+     * entry fields. Deliberately OUTSIDE the [SecurityDialogPhase] arms: the
+     * disable arm's scrim exit alone lets it survive the dialog (reopening
+     * shows the retained entry — the lone survivor, and the only reason this
+     * is a buffer rather than arm state). Which exit clears it is the pure
+     * table [SecurityDialogRules.exitClearsPinInput]; opening either dialog
+     * never touches it. The set-PIN arm can never actually observe a stale
+     * value: it opens only while the PIN is disabled, and the disable arm
+     * either cleared the buffer (Cancel / confirm success) or left the PIN
+     * enabled (scrim), which reopens the disable arm.
+     */
     var pinInput by remember { mutableStateOf("") }
-    var pinConfirm by remember { mutableStateOf("") }
-    var pinError by remember { mutableStateOf<String?>(null) }
-    var pinDisableAuthError by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * The disable-PIN verify-flight latch — concurrency plumbing, NOT dialog
+     * state (the HomeRefresher rule): it intentionally survives a scrim
+     * dismissal that lands mid-verify (the verify callback's writes below
+     * are global, so a re-opened dialog still shows the spinner and still
+     * gets closed by the in-flight verify's success — byte-identical with
+     * the former flat `remember` flag). Its reset is POSITIONAL (last line
+     * of the verify callback, not a `finally`) — a thrown `verifyPin` would
+     * strand it `true`; preserved verbatim and flagged here, not silently
+     * "fixed".
+     */
     var verifyingDisablePin by remember { mutableStateOf(false) }
-    var qcCode by remember { mutableStateOf("") }
-    var qcError by remember { mutableStateOf<String?>(null) }
-    var qcLoading by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    /**
+     * Closes the open PIN arm through [SecurityDialogRules.exitClearsPinInput] —
+     * the ONE funnel through which the shared buffer's survivor table applies
+     * (the former five hand-settled dismiss/confirm sites' differing clear
+     * subsets all fall out of this one rule).
+     */
+    fun closePinDialog(exit: DialogExit) {
+        if (SecurityDialogRules.exitClearsPinInput(activeDialog, exit)) {
+            pinInput = ""
+        }
+        activeDialog = SecurityDialogPhase.Closed
+    }
 
 val biometricGate = rememberBiometricGate()
     // Visibility rides the capability surface; the gate object stays for the
@@ -212,12 +412,18 @@ val biometricGate = rememberBiometricGate()
                             checked = preferences.pinLockEnabled,
                             highlighted = highlightSettingId == SecurityRows.PinLock.id,
                             onCheckedChange = { enabled ->
-                                if (enabled) activeDialog = SecuritySettingsDialog.PinDialog
-                                else activeDialog = SecuritySettingsDialog.PinDisableAuth
+                                activeDialog = if (enabled) {
+                                    SecurityDialogPhase.SetPin(confirm = "", error = null)
+                                } else {
+                                    SecurityDialogPhase.DisablePinAuth(error = null)
+                                }
                             },
                             onClick = {
-                                if (preferences.pinLockEnabled) activeDialog = SecuritySettingsDialog.PinDisableAuth
-                                else activeDialog = SecuritySettingsDialog.PinDialog
+                                activeDialog = if (preferences.pinLockEnabled) {
+                                    SecurityDialogPhase.DisablePinAuth(error = null)
+                                } else {
+                                    SecurityDialogPhase.SetPin(confirm = "", error = null)
+                                }
                             },
                         )
                     }
@@ -316,9 +522,13 @@ val biometricGate = rememberBiometricGate()
                         highlighted = highlightSettingId == SecurityRows.QuickConnectAuthorize.id,
                         index = 0, count = 1,
                         onClick = {
-                            qcCode = ""
-                            qcError = null
-                            activeDialog = SecuritySettingsDialog.QuickConnectAuthorize
+                            // A fresh entry face per opening — the former
+                            // qcCode/qcError reset-before-open writes, now
+                            // structural (a new arm constructs its own empty
+                            // Entering).
+                            activeDialog = SecurityDialogPhase.QuickConnectAuthorize(
+                                QuickConnectAuthorizePhase.Entering(code = ""),
+                            )
                         },
                     )
                 }
@@ -385,54 +595,49 @@ val biometricGate = rememberBiometricGate()
         pickerHost = true,
     )
 
-    if (activeDialog is SecuritySettingsDialog.PinDialog) {
+    val setPinDialog = activeDialog as? SecurityDialogPhase.SetPin
+    if (setPinDialog != null) {
         ImeAlertDialog(
-            onDismissRequest = {
-                activeDialog = SecuritySettingsDialog.None
-                pinInput = ""
-                pinConfirm = ""
-                pinError = null
-            },
+            onDismissRequest = { closePinDialog(DialogExit.Scrim) },
             title = { Text(stringResource(Res.string.settings_set_pin_lock)) },
             text = {
                 Column {
                     androidx.compose.material3.OutlinedTextField(
                         value = pinInput,
                         onValueChange = {
-                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                            if (SecurityDialogRules.isLegalPin(it)) {
                                 pinInput = it
-                                pinError = null
+                                activeDialog = SecurityDialogRules.setPinInputChanged(activeDialog)
                             }
                         },
                         label = { Text(stringResource(Res.string.settings_4_digit_pin)) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
-                        isError = pinError != null,
+                        isError = setPinDialog.error != null,
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(12.dp))
                     androidx.compose.material3.OutlinedTextField(
-                        value = pinConfirm,
+                        value = setPinDialog.confirm,
                         onValueChange = {
-                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
-                                pinConfirm = it
-                                pinError = null
+                            if (SecurityDialogRules.isLegalPin(it)) {
+                                activeDialog = SecurityDialogRules.setPinConfirmChanged(activeDialog, it)
                             }
                         },
                         label = { Text(stringResource(Res.string.settings_confirm_pin)) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
-                        isError = pinError != null,
+                        isError = setPinDialog.error != null,
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     AnimatedVisibility(
-                        visible = pinError != null,
+                        visible = setPinDialog.error != null,
                         enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
                         exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
                     ) {
-                        pinError?.let { error ->
+                        setPinDialog.error?.let { error ->
                             Text(
                                 error,
                                 color = MaterialTheme.colorScheme.error,
@@ -445,40 +650,36 @@ val biometricGate = rememberBiometricGate()
             },
             confirmButton = {
                 TextButton(onClick = {
-                    when {
-                        pinInput.length != 4 -> pinError = pinMustBe4Digits
-                        pinInput != pinConfirm -> pinError = pinsDoNotMatch
-                        else -> {
-                            // Captured before the async edit launches — the
-                            // dialog state resets below would otherwise race
-                            // the fire-and-forget store write.
-                            val newPin = pinInput
-                            viewModel.edit { scope -> scope.security.setPin(newPin) }
-                            activeDialog = SecuritySettingsDialog.None
-                            pinInput = ""
-                            pinConfirm = ""
-                            pinError = null
-                        }
+                    val violation = SecurityDialogRules.setPinViolation(
+                        input = pinInput,
+                        confirm = setPinDialog.confirm,
+                        lengthText = pinMustBe4Digits,
+                        mismatchText = pinsDoNotMatch,
+                    )
+                    if (violation != null) {
+                        activeDialog = setPinDialog.copy(error = violation)
+                    } else {
+                        // Captured before the async edit launches — the
+                        // dialog state reset below would otherwise race
+                        // the fire-and-forget store write.
+                        val newPin = pinInput
+                        viewModel.edit { scope -> scope.security.setPin(newPin) }
+                        closePinDialog(DialogExit.ConfirmSuccess)
                     }
                 }) { Text(stringResource(Res.string.settings_set_pin)) }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    activeDialog = SecuritySettingsDialog.None
-                    pinInput = ""
-                    pinConfirm = ""
-                    pinError = null
-                }) { Text(stringResource(Res.string.settings_cancel)) }
+                TextButton(onClick = { closePinDialog(DialogExit.Cancel) }) {
+                    Text(stringResource(Res.string.settings_cancel))
+                }
             },
         )
     }
 
-    if (activeDialog is SecuritySettingsDialog.PinDisableAuth) {
+    val disablePinDialog = activeDialog as? SecurityDialogPhase.DisablePinAuth
+    if (disablePinDialog != null) {
         ImeAlertDialog(
-            onDismissRequest = {
-                activeDialog = SecuritySettingsDialog.None
-                pinDisableAuthError = null
-            },
+            onDismissRequest = { closePinDialog(DialogExit.Scrim) },
             title = { Text(stringResource(Res.string.settings_disable_pin_lock)) },
             text = {
                 Column {
@@ -491,24 +692,24 @@ val biometricGate = rememberBiometricGate()
                     androidx.compose.material3.OutlinedTextField(
                         value = pinInput,
                         onValueChange = {
-                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                            if (SecurityDialogRules.isLegalPin(it)) {
                                 pinInput = it
-                                pinDisableAuthError = null
+                                activeDialog = SecurityDialogRules.disableAuthInputChanged(activeDialog)
                             }
                         },
                         label = { Text(stringResource(Res.string.settings_current_pin)) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
-                        isError = pinDisableAuthError != null,
+                        isError = disablePinDialog.error != null,
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     AnimatedVisibility(
-                        visible = pinDisableAuthError != null,
+                        visible = disablePinDialog.error != null,
                         enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
                         exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
                     ) {
-                        pinDisableAuthError?.let { error ->
+                        disablePinDialog.error?.let { error ->
                             Text(
                                 error,
                                 color = MaterialTheme.colorScheme.error,
@@ -529,11 +730,17 @@ val biometricGate = rememberBiometricGate()
                             val valid = viewModel.verifyPin(pinInput)
                             if (valid) {
                                 viewModel.edit { scope -> scope.security.clearPin() }
-                                activeDialog = SecuritySettingsDialog.None
-                                pinInput = ""
-                                pinDisableAuthError = null
+                                closePinDialog(DialogExit.ConfirmSuccess)
                             } else {
-                                pinDisableAuthError = incorrectPin
+                                // The failure face lands only while the dialog
+                                // is still the open arm — a scrim dismissal
+                                // that raced the verify can no longer plant a
+                                // ghost error into a future session (the
+                                // former global `pinDisableAuthError` write
+                                // did exactly that).
+                                (activeDialog as? SecurityDialogPhase.DisablePinAuth)
+                                    ?.copy(error = incorrectPin)
+                                    ?.let { activeDialog = it }
                             }
                             verifyingDisablePin = false
                         }
@@ -549,22 +756,22 @@ val biometricGate = rememberBiometricGate()
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    activeDialog = SecuritySettingsDialog.None
-                    pinInput = ""
-                    pinDisableAuthError = null
-                }) { Text(stringResource(Res.string.settings_cancel)) }
+                TextButton(onClick = { closePinDialog(DialogExit.Cancel) }) {
+                    Text(stringResource(Res.string.settings_cancel))
+                }
             },
         )
     }
 
-    if (activeDialog is SecuritySettingsDialog.QuickConnectAuthorize) {
+    val qcDialog = activeDialog as? SecurityDialogPhase.QuickConnectAuthorize
+    if (qcDialog != null) {
+        val qc = qcDialog.qc
         ImeAlertDialog(
             onDismissRequest = {
-                if (!qcLoading) {
-                    activeDialog = SecuritySettingsDialog.None
-                    qcCode = ""
-                    qcError = null
+                // The dismiss refusal rides the machine: refused exactly
+                // while Authorizing (the former `if (!qcLoading)`).
+                if (SecurityDialogRules.qcDismissAllowed(qc)) {
+                    activeDialog = SecurityDialogPhase.Closed
                 }
             },
             title = { Text(stringResource(Res.string.settings_authorize_quick_connect)) },
@@ -577,26 +784,27 @@ val biometricGate = rememberBiometricGate()
                     )
                     Spacer(Modifier.height(16.dp))
                     androidx.compose.material3.OutlinedTextField(
-                        value = qcCode,
+                        value = qc.code,
                         onValueChange = {
-                            if (it.length <= 6 && it.all { c -> c.isDigit() }) {
-                                qcCode = it
-                                qcError = null
+                            if (SecurityDialogRules.isLegalQcCode(it)) {
+                                activeDialog = SecurityDialogPhase.QuickConnectAuthorize(
+                                    SecurityDialogRules.qcEntryChanged(qc, it),
+                                )
                             }
                         },
                         label = { Text(stringResource(Res.string.settings_quick_connect_code)) },
                         singleLine = true,
-                        isError = qcError != null,
-                        enabled = !qcLoading,
+                        isError = qc is QuickConnectAuthorizePhase.Failed,
+                        enabled = SecurityDialogRules.qcEntryEnabled(qc),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     AnimatedVisibility(
-                        visible = qcError != null,
+                        visible = qc is QuickConnectAuthorizePhase.Failed,
                         enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
                         exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
                     ) {
-                        qcError?.let { error ->
+                        (qc as? QuickConnectAuthorizePhase.Failed)?.error?.let { error ->
                             Text(
                                 error,
                                 color = MaterialTheme.colorScheme.error,
@@ -609,32 +817,39 @@ val biometricGate = rememberBiometricGate()
             },
             confirmButton = {
                 TextButton(
-                    enabled = !qcLoading && qcCode.length == 6,
+                    enabled = SecurityDialogRules.qcConfirmEnabled(qc),
                     onClick = {
-                        qcLoading = true
-                        qcError = null
-                        viewModel.authorizeQuickConnect(qcCode) { success, error ->
-                            qcLoading = false
+                        val started = SecurityDialogRules.qcStart(qc)
+                        activeDialog = SecurityDialogPhase.QuickConnectAuthorize(started)
+                        viewModel.authorizeQuickConnect(started.code) { success, error ->
                             if (success) {
-                                activeDialog = SecuritySettingsDialog.None
-                                qcCode = ""
+                                // The code + any face die with the arm — the
+                                // former close's qcCode=""/qcError=null reset.
+                                activeDialog = SecurityDialogPhase.Closed
                             } else {
-                                qcError = error ?: authorizationFailed
+                                // The banner re-raises and the code is KEPT
+                                // for the inline retry (the failure face's
+                                // preserved keep-vs-clear behavior).
+                                activeDialog = SecurityDialogPhase.QuickConnectAuthorize(
+                                    SecurityDialogRules.qcFailed(started, error ?: authorizationFailed),
+                                )
                             }
                         }
                     },
                 ) {
-                    Text(if (qcLoading) stringResource(Res.string.settings_authorizing) else stringResource(Res.string.settings_authorize))
+                    Text(
+                        if (qc is QuickConnectAuthorizePhase.Authorizing) {
+                            stringResource(Res.string.settings_authorizing)
+                        } else {
+                            stringResource(Res.string.settings_authorize)
+                        },
+                    )
                 }
             },
             dismissButton = {
                 TextButton(
-                    enabled = !qcLoading,
-                    onClick = {
-                        activeDialog = SecuritySettingsDialog.None
-                        qcCode = ""
-                        qcError = null
-                    },
+                    enabled = SecurityDialogRules.qcDismissAllowed(qc),
+                    onClick = { activeDialog = SecurityDialogPhase.Closed },
                 ) { Text(stringResource(Res.string.settings_cancel)) }
             },
         )

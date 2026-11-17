@@ -39,7 +39,6 @@ fun PerformanceStep(
             title = stringResource(Res.string.onboarding_performance_title),
             subtitle = stringResource(Res.string.onboarding_performance_subtitle),
             icon = Tabler.Outline.Bolt,
-            onNext = {},
         ) {
             Text(
                 text = stringResource(Res.string.onboarding_performance_mode),

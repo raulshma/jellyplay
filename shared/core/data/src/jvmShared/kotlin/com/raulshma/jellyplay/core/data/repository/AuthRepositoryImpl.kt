@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
+import com.raulshma.jellyplay.core.datastore.identity.PersistedIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
@@ -272,67 +273,159 @@ class AuthRepositoryImpl constructor(
     override suspend fun authorizeQuickConnect(code: String): Result<Boolean> =
         authApiClient.authorizeQuickConnect(code)
 
+    /**
+     * Cold-start restore, driven by the identity store's ONE typed read
+     * ([PersistedIdentity]) — the former raw two-key read (`if (serverId !=
+     * null && userId != null)`) silently ignored the ServerSelected phase and
+     * leaked blank sentinels into the gate. The arms:
+     *
+     *  - NoSession — nothing to do.
+     *  - ServerSelected — adopt the server only (see [restoreSelectedServer]).
+     *  - ActiveSession — the full restore (see [restoreActiveSession]).
+     *
+     * Deliberately does NOT ride [adoptPersistedSession]'s spine: the network
+     * stages are timeout-bounded BETWEEN the steps (address selection before
+     * the user is resolved, token validation after `setUser`, each with a
+     * deferred re-run off the application scope), the 401 reaction is a
+     * teardown (`disconnect` + `clearSession`, with restore still succeeding)
+     * rather than a failed Result, and it neither re-writes the identity store
+     * (it is the SOURCE of the active selection — except for its garbage /
+     * dead-token cleanups, which ARE the store's commands) nor stamps
+     * `lastConnected`.
+     */
     override suspend fun restoreSession(): Result<Unit> = runCatchingRethrowingCancellation {
-        val serverId: String? = serverIdentityStore.activeServerId.first()
-        val userId: String? = serverIdentityStore.activeUserId.first()
-        if (serverId != null && userId != null) {
-            val serverEntity = serverDao.getServerById(serverId)
-            if (serverEntity == null) {
-                // Don't log the raw server/user GUIDs — they survive into
-                // release builds and can be used for cross-session correlation.
-                Log.w("AuthRepository", "restoreSession: server not found in DB")
-                serverIdentityStore.setActiveSession("", "")
-                return@runCatchingRethrowingCancellation
-            }
-            val server = serverEntity.toServerInfo()
-            authApiClient.setServer(server)
-            // Address failover rationale lives on
-            // [selectReachableAddressDefensively]. The probes are
-            // sequential network calls, so the wait is bounded — on timeout
-            // the gate below releases on the primary address and selection
-            // re-runs off the gate in the deferred pass.
-            val addressSelected = tryRestoreNetworkStage {
-                selectReachableAddressDefensively()
-            }
-
-            val userEntity = userDao.getUserById(userId)
-            if (userEntity == null) {
-                Log.w("AuthRepository", "restoreSession: user not found in DB")
-                serverIdentityStore.setActiveUser("")
-                return@runCatchingRethrowingCancellation
-            }
-            val token = tokenCipher.decrypt(userEntity.accessToken)
-            if (token != null) {
-                authApiClient.setUser(
-                    UserInfo(
-                        id = userId,
-                        name = userEntity.name,
-                        serverAddress = server.address,
-                        accessToken = token,
-                        serverId = serverId,
-                        isAdmin = userEntity.isAdmin,
-                        canDeleteContent = userEntity.canDeleteContent,
-                        maxParentalAgeRating = userEntity.maxParentalAgeRating,
-                        primaryImageTag = userEntity.primaryImageTag,
-                        enabledFolderIds = decodeEnabledFolderIds(userEntity.enabledFolderIds),
-                    )
-                )
-                // The token check is a live authenticated GET — bound it
-                // the same way. On timeout the restored session stands exactly
-                // as a successful (or non-401-failed) validation leaves it, so
-                // the first-frame gate releases with the session kept.
-                val validationCompleted = tryRestoreNetworkStage {
-                    validateRestoredSession()
-                }
-                if (!addressSelected || !validationCompleted) {
-                    launchDeferredRestoreValidation(addressSelected, validationCompleted)
-                }
-            } else {
-                Log.w("AuthRepository", "restoreSession: no access token for active user")
-            }
+        // The disk-backed one-shot read, NOT `identity.first()` — a
+        // stateIn(Eagerly) StateFlow answers with its NoSession seed instantly
+        // during the DataStore-read window (no happens-before edge to the
+        // eager collector), which would silently skip the restore and drop the
+        // splash gate straight to NeedsAuth despite a valid persisted session.
+        when (val persisted = serverIdentityStore.readIdentity()) {
+            PersistedIdentity.NoSession -> Unit
+            is PersistedIdentity.ServerSelected -> restoreSelectedServer(persisted.serverId)
+            is PersistedIdentity.ActiveSession -> restoreActiveSession(persisted.serverId, persisted.userId)
         }
     }.onFailure { e ->
         Log.e("AuthRepository", "restoreSession failed", e)
+    }
+
+    /**
+     * Cold-start restore of a server-only selection — the phase a switch to a
+     * server with no remembered user persists (the declared BUG 1 fix). The
+     * client is re-pointed at that server so the login flow opens on ITS user
+     * list, never the previous server's; there is no user to adopt and no
+     * token to validate, so the restore stops after the bounded address
+     * staging.
+     */
+    private suspend fun restoreSelectedServer(serverId: String) {
+        val serverEntity = serverDao.getServerById(serverId)
+        if (serverEntity == null) {
+            // Don't log the raw server GUID — it survives into release builds
+            // and can be used for cross-session correlation.
+            Log.w("AuthRepository", "restoreSession: selected server not found in DB")
+            serverIdentityStore.clearSession()
+            return
+        }
+        authApiClient.setServer(serverEntity.toServerInfo())
+        // Address failover rationale lives on
+        // [selectReachableAddressDefensively]. The probes are
+        // sequential network calls, so the wait is bounded — on timeout
+        // the gate below releases on the primary address and selection
+        // re-runs off the gate in the deferred pass.
+        val addressSelected = tryRestoreNetworkStage {
+            selectReachableAddressDefensively()
+        }
+        if (!addressSelected) {
+            // No session exists to validate — the deferred pass only re-runs
+            // the address selection the bounded gate abandoned.
+            launchDeferredRestoreValidation(addressSelected = false, validationCompleted = true)
+        }
+    }
+
+    /**
+     * Cold-start restore of the full [PersistedIdentity.ActiveSession] phase.
+     * Staging (order is load-bearing, see [restoreSession]):
+     * setServer → bounded address selection → user-row resolution → token
+     * decryption → setUser → bounded token validation, with a deferred
+     * re-run pass for whatever the bounds abandoned.
+     */
+    private suspend fun restoreActiveSession(serverId: String, userId: String) {
+        val serverEntity = serverDao.getServerById(serverId)
+        if (serverEntity == null) {
+            // Don't log the raw server/user GUIDs — they survive into
+            // release builds and can be used for cross-session correlation.
+            Log.w("AuthRepository", "restoreSession: server not found in DB")
+            serverIdentityStore.clearSession()
+            return
+        }
+        val server = serverEntity.toServerInfo()
+        authApiClient.setServer(server)
+        // Address failover rationale lives on
+        // [selectReachableAddressDefensively]. The probes are
+        // sequential network calls, so the wait is bounded — on timeout
+        // the gate below releases on the primary address and selection
+        // re-runs off the gate in the deferred pass.
+        val addressSelected = tryRestoreNetworkStage {
+            selectReachableAddressDefensively()
+        }
+
+        val userEntity = userDao.getUserById(userId)
+        if (userEntity == null) {
+            Log.w("AuthRepository", "restoreSession: user not found in DB")
+            // The user row is gone but the server is fine — land the
+            // ServerSelected phase (the app stays pointed at the server; the
+            // login flow opens on its user list). The former blank-sentinel
+            // write (`setActiveUser("")`) is the same on-disk outcome under
+            // the typed store's uniform blank==absent rule; key removal is
+            // the canonical encoding.
+            serverIdentityStore.clearUser()
+            return
+        }
+        val token = tokenCipher.decrypt(userEntity.accessToken)
+        if (token == null) {
+            // Declared BUG 2 fix, restore side (persist side lives in
+            // [persistSession]): the identity said logged-in but the user row
+            // has no usable token — the Keystore was wiped/rotated under the
+            // stored ciphertext. The former branch logged and stopped
+            // MID-RESTORE: server adopted in memory, DataStore identity still
+            // fully populated — a "persisted" session that could never
+            // authenticate, with no user-facing signal, resurrected by every
+            // cold start. A cipher-failed row must restore as NoSession
+            // (clean, logged): the disconnect mirrors
+            // [validateRestoredSession]'s teardown idiom so no half-adopted
+            // server lingers behind the cleared identity. A full clear (not
+            // clearUser → ServerSelected) is deliberate: a broken cipher
+            // makes EVERY user row's stored token unreadable, so pointing
+            // the selection at a server whose quick sign-in rows cannot
+            // authenticate would re-enter the zombie through the switch path.
+            Log.w("AuthRepository", "restoreSession: stored token for the active user is unusable (cipher failed) — clearing session")
+            authApiClient.disconnect()
+            serverIdentityStore.clearSession()
+            return
+        }
+        authApiClient.setUser(
+            UserInfo(
+                id = userId,
+                name = userEntity.name,
+                serverAddress = server.address,
+                accessToken = token,
+                serverId = serverId,
+                isAdmin = userEntity.isAdmin,
+                canDeleteContent = userEntity.canDeleteContent,
+                maxParentalAgeRating = userEntity.maxParentalAgeRating,
+                primaryImageTag = userEntity.primaryImageTag,
+                enabledFolderIds = decodeEnabledFolderIds(userEntity.enabledFolderIds),
+            )
+        )
+        // The token check is a live authenticated GET — bound it
+        // the same way. On timeout the restored session stands exactly
+        // as a successful (or non-401-failed) validation leaves it, so
+        // the first-frame gate releases with the session kept.
+        val validationCompleted = tryRestoreNetworkStage {
+            validateRestoredSession()
+        }
+        if (!addressSelected || !validationCompleted) {
+            launchDeferredRestoreValidation(addressSelected, validationCompleted)
+        }
     }
 
     /**
@@ -479,17 +572,26 @@ class AuthRepositoryImpl constructor(
      *     `userId`/`accessToken`).
      *
      * A null [userEntity] (switchServer on a server with no remembered
-     * user) still runs steps 1-3 — the client lands pointed at the new
-     * server — and then stops: no user to adopt, nothing to stamp, success.
+     * user) still runs steps 1-3, then persists the
+     * [PersistedIdentity.ServerSelected] phase via
+     * `serverIdentityStore.setSelectedServer(server.id)` BEFORE returning
+     * success, and stops: no user to adopt, nothing to stamp. The
+     * persistence is the declared BUG 1 fix — the former early return wrote
+     * NOTHING, so the client was re-pointed in memory while the DataStore
+     * still named the previous server and the next cold start restored that
+     * previous session instead of the user's chosen one. `setSelectedServer`
+     * also removes any stale user key in the same edit: a remembered user of
+     * the PREVIOUS server must not ride the new selection.
      *
      * [restoreSession] deliberately does NOT ride this spine: its network
      * stages are timeout-bounded BETWEEN the steps (address selection
      * before the user is resolved, token validation after `setUser`, each
      * with a deferred re-run off the application scope), its 401 reaction
      * is a teardown (`disconnect` + `clearSession`, with restore still
-     * succeeding) rather than a failed Result, and it neither re-writes the
-     * identity store (it is the SOURCE of the active selection) nor stamps
-     * `lastConnected`. Folding it here would change ordering/timing
+     * succeeding) rather than a failed Result, and it does not stamp
+     * `lastConnected` (it is the SOURCE of the active selection — its only
+     * identity-store writes are the garbage/dead-token cleanups, which ARE
+     * the store's commands). Folding it here would change ordering/timing
      * semantics, so it shares only the truly verbatim failover body
      * ([selectReachableAddressDefensively]).
      */
@@ -503,7 +605,14 @@ class AuthRepositoryImpl constructor(
         authApiClient.disconnect()
         authApiClient.setServer(server)
         selectReachableAddressDefensively()
-        if (userEntity == null) return Result.success(Unit)
+        if (userEntity == null) {
+            // Declared BUG 1 fix: persist the ServerSelected phase BEFORE the
+            // success return — the identity store must name the server the
+            // client was just re-pointed at, or the next cold start restores
+            // the previous session (see the KDoc above).
+            serverIdentityStore.setSelectedServer(server.id)
+            return Result.success(Unit)
+        }
         authApiClient.setUser(userEntity.toUserInfo(server.address))
         // Guard against re-arming a revoked token: without this, tapping a
         // saved server or user adopts the dead stored token, the app lands on
@@ -622,7 +731,13 @@ class AuthRepositoryImpl constructor(
         val currentUserId = authApiClient.currentUser.first()?.id
         if (currentUserId == userId) {
             authApiClient.disconnect()
-            serverIdentityStore.setActiveUser("")
+            // Only the user key is cleared — the server selection survives as
+            // the ServerSelected phase (the removed user's server stays
+            // pointed at; the login flow opens on its user list). The former
+            // blank-sentinel write is the same on-disk outcome under the
+            // typed store's uniform blank==absent rule; key removal is the
+            // canonical encoding.
+            serverIdentityStore.clearUser()
         }
     }
 
@@ -648,7 +763,43 @@ class AuthRepositoryImpl constructor(
 
     override fun disconnect() = webSocketClient.disconnect()
 
+    /**
+     * The login-path persist: DB rows first, identity LAST (a DB failure
+     * never strands a session identity pointing at rows that were not
+     * written).
+     *
+     * Declared BUG 2 fix, persist side (restore side lives in
+     * [restoreActiveSession]): the token is encrypted FIRST and a cipher
+     * failure aborts the persist before ANY write. The former
+     * `tokenCipher.encrypt(...) ?: ""` stored an empty-token user row AND
+     * still wrote the identity — a "persisted" session that could never
+     * authenticate (restore decrypted to null and stopped mid-restore: server
+     * adopted, identity fully populated, no user-facing signal). Aborting
+     * here leaves the PREVIOUS identity intact (worst case the next cold
+     * start restores it, never a zombie) and surfaces the failure exactly
+     * like the persist path's other failures — Room/DataStore I/O errors
+     * throw out of this function through the callers' `.onSuccess { … }`
+     * lambdas the same way. One encryption serves both rows (user row +
+     * server row's shadow token column): they used to carry two ciphertexts
+     * of the same plaintext; the decrypt side is identical.
+     *
+     * **Known residue (deliberate, see the 2026-11-17 regression analysis):**
+     * the atomic login publishes the in-memory session BEFORE this persist
+     * runs, and nothing rolls it back on a persist failure — a cipher-failed
+     * login leaves a live, connected in-memory session behind the "login
+     * failed" error the caller surfaces (`isAuthenticated` stays true, the
+     * socket connects, the disk identity still names the previous session).
+     * The VM side folds the throw into the UI error (both login legs); only
+     * the in-memory residue is unhandled. Rollback would need to unwind the
+     * published session to the prior identity and is intentionally deferred.
+     */
     private suspend fun persistSession(server: ServerInfo, user: UserInfo, fallbackUsername: String = "") {
+        val cipheredToken = tokenCipher.encrypt(user.accessToken)
+            ?: throw IllegalStateException(
+                "TokenCipher failed to encrypt the access token — session not persisted (previous identity intact)"
+            ).also {
+                Log.e("AuthRepository", "persistSession: token encryption failed for user ${user.id}", it)
+            }
         val existingServer = serverDao.getServerById(server.id)
         val preservedAlternateAddresses = existingServer?.alternateAddresses
         if (existingServer == null) {
@@ -664,7 +815,7 @@ class AuthRepositoryImpl constructor(
             userId = user.id,
             serverId = server.id,
             name = user.name.ifBlank { fallbackUsername },
-            accessToken = tokenCipher.encrypt(user.accessToken) ?: "",
+            accessToken = cipheredToken,
             primaryImageTag = user.primaryImageTag,
             maxParentalAgeRating = user.maxParentalAgeRating,
             isAdmin = user.isAdmin,
@@ -680,7 +831,7 @@ class AuthRepositoryImpl constructor(
                     name = server.name,
                     address = server.address,
                     userId = user.id,
-                    accessToken = tokenCipher.encrypt(user.accessToken),
+                    accessToken = cipheredToken,
                     lastConnected = timeSource.nowEpochMillis(),
                     alternateAddresses = preservedAlternateAddresses,
                 )

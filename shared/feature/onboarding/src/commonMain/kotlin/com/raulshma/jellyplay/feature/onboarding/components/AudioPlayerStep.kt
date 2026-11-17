@@ -52,7 +52,6 @@ fun AudioPlayerStep(
             title = stringResource(Res.string.onboarding_audio_title),
             subtitle = stringResource(Res.string.onboarding_audio_subtitle),
             icon = Tabler.Outline.Headphones,
-            onNext = {},
         ) {
             Text(
                 text = stringResource(Res.string.onboarding_audio_default_speed),

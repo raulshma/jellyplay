@@ -76,7 +76,7 @@ class MirrorProfileSyncAdapterRoundTripTest {
             homeDataStore = tempDataStore("home").also { it.edit { prefs -> prefs.clear() } }
             val identityStore = ServerIdentityStore(homeDataStore, scope)
             homeStore = HomeDiscoveryStore(homeDataStore, scope, identityStore)
-            identityStore.setActiveUser(USER)
+            identityStore.setActiveSession("srv-1", USER)
             integrationsDataStore = tempDataStore("integrations").also { it.edit { prefs -> prefs.clear() } }
         }
     }

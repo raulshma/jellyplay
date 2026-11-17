@@ -67,6 +67,19 @@ internal class AudioCrossfadeHandoff(
     private val exoPlayerProvider: () -> ExoPlayer?,
     /** The swap write — the promoted secondary BECOMES the live engine. */
     private val exoPlayerSetter: (ExoPlayer) -> Unit,
+    /**
+     * The engine-volume-restore edge the swap and the ramp/cancel halves own:
+     * the ramp tail pins the promoted secondary at full volume (`1f`) and the
+     * crossfader's [AudioCrossfader.cancel] restores the primary to `1f`, so
+     * BOTH crossfade exits land the live engine audible regardless of what the
+     * manager believed before the fade. The manager wires its mute reconcile
+     * here (the explicit mute state ends exactly as the former `volume > 0f`
+     * inference verdict would — byte-preserving; the
+     * [AudioPlaybackManagerMuteDuckStateTest] suite pins the manager side, this
+     * suite pins the port firing). Default no-op so the handoff stays
+     * constructible without the manager (the androidHostTest handoff suite).
+     */
+    private val onEngineVolumeRestored: () -> Unit = {},
     /** The manager's current MediaSession (released at the rebuild), null when none. */
     private val mediaSessionProvider: () -> MediaSession?,
     private val mediaSessionSetter: (MediaSession?) -> Unit,
@@ -88,6 +101,16 @@ internal class AudioCrossfadeHandoff(
     val isCrossfading: StateFlow<Boolean> = _isCrossfading.asStateFlow()
 
     /**
+     * Test seam (the chassis's internal-for-test-seams idiom): raises the flag
+     * so the handoff suite can pin the swap-window bracket — production raises
+     * it inside [AudioCrossfader.prepareAndCrossfade], which the suite does not
+     * drive.
+     */
+    internal fun raiseIsCrossfadingForTest() {
+        _isCrossfading.value = true
+    }
+
+    /**
      * The decision half, wired to this manager's cells. The manager's
      * `crossfader` delegates here — cancel/pause/setVolume/setPlaybackSpeed/
      * maybeStart keep their existing call sites.
@@ -103,6 +126,7 @@ internal class AudioCrossfadeHandoff(
         crossfadeDurationMsProvider = { state.crossfadeDurationMs.value },
         isCrossfadingProvider = { _isCrossfading.value },
         isCrossfadingSetter = { _isCrossfading.value = it },
+        onPrimaryVolumeRestored = onEngineVolumeRestored,
         exoPlayerProvider = exoPlayerProvider,
         queueSizeProvider = { state.queue.value.size },
         onGetNextItem = { idx -> state.queue.value.getOrNull(idx) },
@@ -127,59 +151,80 @@ internal class AudioCrossfadeHandoff(
      * transition site launches stop+start AFTER the writes, and no single
      * placement is faithful to both).
      *
+     * THE SWAP-WINDOW BRACKET (the [QueuePlaylistMirror.removingCurrentRow]
+     * try/finally precedent): the whole window runs with `_isCrossfading` up
+     * while a queue mirror built for the DYING engine is still standing, so a
+     * throw (or cancellation) out of any suspend point below — the stop
+     * report, the commit, the session rebuild, the pre-warm, the start report
+     * — used to strand the flag `true` with that mirror, after which
+     * [AudioCrossfader.prepareAndCrossfade] early-returns on the flag and no
+     * crossfade can ever arm again. The `finally` lands the flag low on every
+     * exit path (success, failure, cancellation); on the success path it is a
+     * no-op behind the mid-tail lowering, whose position BEFORE the pre-warm
+     * and the start report is pinned by the handoff suite.
+     *
+     * The promoted secondary arrives at full volume (the ramp tail pins it
+     * there), so the swap is an engine-volume-restore edge:
+     * [onEngineVolumeRestored] fires right after the live-engine write.
+     *
      * internal: the androidHostTest handoff suite drives the tail directly
      * (the chassis's internal-for-test-seams idiom) — on the production path
      * only the [crossfader] wiring below calls it.
      */
     internal suspend fun onCrossfadeTransition(secondary: ExoPlayer, nextIndex: Int, nextItem: AudioQueueItem) {
-        val prevItemId = state.currentItemId
-        val prevSessionId = state.playSessionId
-        val prevPosTicks = AudioQueuePolicy.finalStopPositionTicks(
-            positionMs = state.currentPosition.value,
-            durationMs = state.duration.value,
-        )
+        try {
+            val prevItemId = state.currentItemId
+            val prevSessionId = state.playSessionId
+            val prevPosTicks = AudioQueuePolicy.finalStopPositionTicks(
+                positionMs = state.currentPosition.value,
+                durationMs = state.duration.value,
+            )
 
-        progressReporter.reportStopped(
-            itemId = prevItemId,
-            sessionId = prevSessionId,
-            positionTicks = prevPosTicks,
-        )
+            progressReporter.reportStopped(
+                itemId = prevItemId,
+                sessionId = prevSessionId,
+                positionTicks = prevPosTicks,
+            )
 
-        // reapplyReplayGain = false: the wholesale effects re-attach below
-        // stands in for the single-row ReplayGain re-apply the
-        // natural-transition site does.
-        commitTransition(nextIndex, nextItem, false)
+            // reapplyReplayGain = false: the wholesale effects re-attach below
+            // stands in for the single-row ReplayGain re-apply the
+            // natural-transition site does.
+            commitTransition(nextIndex, nextItem, false)
 
-        exoPlayerSetter(secondary)
+            exoPlayerSetter(secondary)
+            onEngineVolumeRestored()
 
-        mediaSessionProvider()?.release()
-        // Rebuild via the shared audio-session builder (AudioLibraryBrowser is
-        // the single construction path for both the initial session and the
-        // crossfade rebuild). JellyPlayPlaybackService.onGetSession casts the
-        // active session to MediaLibrarySession; a plain MediaSession rebuild
-        // — the pre-fix behaviour — cast to null, so the service rejected
-        // controller connections, killing the now-playing notification and
-        // headset buttons until app restart. Mirrors the video fix
-        // (MediaSessionController).
-        val newSession = libraryBrowser.buildMediaSession(context, secondary, state.playSessionId)
-        mediaSessionSetter(newSession)
-        sessionManager.setActiveSession(newSession)
+            mediaSessionProvider()?.release()
+            // Rebuild via the shared audio-session builder (AudioLibraryBrowser is
+            // the single construction path for both the initial session and the
+            // crossfade rebuild). JellyPlayPlaybackService.onGetSession casts the
+            // active session to MediaLibrarySession; a plain MediaSession rebuild
+            // — the pre-fix behaviour — cast to null, so the service rejected
+            // controller connections, killing the now-playing notification and
+            // headset buttons until app restart. Mirrors the video fix
+            // (MediaSessionController).
+            val newSession = libraryBrowser.buildMediaSession(context, secondary, state.playSessionId)
+            mediaSessionSetter(newSession)
+            sessionManager.setActiveSession(newSession)
 
-        secondary.addListener(playerListener)
-        effectsProcessor.applyNightMode()
-        effectsProcessor.applyDialogueBoost()
-        effectsProcessor.applyEqualizer()
-        effectsProcessor.applyBassBoost()
-        effectsProcessor.applyVirtualizer()
-        effectsProcessor.reattachForCrossfade(secondary.audioSessionId)
+            secondary.addListener(playerListener)
+            effectsProcessor.applyNightMode()
+            effectsProcessor.applyDialogueBoost()
+            effectsProcessor.applyEqualizer()
+            effectsProcessor.applyBassBoost()
+            effectsProcessor.applyVirtualizer()
+            effectsProcessor.reattachForCrossfade(secondary.audioSessionId)
 
-        _isCrossfading.value = false
+            _isCrossfading.value = false
 
-        // Same windowed mirror as the play-path pre-warm: full prefix
-        // below the crossfaded row, bounded lookahead ahead of it.
-        queueMirror.prewarmAround(secondary, nextIndex)
+            // Same windowed mirror as the play-path pre-warm: full prefix
+            // below the crossfaded row, bounded lookahead ahead of it.
+            queueMirror.prewarmAround(secondary, nextIndex)
 
-        playbackRepository.reportPlaybackStart(startReport(nextItem))
+            playbackRepository.reportPlaybackStart(startReport(nextItem))
+        } finally {
+            _isCrossfading.value = false
+        }
     }
 
     /**

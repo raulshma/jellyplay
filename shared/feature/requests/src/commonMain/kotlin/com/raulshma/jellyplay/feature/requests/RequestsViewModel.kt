@@ -61,7 +61,13 @@ data class RequestsUiState(
     /** Free-text search term forwarded to the Seerr `search` query param. */
     val searchQuery: String = "",
     val actionInProgress: Boolean = false,
-    /** Selection-mode state for bulk approve/decline. */
+    /**
+     * Selection-mode state for bulk approve/decline. The ids are only
+     * meaningful against the CURRENT [requests] list: filter writes clear
+     * the selection ([withFilterState], visible-set axes only) and the bulk
+     * dispatch re-resolves ([liveSelectedIds]) — a stale id can neither
+     * inflate the count bar nor reach the server.
+     */
     val selection: SelectionState<Int> = SelectionState(),
     val actionError: String? = null,
 ) {
@@ -82,6 +88,24 @@ data class RequestsUiState(
             showMyRequestsOnly = showMyRequestsOnly,
             searchQuery = searchQuery,
         )
+}
+
+/**
+ * The bulk selection re-resolved against the CURRENTLY rendered
+ * [RequestsUiState.requests] — the dispatch-time half of the declared
+ * "bulk approve can no longer approve invisible requests" fix. Filter
+ * writes clear the selection up front ([withFilterState]), but a list
+ * refresh that drops a selected row WITHOUT any filter write (the poll /
+ * pull-to-refresh / post-action reloads replace [RequestsUiState.requests]
+ * wholesale) can still drift ids stale between pick and dispatch; this
+ * fold drops the misses, preserving the selection's tap order so a
+ * fully-live selection fans out exactly as before. Pure, so the rule is
+ * pinnable without the VM.
+ */
+internal fun RequestsUiState.liveSelectedIds(): List<Int> {
+    if (selectedRequestIds.isEmpty()) return emptyList()
+    val listed = requests.mapTo(HashSet()) { it.id }
+    return selectedRequestIds.filter { it in listed }
 }
 
 @OptIn(FlowPreview::class)
@@ -376,9 +400,12 @@ class RequestsViewModel(
 
     /**
      * Single write path for the filter axes: applies [transform] through the
-     * [RequestsFilterState] algebra (which carries the page-1 reset) and —
-     * unless [refresh] is suppressed — reloads immediately. [setSearchQuery]
-     * passes refresh=false; its reload rides the 400 ms debounce in [init].
+     * [RequestsFilterState] algebra (which carries the page-1 reset and — for
+     * a visible-set axis change — the selection clear, see
+     * [withFilterState]) and — unless [refresh] is suppressed — reloads
+     * immediately. [setSearchQuery] passes refresh=false; its reload rides
+     * the 400 ms debounce in [init] (the clear itself lands on the write,
+     * immediately).
      */
     private fun updateFilters(
         refresh: Boolean = true,
@@ -440,9 +467,19 @@ class RequestsViewModel(
      * uses) instead of one sequential round-trip per request — then clears
      * selection and refreshes the list. Per-item failures are surfaced inside
      * the Seerr result by the repository; here we only drive the fan-out.
+     *
+     * DECLARED FIX: bulk approve/decline can no longer approve invisible
+     * requests. The raw selected set used to fire as-is, so ids drifted
+     * stale by a filter/search/mediaType write or a list refresh dropping a
+     * selected row approved requests that were no longer on screen —
+     * server-side, invisibly to the user. The fan-out now runs over
+     * [liveSelectedIds] (the selection re-resolved against the current
+     * [RequestsUiState.requests]; misses dropped): zero live targets is a
+     * full no-op — no repository calls, no busy flip, no state write — and
+     * the completion path (clear + refresh) is unchanged.
      */
     private fun runBulk(action: suspend (Int) -> Unit) {
-        val ids = _state.value.selectedRequestIds.toList()
+        val ids = _state.value.liveSelectedIds()
         if (ids.isEmpty()) return
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionError = null)

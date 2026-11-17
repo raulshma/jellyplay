@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGat
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
@@ -424,6 +425,92 @@ class RequestsViewModelTest {
 
         coVerify(exactly = 0) { seerrRepository.approveRequest(any()) }
         assertEquals(callsAfterInit, requestCalls.size)
+    }
+
+    // ── stale-selection guards (declared fix: no invisible approvals) ─────
+
+    @Test
+    fun setFilter_clears_a_drifted_selection() = runTest(mainDispatcher) {
+        stubRequests { Result.success(page(listOf(item(1), item(2)))) }
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectAll()
+        assertTrue(viewModel.state.value.selectionMode)
+
+        viewModel.setFilter(SeerrRequestFilter.APPROVED)
+        advanceUntilIdle()
+
+        // The rows the ids pointed at are gone from the new filter's view —
+        // the write clears the selection instead of leaving a phantom count.
+        assertEquals(emptySet(), viewModel.state.value.selectedRequestIds)
+        assertFalse(viewModel.state.value.selectionMode)
+    }
+
+    @Test
+    fun approveSelected_drops_selection_ids_that_left_the_current_list() = runTest(mainDispatcher) {
+        stubRequests { Result.success(page(listOf(item(1), item(2)))) }
+        coEvery { seerrRepository.approveRequest(any()) } returns Result.success(item(1))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectAll()
+
+        // A list refresh lands with request 2 gone (approved elsewhere /
+        // page replaced) — no filter write cleared the selection, so the
+        // ids stay parked against the shrunken list.
+        stubRequests { Result.success(page(listOf(item(1)))) }
+        viewModel.loadRequests(refresh = true)
+        advanceUntilIdle()
+        assertEquals(setOf(1, 2), viewModel.state.value.selectedRequestIds)
+
+        viewModel.approveSelected()
+        advanceUntilIdle()
+
+        // DECLARED FIX: only the live id reaches the server — the invisible
+        // request is never approved.
+        coVerify(exactly = 1) { seerrRepository.approveRequest(1) }
+        coVerify(exactly = 0) { seerrRepository.approveRequest(2) }
+        val state = viewModel.state.value
+        assertFalse(state.actionInProgress)
+        assertEquals(emptySet(), state.selectedRequestIds)
+        assertNull(state.actionError)
+    }
+
+    @Test
+    fun approveSelected_with_a_fully_stale_selection_is_a_full_noop() = runTest(mainDispatcher) {
+        stubRequests { Result.success(page(listOf(item(1)))) }
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.toggleSelection(item(1))
+
+        // The refresh drops the only selected row — the whole selection is
+        // stale at dispatch time.
+        stubRequests { Result.success(page(emptyList())) }
+        viewModel.loadRequests(refresh = true)
+        advanceUntilIdle()
+        val callsBeforeBulk = requestCalls.size
+
+        viewModel.approveSelected()
+        advanceUntilIdle()
+
+        // Zero live targets: a full no-op — no repository call, no busy
+        // flip, no completion refresh, nothing written.
+        coVerify(exactly = 0) { seerrRepository.approveRequest(any()) }
+        assertFalse(viewModel.state.value.actionInProgress)
+        assertEquals(callsBeforeBulk, requestCalls.size)
+        assertEquals(setOf(1), viewModel.state.value.selectedRequestIds)
+    }
+
+    @Test
+    fun liveSelectedIds_preserves_tap_order_and_drops_misses() {
+        val state = RequestsUiState(
+            requests = listOf(item(3), item(1)),
+            selection = SelectionState(setOf(1, 2, 3)),
+        )
+
+        // Misses dropped, tap order preserved (the fan-out order the
+        // fully-live path has always used).
+        assertEquals(listOf(1, 3), state.liveSelectedIds())
+        assertEquals(emptyList<Int>(), RequestsUiState().liveSelectedIds())
     }
 
     // ── single-request actions ────────────────────────────────────────────

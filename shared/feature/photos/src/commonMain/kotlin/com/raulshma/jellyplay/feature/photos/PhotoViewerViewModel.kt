@@ -42,11 +42,29 @@ class PhotoViewerViewModel(
     private val _slideshowIntervalMs = composeState(5000L)
     val slideshowIntervalMs: androidx.compose.runtime.State<Long> get() = _slideshowIntervalMs.asState()
 
-    private val _isSaving = composeState(false)
-    val isSaving: androidx.compose.runtime.State<Boolean> get() = _isSaving.asState()
+    /**
+     * The gallery-save machine: ONE owner value
+     * ([StateManagementConventions.PREFERRED_PATTERN] §3). Folded from the
+     * former `_isSaving` flag + `_saveResult` nullable pair — DECLARED FIX:
+     * a fresh save raised the flag and only then nulled the result, two
+     * hand-synced writes whose in-between published
+     * `isSaving=true && saveResult != null` (the previous save's terminal
+     * result standing beside the new flag). The phase makes that combination
+     * unrepresentable — [SavePhotoPhase.Saving] is payload-less and the
+     * result only ever exists as a terminal face. The re-entry guard is
+     * phase-typed (`!is Saving`), and [clearSaveResult] can only dismiss a
+     * terminal face back to [SavePhotoPhase.Idle].
+     */
+    private val _savePhase = composeState<SavePhotoPhase>(SavePhotoPhase.Idle)
+    val savePhase: androidx.compose.runtime.State<SavePhotoPhase> get() = _savePhase.asState()
 
-    private val _saveResult = composeState<SaveResult?>(null)
-    val saveResult: androidx.compose.runtime.State<SaveResult?> get() = _saveResult.asState()
+    /**
+     * Derived projection over [savePhase] — the save button's spinner gate
+     * (and the legacy pins) keep reading a Boolean. Deliberately still
+     * spelled `isSaving`: the ImplicitStateRatchetTest counts this
+     * declaration on purpose (the HomeUiState phase-verdict-fold precedent).
+     */
+    val isSaving: Boolean get() = _savePhase.value is SavePhotoPhase.Saving
 
     private val _showAdjustments = composeState(false)
     val showAdjustments: androidx.compose.runtime.State<Boolean> get() = _showAdjustments.asState()
@@ -277,13 +295,24 @@ class PhotoViewerViewModel(
     fun startSlideshow() {
         _isSlideshowActive.value = true
         slideshowJob = launch {
-            while (isActive) {
-                delay(_slideshowIntervalMs.value)
-                if (hasNext()) {
-                    navigateTo(_state.value.currentIndex + 1)
-                } else {
-                    navigateTo(0)
+            try {
+                while (isActive) {
+                    delay(_slideshowIntervalMs.value)
+                    if (hasNext()) {
+                        navigateTo(_state.value.currentIndex + 1)
+                    } else {
+                        navigateTo(0)
+                    }
                 }
+            } finally {
+                // The bracket: the active flag can no longer outlive this job.
+                // Every exit that is not stopSlideshow's own synchronous clear
+                // (onCleared / a scope teardown cancelling the parked delay)
+                // lands the flag false from inside the dying job — the
+                // QueuePlaylistMirror.removingCurrentRow try/finally precedent.
+                // stopSlideshow's clear stays first, so the double write is an
+                // idempotent false→false, never a toggle.
+                _isSlideshowActive.value = false
             }
         }
     }
@@ -326,31 +355,42 @@ class PhotoViewerViewModel(
 
     fun savePhotoToGallery() {
         val photo = _state.value.photo ?: return
-        if (_isSaving.value) return
+        if (_savePhase.value is SavePhotoPhase.Saving) return
 
         launch {
-            _isSaving.value = true
-            _saveResult.value = null
+            // ONE atomic write replaces the legacy two-write prologue
+            // (`_isSaving = true` then `_saveResult = null`) — the torn
+            // in-between where the flag stood beside the previous save's
+            // result is unwritable now. There is no flag left to clear in a
+            // `finally`: the terminal face IS the settled state.
+            _savePhase.value = SavePhotoPhase.Saving
 
             try {
                 // The Coil fetch + MediaStore insert live in the platform
                 // PhotoExport actual (androidMain); failures throw and land in
                 // the shared catch below with the same messages as before.
+                // (A scope teardown mid-export lands here too — CancellationException
+                // is an Exception, and the legacy catch mapped it to the error
+                // face exactly the same way. Preserved verbatim.)
                 photoExport.saveToGallery(
                     imageUrl = getImageUrl(photo, maxWidth = null),
                     displayName = photo.name,
                 )
-                _saveResult.value = SaveResult.Success
+                _savePhase.value = SavePhotoPhase.Succeeded
             } catch (e: Exception) {
-                _saveResult.value = SaveResult.Error(UserErrorMessages.resolve(e, "Failed to save photo"))
-            } finally {
-                _isSaving.value = false
+                _savePhase.value = SavePhotoPhase.Failed(UserErrorMessages.resolve(e, "Failed to save photo"))
             }
         }
     }
 
     fun clearSaveResult() {
-        _saveResult.value = null
+        // Only a terminal face dismisses back to Idle: resetting a mid-flight
+        // Saving would unsound the phase-typed guard in [savePhotoToGallery]
+        // (the legacy mid-save call could only re-null an already-null result,
+        // so observably this is the same no-op).
+        if (_savePhase.value is SavePhotoPhase.Succeeded || _savePhase.value is SavePhotoPhase.Failed) {
+            _savePhase.value = SavePhotoPhase.Idle
+        }
     }
 
     fun getFullImageUrl(): String? {
@@ -382,9 +422,37 @@ class PhotoViewerViewModel(
     }
 }
 
-sealed class SaveResult {
-    data object Success : SaveResult()
-    data class Error(val message: String) : SaveResult()
+/**
+ * The gallery-save machine's phases (owner: [PhotoViewerViewModel]'s
+ * `_savePhase`). Replaces the former `SaveResult` sealed class + the
+ * `_isSaving` Boolean beside it: a flag and a nullable result are two
+ * hand-synced writes, and the legacy save prologue raised the flag before
+ * nulling the result — `isSaving=true && saveResult != null` was reachable.
+ * One phase, and the combination cannot be written: [Saving] carries no
+ * payload, and a result exists only as a terminal face.
+ */
+sealed interface SavePhotoPhase {
+
+    /** No save attempted — or a terminal face dismissed via `clearSaveResult`. */
+    data object Idle : SavePhotoPhase
+
+    /**
+     * The export seam is in flight (the Coil fetch + MediaStore insert on
+     * Android). Payload-less by construction: nothing about a result can be
+     * observed while a save runs, and the re-entry guard refuses a second
+     * `savePhotoToGallery` from exactly this face.
+     */
+    data object Saving : SavePhotoPhase
+
+    /** The export completed. The screen posts the gallery snackbar, then clears. */
+    data object Succeeded : SavePhotoPhase
+
+    /**
+     * The export threw. [message] is the user-presentable reason (the same
+     * [UserErrorMessages.resolve] the legacy `SaveResult.Error` carried) that
+     * the screen posts to the bus, then clears.
+     */
+    data class Failed(val message: String) : SavePhotoPhase
 }
 
 /**

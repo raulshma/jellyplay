@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -35,6 +36,9 @@ class JellyPlayPluginApiSseTest {
         mockWebServer.start()
 
         val jellyfin = mockk<Jellyfin>(relaxed = true)
+        // Full-arity createApi stub: the multi-write (updateSession) rebuilds
+        // the client inside its critical section (see AuthApiClientTest's note).
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returns mockk(relaxed = true)
         val engine = JellyfinApiEngine(
             jellyfinLazy = LazyProvider { jellyfin },
             okHttpClientLazy = LazyProvider { OkHttpClient() },
@@ -42,16 +46,18 @@ class JellyPlayPluginApiSseTest {
             addressRouter = com.raulshma.jellyplay.core.network.failover.ServerAddressRouter(),
         )
         val baseUrl = mockWebServer.url("/").toString().trimEnd('/')
-        engine.updateServer(ServerInfo(id = "server-1", name = "Test Server", address = baseUrl))
-        engine.updateUser(
-            UserInfo(
-                id = "user-1",
-                name = "testuser",
-                serverAddress = baseUrl,
-                accessToken = "token-123",
-                serverId = "server-1",
-            ),
-        )
+        runBlocking {
+            engine.updateSession(
+                ServerInfo(id = "server-1", name = "Test Server", address = baseUrl),
+                UserInfo(
+                    id = "user-1",
+                    name = "testuser",
+                    serverAddress = baseUrl,
+                    accessToken = "token-123",
+                    serverId = "server-1",
+                ),
+            )
+        }
         client = JellyPlayPluginApiClientImpl(engine)
     }
 

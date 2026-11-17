@@ -90,7 +90,6 @@ fun AppearanceStep(
             title = stringResource(Res.string.onboarding_appearance_title),
             subtitle = stringResource(Res.string.onboarding_appearance_subtitle),
             icon = Tabler.Outline.Palette,
-            onNext = {},
         ) {
             Text(
                 text = stringResource(Res.string.onboarding_appearance_theme),

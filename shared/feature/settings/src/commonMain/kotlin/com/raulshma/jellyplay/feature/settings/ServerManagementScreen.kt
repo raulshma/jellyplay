@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.formatDate
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -131,10 +132,35 @@ fun ServerManagementScreen(
     var showAddAddressFor by remember { mutableStateOf<String?>(null) }
     var showCertificateImport by remember { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel.addressOperationMessage) {
-        viewModel.addressOperationMessage?.let { msg ->
-            bus.info(msg)
-            viewModel.clearAddressOperationMessage()
+    // The address operation's parked outcome posts to the bus exactly once
+    // and hands the phase back to Idle — the exhaustive when over the VM's
+    // AddressOperationPhase (the former parked-String one-shot's
+    // clear-after-handling, keyed on the phase object instead of the text).
+    LaunchedEffect(viewModel.addressOperationPhase) {
+        when (val phase = viewModel.addressOperationPhase) {
+            is AddressOperationPhase.Completed -> {
+                bus.info(phase.message)
+                viewModel.clearAddressOperationMessage()
+            }
+            AddressOperationPhase.Idle,
+            is AddressOperationPhase.Running,
+                -> Unit
+        }
+    }
+    // A failed switch used to settle the spinner with no feedback — the cards
+    // just re-enabled and nothing said the active server had NOT changed. The
+    // VM parks a UiMessage (exception text, or the localized fallback); the
+    // text resolves in composition (locale-correct), the effect posts it to
+    // the bus exactly once per failure and dismisses it.
+    val switchFailure = viewModel.switchServerFailure
+    val switchFailureText = switchFailure?.asText()
+    LaunchedEffect(switchFailure) {
+        switchFailure?.let {
+            // asText() is total over a non-null UiMessage, so the text is
+            // present here in practice — the ?. keeps a capture-order
+            // refactor from crashing instead of merely skipping the post.
+            switchFailureText?.let { text -> bus.info(text) }
+            viewModel.clearSwitchServerFailure()
         }
     }
     val certificateImportedText = stringResource(Res.string.settings_client_certificate_imported)

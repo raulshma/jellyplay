@@ -125,6 +125,26 @@ import com.raulshma.jellyplay.feature.downloads.sheets.ForceResyncSheet
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
+/**
+ * Which resync sheet the Downloads screen has open, if any: the resync
+ * progress sheet ([Resync], armed by the app-bar resync action after
+ * `checkAllForUpdates()`) or the force-resync picker ([ForceResync]). ONE
+ * nullable slot behind the former `showResyncSheet` / `showForceResyncSheet`
+ * boolean pair — the StateManagementConventions "one of N" encoding. The two
+ * sheets were already mutually exclusive on screen (each `if` rendered its
+ * own, and the handoff armed the second only after closing the first), but
+ * the booleans allowed the combination to be represented; one slot makes the
+ * replacement structural — writing [ForceResync] IS closing [Resync], so the
+ * former "hide one flag, run the VM clear, show the other" choreography
+ * collapses to a single arm write after the same `clearResyncProgress` call.
+ * Newest write wins; both sheets' content and the VM commands they invoke are
+ * unchanged (the resync/force-resync VM state machine itself is out of scope).
+ * (Unrelated to the details module's `ResyncSheet` composable in
+ * com/raulshma/jellyplay/feature/details/SyncUpdateBanner.kt — a different
+ * surface; this slot is the Downloads screen's vocabulary only.)
+ */
+internal enum class ResyncSheet { Resync, ForceResync }
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DownloadsScreen(
@@ -191,8 +211,9 @@ fun DownloadsScreen(
     // cleared" screen-held remember{} machines. The dialogs are driven by the
     // hosts via [DownloadsDeleteDialogs] (DownloadsDialogs.kt) at the bottom
     // of this body.
-    var showResyncSheet by remember { mutableStateOf(false) }
-    var showForceResyncSheet by remember { mutableStateOf(false) }
+    // Which resync sheet is open (Resync / ForceResync) — ONE slot
+    // ([ResyncSheet]; newest write replaces, see its KDoc).
+    var activeResyncSheet by remember { mutableStateOf<ResyncSheet?>(null) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -298,7 +319,7 @@ fun DownloadsScreen(
                 IconButton(
                     onClick = {
                         viewModel.resyncActions.checkAllForUpdates()
-                        showResyncSheet = true
+                        activeResyncSheet = ResyncSheet.Resync
                     },
                     modifier = Modifier
                         .then(syncFocus.focusModifier)
@@ -746,7 +767,7 @@ fun DownloadsScreen(
         selectedIds = selectedIds,
     )
 
-    if (showResyncSheet) {
+    if (activeResyncSheet == ResyncSheet.Resync) {
         DownloadsResyncSheet(
             updateRows = updateRows,
             checking = checking,
@@ -754,18 +775,21 @@ fun DownloadsScreen(
             onResyncAll = viewModel.resyncActions::resyncAll,
             onResyncOne = viewModel.resyncActions::resyncOne,
             onForceResync = {
-                showResyncSheet = false
+                // Escalation handoff: one slot write replaces the resync
+                // sheet with the force picker (the old hide-one-flag-then-
+                // show-the-other pair); the VM clear command and its order
+                // are unchanged.
                 viewModel.resyncActions.clearResyncProgress()
-                showForceResyncSheet = true
+                activeResyncSheet = ResyncSheet.ForceResync
             },
             onDismiss = {
-                showResyncSheet = false
+                activeResyncSheet = null
                 viewModel.resyncActions.clearResyncProgress()
             },
         )
     }
 
-    if (showForceResyncSheet) {
+    if (activeResyncSheet == ResyncSheet.ForceResync) {
         // Candidates resolve straight from the DB on each open (suspend) so the
         // picker offers every eligible downloaded item — not just those inside
         // the UI list's 500-row window, and not an empty set when the sheet is
@@ -781,7 +805,7 @@ fun DownloadsScreen(
             progress = resyncProgress,
             onSync = { ids, options -> viewModel.resyncActions.forceResync(ids, options) },
             onDismiss = {
-                showForceResyncSheet = false
+                activeResyncSheet = null
                 viewModel.resyncActions.clearResyncProgress()
             },
         )

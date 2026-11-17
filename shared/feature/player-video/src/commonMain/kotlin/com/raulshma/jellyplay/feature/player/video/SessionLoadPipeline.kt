@@ -282,6 +282,16 @@ internal class SessionLoadPipeline(
         ) {
             val intros = libraryApiClient.getIntros(request.itemId).getOrDefault(emptyList())
             if (intros.isNotEmpty()) {
+                // NO SUSPENSIONS AFTER beginCinemaMode — the pinning comment
+                // from the 2026-11-17 regression analysis (R5): beginCinemaMode
+                // → loadCinemaIntro REPLACES the LOAD slot whose current
+                // occupant IS this pipeline coroutine (TaskBundle.replace is
+                // cancel-then-launch WITHOUT joining), so this job is killed
+                // mid-execution right here. The tail below — onOutcome +
+                // start's `finally` veil lift + this `return` — is safe ONLY
+                // while it stays fully synchronous: any future suspension
+                // added between this comment and the return would be shot by
+                // its own cancellation with the loading veil stuck up.
                 hooks.beginCinemaMode(intros, request)
                 hooks.onOutcome(LoadOutcome.CinemaIntro(intros.first().id))
                 return

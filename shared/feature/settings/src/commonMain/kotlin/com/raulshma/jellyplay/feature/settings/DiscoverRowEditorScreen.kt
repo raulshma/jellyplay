@@ -104,6 +104,24 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_upcoming
 
 /**
+ * Which picker sheet the discover-row editor has open, if any: the libraries /
+ * studios toggles and the people search. ONE nullable slot behind the former
+ * three parallel `remember` booleans (`showLibrariesSheet` / `showStudiosSheet`
+ * / `showPeopleSheet`) — opening one structurally replaces any other (newest
+ * show() wins). The old booleans could never actually coexist — each sheet is
+ * a modal [TvSafeSheet] window that blocks the editor rows that raise the
+ * others — the slot just makes that mutual exclusion structural instead of
+ * incidental. The sheets render in the same Libraries → Studios → People
+ * order as the former separate `if`s (window stacking order; it can no longer
+ * matter since the arms are exclusive).
+ *
+ * These sheets are NOT part of any screen back ladder — the editor has none;
+ * each sheet dismisses itself via its own window-level back handling
+ * ([TvSafeSheet]), exactly as before.
+ */
+internal enum class DiscoverRowSheet { Libraries, Studios, People }
+
+/**
  * The discover-row editor: name, source (My Server / Seerr), the full filter
  * mix for the chosen source, row length, and a live preview strip (Jellyfin
  * sources). Edits mutate the VM's draft only; Save upserts and exits.
@@ -125,9 +143,7 @@ fun DiscoverRowEditorScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val backgroundColorState = rememberScreenBackgroundColorState()
 
-    var showLibrariesSheet by remember { mutableStateOf(false) }
-    var showStudiosSheet by remember { mutableStateOf(false) }
-    var showPeopleSheet by remember { mutableStateOf(false) }
+    var activeSheet by remember { mutableStateOf<DiscoverRowSheet?>(null) }
 
     LaunchedEffect(rowId) {
         if (rowId != null) viewModel.startEdit(rowId) else viewModel.startNew()
@@ -257,17 +273,17 @@ fun DiscoverRowEditorScreen(
                             } else {
                                 row.libraryIds.size.toString()
                             },
-                            onClick = { showLibrariesSheet = true },
+                            onClick = { activeSheet = DiscoverRowSheet.Libraries },
                         )
                         EditorClickRow(
                             label = stringResource(Res.string.settings_discover_row_studios),
                             value = row.studios.joinToString("/") { it.name }.ifEmpty { "—" },
-                            onClick = { showStudiosSheet = true },
+                            onClick = { activeSheet = DiscoverRowSheet.Studios },
                         )
                         EditorClickRow(
                             label = stringResource(Res.string.settings_discover_row_people),
                             value = row.people.joinToString("/") { it.name }.ifEmpty { "—" },
-                            onClick = { showPeopleSheet = true },
+                            onClick = { activeSheet = DiscoverRowSheet.People },
                         )
                     }
                 }
@@ -317,123 +333,131 @@ fun DiscoverRowEditorScreen(
         }
     }
 
-    if (showLibrariesSheet && current != null) {
-        // Empty selection = the whole catalog: every library shows checked.
-        DiscoverRowToggleSheet(
-            title = stringResource(Res.string.settings_discover_row_libraries),
-            items = libraryFolders,
-            keyFor = { it.id },
-            labelFor = { it.name },
-            isChecked = { folder ->
-                val ids = current.row.libraryIds
-                ids.isEmpty() || folder.id in ids
-            },
-            onToggle = { folder, checked ->
-                viewModel.updateRow { r ->
-                    val next = if (checked) {
-                        (r.libraryIds + folder.id).distinct()
-                    } else {
-                        r.libraryIds - folder.id
+    // The slot's render site: ONE sheet at a time (the slot IS the mutual
+    // exclusion), in the former separate-`if`s' Libraries → Studios → People
+    // order. Per-arm gating preserved: libraries/studios render only with a
+    // loaded draft, people handles a null draft in its own body.
+    when (activeSheet) {
+        DiscoverRowSheet.Libraries -> if (current != null) {
+            // Empty selection = the whole catalog: every library shows checked.
+            DiscoverRowToggleSheet(
+                title = stringResource(Res.string.settings_discover_row_libraries),
+                items = libraryFolders,
+                keyFor = { it.id },
+                labelFor = { it.name },
+                isChecked = { folder ->
+                    val ids = current.row.libraryIds
+                    ids.isEmpty() || folder.id in ids
+                },
+                onToggle = { folder, checked ->
+                    viewModel.updateRow { r ->
+                        val next = if (checked) {
+                            (r.libraryIds + folder.id).distinct()
+                        } else {
+                            r.libraryIds - folder.id
+                        }
+                        r.copy(libraryIds = next)
                     }
-                    r.copy(libraryIds = next)
-                }
-            },
-            onDismissRequest = { showLibrariesSheet = false },
-        )
-    }
+                },
+                onDismissRequest = { activeSheet = null },
+            )
+        }
 
-    if (showStudiosSheet && current != null) {
-        DiscoverRowToggleSheet(
-            title = stringResource(Res.string.settings_discover_row_studios),
-            items = studios,
-            keyFor = { it.id },
-            labelFor = { it.name },
-            isChecked = { studio -> current.row.studios.any { it.id == studio.id } },
-            onToggle = { studio, checked ->
-                viewModel.updateRow { r ->
-                    val next = if (checked) {
-                        r.studios + StudioRef(studio.id, studio.name)
-                    } else {
-                        r.studios.filterNot { it.id == studio.id }
+        DiscoverRowSheet.Studios -> if (current != null) {
+            DiscoverRowToggleSheet(
+                title = stringResource(Res.string.settings_discover_row_studios),
+                items = studios,
+                keyFor = { it.id },
+                labelFor = { it.name },
+                isChecked = { studio -> current.row.studios.any { it.id == studio.id } },
+                onToggle = { studio, checked ->
+                    viewModel.updateRow { r ->
+                        val next = if (checked) {
+                            r.studios + StudioRef(studio.id, studio.name)
+                        } else {
+                            r.studios.filterNot { it.id == studio.id }
+                        }
+                        r.copy(studios = next)
                     }
-                    r.copy(studios = next)
-                }
-            },
-            onDismissRequest = { showStudiosSheet = false },
-        )
-    }
+                },
+                onDismissRequest = { activeSheet = null },
+            )
+        }
 
-    if (showPeopleSheet) {
-        TvSafeSheet(onDismissRequest = { showPeopleSheet = false }) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                Text(
-                    stringResource(Res.string.settings_discover_row_people),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp),
-                )
-                var peopleQuery by remember { mutableStateOf("") }
-                OutlinedTextField(
-                    value = peopleQuery,
-                    onValueChange = { value ->
-                        peopleQuery = value
-                        viewModel.searchPeople(value)
-                    },
-                    singleLine = true,
-                    placeholder = { Text(stringResource(Res.string.settings_discover_row_people_search)) },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                )
-                val currentRow = draft?.row ?: return@Column
-                val selected = currentRow.people
-                val selectedIds = selected.map { it.id }.toSet()
-                if (selected.isNotEmpty()) {
+        DiscoverRowSheet.People -> {
+            TvSafeSheet(onDismissRequest = { activeSheet = null }) {
+                Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                     Text(
-                        stringResource(Res.string.settings_discover_row_people_selected),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+                        stringResource(Res.string.settings_discover_row_people),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(16.dp),
                     )
-                }
-                LazyColumn(modifier = Modifier.tvFocusGroupRestorer()) {
-                    // Selected entries first so they stay reachable (and
-                    // removable) regardless of the current search term.
-                    items(selected.size, key = { "sel_${selected[it].id}" }) { index ->
-                        val person = selected[index]
-                        ListItem(
-                            headlineContent = { Text(person.name) },
-                            trailingContent = {
-                                Switch(
-                                    checked = true,
-                                    onCheckedChange = {
-                                        viewModel.updateRow { r ->
-                                            r.copy(people = r.people.filterNot { it.id == person.id })
-                                        }
-                                    },
-                                )
-                            },
+                    var peopleQuery by remember { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = peopleQuery,
+                        onValueChange = { value ->
+                            peopleQuery = value
+                            viewModel.searchPeople(value)
+                        },
+                        singleLine = true,
+                        placeholder = { Text(stringResource(Res.string.settings_discover_row_people_search)) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    )
+                    val currentRow = draft?.row ?: return@Column
+                    val selected = currentRow.people
+                    val selectedIds = selected.map { it.id }.toSet()
+                    if (selected.isNotEmpty()) {
+                        Text(
+                            stringResource(Res.string.settings_discover_row_people_selected),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
                         )
                     }
-                    items(peopleResults.size, key = { peopleResults[it].id }) { index ->
-                        val person = peopleResults[index]
-                        if (person.id in selectedIds) return@items // already listed above
-                        ListItem(
-                            headlineContent = { Text(person.name) },
-                            trailingContent = {
-                                Switch(
-                                    checked = false,
-                                    onCheckedChange = { checked ->
-                                        if (checked) {
+                    LazyColumn(modifier = Modifier.tvFocusGroupRestorer()) {
+                        // Selected entries first so they stay reachable (and
+                        // removable) regardless of the current search term.
+                        items(selected.size, key = { "sel_${selected[it].id}" }) { index ->
+                            val person = selected[index]
+                            ListItem(
+                                headlineContent = { Text(person.name) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = true,
+                                        onCheckedChange = {
                                             viewModel.updateRow { r ->
-                                                r.copy(people = r.people + PersonRef(person.id, person.name))
+                                                r.copy(people = r.people.filterNot { it.id == person.id })
                                             }
-                                        }
-                                    },
-                                )
-                            },
-                        )
+                                        },
+                                    )
+                                },
+                            )
+                        }
+                        items(peopleResults.size, key = { peopleResults[it].id }) { index ->
+                            val person = peopleResults[index]
+                            if (person.id in selectedIds) return@items // already listed above
+                            ListItem(
+                                headlineContent = { Text(person.name) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = false,
+                                        onCheckedChange = { checked ->
+                                            if (checked) {
+                                                viewModel.updateRow { r ->
+                                                    r.copy(people = r.people + PersonRef(person.id, person.name))
+                                                }
+                                            }
+                                        },
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
             }
         }
+
+        null -> Unit
     }
 }
 

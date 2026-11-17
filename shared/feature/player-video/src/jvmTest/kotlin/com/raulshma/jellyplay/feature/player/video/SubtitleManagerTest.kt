@@ -15,12 +15,15 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.state.ProviderSubtitleSearchState
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
+import com.raulshma.jellyplay.feature.player.video.state.RemoteSubtitleSearchState
 import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -250,10 +253,10 @@ class SubtitleManagerTest {
 
         manager.searchRemoteSubtitles("eng")
 
-        assertEquals(subs, manager.state.value.searchedSubtitles)
-        assertTrue(manager.state.value.hasSearchedSubtitles)
-        assertFalse(manager.state.value.isSearchingSubtitles)
-        assertNull(manager.state.value.subtitleSearchError)
+        // Sealed adaptation: the former searchedSubtitles + hasSearchedSubtitles
+        // / isSearchingSubtitles / subtitleSearchError assertions collapse into
+        // the one Done phase (results populated, not searching, no error).
+        assertEquals(RemoteSubtitleSearchState.Done(subs), manager.state.value.remoteSubtitleSearch)
     }
 
     @Test
@@ -262,12 +265,12 @@ class SubtitleManagerTest {
 
         manager.searchRemoteSubtitles("eng")
 
-        // A failure must set subtitleSearchError (so the UI invites retry) and
-        // must NOT claim a search completed with an empty result.
-        assertEquals("rate limited", manager.state.value.subtitleSearchError)
-        assertFalse(manager.state.value.hasSearchedSubtitles)
-        assertFalse(manager.state.value.isSearchingSubtitles)
-        assertTrue(manager.state.value.searchedSubtitles.isEmpty())
+        // A failure must surface the error payload (so the UI invites retry) and
+        // must NOT claim a search completed with an empty result. Sealed
+        // adaptation: the former subtitleSearchError + hasSearchedSubtitles /
+        // isSearchingSubtitles / searchedSubtitles assertions collapse into the
+        // one Failed phase — structurally distinct from Done(emptyList()).
+        assertEquals(RemoteSubtitleSearchState.Failed("rate limited"), manager.state.value.remoteSubtitleSearch)
     }
 
     @Test
@@ -285,8 +288,12 @@ class SubtitleManagerTest {
 
         // Network detail fetch never happens when the in-memory snapshot exists.
         coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
-        assertTrue(manager.state.value.hasSearchedSubtitles)
-        assertFalse(manager.state.value.isSearchingSubtitles)
+        // Sealed adaptation: settled-with-empty-results is the Results phase
+        // (the former hasSearchedSubtitles + !isSearchingSubtitles pair).
+        assertEquals(
+            ProviderSubtitleSearchState.Results(emptyList(), emptyMap()),
+            manager.state.value.providerSubtitleSearch,
+        )
     }
 
     @Test
@@ -311,11 +318,14 @@ class SubtitleManagerTest {
 
         manager.searchAllProviders("eng")
 
-        assertEquals(listOf(wyzieResult), manager.state.value.providerSearchResults)
+        // Sealed adaptation: the former providerSearchResults /
+        // providerSearchErrors + hasSearchedSubtitles / isSearchingSubtitles
+        // assertions collapse into the one Results phase.
+        assertEquals(
+            ProviderSubtitleSearchState.Results(listOf(wyzieResult), emptyMap()),
+            manager.state.value.providerSubtitleSearch,
+        )
         // No fatal "Could not load item details" — external results came through.
-        assertTrue(manager.state.value.providerSearchErrors.isEmpty())
-        assertTrue(manager.state.value.hasSearchedSubtitles)
-        assertFalse(manager.state.value.isSearchingSubtitles)
     }
 
     @Test
@@ -352,10 +362,197 @@ class SubtitleManagerTest {
 
         manager.searchAllProviders("eng")
 
-        // Final state reflects the merged snapshot.
-        assertEquals(2, manager.state.value.providerSearchResults.size)
-        assertTrue(manager.state.value.hasSearchedSubtitles)
-        assertFalse(manager.state.value.isSearchingSubtitles)
+        // Final state reflects the merged snapshot. Sealed adaptation: the
+        // former providerSearchResults.size + hasSearchedSubtitles /
+        // isSearchingSubtitles assertions collapse into the one Results phase.
+        assertEquals(
+            ProviderSubtitleSearchState.Results(listOf(osResult, wyzieResult), emptyMap()),
+            manager.state.value.providerSubtitleSearch,
+        )
+    }
+
+    // ─── Two search machines, one Search tab (sealed-state pins) ───────────────
+    // The legacy Jellyfin search and the multi-provider search used to write
+    // ONE shared isSearchingSubtitles / hasSearchedSubtitles pair, so each
+    // machine's start/completion rewrote the other's flags mid-flight. Each
+    // machine now owns a sealed phase ([RemoteSubtitleSearchState] /
+    // [ProviderSubtitleSearchState]); the sheet renders their fold (the
+    // `searchTab*` helpers). The pins below drive the reported interleavings
+    // through both machines and assert the folded surface the sheet sees.
+
+    /**
+     * Stubs the provider search as PARKED mid-flight: the [partial] lands on
+     * the Searching arm, then the merge suspends until the returned gate is
+     * completed with the final snapshot (the Unconfined scope resumes inline,
+     * so completing the gate settles the machine deterministically).
+     */
+    private fun parkedProviderSearch(
+        partial: MergedSubtitleSearch,
+    ): CompletableDeferred<MergedSubtitleSearch> {
+        val gate = CompletableDeferred<MergedSubtitleSearch>()
+        coEvery {
+            subtitleProviderRepository.searchAllStreaming(any(), "item-1", "eng", any())
+        } coAnswers {
+            @Suppress("UNCHECKED_CAST")
+            val callback = args[3] as (MergedSubtitleSearch) -> Unit
+            // The first provider resolves: its partial lands on the Searching
+            // arm while the machine keeps running.
+            callback(partial)
+            gate.await()
+        }
+        return gate
+    }
+
+    @Test
+    fun searchMachines_legacyCompletedFirst_providerStreamingKeepsSpinnerUpUntilProviderSettles() {
+        // Pin (a), ordering 1 of the reported spinner-drop bug: the legacy
+        // machine completes FIRST, then the provider machine starts and
+        // streams partials. The folded spinner must ride the PROVIDER machine
+        // until it settles — the legacy machine's settled Done phase must not
+        // read as "everything finished".
+        currentDetail = mediaDetail("item-1")
+        val providerResult = SubtitleSearchResult(
+            provider = SubtitleProviderKind.WYZIE,
+            id = "w1",
+            language = "eng",
+            displayName = "Wyzie EN",
+        )
+        val legacyResults = listOf(RemoteSubtitleInfo(id = "os1", name = "OpenSub en"))
+        coEvery { playbackRepository.searchRemoteSubtitles("item-1", "eng") } returns Result.success(legacyResults)
+        val providerGate = parkedProviderSearch(MergedSubtitleSearch(listOf(providerResult), emptyMap()))
+
+        manager.searchRemoteSubtitles("eng")
+        assertEquals(RemoteSubtitleSearchState.Done(legacyResults), manager.state.value.remoteSubtitleSearch)
+        manager.searchAllProviders("eng")
+
+        // The provider machine is still streaming: the spinner is up — driven
+        // by it alone — and its partial renders.
+        assertEquals(
+            ProviderSubtitleSearchState.Searching(partialResults = listOf(providerResult)),
+            manager.state.value.providerSubtitleSearch,
+        )
+        assertTrue(manager.state.value.searchTabIsSearching)
+
+        providerGate.complete(MergedSubtitleSearch(listOf(providerResult), emptyMap()))
+        // Only the provider machine settling drops the spinner.
+        assertEquals(
+            ProviderSubtitleSearchState.Results(listOf(providerResult), emptyMap()),
+            manager.state.value.providerSubtitleSearch,
+        )
+        assertFalse(manager.state.value.searchTabIsSearching)
+        assertTrue(manager.state.value.searchTabHasSearched)
+    }
+
+    @Test
+    fun searchMachines_legacyCompletesDuringProviderStreaming_spinnerDoesNotDrop() {
+        // Pin (a), ordering 2 — THE reported bug: both machines shared one
+        // isSearchingSubtitles flag, so the legacy machine's completion cleared
+        // it while the provider machine was still streaming (the sheet's
+        // spinner dropped mid-load). With per-machine states the fold keeps the
+        // spinner up until the provider machine settles.
+        currentDetail = mediaDetail("item-1")
+        val providerResult = SubtitleSearchResult(
+            provider = SubtitleProviderKind.WYZIE,
+            id = "w1",
+            language = "eng",
+            displayName = "Wyzie EN",
+        )
+        val legacyResults = listOf(RemoteSubtitleInfo(id = "os1", name = "OpenSub en"))
+        coEvery { playbackRepository.searchRemoteSubtitles("item-1", "eng") } returns Result.success(legacyResults)
+        val providerGate = parkedProviderSearch(MergedSubtitleSearch(listOf(providerResult), emptyMap()))
+
+        // The provider search starts, lands its first partial, parks mid-flight.
+        manager.searchAllProviders("eng")
+        assertTrue(manager.state.value.searchTabIsSearching)
+
+        // The legacy machine completes UNDER the still-streaming provider flow.
+        manager.searchRemoteSubtitles("eng")
+        assertEquals(RemoteSubtitleSearchState.Done(legacyResults), manager.state.value.remoteSubtitleSearch)
+
+        // The spinner is STILL up — the old shared pair was cleared by the
+        // legacy completion exactly here — and the partial still renders.
+        assertTrue(manager.state.value.searchTabIsSearching)
+
+        providerGate.complete(MergedSubtitleSearch(listOf(providerResult), emptyMap()))
+        // Only the provider machine settling drops the spinner.
+        assertFalse(manager.state.value.searchTabIsSearching)
+        assertTrue(manager.state.value.searchTabHasSearched)
+    }
+
+    @Test
+    fun searchMachines_legacyFailsDuringProviderStreaming_providerResultsAndErrorSurfaceUnchanged() {
+        // Pin (b): a legacy search failing while the provider search is
+        // running must keep the legacy error surface unchanged (the tab's
+        // "search failed" retry block, fed by the folded searchError) AND keep
+        // showing the streaming provider results. The old shared pair let the
+        // legacy failure's flag writes flip the tab's settled branches under
+        // the streaming flow.
+        currentDetail = mediaDetail("item-1")
+        val providerResult = SubtitleSearchResult(
+            provider = SubtitleProviderKind.WYZIE,
+            id = "w1",
+            language = "eng",
+            displayName = "Wyzie EN",
+        )
+        coEvery {
+            playbackRepository.searchRemoteSubtitles("item-1", "eng")
+        } returns Result.failure(RuntimeException("rate limited"))
+        val providerGate = parkedProviderSearch(MergedSubtitleSearch(listOf(providerResult), emptyMap()))
+
+        manager.searchAllProviders("eng")
+        manager.searchRemoteSubtitles("eng")
+
+        // The legacy machine failed: its error surface is the Failed payload,
+        // its results are empty (a failure is not a settled empty result).
+        assertEquals(RemoteSubtitleSearchState.Failed("rate limited"), manager.state.value.remoteSubtitleSearch)
+        assertEquals("rate limited", manager.state.value.searchTabLegacyError)
+        assertTrue(manager.state.value.searchTabLegacyResults.isEmpty())
+        // …while the provider machine keeps streaming untouched.
+        assertEquals(listOf(providerResult), manager.state.value.searchTabProviderResults)
+        assertTrue(manager.state.value.searchTabIsSearching)
+
+        providerGate.complete(MergedSubtitleSearch(listOf(providerResult), emptyMap()))
+        // The provider machine settles unaffected by the legacy failure.
+        assertEquals(
+            ProviderSubtitleSearchState.Results(listOf(providerResult), emptyMap()),
+            manager.state.value.providerSubtitleSearch,
+        )
+        assertEquals("rate limited", manager.state.value.searchTabLegacyError)
+    }
+
+    @Test
+    fun searchMachines_staleCompletionCannotClobberTheOtherMachine_regressionRow() {
+        // Pin (c): each machine's completion used to write the SHARED
+        // isSearching/hasSearched pair, so a settling machine clobbered its
+        // sibling's in-flight state. With one sealed phase per machine that
+        // clobber is structurally impossible — this pins the reported
+        // interleaving as the regression row: the legacy machine completes
+        // mid-provider-streaming and the provider machine's phase is
+        // byte-identical before and after.
+        currentDetail = mediaDetail("item-1")
+        val providerResult = SubtitleSearchResult(
+            provider = SubtitleProviderKind.WYZIE,
+            id = "w1",
+            language = "eng",
+            displayName = "Wyzie EN",
+        )
+        val legacyResults = listOf(RemoteSubtitleInfo(id = "os1", name = "OpenSub en"))
+        coEvery { playbackRepository.searchRemoteSubtitles("item-1", "eng") } returns Result.success(legacyResults)
+        val providerGate = parkedProviderSearch(MergedSubtitleSearch(listOf(providerResult), emptyMap()))
+
+        manager.searchAllProviders("eng")
+        val providerPhaseBeforeLegacyCompletes = manager.state.value.providerSubtitleSearch
+
+        manager.searchRemoteSubtitles("eng")
+
+        assertEquals(providerPhaseBeforeLegacyCompletes, manager.state.value.providerSubtitleSearch)
+        assertEquals(RemoteSubtitleSearchState.Done(legacyResults), manager.state.value.remoteSubtitleSearch)
+
+        providerGate.complete(MergedSubtitleSearch(listOf(providerResult), emptyMap()))
+        assertEquals(
+            ProviderSubtitleSearchState.Results(listOf(providerResult), emptyMap()),
+            manager.state.value.providerSubtitleSearch,
+        )
     }
 
     @Test
@@ -386,15 +583,16 @@ class SubtitleManagerTest {
     fun resetSubtitleManagerState_clearsTheWholeSlice() {
         coEvery { playbackRepository.searchRemoteSubtitles("item-1", "eng") } returns Result.failure(RuntimeException("err"))
         manager.searchRemoteSubtitles("eng")
-        assertTrue(manager.state.value.hasSearchedSubtitles.not())
-        assertEquals("err", manager.state.value.subtitleSearchError)
+        // Sealed adaptation: the former subtitleSearchError assertion — a
+        // failed search is the Failed phase, not a settled empty result.
+        assertEquals(RemoteSubtitleSearchState.Failed("err"), manager.state.value.remoteSubtitleSearch)
 
         manager.resetSubtitleManagerState()
 
-        assertTrue(manager.state.value.searchedSubtitles.isEmpty())
-        assertFalse(manager.state.value.hasSearchedSubtitles)
-        assertFalse(manager.state.value.isSearchingSubtitles)
-        assertNull(manager.state.value.subtitleSearchError)
+        // Sealed adaptation: the former searchedSubtitles / hasSearchedSubtitles
+        // / isSearchingSubtitles / subtitleSearchError assertions collapse into
+        // the one Idle phase.
+        assertEquals(RemoteSubtitleSearchState.Idle, manager.state.value.remoteSubtitleSearch)
         assertTrue(manager.state.value.subtitleCultures.isEmpty())
     }
 
@@ -702,16 +900,18 @@ class SubtitleManagerTest {
             m.loadSubtitleCultures()
             m.loadConfiguredProviders()
             advanceUntilIdle()
-            assertEquals("err", m.state.value.subtitleSearchError)
+            // Sealed adaptation: the former subtitleSearchError assertion.
+            assertEquals(RemoteSubtitleSearchState.Failed("err"), m.state.value.remoteSubtitleSearch)
             assertTrue(m.state.value.downloadingSubtitles.isNotEmpty())
 
             m.openSubtitleHub(resetFirst = true)
 
             // The reset cleared the stale slice (cancelled jobs included — a
             // cancelled job cannot write its status back after the clear).
-            assertNull(m.state.value.subtitleSearchError)
-            assertFalse(m.state.value.hasSearchedSubtitles)
-            assertTrue(m.state.value.searchedSubtitles.isEmpty())
+            // Sealed adaptation: the former subtitleSearchError /
+            // hasSearchedSubtitles / searchedSubtitles assertions collapse into
+            // the one Idle phase.
+            assertEquals(RemoteSubtitleSearchState.Idle, m.state.value.remoteSubtitleSearch)
             assertTrue(m.state.value.downloadingSubtitles.isEmpty())
             // …and the cascade then ran the three loads in order: the
             // server-default list fetched, cultures RE-fetched (exactly
@@ -737,11 +937,12 @@ class SubtitleManagerTest {
             val m = managerInScope(this)
             m.searchRemoteSubtitles("eng")
             advanceUntilIdle()
-            assertEquals(results, m.state.value.searchedSubtitles)
+            // Sealed adaptation: settled search results are the Done phase.
+            assertEquals(RemoteSubtitleSearchState.Done(results), m.state.value.remoteSubtitleSearch)
 
             m.openSubtitleHub(resetFirst = false)
 
-            assertEquals(results, m.state.value.searchedSubtitles)
+            assertEquals(RemoteSubtitleSearchState.Done(results), m.state.value.remoteSubtitleSearch)
             assertEquals(listOf(RemoteSubtitleInfo(id = "s1", name = "English")), m.state.value.remoteSubtitles)
             assertEquals(listOf(CultureInfo(name = "deu")), m.state.value.subtitleCultures)
         }
@@ -804,7 +1005,8 @@ class SubtitleManagerTest {
         manager.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
         manager.loadConfiguredProviders()
         assertTrue(manager.state.value.downloadingSubtitles.isNotEmpty())
-        assertEquals("err", manager.state.value.subtitleSearchError)
+        // Sealed adaptation: the former subtitleSearchError assertion.
+        assertEquals(RemoteSubtitleSearchState.Failed("err"), manager.state.value.remoteSubtitleSearch)
         assertTrue(manager.state.value.configuredSubtitleProviders.isNotEmpty())
 
         manager.resetForItem()

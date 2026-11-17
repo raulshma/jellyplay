@@ -689,6 +689,37 @@ class LiveTvPlayerViewModelGapsTest {
         assertEquals(0, capturedRequests.size)
     }
 
+    @Test
+    fun `setLiveStreamOption no longer spins over the previous stream's READY phase (declared fix)`() = runTest {
+        val vm = tune()
+        // The previous stream is live on screen: the engine sits in READY.
+        engineStateFlow.value = LiveEngineState.READY
+        scheduler.runCurrent()
+        assertFalse(vm.state.value.isBuffering)
+        coEvery { playbackStore.setLiveStreamOption(any()) } returns Unit
+
+        vm.onEvent(LiveTvPlayerUiEvent.SetLiveStreamOption(LiveStreamOption.TRANSCODE))
+        scheduler.runCurrent()
+
+        // The error-clearing half of the former optimistic fold is unchanged…
+        assertNull(vm.state.value.errorMessage, "a reload clears a prior error")
+        // …but the former stored `isBuffering = true` raise is dead: with the
+        // engine still in READY from the previous stream, no rebuffer spinner
+        // renders over the live picture — the `READY && isBuffering` drift
+        // combo is unrepresentable now (the buffering chrome is derived from
+        // the phase; see liveBufferingChrome).
+        assertFalse(
+            vm.state.value.isBuffering,
+            "READY renders no rebuffer spinner — the mid-switch stored-flag raise is the declared fix",
+        )
+
+        // The spinner returns exactly when the reload flips the engine, like
+        // every other buffering face.
+        engineStateFlow.value = LiveEngineState.BUFFERING
+        scheduler.runCurrent()
+        assertTrue(vm.state.value.isBuffering, "the reload's BUFFERING flip renders the spinner again")
+    }
+
     // ── 6. DVR guards, selection priority, stop/reset, logo urls ─────────────
 
     @Test

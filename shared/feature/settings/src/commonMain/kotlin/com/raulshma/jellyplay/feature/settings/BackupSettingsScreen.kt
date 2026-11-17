@@ -118,14 +118,22 @@ fun BackupSettingsScreen(
                         onClick = onFactoryReset,
                     )
                 }
-
-                LaunchedEffect(viewModel.backupRestoreStatus) {
-                    viewModel.backupRestoreStatus?.let { msg ->
-                        bus.info(msg)
-                        viewModel.clearBackupRestoreStatus()
-                    }
-                }
             }
+    }
+
+    // One-shot export feedback rides the VM's SettingsUserMessage channel
+    // (the codified StateManagementConventions §2 idiom) — the former
+    // backupRestoreStatus parked field + clearBackupRestoreStatus dance
+    // re-fired the snackbar on re-subscription (a StateFlow replays its
+    // current value to every new collector). Keyed on Unit: this collector
+    // lives for the screen's composition lifetime and consumes each message
+    // exactly once; the bus text folds off the arm, never off a string
+    // prefix. (Lifted out of the scaffold's LazyListScope item — a collector
+    // is screen-entry state, not row content.)
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { message ->
+            bus.info(message.busText())
+        }
     }
 
     stagedSecretsExportUri?.let { uri ->

@@ -98,15 +98,11 @@ data class FileRestoreState(
     val extras: ExtrasGroup?,
     val externalSlices: List<ExternalSliceGroup>,
     val selection: FileSelection = FileSelection(),
-    /** The lock-config opt-in (defaults off; the row renders only when [hasSecuritySensitive]). */
+    /** The lock-config opt-in (defaults off; the row renders only when [FileRestoreState.hasSecuritySensitive]). */
     val restoreSecuritySensitive: Boolean = false,
     // ── Secrets block: locked until the passphrase unlocks it; the apply
     //    rides its own explicit confirm, never another apply arm. ──
-    val hasSecrets: Boolean = false,
-    val secretsUnlocked: SecretsRestoreSummary? = null,
-    val secretsUnlocking: Boolean = false,
-    /** The inline unlock failure flag (the screen renders the localized retry text). */
-    val secretsError: Boolean = false,
+    val secrets: SecretsPhase = SecretsPhase.Hidden,
 )
 
 /** The SNAPSHOT diff step's whole face. */
@@ -123,30 +119,170 @@ data class FullRestoreState(
     val snapshotId: String,
 )
 
-/** The whole wizard's UI state — exactly one of the three diff faces is non-null in [WizardStep.DIFF]. */
+// ---------------------------------------------------------------------------
+// Sealed phase machines (each records the boolean/nullable soup it replaced)
+// ---------------------------------------------------------------------------
+
+/**
+ * The SOURCE step's server arm as ONE mutually-exclusive face. Replaces the
+ * former `serverAvailable` / `snapshotsLoading` / `snapshotsUnavailable` /
+ * `snapshots` quartet, whose independent write sites could land
+ * `serverAvailable=true` beside `snapshotsUnavailable=true`, and whose
+ * `snapshotsUnavailable` flag conflated four distinct causes into one Boolean
+ * (the KDoc there admitted the conflation). The cause is now data
+ * ([SourceUnavailableReason]); the rendering is not — the quiet unavailable
+ * card shows exactly where it always did.
+ */
+sealed interface SourcePhase {
+    /** The gate is open and the restore-point list is in flight (the loading line). */
+    data object Probing : SourcePhase
+
+    /** The list landed. An EMPTY list renders the same quiet unavailable card, as the former arm did. */
+    data class Available(val snapshots: List<JellyPlaySnapshot>) : SourcePhase
+
+    /** The server arm is unusable — [SourceUnavailableReason] carries which of the four causes. */
+    data class Unavailable(val reason: SourceUnavailableReason) : SourcePhase
+}
+
+/**
+ * Why the server arm is unusable — the FOUR causes the former
+ * `snapshotsUnavailable: Boolean` conflated, now declared data. The screen
+ * renders the identical quiet card for [OLD_PLUGIN] and [READ_FAILED]; the
+ * two gate causes keep rendering nothing (the server section stays absent,
+ * exactly the closed-gate arm's former face).
+ */
+enum class SourceUnavailableReason {
+    /** The sync gate is closed (the plugin-gating contract). */
+    GATE_CLOSED,
+
+    /** No plugin api client is wired (the file-only graph). */
+    NO_CLIENT,
+
+    /** The server's plugin predates the restore-point read (the 404 null payload). */
+    OLD_PLUGIN,
+
+    /** The restore-point read failed (transport error / plugin 5xx). */
+    READ_FAILED,
+}
+
+/**
+ * The inline load-failure face — ONE object carrying presence, the resolved
+ * message and the arm identity together. Replaces the former
+ * `loadError: Boolean` flag plus the two side-channel vars that lived OUTSIDE
+ * the state (`lastLoadErrorMessage` / `lastLoadErrorIsServer`), which split
+ * the error's identity from its presence across two write sites and two state
+ * homes; now one write lands all three and nothing can observe a failure
+ * without its message.
+ */
+sealed interface SourceLoadFailure {
+    val message: String
+
+    /** The staged backup failed to open/parse — picking another file retries. */
+    data class File(override val message: String) : SourceLoadFailure
+
+    /** The server arm's read failed (content or live export) — re-tapping the restore point retries. */
+    data class Server(override val message: String) : SourceLoadFailure
+}
+
+/**
+ * The DIFF step's ONE staged-source slot. Replaces the former parallel
+ * nullable faces (`file: FileRestoreState?`, `snapshot: SnapshotRestoreState?`,
+ * `fullRestore: FullRestoreState?`) whose "exactly one is non-null" invariant
+ * was comment-enforced only: `loadBackupFile` wrote `file` WITHOUT clearing
+ * `snapshot`/`fullRestore`, so staging a backup file after a snapshot diff
+ * left two faces non-null and `restoreSelected`'s when-chain silently
+ * preferred the file arm while the stale face lingered. One slot makes the
+ * two-face state unwritable — setting a member replaces the previous one
+ * structurally.
+ */
+sealed interface DiffStage {
+    data class File(val state: FileRestoreState) : DiffStage
+
+    data class Snapshot(val state: SnapshotRestoreState) : DiffStage
+
+    data class Full(val state: FullRestoreState) : DiffStage
+}
+
+/**
+ * The staged file-diff face ([DiffStage.File]'s state), null when another
+ * stage (or none) holds the slot — the ONE read shape, shared by the
+ * ViewModel's writers and the screen's render sites.
+ */
+internal fun RestoreWizardUiState.stagedFile(): FileRestoreState? =
+    (diffStage as? DiffStage.File)?.state
+
+/**
+ * The staged backup's secrets block as ONE phase. Replaces the former
+ * `hasSecrets` / `secretsUnlocking` / `secretsUnlocked` / `secretsError`
+ * quartet, which admitted combinations that never rendered (unlocking beside
+ * unlocked, an error flag beside a summary). The unlock's envelope-identity
+ * guard is untouched: a decrypt still binds to the exact staged
+ * [SecretsEnvelope] and is discarded after a re-stage.
+ */
+sealed interface SecretsPhase {
+    /** The staged backup carries no secrets envelope — no card. */
+    data object Hidden : SecretsPhase
+
+    /** Envelope present, locked — the unlock affordance. */
+    data object Locked : SecretsPhase
+
+    /** A KDF decrypt is in flight (the busy guard's face; the second rapid confirm hits it). */
+    data object Unlocking : SecretsPhase
+
+    /** Unlocked — the preview counts are up, the explicit apply is offered. */
+    data class Unlocked(override val summary: SecretsRestoreSummary) : SecretsPhase
+
+    /** The last attempt failed (wrong passphrase) — the dialog's inline retry text; a fresh attempt clears it. */
+    data object UnlockFailed : SecretsPhase
+
+    /** The preview counts when unlocked, null otherwise (the card's branch and the tests read this). */
+    val summary: SecretsRestoreSummary? get() = (this as? Unlocked)?.summary
+}
+
+/**
+ * The confirm→apply ladder as ONE phase. Replaces the former `applying` /
+ * `applyError` / `completed` booleans, which could describe `applying=true`
+ * beside a stale `completed=true`. [Completed] keeps the exact one-shot
+ * consumption semantics: the screen navigates back on it and
+ * [RestoreWizardViewModel.consumeCompleted] spends it back to [Idle].
+ */
+sealed interface ApplyPhase {
+    /** Nothing in flight. */
+    data object Idle : ApplyPhase
+
+    /** Between the confirm tap and the apply settling — the dialog's loading face; back is dead. */
+    data object Applying : ApplyPhase
+
+    /** One-shot success — the screen pops the wizard, then consumes it. */
+    data object Completed : ApplyPhase
+
+    /** The apply (the main restore or the secrets apply) failed — the inline error card's text. */
+    data class Failed(val message: String) : ApplyPhase
+}
+
+/**
+ * The whole wizard's UI state. The DIFF step's staged source rides the ONE
+ * [diffStage] slot (a stage replaces the previous wholesale); the SOURCE
+ * step's server arm rides [sourcePhase]; the inline load failure's presence,
+ * message and arm identity ride the single [loadFailure] object; the apply
+ * ladder rides [applyPhase].
+ */
 @androidx.compose.runtime.Immutable
 data class RestoreWizardUiState(
     val step: WizardStep = WizardStep.SOURCE,
     // ── SOURCE faces ──
-    /** The plugin probe + `settings-sync` registry check — the server arm's availability. */
-    val serverAvailable: Boolean = false,
-    val snapshotsLoading: Boolean = false,
-    /** True when the server arm is unusable (gate closed, no client, old plugin, failed read) — the empty state explains. */
-    val snapshotsUnavailable: Boolean = false,
-    val snapshots: List<JellyPlaySnapshot> = emptyList(),
-    // ── DIFF faces ──
-    val file: FileRestoreState? = null,
-    val snapshot: SnapshotRestoreState? = null,
-    val fullRestore: FullRestoreState? = null,
+    /**
+     * The server arm's face. The pre-start default renders nothing (the
+     * closed-gate arm) — [RestoreWizardViewModel.start] overwrites it on entry.
+     */
+    val sourcePhase: SourcePhase = SourcePhase.Unavailable(SourceUnavailableReason.GATE_CLOSED),
+    // ── DIFF face: the ONE staged source (backup file / snapshot / full-restore degrade) ──
+    val diffStage: DiffStage? = null,
     // ── shared faces ──
-    /** A file read/parse failure (inline warning; picking another file retries). */
-    val loadError: Boolean = false,
-    /** The apply's failure text (inline; the dialog has settled by then). */
-    val applyError: String? = null,
-    /** True between the confirm tap and the apply settling — the dialog's loading face. */
-    val applying: Boolean = false,
-    /** One-shot success signal — the screen navigates back on it. */
-    val completed: Boolean = false,
+    /** A file or server read failure — message + arm identity in ONE object (the inline warning card). */
+    val loadFailure: SourceLoadFailure? = null,
+    /** The confirm→apply ladder ([ApplyPhase]). */
+    val applyPhase: ApplyPhase = ApplyPhase.Idle,
 )
 
 /**
@@ -288,7 +424,14 @@ class RestoreWizardViewModel(
     fun start(uri: String?, snapshotId: String?) {
         launch {
             val gateOpen = syncGateOpen()
-            uiState = uiState.copy(serverAvailable = gateOpen, snapshotsUnavailable = !gateOpen)
+            uiState = uiState.copy(
+                sourcePhase = when {
+                    gateOpen -> SourcePhase.Probing
+                    // The gate's own two closed causes, now distinct data.
+                    pluginApiClient == null -> SourcePhase.Unavailable(SourceUnavailableReason.NO_CLIENT)
+                    else -> SourcePhase.Unavailable(SourceUnavailableReason.GATE_CLOSED)
+                },
+            )
             if (gateOpen) refreshSnapshots()
             when {
                 !uri.isNullOrBlank() -> loadBackupFile(uri)
@@ -300,20 +443,27 @@ class RestoreWizardViewModel(
     private suspend fun refreshSnapshots() {
         val client = pluginApiClient
         if (client == null || !syncGateOpen()) {
-            uiState = uiState.copy(snapshotsUnavailable = true, snapshots = emptyList(), snapshotsLoading = false)
+            uiState = uiState.copy(
+                sourcePhase = SourcePhase.Unavailable(
+                    if (client == null) SourceUnavailableReason.NO_CLIENT else SourceUnavailableReason.GATE_CLOSED,
+                ),
+            )
             return
         }
-        uiState = uiState.copy(snapshotsLoading = true, snapshotsUnavailable = false)
+        uiState = uiState.copy(sourcePhase = SourcePhase.Probing)
         // apiResult flattens the api's `Result<Result<T>>`: a THROWN error and a
-        // FAILED Result both land null beside the success-null payload, so all
-        // three share the quiet unavailable face (the source list carries no
-        // failure/null distinction).
-        val snapshots = apiResult { client.getSnapshots() }.getOrNull()
+        // FAILED Result both land in the failure side, so the old-plugin 404
+        // (success-null) and a failed read are DISTINGUISHABLE now — the two
+        // causes the former conflated flag could not tell apart.
+        val result = apiResult { client.getSnapshots() }
+        val snapshots = result.getOrNull()
         uiState = uiState.copy(
-            snapshotsLoading = false,
-            // null payload = old plugin → the same quiet unavailable face as a failed read.
-            snapshots = snapshots.orEmpty(),
-            snapshotsUnavailable = snapshots == null,
+            sourcePhase = when {
+                result.isFailure -> SourcePhase.Unavailable(SourceUnavailableReason.READ_FAILED)
+                // null payload = old plugin → the same quiet unavailable face.
+                snapshots == null -> SourcePhase.Unavailable(SourceUnavailableReason.OLD_PLUGIN)
+                else -> SourcePhase.Available(snapshots)
+            },
         )
     }
 
@@ -329,8 +479,9 @@ class RestoreWizardViewModel(
     /**
      * Reads + parses the picked backup file and stages the file diff.
      * A different uri reloads (back → pick another file); the same uri is
-     * served once. Failures land in the inline [RestoreWizardUiState.loadError]
-     * face and clear the staged uri so the same file can retry.
+     * served once. Failures land in the inline [RestoreWizardUiState.loadFailure]
+     * face (message + arm identity in one object) and clear the staged uri so
+     * the same file can retry.
      */
     fun loadBackupFile(uriString: String) {
         launch {
@@ -338,35 +489,31 @@ class RestoreWizardViewModel(
             try {
                 if (loadedUri == uriString) return@launch
                 loadedUri = uriString
-                uiState = uiState.copy(loadError = false)
+                uiState = uiState.copy(loadFailure = null)
                 val state = stageFile(uriString)
                 // A successful re-stage invalidates any unlock from the
                 // previous envelope (its in-flight decrypt is discarded by the
                 // identity check; the apply path re-checks it).
                 decryptedSecrets = null
                 decryptedForEnvelope = null
-                uiState = uiState.copy(step = WizardStep.DIFF, file = state)
+                // ONE slot: staging a file replaces any staged snapshot/full
+                // face structurally — the former parallel faces let a file
+                // stage ride beside a stale snapshot diff.
+                uiState = uiState.copy(step = WizardStep.DIFF, diffStage = DiffStage.File(state))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 loadedUri = null
-                // The resolved message is surfaced verbatim by the screen's warning card.
-                lastLoadErrorMessage = UserErrorMessages.resolve(e, "Could not read backup file")
-                lastLoadErrorIsServer = false
-                uiState = uiState.copy(loadError = true)
+                // The resolved message + the file arm's identity land with
+                // presence in ONE object (the screen's warning card reads both).
+                uiState = uiState.copy(
+                    loadFailure = SourceLoadFailure.File(UserErrorMessages.resolve(e, "Could not read backup file")),
+                )
             } finally {
                 loadMutex.unlock()
             }
         }
     }
-
-    /** The load failure's resolved text — read by the screen when [RestoreWizardUiState.loadError] flips on. */
-    var lastLoadErrorMessage: String? = null
-        private set
-
-    /** Whether [lastLoadErrorMessage] came from the server arm (the card's title differs). */
-    var lastLoadErrorIsServer: Boolean = false
-        private set
 
     private suspend fun stageFile(uriString: String): FileRestoreState {
         val jsonString = settingsBackupIo.readImportPayload(uriString)
@@ -433,7 +580,7 @@ class RestoreWizardViewModel(
             categories = categories,
             extras = extras,
             externalSlices = externalSlices,
-            hasSecrets = backup.secrets != null,
+            secrets = if (backup.secrets != null) SecretsPhase.Locked else SecretsPhase.Hidden,
         )
     }
 
@@ -454,7 +601,11 @@ class RestoreWizardViewModel(
         launch {
             val client = pluginApiClient
             if (client == null || !syncGateOpen()) {
-                uiState = uiState.copy(snapshotsUnavailable = true)
+                uiState = uiState.copy(
+                    sourcePhase = SourcePhase.Unavailable(
+                        if (client == null) SourceUnavailableReason.NO_CLIENT else SourceUnavailableReason.GATE_CLOSED,
+                    ),
+                )
                 return@launch
             }
             val contentOutcome = apiResult { client.getSnapshotContent(snapshotId) }
@@ -469,11 +620,10 @@ class RestoreWizardViewModel(
                 return@launch
             }
             if (content == null) {
+                // The one slot: the degrade face replaces whatever was staged.
                 uiState = uiState.copy(
                     step = WizardStep.DIFF,
-                    file = null,
-                    snapshot = null,
-                    fullRestore = FullRestoreState(snapshotId),
+                    diffStage = DiffStage.Full(FullRestoreState(snapshotId)),
                 )
                 return@launch
             }
@@ -499,10 +649,8 @@ class RestoreWizardViewModel(
             val groups = buildSnapshotDiffGroups(snapshotRows, liveRows) { domain -> domainTitle(domain) }
             uiState = uiState.copy(
                 step = WizardStep.DIFF,
-                file = null,
-                fullRestore = null,
-                snapshot = SnapshotRestoreState(snapshotId = snapshotId, groups = groups),
-                loadError = false,
+                diffStage = DiffStage.Snapshot(SnapshotRestoreState(snapshotId = snapshotId, groups = groups)),
+                loadFailure = null,
             )
         }
     }
@@ -510,12 +658,11 @@ class RestoreWizardViewModel(
     /**
      * The server arm's read failure face: the same inline error card the file
      * arm uses (with a retry via re-tapping the restore point) — the wizard
-     * stays on the SOURCE step and never stages a diff.
+     * stays on the SOURCE step and never stages a diff. Message + the server
+     * arm's identity land with presence in ONE object.
      */
     private fun failServerLoad(message: String) {
-        lastLoadErrorMessage = message
-        lastLoadErrorIsServer = true
-        uiState = uiState.copy(loadError = true)
+        uiState = uiState.copy(loadFailure = SourceLoadFailure.Server(message))
     }
 
     /**
@@ -594,28 +741,33 @@ class RestoreWizardViewModel(
         }
     }
 
-    /** A file-diff-step selection write: no-op while nothing is staged. */
+    /** The staged file-diff face, or null when another stage (or none) holds the slot. */
+    private val stagedFile: FileRestoreState?
+        get() = uiState.stagedFile()
+
+    /** A file-diff-step selection write: no-op while another stage (or none) holds the slot. */
     private inline fun updateStagedFile(transform: (FileRestoreState) -> FileRestoreState) {
-        val file = uiState.file ?: return
-        uiState = uiState.copy(file = transform(file))
+        val stage = uiState.diffStage as? DiffStage.File ?: return
+        uiState = uiState.copy(diffStage = stage.copy(state = transform(stage.state)))
     }
 
-    /** A snapshot-diff-step selection write: no-op while nothing is staged. */
+    /** A snapshot-diff-step selection write: no-op while another stage (or none) holds the slot. */
     private inline fun updateStagedSnapshot(transform: (SnapshotRestoreState) -> SnapshotRestoreState) {
-        val snapshot = uiState.snapshot ?: return
-        uiState = uiState.copy(snapshot = transform(snapshot))
+        val stage = uiState.diffStage as? DiffStage.Snapshot ?: return
+        uiState = uiState.copy(diffStage = stage.copy(state = transform(stage.state)))
     }
 
     /** The confirm dialog's count face: how many top groups the restore touches. */
-    fun selectedGroupCount(): Int {
-        uiState.file?.let { file ->
-            return file.selection.categories.size + (if (file.selection.extras) 1 else 0) + file.selection.slices.size
-        }
-        uiState.snapshot?.let { snapshot ->
-            return snapshot.selection.namespaces.size +
-                (if (snapshot.selection.domains.isNotEmpty()) 1 else 0)
-        }
-        return 1 // full-restore degrade: one operation
+    fun selectedGroupCount(): Int = when (val stage = uiState.diffStage) {
+        is DiffStage.File ->
+            stage.state.selection.categories.size +
+                (if (stage.state.selection.extras) 1 else 0) +
+                stage.state.selection.slices.size
+        is DiffStage.Snapshot ->
+            stage.state.selection.namespaces.size +
+                (if (stage.state.selection.domains.isNotEmpty()) 1 else 0)
+        // full-restore degrade: one operation
+        is DiffStage.Full, null -> 1
     }
 
     // ---------------------------------------------------------------------------
@@ -624,14 +776,14 @@ class RestoreWizardViewModel(
 
     /**
      * Decrypts the staged envelope with [passphrase] (wrong passphrase → the
-     * inline retry flag, never a crash). On success the preview counts land in
-     * the state and the payload is held in memory for the explicit apply.
-     * [passphrase] is zeroed before this returns — including the early
-     * returns (nothing staged, no secrets envelope, already unlocking); the
-     * KDF runs on Dispatchers.Default.
+     * inline [SecretsPhase.UnlockFailed] retry face, never a crash). On
+     * success the preview counts land in the state and the payload is held in
+     * memory for the explicit apply. [passphrase] is zeroed before this
+     * returns — including the early returns (nothing staged, no secrets
+     * envelope, already unlocking); the KDF runs on Dispatchers.Default.
      *
-     * The busy flag is set synchronously BEFORE the coroutine launches, so the
-     * second of two rapid confirmations is refused instead of queueing a
+     * The busy phase is set synchronously BEFORE the coroutine launches, so
+     * the second of two rapid confirmations is refused instead of queueing a
      * second 600k KDF run. The result is bound to the exact staged
      * [SecretsEnvelope] instance: a decrypt that settles after the wizard
      * re-staged a DIFFERENT source is discarded — it must not resurrect a
@@ -639,16 +791,16 @@ class RestoreWizardViewModel(
      * same identity, so a stale payload can never be applied.
      */
     fun unlockSecrets(passphrase: CharArray) {
-        val file = uiState.file
+        val file = stagedFile
         val envelope = file?.backup?.secrets
-        if (file == null || envelope == null || file.secretsUnlocking) {
+        if (file == null || envelope == null || file.secrets is SecretsPhase.Unlocking) {
             passphrase.fill('\u0000')
             return
         }
-        // Synchronous busy-flag flip: the second of two rapid confirmations
-        // must hit the `secretsUnlocking` early return above, not queue behind
-        // the first KDF run.
-        uiState = uiState.copy(file = file.copy(secretsUnlocking = true, secretsError = false))
+        // Synchronous busy-phase flip: the second of two rapid confirmations
+        // must hit the [SecretsPhase.Unlocking] early return above, not queue
+        // behind the first KDF run.
+        uiState = uiState.copy(diffStage = DiffStage.File(file.copy(secrets = SecretsPhase.Unlocking)))
         val staged = envelope
         launch {
             try {
@@ -659,24 +811,24 @@ class RestoreWizardViewModel(
                 // decrypt ran: discard the stale result rather than surfacing
                 // (or holding) a payload computed from the old envelope. The
                 // passphrase is zeroed in `finally` either way.
-                val current = uiState.file
+                val current = stagedFile
                 if (current?.backup?.secrets !== staged) return@launch
                 decryptedSecrets = secrets
                 decryptedForEnvelope = staged
                 val summary = secretsBackupAssembler?.summarize(secrets)
                     ?: SecretsRestoreSummary.of(secrets)
                 uiState = uiState.copy(
-                    file = current.copy(secretsUnlocked = summary, secretsUnlocking = false, secretsError = false),
+                    diffStage = DiffStage.File(current.copy(secrets = SecretsPhase.Unlocked(summary))),
                 )
             } catch (e: BackupSecretsException) {
                 // Same identity rule on the failure arm: a stale attempt must
                 // not touch the state of the newly staged source.
-                val current = uiState.file
+                val current = stagedFile
                 if (current?.backup?.secrets === staged) {
                     decryptedSecrets = null
                     decryptedForEnvelope = null
                     uiState = uiState.copy(
-                        file = current.copy(secretsUnlocked = null, secretsUnlocking = false, secretsError = true),
+                        diffStage = DiffStage.File(current.copy(secrets = SecretsPhase.UnlockFailed)),
                     )
                 }
             } finally {
@@ -687,8 +839,9 @@ class RestoreWizardViewModel(
 
     /** Dismisses the unlock error (a fresh attempt clears it anyway). */
     fun clearSecretsError() {
-        val file = uiState.file ?: return
-        uiState = uiState.copy(file = file.copy(secretsError = false))
+        updateStagedFile { file ->
+            if (file.secrets is SecretsPhase.UnlockFailed) file.copy(secrets = SecretsPhase.Locked) else file
+        }
     }
 
     /**
@@ -703,7 +856,7 @@ class RestoreWizardViewModel(
     fun applySecrets() {
         val secrets = decryptedSecrets ?: return
         val assembler = secretsBackupAssembler ?: return
-        if (decryptedForEnvelope !== uiState.file?.backup?.secrets) return
+        if (decryptedForEnvelope !== stagedFile?.backup?.secrets) return
         launch {
             try {
                 assembler.apply(secrets)
@@ -713,7 +866,7 @@ class RestoreWizardViewModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                uiState = uiState.copy(applyError = UserErrorMessages.resolve(e, "Secrets restore failed"))
+                uiState = uiState.copy(applyPhase = ApplyPhase.Failed(UserErrorMessages.resolve(e, "Secrets restore failed")))
             }
         }
     }
@@ -727,38 +880,37 @@ class RestoreWizardViewModel(
      * snapshot first (failure warns through the bus, never blocks), then the
      * arm's own write, then the trailing `requestSync()` so local changes
      * push / server changes adopt. The summary lands on the bus;
-     * [RestoreWizardUiState.completed] pops the wizard. A failure anywhere in
-     * the choreography surfaces the inline error face ([RestoreWizardUiState.applyError])
-     * and never claims success.
+     * [ApplyPhase.Completed] pops the wizard. A failure anywhere in the
+     * choreography surfaces the inline error face ([ApplyPhase.Failed]) and
+     * never claims success.
      */
     fun restoreSelected() {
-        if (uiState.applying) return
+        if (uiState.applyPhase is ApplyPhase.Applying) return
         // Flipped synchronously (before the coroutine) so the second of two
         // rapid confirmations is refused outright instead of queueing a
         // second apply behind the first.
-        uiState = uiState.copy(applying = true, applyError = null)
+        uiState = uiState.copy(applyPhase = ApplyPhase.Applying)
         launch {
             try {
                 captureSafetySnapshotBestEffort()
-                val summary = when {
-                    uiState.file != null -> applyFileRestore()
-                    uiState.snapshot != null -> applySnapshotRestore()
-                    uiState.fullRestore != null -> applyFullRestore()
-                    else -> null
+                val summary = when (val stage = uiState.diffStage) {
+                    is DiffStage.File -> applyFileRestore(stage.state)
+                    is DiffStage.Snapshot -> applySnapshotRestore(stage.state)
+                    is DiffStage.Full -> applyFullRestore(stage.state)
+                    null -> null
                 }
                 if (summary != null) {
                     requestTrailingSync()
                     messageBus?.info(summary)
-                    uiState = uiState.copy(applying = false, completed = true)
+                    uiState = uiState.copy(applyPhase = ApplyPhase.Completed)
                 } else {
-                    uiState = uiState.copy(applying = false)
+                    uiState = uiState.copy(applyPhase = ApplyPhase.Idle)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 uiState = uiState.copy(
-                    applying = false,
-                    applyError = UserErrorMessages.resolve(e, "Restore failed"),
+                    applyPhase = ApplyPhase.Failed(UserErrorMessages.resolve(e, "Restore failed")),
                 )
             }
         }
@@ -766,12 +918,16 @@ class RestoreWizardViewModel(
 
     /** Acknowledges the one-shot success signal (the screen navigated back). */
     fun consumeCompleted() {
-        uiState = uiState.copy(completed = false)
+        if (uiState.applyPhase is ApplyPhase.Completed) {
+            uiState = uiState.copy(applyPhase = ApplyPhase.Idle)
+        }
     }
 
     /** Dismisses the inline apply failure. */
     fun clearApplyError() {
-        uiState = uiState.copy(applyError = null)
+        if (uiState.applyPhase is ApplyPhase.Failed) {
+            uiState = uiState.copy(applyPhase = ApplyPhase.Idle)
+        }
     }
 
     /** The pre-apply restore point. Miss → bus warn, never a blocker. */
@@ -792,8 +948,7 @@ class RestoreWizardViewModel(
     }
 
     /** The BACKUP-FILE arm: selected categories + slices + extras through the store seams. */
-    private suspend fun applyFileRestore(): String? {
-        val file = uiState.file ?: return null
+    private suspend fun applyFileRestore(file: FileRestoreState): String? {
         val backup = file.backup
         val selection = file.selection
         if (selection.categories.isNotEmpty()) {
@@ -831,9 +986,8 @@ class RestoreWizardViewModel(
      * summary (+ reject buckets). A failed call throws into [restoreSelected]'s
      * catch — the inline error face — never a silent "nothing to do".
      */
-    private suspend fun applySnapshotRestore(): String? {
+    private suspend fun applySnapshotRestore(state: SnapshotRestoreState): String? {
         val client = pluginApiClient ?: return null
-        val state = uiState.snapshot ?: return null
         val deviceId = syncRepository?.let {
             runCatchingRethrowingCancellation { it.currentDeviceId() }.getOrNull()
         }
@@ -873,9 +1027,8 @@ class RestoreWizardViewModel(
      * the caller's) means nothing was restored — surfaced as an error, never
      * as success.
      */
-    private suspend fun applyFullRestore(): String? {
+    private suspend fun applyFullRestore(full: FullRestoreState): String? {
         val client = pluginApiClient ?: return null
-        val full = uiState.fullRestore ?: return null
         val result = client.restoreSnapshot(full.snapshotId).getOrThrow()
             ?: throw IllegalStateException("The restore point could not be restored")
         val appliedCount = result.applied.size
@@ -934,13 +1087,16 @@ class RestoreWizardViewModel(
      */
     private fun crossAccountDetected(
         backup: SettingsBackup,
-        identity: com.raulshma.jellyplay.core.datastore.identity.ServerIdentity?,
+        identity: com.raulshma.jellyplay.core.datastore.identity.PersistedIdentity?,
     ): Boolean {
         if (identity == null) return false
         val originUser = backup.originUserId?.takeIf { it.isNotBlank() } ?: return false
         val originServer = backup.originServerId?.takeIf { it.isNotBlank() }
-        val sameUser = originUser == identity.activeUserId
-        val sameServer = originServer == null || originServer == identity.activeServerId
+        // The typed identity's projections are blank-free (the store's
+        // uniform blank==absent rule), so a legacy blank on disk can never
+        // collide with a positive origin id here.
+        val sameUser = originUser == identity.userId
+        val sameServer = originServer == null || originServer == identity.serverId
         return !(sameUser && sameServer)
     }
 

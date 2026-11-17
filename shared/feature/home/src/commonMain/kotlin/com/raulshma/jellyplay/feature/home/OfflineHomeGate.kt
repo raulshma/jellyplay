@@ -35,11 +35,12 @@ import kotlinx.coroutines.launch
  * [computeHomeRenderSource] call inside one of them).
  *
  * Interface: [state] ([OfflineHomeState] carries the render source plus both
- * offline lists). Inputs: the offline mode and the refresher's
- * `fetchFailed`. The fold keys on the SAME gate emission that opened the
- * collection (the gate value is paired into every library emission inside
- * `flatMapLatest`), so the lag race the old mirror worked around is
- * structurally impossible here.
+ * offline lists). Inputs: the offline mode and the refresher's load phase
+ * ([HomeLoadPhase] — the fold keys on the [HomeLoadPhase.Failed] variant,
+ * formerly the refresher's `fetchFailed` boolean). The fold keys on the SAME
+ * gate emission that opened the collection (the gate value is paired into
+ * every library emission inside `flatMapLatest`), so the lag race the old
+ * mirror worked around is structurally impossible here.
  *
  * The underlying repository flows re-emit on every download-progress write,
  * so they are collected ONLY while the gate is open (any offline mode, or an
@@ -55,7 +56,7 @@ internal class OfflineHomeGate(
     scope: CoroutineScope,
     offlineMode: Flow<OfflineMode>,
     offlineRepository: OfflineRepository,
-    fetchFailed: Flow<Boolean>,
+    loadPhase: Flow<HomeLoadPhase>,
     homeLayoutProvider: suspend () -> List<HomeSection> = { emptyList() },
     /**
      * Local TOC cache backing the offline Continue Reading row's progress
@@ -70,11 +71,17 @@ internal class OfflineHomeGate(
     private val _state = MutableStateFlow(OfflineHomeState())
     val state: StateFlow<OfflineHomeState> = _state.asStateFlow()
 
-    /** The gate value both collectors key on — see [OfflineGate.isCollecting]. */
+    /**
+     * The gate value both collectors key on — see [OfflineGate.isCollecting].
+     * The phase is normalized ([gatePhase]) BEFORE the key so a second
+     * failure carrying a different message does not restart the gated
+     * collections (the former `fetchFailed` boolean was stable across
+     * message changes).
+     */
     private val gate: Flow<OfflineGate> = combine(
         offlineMode,
-        fetchFailed,
-    ) { mode, failedEmpty -> OfflineGate(mode, failedEmpty) }
+        loadPhase,
+    ) { mode, phase -> OfflineGate(mode, phase.gatePhase()) }
         .distinctUntilChanged()
 
     init {
@@ -121,7 +128,7 @@ internal class OfflineHomeGate(
                             bookProgressFractions = bookFractions,
                             renderSource = computeHomeRenderSource(
                                 offlineMode = gate.mode,
-                                fetchFailed = gate.fetchFailed,
+                                loadPhase = gate.loadPhase,
                                 offlineLibrary = emission.items,
                                 fallbackPending = emission.pending,
                             ),
@@ -220,16 +227,31 @@ internal data class OfflineHomeState(
 
 /**
  * The offline collection gate value: [isCollecting] is the predicate both
- * collectors key on, and [mode]/[fetchFailed] feed
+ * collectors key on, and [mode]/[loadPhase] feed
  * [computeHomeRenderSource] so the render-source fold reads the same gate
- * emission that opened/closed the collection.
+ * emission that opened/closed the collection. [loadPhase] arrives
+ * message-normalized ([gatePhase]) — only the variant is render-relevant
+ * here.
  */
 internal data class OfflineGate(
     val mode: OfflineMode,
-    val fetchFailed: Boolean,
+    val loadPhase: HomeLoadPhase,
 ) {
-    val isCollecting: Boolean get() = mode != OfflineMode.ONLINE || fetchFailed
+    val isCollecting: Boolean get() = mode != OfflineMode.ONLINE || loadPhase is HomeLoadPhase.Failed
 }
+
+/**
+ * The gate's render-relevant reduction of a [HomeLoadPhase]: every
+ * [HomeLoadPhase.Failed] variant collapses to one canonical instance. The
+ * gate value keys the gated collectors' `flatMapLatest` — a second failure
+ * carrying a distinct message must NOT restart the offline-library
+ * collection (a restart re-emits the pending window and would flash
+ * [HomeRenderSource.FallbackPending] — the former `fetchFailed` boolean was
+ * stable across message changes, and this keeps that stability). The
+ * variant itself is all the gate's fold consumes.
+ */
+private fun HomeLoadPhase.gatePhase(): HomeLoadPhase =
+    if (this is HomeLoadPhase.Failed) HomeLoadPhase.Failed(null) else this
 
 /**
  * Emission envelope for the offline-library collection gate: [pending] marks

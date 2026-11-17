@@ -49,7 +49,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -57,11 +56,11 @@ import kotlin.test.assertTrue
  * does not cover):
  *  - `fetchOnce` success with failed section types raises `partialLoadError`
  *    while keeping the loaded sections (zero-item sections are NOT failures).
- *  - `fetchOnce` failure over EMPTY sections sets `error` (and therefore
- *    `fetchFailed`); failure over EXISTING sections keeps the stale
- *    sections AND still sets `error` — the stale snapshot cannot refresh, so
- *    `fetchFailed` must open the implicit-offline gate instead of freezing
- *    the pre-failure server rows.
+ *  - `fetchOnce` failure over EMPTY sections lands the [HomeLoadPhase.Failed]
+ *    phase (and therefore `fetchFailed`); failure over EXISTING sections
+ *    keeps the stale sections AND still lands Failed — the stale snapshot
+ *    cannot refresh, so `fetchFailed` must open the implicit-offline gate
+ *    instead of freezing the pre-failure server rows.
  *  - An offline `fetchOnce` never touches the repository yet still stamps the
  *    refresh clock fresh (the onStart stale check must not re-fetch right
  *    after an offline attempt).
@@ -69,9 +68,10 @@ import kotlin.test.assertTrue
  *    PrefsChanged trigger fetches NON-forced.
  *  - The DiscoverEnabled trigger runs a standalone discover-only fan-out that
  *    never touches `getHomeSections`.
- *  - Manual refresh clears sections + raises the full-screen loader while the
- *    fetch is in flight; PullToRefresh keeps content and raises only the
- *    inline spinner. Both clear their flag when the fetch resolves.
+ *  - Manual refresh clears sections + lands in [HomeLoadPhase.ColdLoading]
+ *    while the fetch is in flight; PullToRefresh keeps content and lands in
+ *    [HomeLoadPhase.InlineRefreshing] only. Both settle to
+ *    [HomeLoadPhase.Ready] when the fetch resolves.
  *
  * Harness mirrors [HomeRefresherTest]: MockK collaborators, inlined
  * StandardTestDispatcher (Dispatchers.setMain), a scope over the test
@@ -195,8 +195,8 @@ class HomeRefresherFetchTest {
             "a failed section type must raise the non-blocking partial-load notice",
         )
         assertEquals(1, refresher.state.value.sections.size)
-        assertNull(refresher.state.value.error)
-        assertFalse(refresher.state.value.isLoading)
+        assertFalse(refresher.state.value.fetchFailed)
+        assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
     }
 
     @Test
@@ -208,7 +208,11 @@ class HomeRefresherFetchTest {
         refresher.fetchOnce()
         runCurrent()
 
-        assertEquals("server down", refresher.state.value.error)
+        assertEquals(
+            "server down",
+            (refresher.state.value.loadPhase as HomeLoadPhase.Failed).message,
+            "the resolved failure message rides the Failed phase payload",
+        )
         assertTrue(refresher.state.value.sections.isEmpty())
         assertTrue(
             refresher.state.value.fetchFailed,
@@ -237,7 +241,7 @@ class HomeRefresherFetchTest {
 
         assertEquals(
             "flaky network",
-            refresher.state.value.error,
+            (refresher.state.value.loadPhase as HomeLoadPhase.Failed).message,
             "a failure with content on screen still records the failure",
         )
         assertEquals(listOf(stale), refresher.state.value.sections)
@@ -255,7 +259,7 @@ class HomeRefresherFetchTest {
             refresher.fetchOnce()
             runCurrent()
             coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
-            assertNull(refresher.state.value.error)
+            assertFalse(refresher.state.value.fetchFailed)
 
             // The offline attempt counted as fresh: 50s later (past no other
             // threshold, under the 60s onStart staleness window) going back
@@ -303,7 +307,7 @@ class HomeRefresherFetchTest {
             // Non-forced: the new query is what matters, not cache bypass.
             coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = false) }
             coVerify(exactly = 0) { homeFeed.getHomeSections(any(), force = true) }
-            assertFalse(refresher.state.value.isLoading)
+            assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         } finally {
             refresher.stop()
         }
@@ -335,7 +339,7 @@ class HomeRefresherFetchTest {
         coVerify(exactly = 1) { seerrRepository.getTrending(any()) }
         coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
         assertEquals(mapOf(DiscoverSectionType.TRENDING to trending), refresher.state.value.discoverSections)
-        assertNull(refresher.state.value.error)
+        assertFalse(refresher.state.value.fetchFailed)
     }
 
     // ── request(): Manual vs PullToRefresh preamble, observed mid-flight ────
@@ -356,20 +360,19 @@ class HomeRefresherFetchTest {
             refresher.request(RefreshTrigger.Manual)
             runCurrent()
 
-            assertTrue(refresher.state.value.isLoading, "Manual raises the full-screen loader")
+            assertEquals(HomeLoadPhase.ColdLoading, refresher.state.value.loadPhase, "Manual raises the full-screen loader")
             assertTrue(
                 refresher.state.value.sections.isEmpty(),
                 "Manual clears the on-screen content for the loader",
             )
             assertTrue(refresher.state.value.discoverSections.isEmpty())
-            assertNull(refresher.state.value.error)
 
             fetchGate.complete(
                 Result.success(HomeSectionsResult(sections = listOf(section(HomeSectionType.NEXT_UP, listOf(item("n1")))))),
             )
             runCurrent()
 
-            assertFalse(refresher.state.value.isLoading)
+            assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
             assertEquals(1, refresher.state.value.sections.size)
         } finally {
             refresher.stop()
@@ -393,8 +396,9 @@ class HomeRefresherFetchTest {
             refresher.request(RefreshTrigger.PullToRefresh)
             runCurrent()
 
-            assertTrue(refresher.state.value.isRefreshing, "PullToRefresh raises the inline spinner")
-            assertFalse(refresher.state.value.isLoading, "PullToRefresh must NOT raise the full-screen loader")
+            assertEquals(HomeLoadPhase.InlineRefreshing, refresher.state.value.loadPhase, "PullToRefresh raises the inline spinner")
+            // (The InlineRefreshing variant IS "no full-screen loader": the
+            // former pair isRefreshing=true + isLoading=false is one phase.)
             assertEquals(
                 onScreen,
                 refresher.state.value.sections,
@@ -404,7 +408,7 @@ class HomeRefresherFetchTest {
             fetchGate.complete(Result.success(HomeSectionsResult(sections = onScreen)))
             runCurrent()
 
-            assertFalse(refresher.state.value.isRefreshing)
+            assertEquals(HomeLoadPhase.Ready, refresher.state.value.loadPhase)
         } finally {
             refresher.stop()
         }
@@ -533,7 +537,7 @@ class HomeRefresherFetchTest {
             refresher.state.value.sections.first { it.type == HomeSectionType.DISCOVER }.items,
             "a failed roll degrades silently — the row keeps its items",
         )
-        assertNull(refresher.state.value.error, "a failed roll never raises the error surface")
+        assertFalse(refresher.state.value.fetchFailed, "a failed roll never raises the error surface")
         advanceTimeBy(DiscoverRowsCoordinator.ROLL_MIN_SPIN_FOR_TEST + 1)
         runCurrent()
         assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
@@ -601,13 +605,13 @@ class HomeRefresherFetchTest {
     // ── HomeRefreshState.fetchFailed boundary ──────────────────────────────
 
     @Test
-    fun fetchFailed_isErrorRegardlesOfSectionsOnScreen() {
+    fun fetchFailed_isTheFailedPhaseRegardlesOfSectionsOnScreen() {
         // Sections on screen do not disqualify the implicit-offline
         // fallback: they are the stale pre-failure snapshot, which is exactly
         // when the offline rows must take over.
         val state = HomeRefreshState(
             sections = listOf(section(HomeSectionType.LATEST_MEDIA)),
-            error = "server down",
+            loadPhase = HomeLoadPhase.Failed("server down"),
         )
         assertTrue(state.fetchFailed)
         assertFalse(HomeRefreshState().fetchFailed)

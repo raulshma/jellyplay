@@ -229,6 +229,15 @@ internal class HomeRefresher(
     private val discoverRows = DiscoverRowsCoordinator(scope, homeFeed, _state)
 
     private val refreshMutex = Mutex()
+    // ── Concurrency plumbing, NOT state ─────────────────────────────────────
+    // The four Job holders below (and the [lastRefreshTime] clock,
+    // [lastFetchRacedPendingSync] latch, and [identityEpoch] counter that
+    // follow) are the refresh machinery's execution plumbing: they order and
+    // cancel work, but they are never folded into [HomeRefreshState] and the
+    // UI never observes them. The load/refresh lifecycle the UI DOES observe
+    // lives in [HomeLoadPhase] (one phase per [HomeRefreshState] emission);
+    // these fields exist only to make the phase's transitions happen in the
+    // right order and die at the right time.
     private var refreshJob: Job? = null
     // Identity-transition choreography (sign-in / user switch) runs here —
     // NOT in [refreshJob]: its fetch must survive a mid-flight [stop] ([stop]
@@ -466,7 +475,16 @@ internal class HomeRefresher(
                                 ?.items ?: emptyList(),
                         )
 
-                        _state.update { it.copy(error = null) }
+                        // The load-phase success rule (see
+                        // [HomeLoadPhaseTransitions.succeeded]): clears a
+                        // recorded failure so the implicit-offline gate and
+                        // the hard-error verdict close — the former
+                        // `error = null` write, and the ONLY thing it did
+                        // (the spinner clear belongs to the guarded finally
+                        // below, as it always did).
+                        _state.update {
+                            it.copy(loadPhase = HomeLoadPhaseTransitions.succeeded(it.loadPhase))
+                        }
 
                         // A successful foreground library scan is the shared
                         // hook for the auto_download foreground drain and the
@@ -478,13 +496,22 @@ internal class HomeRefresher(
                     }
                     .onFailure { throwable ->
                         // Always record the failure — stale sections stay on
-                        // screen, but `fetchFailed` (error != null) is what
-                        // opens the implicit-offline gate downstream, so a
-                        // server that can't be reached while content is cached
-                        // still swaps Continue Watching / Next Up to the
-                        // locally derived rows instead of freezing the
-                        // pre-offline server snapshot.
-                        _state.update { s -> s.copy(error = UserErrorMessages.resolve(throwable, "${throwable::class.simpleName}")) }
+                        // screen, but `fetchFailed` (the [HomeLoadPhase.Failed]
+                        // variant) is what opens the implicit-offline gate
+                        // downstream, so a server that can't be reached while
+                        // content is cached still swaps Continue Watching /
+                        // Next Up to the locally derived rows instead of
+                        // freezing the pre-offline server snapshot. The
+                        // failure REPLACES the active phase, spinner included
+                        // ([HomeLoadPhaseTransitions.failed]).
+                        _state.update {
+                            s ->
+                            s.copy(
+                                loadPhase = HomeLoadPhaseTransitions.failed(
+                                    UserErrorMessages.resolve(throwable, "${throwable::class.simpleName}"),
+                                ),
+                            )
+                        }
                         _state.update { it.copy(partialLoadError = false) }
                     }
 
@@ -496,20 +523,25 @@ internal class HomeRefresher(
                 arrDeferred?.await()
             }
         } finally {
-            // Defensive spinner clear — but only if this fetch was NOT
+            // Defensive phase settle — but only if this fetch was NOT
             // cancelled: whoever cancelled it (the user-switch paint, a
             // replaced refresh job, [stop], the going-online timeout) owns
-            // the flags now. A cancelled fetch clearing them here would
+            // the phase now. A cancelled fetch settling it here would
             // land between the user-switch paint and its replacement fetch,
-            // exposing sections=empty + isLoading=false + error=null — the
-            // cold-launch "No Content Available" flash. A fetch that merely
-            // raced a CONCURRENT fetch on the mutex still completes under
-            // its own power and keeps clearing.
+            // exposing sections=empty + phase=Ready — the cold-launch
+            // "No Content Available" flash, which this migration makes
+            // structurally impossible: the cancelled fetch simply does not
+            // write ([HomeLoadPhaseTransitions.settled] runs only under the
+            // isActive guard). A fetch that merely raced a CONCURRENT fetch
+            // on the mutex still completes under its own power and keeps
+            // settling; a Failed phase set by the fetch's own failure arm
+            // survives the settle (the former flag clear never touched
+            // `error`).
             // (The going-online busy flag is not the fetch's to clear —
             // [OfflineModeManager] owns it and clears it at the ONLINE
             // emission, before this handshake's fetch even starts.)
             if (currentCoroutineContext().isActive) {
-                _state.update { it.copy(isLoading = false, isRefreshing = false) }
+                _state.update { it.copy(loadPhase = HomeLoadPhaseTransitions.settled(it.loadPhase)) }
             }
             refreshMutex.unlock()
         }
@@ -532,11 +564,12 @@ internal class HomeRefresher(
      *
      *  * [Manual] / [PullToRefresh]: replace [refreshJob] with ONE job that
      *    runs the preamble, a forced fetch, then the periodic loop. Preamble
-     *    policy (spinner raise, content/error clear, discover-cache
+     *    policy (phase raise, content/error clear, discover-cache
      *    invalidation — the invalidation strictly happens-before the fetch)
-     *    is refresher-owned; Manual additionally clears sections for the
-     *    full-screen loader, PullToRefresh keeps content and raises only the
-     *    inline spinner.
+     *    is refresher-owned; Manual additionally clears sections and lands in
+     *    [HomeLoadPhase.ColdLoading] (the full-screen loader),
+     *    PullToRefresh keeps content and lands in
+     *    [HomeLoadPhase.InlineRefreshing] only.
      *  * [PrefsChanged]: replace [refreshJob] with a NON-forced fetch (the
      *    new query is what matters, not cache bypass) followed by the loop.
      *    Folding this fetch into the refresh job (rather than running it in
@@ -558,12 +591,23 @@ internal class HomeRefresher(
         when (trigger) {
             RefreshTrigger.Manual -> startForcedRefresh {
                 _state.update {
-                    it.withContentDropped(error = null, isLoading = true)
+                    it.withContentDropped(loadPhase = HomeLoadPhase.ColdLoading)
                 }
                 invalidateDiscoverCache()
             }
             RefreshTrigger.PullToRefresh -> startForcedRefresh {
-                _state.update { it.copy(isRefreshing = true, error = null) }
+                // The inline spinner over live content — the former
+                // `isRefreshing = true, error = null` (content kept, the
+                // full-screen loader untouched). Clearing the error rides
+                // the phase write: a prior Failed variant is replaced. The
+                // transition rule keeps a COLD/handshake loader up instead
+                // of demoting it to the inline spinner (the phase is a
+                // single value; the unconditional write here once flipped
+                // isLoading false mid-loader — the R3 drift from the
+                // 2026-11-17 regression analysis).
+                _state.update {
+                    it.copy(loadPhase = HomeLoadPhaseTransitions.onPullToRefresh(it.loadPhase))
+                }
                 invalidateDiscoverCache()
             }
             RefreshTrigger.PrefsChanged -> replaceRefreshJob {
@@ -588,7 +632,7 @@ internal class HomeRefresher(
                 lastFetchRacedPendingSync = false
                 identityEpoch++
                 _state.update {
-                    it.withContentDropped(error = null, isLoading = true)
+                    it.withContentDropped(loadPhase = HomeLoadPhase.ColdLoading)
                 }
             }
             RefreshTrigger.DiscoverEnabled -> fetchDiscover()
@@ -684,11 +728,14 @@ internal class HomeRefresher(
                 it.withContentDropped(
                     sections = cachedSections,
                     bookProgressFractions = cachedFractions,
-                    error = null,
-                    isLoading = false,
+                    // The SWR paint shows content with NOTHING spinning while
+                    // the revalidation fetch below runs silently — the former
+                    // `isLoading = false` paint (and its `error = null`: the
+                    // Ready variant carries no failure).
+                    loadPhase = HomeLoadPhase.Ready,
                 )
             } else {
-                it.withContentDropped(error = null, isLoading = true)
+                it.withContentDropped(loadPhase = HomeLoadPhase.ColdLoading)
             }
         }
         fetchOnce()
@@ -713,21 +760,26 @@ internal class HomeRefresher(
     /**
      * Raises the full-screen loader for the going-online handshake (the
      * post-toggle fetch renders behind it). Paired with
-     * [clearFullScreenLoader], these are the only isLoading writes from
-     * outside the fetch machinery itself — routing them through here keeps
-     * every [HomeRefreshState.isLoading] transition inside this class.
+     * [clearFullScreenLoader], these are the only full-screen-loader phase
+     * writes from outside the fetch machinery itself — routing them through
+     * here keeps every [HomeLoadPhase.Handshaking] transition inside this
+     * class.
      */
     private fun showFullScreenLoader() {
-        _state.update { it.copy(isLoading = true) }
+        _state.update { it.copy(loadPhase = HomeLoadPhase.Handshaking) }
     }
 
     /**
      * Force-clears the full-screen loader raised by [showFullScreenLoader]
      * — the going-online handshake clears it in its `finally` so a hung or
-     * cancelled post-toggle fetch cannot leave it stuck on.
+     * cancelled post-toggle fetch cannot leave it stuck on. The clear is the
+     * shared settle rule: a [HomeLoadPhase.Failed] phase recorded by the
+     * handshake's own fetch survives (the former clear never touched
+     * `error`), so the hard-error screen outlives the loader it briefly
+     * sat under.
      */
     private fun clearFullScreenLoader() {
-        _state.update { it.copy(isLoading = false) }
+        _state.update { it.copy(loadPhase = HomeLoadPhaseTransitions.settled(it.loadPhase)) }
     }
 
     /**
@@ -800,9 +852,10 @@ internal class HomeRefresher(
         discoverJob?.cancel()
         discoverJob = null
         // stop() cancels with NO replacement fetch, so the cancelled fetch's
-        // guarded finally will not clear the flags — clear them here so a
-        // backgrounded cold start doesn't sit on a stuck loader.
-        _state.update { it.copy(isLoading = false, isRefreshing = false) }
+        // guarded finally will not settle the phase — settle it here so a
+        // backgrounded cold start doesn't sit on a stuck loader. A Failed
+        // phase survives (the former clear never touched `error`).
+        _state.update { it.copy(loadPhase = HomeLoadPhaseTransitions.settled(it.loadPhase)) }
     }
 
     /**
@@ -1329,9 +1382,9 @@ internal class HomeRefresher(
 
 /** What caused a refresh — decides the job-replacement policy in [HomeRefresher.request]. */
 internal enum class RefreshTrigger {
-    /** Menu refresh: full-screen loader, content + error cleared, discover cache invalidated, forced fetch. */
+    /** Menu refresh: [HomeLoadPhase.ColdLoading] (content dropped for the full-screen loader), discover cache invalidated, forced fetch. */
     Manual,
-    /** Swipe-to-refresh: inline spinner only (no content clear), error cleared, discover cache invalidated, forced fetch. */
+    /** Swipe-to-refresh: [HomeLoadPhase.InlineRefreshing] only (no content clear), discover cache invalidated, forced fetch. */
     PullToRefresh,
     /** Home-section preference diff: non-forced fetch with the new query, then loop restart. */
     PrefsChanged,
@@ -1343,7 +1396,7 @@ internal enum class RefreshTrigger {
      * [HomeRefresher.request].
      */
     UserSwitched,
-    /** Sign-out: cancel pending refresh work (refresh, discover AND transition jobs) and reset to the empty loading state. */
+    /** Sign-out: cancel pending refresh work (refresh, discover AND transition jobs) and reset to [HomeLoadPhase.ColdLoading] with the content dropped. */
     SignedOut,
     /** Discover newly enabled in prefs: standalone discover-only fetch outside the refresh mutex. */
     DiscoverEnabled,
@@ -1360,8 +1413,8 @@ internal enum class RefreshTrigger {
  * The refresh-owned slice of the home UiState: everything the fetch
  * machinery writes. The VM folds this into its single UiState object (same
  * pattern as the SeerrRequestStateHolder fold) so the UI still observes one
- * state object. [isLoading] starts true — a cold home screen shows the
- * loading box until the first fetch resolves.
+ * state object. [loadPhase] starts [HomeLoadPhase.ColdLoading] — a cold home
+ * screen shows the loading box until the first fetch resolves.
  */
 @Immutable
 internal data class HomeRefreshState(
@@ -1383,9 +1436,13 @@ internal data class HomeRefreshState(
      * renders the percent fallback in the card.
      */
     val bookProgressFractions: Map<String, Float> = emptyMap(),
-    val isLoading: Boolean = true,
-    val isRefreshing: Boolean = false,
-    val error: String? = null,
+    /**
+     * The load/refresh lifecycle as ONE mutually-exclusive phase — the sealed
+     * migration of the former `isLoading`/`isRefreshing`/`error` flag trio
+     * (see [HomeLoadPhase] for the replaced write sites and the
+     * No-Content-flash invariant the sealed shape makes structural).
+     */
+    val loadPhase: HomeLoadPhase = HomeLoadPhase.ColdLoading,
     /** Non-blocking notice shown when some (not all) home sections failed to load. */
     val partialLoadError: Boolean = false,
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
@@ -1440,7 +1497,7 @@ internal data class HomeRefreshState(
      * [com.raulshma.jellyplay.feature.home.homeSurface]).
      */
     val fetchFailed: Boolean
-        get() = error != null
+        get() = loadPhase is HomeLoadPhase.Failed
 }
 
 /**
@@ -1476,14 +1533,15 @@ internal data class HomeRefreshSpinnerState(
  * leave them behind. Call sites state only what differs: the painted
  * sections (empty on a clear, the SWR snapshot on user switch) and their
  * decoded fractions (empty by default — cleared with the sections; the SWR
- * repaint paints its own), the error/spinner resets, and whether the *arr
- * row rides the drop.
+ * repaint paints its own), the target load phase (default: the current one
+ * untouched — the offline content drop changes neither spinners nor a
+ * recorded failure, mirroring the former fold that touched neither flag),
+ * and whether the *arr row rides the drop.
  */
 private fun HomeRefreshState.withContentDropped(
     sections: List<HomeSection> = emptyList(),
     bookProgressFractions: Map<String, Float> = emptyMap(),
-    error: String? = this.error,
-    isLoading: Boolean = this.isLoading,
+    loadPhase: HomeLoadPhase = this.loadPhase,
     dropRecentlyGrabbed: Boolean = false,
 ): HomeRefreshState = copy(
     sections = sections,
@@ -1491,7 +1549,6 @@ private fun HomeRefreshState.withContentDropped(
     bookProgressFractions = bookProgressFractions,
     // Server-curated hero billboards clear with the sections that carry them.
     curatedHero = emptyList(),
-    error = error,
-    isLoading = isLoading,
+    loadPhase = loadPhase,
     recentlyGrabbed = if (dropRecentlyGrabbed) emptyList() else this.recentlyGrabbed,
 )

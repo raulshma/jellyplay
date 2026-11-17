@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.auth.AuthSessionStateStore
+import com.raulshma.jellyplay.core.network.auth.AuthSessionStateStoreAdapter
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.HttpClientOptions
 import org.jellyfin.sdk.model.api.ClientCapabilitiesDto
 import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
@@ -42,7 +44,7 @@ class JellyfinApiEngine(
     private val okHttpClientLazy: LazyProvider<OkHttpClient>,
     private val deviceProfileProvider: DeviceProfileProvider,
     private val addressRouter: ServerAddressRouter,
-) : AuthSessionStateStore {
+) {
     val jellyfin: Jellyfin get() = jellyfinLazy.get()
     val okHttpClient: OkHttpClient get() = okHttpClientLazy.get()
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
@@ -53,26 +55,27 @@ class JellyfinApiEngine(
 
     /**
      * The [ActiveSession] server+user pair published as ONE atomic value.
-     * `currentServer` and `currentUser` are separate StateFlows, so any
-     * caller that updates them as two assignments (login / switchUser /
-     * disconnect) lets a `combine(currentServer, currentUser)` downstream
-     * observe a synthetic mixed `(newServer, oldUser)` intermediate — an
-     * identity that never existed. This flow is updated inside the same
-     * critical sections (see [updateSession]) so a session transition is
-     * always observed as a single step from one stable session to the next,
-     * or to/from `null`. `null` means "no fully-established identity"
-     * (either side missing), matching the `if (server != null && user != null)`
+     * `currentServer` and `currentUser` are separate StateFlows, but the
+     * public write surface ([updateSession], [adoptUser]) publishes them as
+     * one mutex-held step, so a `combine(currentServer, currentUser)`
+     * downstream can never observe a synthetic mixed `(newServer, oldUser)`
+     * intermediate — an identity that never existed. This flow is updated
+     * inside the same critical sections so a session transition is always
+     * observed as a single step from one stable session to the next, or
+     * to/from `null`. `null` means "no fully-established identity" (either
+     * side missing), matching the `if (server != null && user != null)`
      * projection consumers used to derive from the separate flows.
      */
     private val _session = MutableStateFlow<ActiveSession?>(null)
     val session: StateFlow<ActiveSession?> = _session.asStateFlow()
 
     /**
-     * [AuthSessionStateStore] read for the shared auth spine (commonMain
-     * `AuthSessionCore`) — reads the ATOMIC session value, never a combine
-     * of the two separate flows.
+     * The spine's read (through the internal
+     * [AuthSessionStateStoreAdapter] — see [asAuthSessionStateStore]):
+     * reads the ATOMIC session value, never a combine of the two separate
+     * flows.
      */
-    override fun currentSession(): ActiveSession? = session.value
+    internal fun currentSession(): ActiveSession? = session.value
 
     val authMutex = Mutex()
 
@@ -101,11 +104,11 @@ class JellyfinApiEngine(
         // URLs — REST, images via imageApi — follow the active address too.
         engineScope.launch {
             addressRouter.activeAddress.drop(1).collect { address ->
-                // Under authMutex: rebuildApiFor republishes the session via
-                // updateUser, and without the lock an address failover could
-                // interleave with an authMutex-guarded updateSession — publishing
-                // the mixed (currentServer, refreshedUser) pair the atomic
-                // session exists to prevent.
+                // Under authMutex: rebuildApiFor republishes the refreshed
+                // pair, and without the lock an address failover could
+                // interleave with an authMutex-guarded session write —
+                // publishing a mixed (currentServer, refreshedUser) pair the
+                // atomic session exists to prevent.
                 if (address != null) authMutex.withLock { rebuildApiFor(address) }
             }
         }
@@ -139,40 +142,132 @@ class JellyfinApiEngine(
      */
     internal fun currentUserId(): String? = session.value?.user?.id
 
-    override fun updateServer(server: ServerInfo?) {
-        _currentServer.value = server
-        publishSession(server, _currentUser.value)
-        if (server == null) addressRouter.clear() else addressRouter.configure(server)
-    }
-
-    fun updateUser(user: UserInfo?) {
-        _currentUser.value = user
-        publishSession(_currentServer.value, user)
+    /**
+     * THE public session write: atomically adopts BOTH sides of the session
+     * in ONE [authMutex] critical section, so a [session] observer can never
+     * see the mixed `(newServer, oldUser)` pair that two separate writes
+     * would produce, and `_api` can never lag the published session.
+     *
+     * The critical section runs in a fixed order:
+     *
+     *  1. `_api` retarget — a fresh client is built from the published pair
+     *     (`server.address` + `user.accessToken`) BEFORE the pair is
+     *     published, mirroring the spine's publishSide ordering
+     *     ([AuthSessionCore]'s class KDoc): no observer that acts on the new
+     *     session can pick up a client still speaking as the old identity.
+     *     A fully-cleared publish (`null, null`) drops the client — the
+     *     disconnect shape. The DESIGNED intermediates leave the client
+     *     alone: `(server, null)` is the login-in-flight state (the client
+     *     retargets when the user lands — via this method's rebuild, or the
+     *     address collector's self-healing retarget, see [rebuildApiFor]),
+     *     and `(null, user)` collapses to no identity while a live client
+     *     must not die merely because its server side is momentarily gone.
+     *  2. The pair write + collapsed [session] publish + address router
+     *     reconfiguration ([publishSessionState]).
+     *
+     * The shared auth spine ([AuthSessionCore]) does NOT go through this
+     * method — its choreography (capture → adopt → round-trip → publish →
+     * restore, the api swap riding the side-effects hooks) needs several
+     * state moves inside ONE critical section, so it composes the internal
+     * [publishSessionState] primitive under the SAME [authMutex] it is
+     * injected with. This method is the public shape for callers that hold
+     * no lock of their own.
+     */
+    suspend fun updateSession(server: ServerInfo?, user: UserInfo?) {
+        authMutex.withLock {
+            if (server != null && user != null) {
+                _api = createApiClient(server.address, user.accessToken)
+            } else if (server == null && user == null) {
+                _api = null
+            }
+            publishSessionState(server, user)
+        }
     }
 
     /**
-     * Atomically adopts BOTH sides of the session in one critical-section
-     * step, so [session] observers never see the mixed intermediate that two
-     * separate [updateServer]+[updateUser] calls would produce. Callers that
-     * know both sides at once (the login / switchUser / disconnect paths in
-     * [AuthApiClientImpl]) must use this; [updateServer]/[updateUser] remain
-     * for legitimate single-side updates and pair with the current other side
-     * (e.g. `updateUser(token-refreshed-user)` re-publishes the same
-     * identity).
+     * The single-side USER adopt — the named intent behind
+     * `AuthApiClientImpl.setUser` (session restore, switchServer/switchUser,
+     * refreshCurrentUser): the server side is ALREADY established (setUser's
+     * guard fails the call without one) and the address router has already
+     * selected the endpoint, so this intent must NOT re-configure the router
+     * nor move the base URL off the router's active endpoint onto the
+     * server's primary — hence single-side instead of [updateSession].
+     *
+     * Under [authMutex], in the setUser order: the client is built and
+     * installed BEFORE the user publish (`currentUser` drives the
+     * authenticated UI — publishing first made a user switch issue its first
+     * request with the previous user's client). A publish without a
+     * configured server is a no-op, exactly as setUser's guard always did.
      */
-    override fun updateSession(server: ServerInfo?, user: UserInfo?) {
+    suspend fun adoptUser(user: UserInfo) {
+        authMutex.withLock {
+            val server = _currentServer.value ?: return
+            _api = createApiClient(activeServerAddress ?: server.address, user.accessToken)
+            _currentUser.value = user
+            collapseSession(_currentServer.value, user)
+        }
+    }
+
+    /**
+     * The ONE ApiClient-construction seam (updateSession's rebuild,
+     * adoptUser, rebuildApiFor, and the auth client's round-trip legs all
+     * build clients through here). Arguments are passed EXPLICITLY —
+     * clientInfo/deviceInfo resolved from the Jellyfin instance's options
+     * and a fresh default [HttpClientOptions] — instead of riding the SDK's
+     * default-args overload: the `$default` static evaluates
+     * `options.clientInfo`/`options.deviceInfo` BEFORE dispatching to the
+     * (stubbed) instance method, which NPEs whenever `options` is null —
+     * the asynchronous-rebuild trap the test suites mock the address router
+     * flat to avoid. For a real instance this resolves to EXACTLY the
+     * arguments the SDK defaults would have used (the static reads
+     * `options.clientInfo`/`options.deviceInfo` and constructs a fresh
+     * `HttpClientOptions()`), so production behavior is unchanged.
+     */
+    internal fun createApiClient(baseUrl: String, accessToken: String?): ApiClient =
+        jellyfin.createApi(
+            baseUrl = baseUrl,
+            accessToken = accessToken,
+            clientInfo = jellyfin.options.clientInfo,
+            deviceInfo = jellyfin.options.deviceInfo,
+            httpClientOptions = HttpClientOptions(),
+        )
+
+    /**
+     * The raw session publish primitive the shared auth spine composes —
+     * both side flows + the collapsed [session] publish + the address router
+     * dance, in one step. Caller MUST hold [authMutex] (the mutex injected
+     * into [AuthSessionCore] — the spine's critical sections are the only
+     * production caller; the public [updateSession] wraps this primitive
+     * with the mutex itself). Module-internal so the spine (via
+     * [asAuthSessionStateStore]) and this module's tests can drive it while
+     * the public surface stays updateSession/adoptUser only.
+     */
+    internal fun publishSessionState(server: ServerInfo?, user: UserInfo?) {
         _currentServer.value = server
         _currentUser.value = user
-        publishSession(server, user)
+        collapseSession(server, user)
         if (server == null) addressRouter.clear() else addressRouter.configure(server)
     }
 
-    /** Publishes the combined session; a missing side collapses it to null. */
-    private fun publishSession(server: ServerInfo?, user: UserInfo?) {
+    /** Collapses the pair into the combined session; a missing side → null. */
+    private fun collapseSession(server: ServerInfo?, user: UserInfo?) {
         _session.value = if (server != null && user != null) ActiveSession(server, user) else null
     }
 
-    fun updateApi(api: ApiClient?) {
+    /**
+     * The raw `_api` swap — single-side by nature: the client is the
+     * side-channel [AuthSessionCore]'s side-effects hooks keep atomic WITH
+     * the session inside their critical sections, never published
+     * independently. The legitimate callers are exactly those hooks'
+     * shapes (AuthApiClientImpl's port): publishSide installs the fresh
+     * client before the session write, restoreSide puts the CAPTURED client
+     * instance back (rebuilding would mint a different object than the
+     * capture — see [AuthSessionSideEffects.restoreSide]), clearSide drops
+     * it on disconnect — plus [rebuildApiFor] and the test harnesses, which
+     * install recording clients. Module-internal for the same reach as
+     * [publishSessionState]; NOT part of the public surface.
+     */
+    internal fun updateApi(api: ApiClient?) {
         _api = api
     }
 
@@ -181,23 +276,35 @@ class JellyfinApiEngine(
      * access token (both addresses belong to the same server, so the token
      * stays valid) and mirroring the address into the published user so
      * URL-building consumers see the active endpoint. Only retargets an
-     * existing client — creating one from here would race setUser's
-     * authoritative construction. MUST be called while holding [authMutex]:
-     * it republishes the combined session, and an unguarded publish could
-     * interleave with an authMutex-guarded [updateSession].
+     * existing client — creating one from here would race the spine's
+     * publishSide/adoptUser authoritative construction. Runs under
+     * [authMutex] (the collector takes the lock): it republishes the
+     * combined session, and an unguarded publish could interleave with an
+     * authMutex-guarded session write.
+     *
+     * DECLARED window: with no user yet there is no token to preserve, so
+     * the early return keeps the existing client rather than nulling it — a
+     * live client must not die merely because an address flap raced the
+     * session seeding. Until the user lands, `_api` can therefore still
+     * speak the PREVIOUS address; the window self-heals on the next address
+     * change after the user lands (this rebuild), or immediately when the
+     * user lands through [updateSession]/[adoptUser], both of which build
+     * the client inside their critical sections.
      */
     private fun rebuildApiFor(address: String) {
         if (_api == null) return
         // No user yet → no token to preserve; keep the existing client rather
         // than nulling it. A live client must not die merely because an
-        // address flap raced the session seeding (updateServer → updateApi →
-        // updateUser is not atomic) — the next address change after the user
-        // lands performs the retarget.
+        // address flap raced the session seeding (the designed (server, null)
+        // intermediate) — the next address change after the user lands
+        // performs the retarget.
         val user = _currentUser.value ?: return
-        _api = jellyfin.createApi(baseUrl = address, accessToken = user.accessToken)
-        // updateUser (not a raw assignment) so the combined session flow
-        // republishes the pair with the mirrored address.
-        updateUser(user.copy(serverAddress = address))
+        _api = createApiClient(address, user.accessToken)
+        // Republish the pair with the mirrored address — raw writes (not the
+        // public updateSession: no rebuild wanted, the client is already
+        // retargeted; not the router dance: this IS the router's collector).
+        _currentUser.value = user.copy(serverAddress = address)
+        collapseSession(_currentServer.value, _currentUser.value)
     }
 
     suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
@@ -323,3 +430,16 @@ internal fun JellyfinApiEngine.currentCacheIdentity(): CacheIdentity {
     val session = session.value
     return CacheIdentity.ofOrNull(session?.server?.id, session?.user?.id)
 }
+
+/**
+ * The [AuthSessionStateStore] port over the engine's internal read +
+ * publish pair — how the auth clients' injection site connects the engine
+ * to the commonMain spine ([AuthSessionCore]) without this public class
+ * carrying an internal supertype (the public class cannot implement the
+ * module-private interface; see [AuthSessionStateStore]).
+ */
+internal fun JellyfinApiEngine.asAuthSessionStateStore(): AuthSessionStateStore =
+    AuthSessionStateStoreAdapter(
+        read = { currentSession() },
+        publish = { server, user -> publishSessionState(server, user) },
+    )

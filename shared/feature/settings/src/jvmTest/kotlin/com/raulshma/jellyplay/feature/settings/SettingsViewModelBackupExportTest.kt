@@ -20,10 +20,13 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -38,7 +41,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -169,7 +171,12 @@ class SettingsViewModelBackupExportTest {
         advanceUntilIdle()
 
         vm.exportSettings("backup:out")
-        awaitUntil("the export completes") { vm.backupRestoreStatus != null }
+        advanceUntilIdle()
+
+        // The outcome is a typed one-shot arm off the buffered channel (the
+        // former backupRestoreStatus parked String is retired) — success and
+        // failure are distinct variants, not string prefixes.
+        assertEquals(SettingsUserMessage.BackupExported, vm.messages.first())
 
         val decoded = PreferencesJson.import.decodeFromString(
             SettingsBackup.serializer(),
@@ -178,7 +185,7 @@ class SettingsViewModelBackupExportTest {
         assertEquals(SettingsBackup.CURRENT_SCHEMA_VERSION, decoded.schemaVersion)
         assertEquals(JsonPrimitive("stub-slice"), decoded.slices[BackupSliceKey.APPEARANCE])
         assertEquals(setOf("chan-1"), decoded.extras.favoriteChannels)
-        assertEquals("Settings exported successfully", vm.backupRestoreStatus)
+        assertEquals("Settings exported successfully", SettingsUserMessage.BackupExported.busText())
     }
 
     @Test
@@ -192,11 +199,14 @@ class SettingsViewModelBackupExportTest {
         advanceUntilIdle()
 
         vm.exportSettings("backup:dead")
-        awaitUntil("the failure surfaces") { vm.backupRestoreStatus != null }
+        advanceUntilIdle()
 
-        assertTrue(
-            "Export failed" in vm.backupRestoreStatus.orEmpty() && "Cannot open output stream" in vm.backupRestoreStatus.orEmpty(),
-            "got: ${vm.backupRestoreStatus}",
+        // The failure arm carries the exception's own message as its reason —
+        // the exact payload the former "Export failed: <reason>" string baked
+        // in, now type-distinguishable from the success arm.
+        assertEquals(
+            SettingsUserMessage.BackupExportFailed("Cannot open output stream"),
+            vm.messages.first(),
         )
     }
 
@@ -207,9 +217,9 @@ class SettingsViewModelBackupExportTest {
         advanceUntilIdle()
 
         vm.exportSettings("backup:any")
-        awaitUntil("the failure surfaces") { vm.backupRestoreStatus != null }
+        advanceUntilIdle()
 
-        assertTrue("store sealed" in vm.backupRestoreStatus.orEmpty(), "got: ${vm.backupRestoreStatus}")
+        assertEquals(SettingsUserMessage.BackupExportFailed("store sealed"), vm.messages.first())
     }
 
     // ------------------------------------------------- session auto-refresh
@@ -276,15 +286,26 @@ class SettingsViewModelBackupExportTest {
     }
 
     @Test
-    fun `clearBackupRestoreStatus resets the backup banner`() = vmTest {
+    fun `the export outcome is a one-shot — consumed messages never replay to a late collector`() = vmTest {
         coEvery { preferencesStore.snapshotForBackup() } throws RuntimeException("boom")
         val vm = viewModel()
         advanceUntilIdle()
         vm.exportSettings("backup:any")
-        awaitUntil("the failure surfaces") { vm.backupRestoreStatus != null }
+        advanceUntilIdle()
 
-        vm.clearBackupRestoreStatus()
+        // The screen's collector consumes the failure exactly once.
+        assertEquals(SettingsUserMessage.BackupExportFailed("boom"), vm.messages.first())
 
-        assertNull(vm.backupRestoreStatus)
+        // A LATE collector (the screen re-entering composition, a restored
+        // process) receives NOTHING: the buffered channel never replays — the
+        // guarantee the former parked backupRestoreStatus field + its
+        // clearBackupRestoreStatus consume dance could not provide.
+        val late = mutableListOf<SettingsUserMessage>()
+        val lateCollector = launch(start = CoroutineStart.UNDISPATCHED) {
+            vm.messages.collect { late += it }
+        }
+        runCurrent()
+        assertTrue(late.isEmpty(), "a consumed one-shot must not replay to a new collector")
+        lateCollector.cancel()
     }
 }

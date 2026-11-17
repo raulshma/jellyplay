@@ -169,8 +169,9 @@ internal class HomeUserDataReactor(
      * last fetch raced a still-pending outbox drain
      * ([Port.lastFetchRacedPendingSync]): the drain-completion echo is then
      * the sync-complete signal, the one notice that the painted snapshot is
-     * pre-sync, and must refresh regardless of the clock. No spinner:
-     * isRefreshing/isLoading stay untouched.
+     * pre-sync, and must refresh regardless of the clock. No spinner: the
+     * load phase stays untouched (a silent refresh settles only through
+     * fetchOnce's own success/failure/finally rules).
      *
      * A change that lands inside the throttle window is DEFERRED, not
      * dropped: it arms [pendingUserDataRefresh] and schedules the fetch at

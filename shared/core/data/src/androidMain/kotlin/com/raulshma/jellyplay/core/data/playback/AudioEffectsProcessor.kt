@@ -27,6 +27,17 @@ class AudioEffectsProcessor() : AudioEffectsStateCore() {
 
     var playerProvider: (() -> ExoPlayer?)? = null
 
+    /**
+     * REVIEW FIX (defect cohort): fired after every engine-volume write
+     * [applyNightMode] performs (the enable arm's night level, the disable
+     * arm's `1f` unwind). [AudioPlaybackManager] wires this to its mute
+     * reconcile so an audible night-mode write ends an explicit mute exactly
+     * as the deleted `volume > 0f` inference verdict did at the same edge —
+     * the same port shape the crossfade restore edges use
+     * ([AudioCrossfadeHandoff]'s `onEngineVolumeRestored`).
+     */
+    var onNightModeVolumeWrite: (() -> Unit)? = null
+
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private val equalizerHelper = EqualizerHelper()
     private val highPassFilter = HighPassFilterAudioProcessor()
@@ -174,6 +185,9 @@ class AudioEffectsProcessor() : AudioEffectsStateCore() {
             loudnessEnhancer?.release()
             loudnessEnhancer = null
         }
+        // Either arm just rewrote the engine level — the mute reconcile rides
+        // the port (see [onNightModeVolumeWrite]).
+        onNightModeVolumeWrite?.invoke()
     }
 
     fun applyDialogueBoost() {

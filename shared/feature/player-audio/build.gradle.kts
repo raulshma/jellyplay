@@ -6,6 +6,14 @@ plugins {
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.player.audio"
+        // The CastButton device-picker Robolectric suite. Flags mirrored
+        // verbatim from shared/core/ui: real resource serving for the
+        // compose-resources lookups the picker's dialog strings ride, and
+        // unstubbed-Context tolerance.
+        withHostTest {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 
     sourceSets {
@@ -34,6 +42,30 @@ kotlin {
         // APP-side (HiltInteropModule) because constructing it here would be
         // a second framework per type (details DetailAudioPlayback
         // precedent; dies at ).
+    }
+}
+
+// The Robolectric lane (robolectric.properties pins sdk=35 — Robolectric 4.16
+// emulates at most 36 while the merged manifest targets 37). AGP 9.4's
+// withHostTest names the lane's source set androidHostTest
+// (src/androidHostTest/kotlin) and materializes it only in afterEvaluate, so
+// the dependency wiring rides a configureEach — an eager lookup would run
+// before the source set exists. Same shape as shared/core/ui's /
+// shared/feature/settings' lane.
+kotlin.sourceSets.configureEach {
+    if (name == "androidHostTest") {
+        dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.junit)
+            implementation(libs.robolectric)
+            implementation(libs.androidx.test.core)
+            // Compose UI tests under Robolectric (the CastButton device-picker
+            // regression suite — platform AlertDialog + compose-resources
+            // lookups).
+            implementation(project.dependencies.platform(libs.compose.bom))
+            implementation(libs.compose.ui.test)
+            implementation(libs.compose.ui.test.manifest)
+        }
     }
 }
 

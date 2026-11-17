@@ -4,6 +4,7 @@
 
     <string name="onboarding_skip">Salta</string>
     <string name="onboarding_next">Avanti</string>
+    <string name="onboarding_step_progress">Passo %1$d di %2$d</string>
     <string name="onboarding_completion_title">Tutto pronto!</string>
     <string name="onboarding_completion_subtitle">Il tuo JellyPlay è configurato e pronto all'uso. Puoi sempre modificare queste impostazioni in seguito.</string>
     <string name="onboarding_completion_start_watching">Inizia a guardare</string>

@@ -34,6 +34,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -929,7 +930,13 @@ class LibraryViewModelTest {
     }
 
     // ── Folder loading failure semantics ─────────────────────────────────────
+    // Post sealed-phase migration these read the [LibraryLoadPhase] flow; the
+    // former `vm.error.value` reads became Failed-phase message reads and the
+    // former `vm.isLoading.value` reads became phase-identity reads (Loading
+    // in flight, Ready/Failed landed — "clears loading" is structural now:
+    // Failed is not Loading).
 
+    /** Transition 3: failure with EMPTY folders → Failed (the error-screen path). */
     @Test
     fun `loadFolders failure with no cached folders surfaces the error and clears loading`() = runTest {
         coEvery { libraryFeed.getLibraryFolders(any()) } returns
@@ -938,9 +945,8 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals("boom", vm.error.value)
+        assertEquals("boom", (vm.loadPhase.value as LibraryLoadPhase.Failed).message)
         assertTrue(vm.folders.value.isEmpty())
-        assertFalse(vm.isLoading.value)
     }
 
     @Test
@@ -950,13 +956,16 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals("RuntimeException", vm.error.value)
+        assertEquals("RuntimeException", (vm.loadPhase.value as LibraryLoadPhase.Failed).message)
     }
 
+    /** Transition 4 (the conditional-failure pin): failure with folders present stays Ready. */
     @Test
-    fun `loadFolders failure after success keeps the stale folders and stays silent`() = runTest {
+    fun `loadFolders failure after success keeps the stale folders and stays Ready`() = runTest {
         // A transient 403 mid-session must not blank the library: already
-        // loaded folders stay browsable and no blocking error is raised.
+        // loaded folders stay browsable and the phase returns to Ready — the
+        // preserved conditional (Failed is reserved for a failure with
+        // NOTHING loaded).
         coEvery { libraryFeed.getLibraryFolders(any()) } returnsMany listOf(
             Result.success(listOf(LibraryFolder(id = "lib-1", name = "Movies"))),
             Result.failure(RuntimeException("403")),
@@ -965,14 +974,15 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
         assertEquals(1, vm.folders.value.size)
-        assertNull(vm.error.value)
+        assertEquals(LibraryLoadPhase.Ready, vm.loadPhase.value)
 
         vm.onEvent(LibraryUiEvent.Refresh)
         advanceUntilIdle()
 
-        // Folders survive, no error even though the refresh failed.
+        // Folders survive and the phase is Ready (not Failed) even though the
+        // refresh failed.
         assertEquals(1, vm.folders.value.size)
-        assertNull(vm.error.value)
+        assertEquals(LibraryLoadPhase.Ready, vm.loadPhase.value)
     }
 
     @Test
@@ -984,13 +994,77 @@ class LibraryViewModelTest {
 
         val vm = createViewModel()
         advanceUntilIdle()
-        assertEquals("boom", vm.error.value)
+        assertEquals("boom", (vm.loadPhase.value as LibraryLoadPhase.Failed).message)
 
         vm.onEvent(LibraryUiEvent.Refresh)
         advanceUntilIdle()
 
-        assertNull(vm.error.value)
+        assertEquals(LibraryLoadPhase.Ready, vm.loadPhase.value)
         assertEquals("lib-1", vm.folders.value.single().id)
+    }
+
+    /**
+     * Transitions 1 + 2 of the [LibraryLoadPhase] ladder: the initial value
+     * is Loading and stays observable-Loading while the first fetch is parked
+     * mid-flight; a success lands Ready with the folders beside the phase
+     * (the former `_isLoading` initial-true / success-false reads).
+     */
+    @Test
+    fun `initial load is Loading while the fetch is parked then lands Ready on success`() = runTest {
+        val firstFetch = CompletableDeferred<Result<List<LibraryFolder>>>()
+        coEvery { libraryFeed.getLibraryFolders(any()) } coAnswers { firstFetch.await() }
+
+        val vm = createViewModel()
+        advanceUntilIdle() // parked at the gate — Loading is the observable phase
+
+        assertEquals(LibraryLoadPhase.Loading, vm.loadPhase.value)
+
+        firstFetch.complete(Result.success(listOf(LibraryFolder(id = "lib-1", name = "Movies"))))
+        advanceUntilIdle()
+
+        assertEquals(LibraryLoadPhase.Ready, vm.loadPhase.value)
+        assertEquals("lib-1", vm.folders.value.single().id)
+    }
+
+    /**
+     * The refresh-serialization pin: fetch A (older, forced) is parked
+     * mid-flight, fetch B fires and supersedes it via the cancel-and-replace
+     * slot, B lands, THEN A is released — A's folders must NOT land. The
+     * pre-slot machine interleaved the two fetches' writes and let the slow
+     * stale fetch repaint newer data (last-writer-wins, no epoch).
+     */
+    @Test
+    fun `a stale fetch landing after a newer one never repaints the folders`() = runTest {
+        val staleGate = CompletableDeferred<Result<List<LibraryFolder>>>()
+        var call = 0
+        coEvery { libraryFeed.getLibraryFolders(any()) } coAnswers {
+            when (++call) {
+                1 -> Result.success(listOf(LibraryFolder(id = "lib-1", name = "Movies"))) // init load
+                2 -> staleGate.await() // refresh A — parked mid-flight
+                else -> Result.success(listOf(LibraryFolder(id = "lib-2", name = "Shows"))) // refresh B
+            }
+        }
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertEquals("lib-1", vm.folders.value.single().id)
+
+        vm.onEvent(LibraryUiEvent.Refresh) // fetch A — parks on the gate
+        advanceUntilIdle()
+        assertEquals(LibraryLoadPhase.Loading, vm.loadPhase.value)
+
+        vm.onEvent(LibraryUiEvent.Refresh) // fetch B — cancels A, lands immediately
+        advanceUntilIdle()
+        assertEquals(LibraryLoadPhase.Ready, vm.loadPhase.value)
+        assertEquals("lib-2", vm.folders.value.single().id)
+
+        staleGate.complete(Result.success(listOf(LibraryFolder(id = "lib-stale", name = "Old"))))
+        advanceUntilIdle()
+
+        // A never landed: B's folders are still the published truth and the
+        // phase did not flicker.
+        assertEquals("lib-2", vm.folders.value.single().id)
+        assertEquals(LibraryLoadPhase.Ready, vm.loadPhase.value)
     }
 
     // ── Refresh ──────────────────────────────────────────────────────────────

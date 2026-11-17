@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.admin.analytics
 
+import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
 import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsDay
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsOverview
@@ -17,13 +19,20 @@ import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
 import com.raulshma.jellyplay.feature.admin.transcodes.TranscodePlayMethod
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
+import io.mockk.slot
+
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -68,6 +77,14 @@ class JellyPlayAnalyticsViewModelTest {
     private lateinit var capabilitiesApi: JellyPlayCapabilitiesRoutes
     private lateinit var sessionCacheRegistry: SessionCacheRegistry
     private lateinit var statusStore: JellyPlayPluginStatusStore
+
+    /**
+     * The store's registered identity-reset action, captured from the relaxed
+     * registry mock — firing it IS the production identity reset (user switch
+     * / plugin reinstall): it flips the store back to UNKNOWN so the next
+     * [JellyPlayAnalyticsViewModel.start] re-probes into a fresh gate-on.
+     */
+    private val resetAction = slot<suspend (HomeSessionTransition) -> Unit>()
 
     private val overview = JellyPlayAnalyticsOverview(
         days = 30,
@@ -124,7 +141,13 @@ class JellyPlayAnalyticsViewModelTest {
         pluginApi = mockk()
         capabilitiesApi = mockk()
         sessionCacheRegistry = mockk(relaxed = true)
+        every { sessionCacheRegistry.registerAction(any(), capture(resetAction)) } just runs
         statusStore = JellyPlayPluginStatusStore(capabilitiesApi, sessionCacheRegistry)
+    }
+
+    /** Fires the store's captured identity-reset action — the gate drops to Unknown. */
+    private suspend fun simulateIdentityReset() {
+        resetAction.captured.invoke(HomeSessionTransition.UserSwitched(SessionIdentity("srv-1", "user-2")))
     }
 
     @AfterTest
@@ -179,7 +202,10 @@ class JellyPlayAnalyticsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
-        assertFalse(viewModel.uiState.value.isLoading)
+        // The screen renders the gate face; no load ever ran, so the phase
+        // never left its unobserved initial (adapted from the former
+        // `assertFalse(isLoading)` — the phase machine has no flag to clear).
+        assertTrue(viewModel.uiState.value.loadPhase is AnalyticsLoadPhase.Loading)
         coVerify(exactly = 0) { pluginApi.getAnalyticsOverview(any()) }
         coVerify(exactly = 0) { pluginApi.getAnalyticsSessions(any(), any(), any()) }
     }
@@ -202,7 +228,8 @@ class JellyPlayAnalyticsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
-        assertFalse(viewModel.uiState.value.isLoading)
+        // Unobserved initial phase (adapted from the former `assertFalse(isLoading)`).
+        assertTrue(viewModel.uiState.value.loadPhase is AnalyticsLoadPhase.Loading)
         coVerify(exactly = 0) { capabilitiesApi.getCapabilities() }
         coVerify(exactly = 0) { pluginApi.getAnalyticsOverview(any()) }
     }
@@ -216,11 +243,10 @@ class JellyPlayAnalyticsViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(JellyPlayCapabilityState.Available, state.gate)
-            assertFalse(state.isLoading)
-            assertNull(state.error)
-            assertFalse(state.overviewDegraded)
+            val loadedPhase = state.loadPhase as AnalyticsLoadPhase.Loaded
+            assertFalse(loadedPhase.degraded)
 
-            val loaded = state.overview!!
+            val loaded = loadedPhase.overview!!
             assertEquals(42, loaded.totals.plays)
             assertEquals("12h 30m", loaded.totals.watchTimeLabel)
             assertEquals("1h", loaded.totals.transcodeTimeLabel)
@@ -268,20 +294,23 @@ class JellyPlayAnalyticsViewModelTest {
         val viewModel = JellyPlayAnalyticsViewModel(pluginApi, statusStore)
         advanceUntilIdle()
 
-        assertEquals("offline", viewModel.uiState.value.error)
-        assertFalse(viewModel.uiState.value.isLoading)
-        assertNull(viewModel.uiState.value.overview)
+        // Adapted from the former `error` field + `assertFalse(isLoading)` +
+        // `assertNull(overview)`: the Failed arm carries all three facts.
+        val phase = viewModel.uiState.value.loadPhase
+        assertTrue(phase is AnalyticsLoadPhase.Failed)
+        assertEquals("offline", (phase as AnalyticsLoadPhase.Failed).message)
     }
 
     @Test
     fun `an overview 404 degrades quietly instead of erroring`() = runTest(mainDispatcher) {
         val viewModel = loadedViewModel(overviewPayload = null)
 
-        val state = viewModel.uiState.value
-        assertNull(state.error)
-        assertFalse(state.isLoading)
-        assertTrue(state.overviewDegraded)
-        assertNull(state.overview)
+        // Adapted from the former `overviewDegraded` + null `overview` pair:
+        // one Loaded arm, degraded as declared data.
+        val phase = viewModel.uiState.value.loadPhase
+        assertTrue(phase is AnalyticsLoadPhase.Loaded)
+        assertTrue((phase as AnalyticsLoadPhase.Loaded).degraded)
+        assertNull(phase.overview)
     }
 
     @Test
@@ -294,10 +323,10 @@ class JellyPlayAnalyticsViewModelTest {
         val viewModel = JellyPlayAnalyticsViewModel(pluginApi, statusStore)
         advanceUntilIdle()
 
-        assertNull(viewModel.uiState.value.error)
+        val phase = viewModel.uiState.value.loadPhase as AnalyticsLoadPhase.Loaded
         assertFalse(viewModel.uiState.value.isLoadingSessions)
         assertTrue(viewModel.uiState.value.sessions.isEmpty())
-        assertEquals(42, viewModel.uiState.value.overview?.totals?.plays)
+        assertEquals(42, phase.overview?.totals?.plays)
     }
 
     // ── mapping corners ──
@@ -467,9 +496,104 @@ class JellyPlayAnalyticsViewModelTest {
             viewModel.refresh()
             advanceUntilIdle()
 
-            assertNull(viewModel.uiState.value.error)
-            assertFalse(viewModel.uiState.value.isRefreshing)
-            assertEquals(42, viewModel.uiState.value.overview?.totals?.plays)
+            // Adapted from the former `assertNull(error)` + `assertFalse(isRefreshing)`:
+            // the failure-restore rule lands the pre-refresh Loaded face back.
+            val phase = viewModel.uiState.value.loadPhase
+            assertTrue(phase is AnalyticsLoadPhase.Loaded)
+            assertEquals(42, (phase as AnalyticsLoadPhase.Loaded).overview?.totals?.plays)
             assertEquals(2, viewModel.uiState.value.sessions.size)
+        }
+
+    // ── gate re-arm (the load latch) ──
+
+    @Test
+    fun `a gate drop re-arms the load - the next gate-on reloads`() = runTest(mainDispatcher) {
+        val viewModel = loadedViewModel() // visit 1: data loaded, latch raised
+
+        // Identity reset (user switch / plugin reinstall): the store's
+        // registered action flips the status back to UNKNOWN — the gate
+        // follows and the VM must re-arm its load latch.
+        simulateIdentityReset()
+        advanceUntilIdle()
+        assertEquals(JellyPlayCapabilityState.Unknown, viewModel.uiState.value.gate)
+
+        // The next visit's arm re-probes into a fresh gate-on. Serve a
+        // DIFFERENT overview so the reload's landing is observable.
+        coEvery { pluginApi.getAnalyticsOverview(any()) } returns Result.success(
+            overview.copy(totals = overview.totals.copy(plays = 43)),
+        )
+        viewModel.start()
+        advanceUntilIdle()
+
+        assertEquals(JellyPlayCapabilityState.Available, viewModel.uiState.value.gate)
+        val phase = viewModel.uiState.value.loadPhase as AnalyticsLoadPhase.Loaded
+        assertEquals(43, phase.overview?.totals?.plays)
+        // Before the fix the latch stayed set forever: this reload never
+        // fired and the screen showed the first visit's data.
+        coVerify(exactly = 2) { pluginApi.getAnalyticsOverview(any()) }
+        coVerify(exactly = 2) { pluginApi.getAnalyticsSessions(any(), any(), any()) }
+    }
+
+    // ── refresh ⊕ re-filter serialization (the sessions slot) ──
+
+    @Test
+    fun `a user switch during an in-flight refresh serializes - the late refresh write never lands under the old filter`() =
+        runTest(mainDispatcher) {
+            val viewModel = loadedViewModel()
+
+            // Park any further sessions fetch: refresh()'s session reset lands
+            // in the TaskBundle slot and suspends there.
+            val refreshGate = CompletableDeferred<Unit>()
+            coEvery { pluginApi.getAnalyticsOverview(any()) } returns Result.success(overview)
+            coEvery { pluginApi.getAnalyticsSessions(any(), any(), any()) } coAnswers {
+                refreshGate.await()
+                Result.success(
+                    JellyPlayAnalyticsSessions(
+                        sessions = listOf(
+                            JellyPlayAnalyticsSession(
+                                userId = "u-old",
+                                itemId = "i-old",
+                                itemName = "Old filter row",
+                                playMethod = "DirectPlay",
+                                endedAt = 1_000,
+                            ),
+                        ),
+                    ),
+                )
+            }
+
+            viewModel.refresh()
+            testScheduler.runCurrent() // overview settled; the session reset parks in the slot
+
+            // The user re-filters MID-refresh: cancels-and-replaces the parked
+            // fetch (before the fix, refresh's untracked fetch kept running
+            // and its late write landed old-filter rows under the new chip).
+            coEvery { pluginApi.getAnalyticsSessions(any(), any(), any()) } returns
+                Result.success(
+                    JellyPlayAnalyticsSessions(
+                        sessions = listOf(
+                            JellyPlayAnalyticsSession(
+                                userId = "u-1",
+                                itemId = "i-new",
+                                itemName = "New filter row",
+                                playMethod = "DirectPlay",
+                                endedAt = 2_000,
+                            ),
+                        ),
+                    ),
+                )
+            viewModel.selectUser("u-1")
+            advanceUntilIdle()
+
+            // Release the replaced fetch's response — it must never land.
+            refreshGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("u-1", viewModel.uiState.value.selectedUserId)
+            val sessions = viewModel.uiState.value.sessions
+            assertTrue(sessions.isNotEmpty())
+            assertEquals(listOf("u-1"), sessions.map { it.userId })
+            assertEquals(listOf("i-new"), sessions.map { it.itemId })
+            assertTrue(viewModel.uiState.value.loadPhase is AnalyticsLoadPhase.Loaded)
         }
 }

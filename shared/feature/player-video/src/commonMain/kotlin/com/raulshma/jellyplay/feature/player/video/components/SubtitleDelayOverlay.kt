@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -106,6 +107,31 @@ import kotlinx.coroutines.launch
  * engines (e.g. ExoPlayer) must reload the media item to re-parse cues. The
  * overlay stays open until the user closes it (✕ or back) — there is no
  * auto-hide.
+ *
+ * DECLARED FIX (the reader's final-flush shape): a nudge landing inside the
+ * debounce window used to be silently dropped when the overlay left
+ * composition there — the dismissal path cancelled the debounce's Job (the
+ * scope dies with the composition), so the persisted per-item delay never saw
+ * the LAST adjustment. The pending value is now flushed synchronously in the
+ * dispose hook (the ReaderProgressReporter exit-flush pattern: deliver the
+ * pending value on dispose; here [onChange] is a plain synchronous callback
+ * into the live ViewModel, so no flush-scope escape is needed). The flush is
+ * conditional on the dirty bit — a quiet close (nothing pending, already
+ * delivered, or externally re-seeded) issues NO extra [onChange], so closing
+ * the overlay never triggers a redundant engine media reload.
+ *
+ * DECLARED FIX 2 (the same machine's delivery paths): the two long-lived
+ * closures — the armed debounce and the dispose hook — read the accumulator
+ * through a [rememberUpdatedState] mirror instead of their captured
+ * `pendingMs` delegate, which an external re-seed leaves holding the
+ * SUPERSEDED value; delivering through it would revert a hub reset to the
+ * nudge it just replaced. Both delivery paths now carry the live accumulator
+ * (pins: overlay_disposeInsideDebounceWindow_* and the debounce-path re-seed
+ * row in SubtitleDelayOverlayTest). REVIEW FIX on the same machine: the
+ * re-seed itself moved from the remember key into the guarded effect (the
+ * keyed remember re-seeded BEFORE the effect could compare, deadening its
+ * dirty-bit drop — a quiet close re-delivered the already-current value, the
+ * redundant reload this KDoc promises never to cost).
  */
 @Composable
 fun SubtitleDelayOverlay(
@@ -118,9 +144,15 @@ fun SubtitleDelayOverlay(
     val isTv = LocalTvMode.current
     val focusRequester = remember { FocusRequester() }
 
-    // Local accumulator, re-seeded from the persisted value whenever the engine
-    // or another surface mutates it out from under us (e.g. reset from the hub).
-    var pendingMs by remember(currentDelayMs) { mutableLongStateOf(currentDelayMs) }
+    // Local accumulator, seeded ONCE from the persisted value at composition.
+    // REVIEW FIX (defect cohort): deliberately UN-KEYED — the first cut keyed
+    // the remember on currentDelayMs, which re-seeded the slot BEFORE the
+    // re-seed effect below could compare, making that effect's
+    // `currentDelayMs != pendingMs` guard dead code: the dirty bit never
+    // dropped on an external write, so a quiet close re-delivered the
+    // already-current value (a redundant engine media reload). The effect is
+    // the ONLY re-seed path now, and its guard is live.
+    var pendingMs by remember { mutableLongStateOf(currentDelayMs) }
     // A/B sync markers; -1L means "not captured". Stored as wall-clock millis so
     // their delta (voice - text) is already a delay delta in milliseconds.
     var voiceMarkerMs by remember { mutableLongStateOf(-1L) }
@@ -128,19 +160,63 @@ fun SubtitleDelayOverlay(
 
     val scope = rememberCoroutineScope()
     var flushJob by remember { mutableStateOf<Job?>(null) }
+    // The final-flush dirty bit: true exactly while a debounce window is armed
+    // and has not delivered yet. The dispose hook reads it so a quiet close
+    // (value already delivered / never nudged / externally re-seeded) issues
+    // no redundant onChange — each delivery costs ExoPlayer a media reload.
+    var hasPendingFlush by remember { mutableStateOf(false) }
+    // The two LONG-LIVED closures of this overlay — the armed debounce
+    // coroutine and the dispose hook (installed once by DisposableEffect(Unit))
+    // — must never read a SUPERSEDED accumulator value (a hub reset reverting
+    // to the nudge it just replaced). This un-keyed holder keeps ONE identity
+    // across recompositions; the body re-syncs it every recomposition (the
+    // rememberUpdatedState pattern, writable), the explicit write sites update
+    // it eagerly, and the guarded re-seed effect updates it too — so both
+    // delivery paths always read the live accumulator.
+    val pendingMsForFlush = remember { mutableStateOf(pendingMs) }
+    pendingMsForFlush.value = pendingMs
 
     fun scheduleFlush(newMs: Long) {
         // Clamp to the supported delay range so a runaway two-tap sync (markers
         // captured minutes apart) or a long hold can't push the offset into
         // engine-defined territory (VLC applies the same ±30s cap).
         pendingMs = newMs.coerceIn(MIN_MS, MAX_MS)
+        pendingMsForFlush.value = pendingMs
         // Cancel any pending flush and start a fresh debounce window; the final
         // value is pushed to the engine once the burst settles.
+        hasPendingFlush = true
         flushJob?.cancel()
         flushJob = scope.launch {
             delay(FLUSH_DEBOUNCE_MS)
-            onChange(pendingMs)
+            hasPendingFlush = false
+            // Delivered through the live-accumulator mirror, NOT the captured
+            // `pendingMs` delegate — and the guarded re-seed effect cancels
+            // this job outright when an external write lands mid-window, so
+            // a superseded value can never reach [onChange] from here.
+            onChange(pendingMsForFlush.value)
         }
+    }
+
+    /**
+     * DECLARED FIX — the exit flush (ReaderProgressReporter's final-flush
+     * shape): deliver a still-pending adjustment synchronously when the
+     * overlay leaves composition. The dismissal paths (✕, back, and the
+     * host-side `showDelayOverlay && !isInPipMode && !isScreenLocked` gates
+     * removing the overlay without an onDismiss) all cancel this scope, which
+     * used to swallow the debounce and silently drop the last nudge from the
+     * persisted per-item delay. [onChange] is a plain synchronous callback
+     * into the live ViewModel (SetSubtitleDelay → SubtitleStyleController
+     * .setDelay), so the flush needs no coroutine and cannot race the dying
+     * scope. The pending value is read through [pendingMsForFlush] (the
+     * live accumulator — see above) and the delivery runs at most once per
+     * armed debounce — see [hasPendingFlush].
+     */
+    fun flushPendingOnChange() {
+        flushJob?.cancel()
+        flushJob = null
+        if (!hasPendingFlush) return
+        hasPendingFlush = false
+        onChange(pendingMsForFlush.value)
     }
 
     fun adjust(deltaMs: Long, fromCustom: Boolean = false) {
@@ -172,18 +248,38 @@ fun SubtitleDelayOverlay(
 
     fun reset() {
         flushJob?.cancel()
+        // Reset delivers 0 immediately (below) — nothing stays pending for the
+        // dispose hook to re-deliver.
+        hasPendingFlush = false
         voiceMarkerMs = -1L
         textMarkerMs = -1L
         pendingMs = 0L
+        pendingMsForFlush.value = 0L
         onChange(0L)
+    }
+
+    // The exit flush must fire on EVERY removal path, including the host's
+    // conditional gates (PiP entry, screen lock) that drop this overlay
+    // without running onDismiss.
+    DisposableEffect(Unit) {
+        onDispose { flushPendingOnChange() }
     }
 
     LaunchedEffect(currentDelayMs) {
         // An external change (reset button elsewhere, engine hydration) wins:
-        // re-seed the local accumulator and drop any pending flush.
+        // re-seed the local accumulator and drop any pending flush. The dirty
+        // bit drops with it — the external value IS the persisted state, so
+        // neither the dispose flush nor the armed debounce may re-deliver the
+        // superseded adjustment. The guard is LIVE only because the
+        // accumulator above is un-keyed: the effect runs with the PRE-seed
+        // accumulator in hand, so `!=` can actually detect the external
+        // write (the keyed remember of the first cut always re-seeded first,
+        // deadening this comparison).
         if (currentDelayMs != pendingMs) {
             flushJob?.cancel()
+            hasPendingFlush = false
             pendingMs = currentDelayMs
+            pendingMsForFlush.value = currentDelayMs
         }
     }
     LaunchedEffect(isTv) {

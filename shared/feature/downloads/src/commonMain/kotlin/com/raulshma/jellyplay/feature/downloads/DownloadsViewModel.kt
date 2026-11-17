@@ -275,7 +275,15 @@ class DownloadsViewModel(
     private val _selectionHintSeen = MutableStateFlow(false)
     val selectionHintSeen: StateFlow<Boolean> = _selectionHintSeen.asStateFlow()
 
+    /**
+     * DECLARED FIX (the requests runBulk twin): a value-changing type-filter
+     * write clears the selection — the new filter can hide picked rows and
+     * the count bar kept the phantom count (DownloadActions still no-op'd
+     * stale ids; the bar lied). Same-value writes keep it; sort is
+     * order-only, no clear.
+     */
     fun setFilter(value: DownloadListFilter) {
+        if (value != _filter.value) clearSelection()
         _filter.value = value
         launch { downloadsStore.setDownloadsListFilter(value.name) }
     }
@@ -285,7 +293,9 @@ class DownloadsViewModel(
         launch { downloadsStore.setDownloadsListSort(value.name) }
     }
 
+    /** The same value-change clear as [setFilter] for the gh-178 status filter. */
     fun setStatusFilter(value: DownloadStatusFilter) {
+        if (value != _statusFilter.value) clearSelection()
         _statusFilter.value = value
         launch { downloadsStore.setDownloadsListStatusFilter(value.name) }
     }

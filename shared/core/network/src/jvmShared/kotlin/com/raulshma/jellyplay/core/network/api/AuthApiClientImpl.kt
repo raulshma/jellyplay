@@ -12,11 +12,11 @@ import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.auth.AuthSessionCore
 import com.raulshma.jellyplay.core.network.auth.AuthSessionSideEffects
 import com.raulshma.jellyplay.core.network.auth.RawLoginOutcome
+import com.raulshma.jellyplay.core.network.auth.asAuthSessionStateStore
 import com.raulshma.jellyplay.core.network.config.isTlsTrustFailure
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.model.api.AuthenticateUserByName
 import org.jellyfin.sdk.model.api.QuickConnectDto
@@ -51,22 +51,25 @@ class AuthApiClientImpl(
     /**
      * The shared auth session spine (capture/adopt/try/publish/restore,
      * connect-adopt, setServer, disconnect) — commonMain [AuthSessionCore]
-     * owns the invariant KDoc. Injected with the ENGINE's mutex and state so
-     * the folded paths exclude against setUser and failover's rebuildApiFor
-     * exactly like the private spine they replace. The side-effects port is
-     * the engine's ApiClient swap — the one platform side-channel, which
-     * must stay inside the spine's critical sections (a failover's
-     * mutex-held rebuildApiFor could otherwise rebuild from the old user's
-     * token on top of a new session; see AuthSessionCore's class KDoc).
+     * owns the invariant KDoc. Injected with the ENGINE's mutex and its
+     * state port (the internal adapter over the engine's read + publish
+     * pair — the public engine class cannot implement the module-private
+     * store interface directly) so the folded paths exclude against setUser
+     * and failover's rebuildApiFor exactly like the private spine they
+     * replace. The side-effects port is the engine's ApiClient swap — the
+     * one platform side-channel, which must stay inside the spine's
+     * critical sections (a failover's mutex-held rebuildApiFor could
+     * otherwise rebuild from the old user's token on top of a new session;
+     * see AuthSessionCore's class KDoc).
      */
     private val sessionCore = AuthSessionCore<ApiClient?>(
         mutex = engine.authMutex,
-        state = engine,
+        state = engine.asAuthSessionStateStore(),
         sideEffects = object : AuthSessionSideEffects<ApiClient?> {
             override fun captureSide(): ApiClient? = engine.api
             override fun publishSide(serverInfo: ServerInfo, userInfo: UserInfo) {
                 engine.updateApi(
-                    engine.jellyfin.createApi(
+                    engine.createApiClient(
                         baseUrl = serverInfo.address,
                         accessToken = userInfo.accessToken,
                     )
@@ -127,10 +130,11 @@ class AuthApiClientImpl(
                         // Atomically adopt the probed server AND drop any signed-in
                         // user: this path is reachable while authenticated
                         // (Settings → Server Management → Add Server), and a
-                        // single-sided updateServer would publish a synthetic
-                        // (newServer, oldUser) ActiveSession — driving HomeSession
-                        // to emit a ServerSwitched and clear Room under the wrong
-                        // identity. The follow-up login republishes a real pair.
+                        // server-only publish that kept the user would publish a
+                        // synthetic (newServer, oldUser) ActiveSession — driving
+                        // HomeSession to emit a ServerSwitched and clear Room under
+                        // the wrong identity. The follow-up login republishes a
+                        // real pair.
                         sessionCore.adoptServer(info)
                         info
                     } catch (e: Exception) {
@@ -186,7 +190,7 @@ class AuthApiClientImpl(
         // model mapping. The user maps only when the token survived, matching
         // the pre-fold order (token validated first, then the user).
         sessionCore.atomicLogin(serverInfo) {
-            val client = engine.jellyfin.createApi(serverInfo.address)
+            val client = engine.createApiClient(serverInfo.address, accessToken = null)
             val authResult = client.userApi.authenticateUserByName(
                 AuthenticateUserByName(
                     username = username,
@@ -207,21 +211,16 @@ class AuthApiClientImpl(
     }
 
     override suspend fun setUser(userInfo: UserInfo) {
-        engine.authMutex.withLock {
-            val server = engine.currentServer.value ?: return
-            // `currentUser` drives the authenticated UI (including Home's
-            // initial fetch), so do not publish it until requests can use this
-            // user's API client. Publishing first made a user switch issue its
-            // first request with the previous user's client or no client.
-            // Build against the router's active endpoint — after address
-            // selection this is the reachable address, not necessarily the
-            // server's primary one.
-            engine.updateApi(engine.jellyfin.createApi(
-                baseUrl = engine.activeServerAddress ?: server.address,
-                accessToken = userInfo.accessToken,
-            ))
-            engine.updateUser(userInfo)
-        }
+        // The engine's single-side user adopt (the named intent): under
+        // authMutex it installs the user's API client — built against the
+        // router's ACTIVE endpoint; after address selection this is the
+        // reachable address, not necessarily the server's primary one — and
+        // then publishes the user, so `currentUser` (which drives the
+        // authenticated UI, including Home's initial fetch) is never
+        // visible while requests cannot yet speak as that user. No server
+        // configured → a no-op, as the guard here always was. The server
+        // side is deliberately NOT touched (see JellyfinApiEngine.adoptUser).
+        engine.adoptUser(userInfo)
     }
 
     override suspend fun disconnect() {
@@ -270,7 +269,7 @@ class AuthApiClientImpl(
         // Same shape as authenticateUser above: the shared spine, with the
         // Quick Connect round-trip + mapping as the JVM wire leg.
         sessionCore.atomicLogin(serverInfo) {
-            val client = engine.jellyfin.createApi(serverInfo.address)
+            val client = engine.createApiClient(serverInfo.address, accessToken = null)
             val authResult = client.userApi.authenticateWithQuickConnect(
                 QuickConnectDto(secret = secret)
             ).content

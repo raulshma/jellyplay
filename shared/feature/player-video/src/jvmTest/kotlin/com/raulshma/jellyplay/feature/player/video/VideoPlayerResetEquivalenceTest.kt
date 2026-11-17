@@ -173,7 +173,13 @@ class VideoPlayerResetEquivalenceTest : VideoPlayerViewModelHarness() {
         assertTrue(viewModel.playbackSession.sleepTimer.state.value.sleepTimerActive)
         assertTrue(viewModel.playbackSession.effects.state.value.nightModeEnabled)
         assertEquals(250L, viewModel.playbackSession.effects.state.value.audioDelayMs)
-        assertTrue(viewModel.playbackSession.subtitles.state.value.hasSearchedSubtitles)
+        // Sealed adaptation: the former hasSearchedSubtitles flag — a
+        // completed search is the Done phase.
+        assertEquals(
+            com.raulshma.jellyplay.feature.player.video.state.RemoteSubtitleSearchState
+                .Done(listOf(RemoteSubtitleInfo(id = "os1", name = "OpenSub en"))),
+            viewModel.playbackSession.subtitles.state.value.remoteSubtitleSearch,
+        )
         assertEquals(1, viewModel.playbackSession.subtitles.state.value.remoteSubtitles.size)
         assertTrue(viewModel.playbackSession.abRepeat.state.value.isActive)
         assertTrue(viewModel.playbackSession.syncPlay.state.value.isInSyncPlaySession)

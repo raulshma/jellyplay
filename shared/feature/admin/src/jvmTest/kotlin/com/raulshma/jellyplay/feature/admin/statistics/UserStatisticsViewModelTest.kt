@@ -10,12 +10,18 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -272,9 +278,18 @@ class UserStatisticsViewModelTest {
         viewModel.requestExport()
         advanceUntilIdle()
 
-        // The share request fires after the bounded fan-out, and the exported
-        // rows carry the fetched counts.
-        assertTrue(viewModel.state.value.shareRequested)
+        // The share request fires after the bounded fan-out (one-shot off the
+        // exportRequests channel — no parked boolean), and the PAYLOAD is the
+        // exported snapshot itself: the fetched counts ride the payload, not
+        // a later read of the published state (the screen's composition state
+        // can lag the emission).
+        val exported = viewModel.exportRequests.first()
+        val countsByExportedRow = exported.associateBy { it.userId }
+        assertEquals(12, countsByExportedRow.getValue("u-1").totalPlayCount)
+        assertEquals(2, countsByExportedRow.getValue("u-2").totalPlayCount)
+        assertEquals(30, countsByExportedRow.getValue("u-3").totalPlayCount)
+        // The published state carries the same re-merged rows (the pills'
+        // visible values).
         val countsByUser = viewModel.state.value.users.associateBy { it.userId }
         assertEquals(12, countsByUser.getValue("u-1").totalPlayCount)
         assertEquals(2, countsByUser.getValue("u-2").totalPlayCount)
@@ -284,17 +299,32 @@ class UserStatisticsViewModelTest {
     // ── export share request ──
 
     @Test
-    fun `export request is a consumable one-shot`() = runTest(mainDispatcher) {
+    fun `export requests are one-shot emissions — two requests deliver twice and never replay`() = runTest(mainDispatcher) {
         coEvery { repository.getUserPlayCounts(any()) } returns Result.success(UserPlayCounts())
         val viewModel = UserStatisticsViewModel(repository)
         advanceUntilIdle()
 
-        // The share request fires after the export's counts pass.
+        val received = mutableListOf<List<UserStatistics>>()
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+            viewModel.exportRequests.take(2).toList(received)
+        }
         viewModel.requestExport()
         advanceUntilIdle()
-        assertTrue(viewModel.state.value.shareRequested)
+        viewModel.requestExport()
+        advanceUntilIdle()
 
-        viewModel.consumeExportRequest()
-        assertFalse(viewModel.state.value.shareRequested)
+        // Two requests, two deliveries — the retired shareRequested boolean
+        // + consumeExportRequest dance could not distinguish them.
+        assertEquals(2, received.size)
+
+        // A LATE collector (the screen re-entering composition) receives
+        // NOTHING: the buffered channel never replays a consumed request.
+        val late = mutableListOf<List<UserStatistics>>()
+        val lateCollector = launch(start = CoroutineStart.UNDISPATCHED) {
+            viewModel.exportRequests.collect { late += it }
+        }
+        runCurrent()
+        assertTrue(late.isEmpty(), "a consumed one-shot must not replay to a new collector")
+        lateCollector.cancel()
     }
 }

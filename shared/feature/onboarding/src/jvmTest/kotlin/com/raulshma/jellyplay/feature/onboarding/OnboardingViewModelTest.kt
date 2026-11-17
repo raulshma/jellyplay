@@ -206,16 +206,6 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `skipOnboarding jumps to the final review step instead of completing`() = runTest(mainDispatcher) {
-        val vm = newViewModel()
-
-        vm.skipOnboarding()
-
-        assertEquals(OnboardingStep.count - 1, vm.currentStep.value)
-        coVerify(exactly = 0) { appRuntimeStateStore.setOnboardingCompleted(any()) }
-    }
-
-    @Test
     fun `completeOnboarding persists the completion flag through the editor`() = runTest(mainDispatcher) {
         val vm = newViewModel()
 

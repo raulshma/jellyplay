@@ -97,19 +97,28 @@ fun <T, U> DeferredFetchState<T>.wholeScreenPhase(
  * [fetch] returns the whole content aggregate `T` (all-or-nothing: a
  * multi-part fetch that can only half-succeed must throw rather than return
  * a half) and throws on failure. The coordinator decides loud-vs-silent
- * internally — [load] is the loud entry, the re-entry-triggered regeneration
- * is silent and always forced (the announced change it heals must bypass the
- * caches the announce may not have evicted). A thrown [Exception] is a fetch
- * failure per the transitions above; cancellation always propagates (a
- * cancelled load must not mask as failure and strand the spinner it
- * published); a non-[Exception] throwable is not a fetch failure — it
- * rethrows and surfaces as it always did.
+ * internally and HANDS THE MODE TO [fetch] — [load] invokes it with
+ * `isSilent = false`, the re-entry-triggered regeneration with
+ * `isSilent = true` (that regeneration is always forced: the announced
+ * change it heals must bypass the caches the announce may not have evicted).
+ * The parameter is bound at the entry call — the same truth [fetchJobIsSilent]
+ * tracks — so a host whose body branches on the mode reads the parameter
+ * instead of inferring the mode from a published phase at body start. A
+ * thrown [Exception] is a fetch failure per the transitions above;
+ * cancellation always propagates (a cancelled load must not mask as failure
+ * and strand the spinner it published); a non-[Exception] throwable is not a
+ * fetch failure — it rethrows and surfaces as it always did.
  *
  * The music home is the one `Unit`-content host: its multi-field uiState,
  * loud partial-section publish, quiet offline gate and past-the-gate error
- * reset stay hand-rolled in its fetch body (which recovers the loud/silent
- * split from the loading phase the loud entry publishes), riding this class
- * for the single-flight slot, the re-arm table and the deferred refresher.
+ * reset stay hand-rolled in its fetch body, riding this class for the
+ * single-flight slot, the re-arm table and the deferred refresher. It rides
+ * the mode-aware [fetch] arity: the loud/silent split reaches the body as an
+ * explicit parameter (see the constructor doc) instead of being inferred from
+ * the loading phase the loud entry publishes — a read that was only safe
+ * while that synchronous spinner write stayed the last write before the body
+ * ran, a one-dispatch-wide window any future isLoading writer would have
+ * silently corrupted into a mode flip.
  *
  * Single-flight: one fetch-job slot shared by loud and silent loads — a loud
  * load cancels an in-flight silent one (it regenerates the same data
@@ -143,8 +152,28 @@ fun <T, U> DeferredFetchState<T>.wholeScreenPhase(
 class DeferredFetchCoordinator<K, T>(
     userDataChanges: Flow<UserDataChange>,
     private val scope: CoroutineScope,
-    private val fetch: suspend (id: K, force: Boolean) -> T,
+    /**
+     * The whole-aggregate fetch behind both load paths. The trailing
+     * [isSilent] is the loud/silent mode HAND-OFF this class owns: `false`
+     * from [load], `true` from the deferred regeneration — bound at the
+     * entry call, never re-derived from a published phase at body start
+     * (the music home's body branches on it; the detail hosts never read
+     * it and ride the two-parameter arity below).
+     */
+    private val fetch: suspend (id: K, force: Boolean, isSilent: Boolean) -> T,
 ) {
+
+    /**
+     * The legacy two-parameter fetch arity, kept so hosts whose bodies don't
+     * branch on the loud/silent mode (the detail hosts hand that decision to
+     * the coordinator's publish policy) compile unchanged: the adapter drops
+     * the mode the coordinator passes.
+     */
+    constructor(
+        userDataChanges: Flow<UserDataChange>,
+        scope: CoroutineScope,
+        fetch: suspend (id: K, force: Boolean) -> T,
+    ) : this(userDataChanges, scope, { id, force, _ -> fetch(id, force) })
 
     private val _state = MutableStateFlow(DeferredFetchState<T>())
 
@@ -212,7 +241,7 @@ class DeferredFetchCoordinator<K, T>(
         // the scope dispatches. The last value stays behind the spinner.
         _state.update { it.copy(isLoading = true, error = null) }
         fetchJob = scope.launch {
-            val result = runFetch(id, force)
+            val result = runFetch(id, force, isSilent = false)
             loadedSuccessfully = result.isSuccess
             if (result.isSuccess) {
                 _state.update {
@@ -253,7 +282,7 @@ class DeferredFetchCoordinator<K, T>(
         } else {
             fetchJobIsSilent = true
             fetchJob = scope.launch {
-                val result = runFetch(id, force = true)
+                val result = runFetch(id, force = true, isSilent = true)
                 if (result.isSuccess) {
                     // Quiet publish: value + heal, and isLoading stays false —
                     // a silent fetch only ever starts with no loud load in
@@ -274,8 +303,8 @@ class DeferredFetchCoordinator<K, T>(
      * load lifecycle. [runCatchingRethrowingCancellation] keeps cancellation
      * propagating; the non-[Exception] rethrow skips the failure re-arm.
      */
-    private suspend fun runFetch(id: K, force: Boolean): Result<T> =
-        runCatchingRethrowingCancellation { fetch(id, force) }
+    private suspend fun runFetch(id: K, force: Boolean, isSilent: Boolean): Result<T> =
+        runCatchingRethrowingCancellation { fetch(id, force, isSilent) }
             .fold(
                 onSuccess = { Result.success(it) },
                 onFailure = { e ->

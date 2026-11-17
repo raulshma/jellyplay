@@ -43,10 +43,12 @@ import kotlin.test.assertTrue
  * collapse/re-expand. The degrade ladder is quiet by contract: a reset row's
  * empty diff reads "No key changes", a 404 (null payload) and a failed read
  * both cache the "—" degrade, and a degraded gate never touches the api at
- * all. The rest of the screen rides the same refresh: the snapshot list
- * (null = hidden), the namespace rows (server usage ∪ engine namespaces,
- * selective-sync flags folded in), and the device rows (model + revoked
- * carried, this-device first).
+ * all. The rest of the screen rides the same refresh: the per-section
+ * capability states (the snapshot section hides for every non-Available
+ * face — Unsupported/Unavailable — with the cause declared data), the
+ * namespace rows (server usage ∪ engine namespaces, selective-sync flags
+ * folded in), and the device rows (model + revoked carried, this-device
+ * first).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class JellyPlaySyncViewModelTest {
@@ -171,7 +173,7 @@ class JellyPlaySyncViewModelTest {
         )
         val viewModel = viewModel()
         viewModel.refresh()
-        awaitUntil { !viewModel.uiState.value.isLoading }
+        awaitUntil { viewModel.uiState.value.loadPhase is SyncLoadPhase.Loaded }
         assertTrue(viewModel.uiState.value.historyKeyDetails.isEmpty(), "diffs must not fetch before the first expand")
 
         viewModel.toggleHistoryEntryExpanded(1)
@@ -206,7 +208,7 @@ class JellyPlaySyncViewModelTest {
         coEvery { pluginApi.getSyncHistoryKeys(4, any()) } returns Result.failure(IllegalStateException("500"))
         val viewModel = viewModel()
         viewModel.refresh()
-        awaitUntil { !viewModel.uiState.value.isLoading }
+        awaitUntil { viewModel.uiState.value.loadPhase is SyncLoadPhase.Loaded }
 
         viewModel.toggleHistoryEntryExpanded(2)
         awaitUntil { viewModel.uiState.value.historyKeyDetails.containsKey(2L) }
@@ -248,13 +250,82 @@ class JellyPlaySyncViewModelTest {
         )
         val viewModel = viewModel()
         viewModel.refresh()
-        awaitUntil { !viewModel.uiState.value.isLoading }
-        assertEquals(1, viewModel.uiState.value.snapshots?.size)
+        awaitUntil { viewModel.uiState.value.loadPhase is SyncLoadPhase.Loaded }
+        val snapshotsState = viewModel.uiState.value.snapshots
+        assertTrue(snapshotsState is SyncCapabilityState.Available, "the landed payload renders the section")
+        assertEquals(1, snapshotsState.dataOrNull?.size)
 
-        // A 404 (null) hides the section, never errors.
+        // A 404 (null) hides the section, never errors — Unsupported is the declared cause now.
         coEvery { pluginApi.getSnapshots() } returns Result.success(null)
         viewModel.refresh()
-        awaitUntil { viewModel.uiState.value.snapshots == null }
+        awaitUntil { viewModel.uiState.value.snapshots == SyncCapabilityState.Unsupported }
+        assertEquals(SyncCapabilityState.Unsupported, viewModel.uiState.value.snapshots)
+    }
+
+    @Test
+    fun refresh_capabilityCauses_404LandsUnsupported_failedReadLandsReadFailed() = runTest {
+        gateOpen()
+        // The status payload 404s (success-null): Unsupported — the plugin does not serve it.
+        coEvery { pluginApi.getSyncStatus() } returns Result.success(null)
+        // The snapshot read fails (plugin 5xx / transport): READ_FAILED — the
+        // cause the former conflated null could not declare.
+        coEvery { pluginApi.getSnapshots() } returns Result.failure(IllegalStateException("500"))
+        // The admin overview 404s: Unsupported (the not-admin / old-plugin null).
+        coEvery { pluginApi.adminSyncOverview() } returns Result.success(null)
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { viewModel.uiState.value.loadPhase is SyncLoadPhase.Loaded }
+
+        assertEquals(SyncCapabilityState.Unsupported, viewModel.uiState.value.status, "the 404 null is Unsupported")
+        assertEquals(
+            SyncCapabilityState.Unavailable(SyncCapabilityGap.READ_FAILED),
+            viewModel.uiState.value.snapshots,
+            "a failed read is Unavailable(READ_FAILED), distinct from the 404 null",
+        )
+        assertEquals(SyncCapabilityState.Unsupported, viewModel.uiState.value.adminUsers)
+        // Both degrades hide the section identically — no payload either way.
+        assertNull(viewModel.uiState.value.snapshots.dataOrNull)
+        assertNull(viewModel.uiState.value.status.dataOrNull)
+    }
+
+    @Test
+    fun refresh_gateClosed_landsTheDegradedBulkWrite() = runTest {
+        // A good pull first: one registry row lands, so the degrade's
+        // retention face is observable.
+        gateOpen()
+        coEvery { syncRepository.currentDeviceId() } returns "device-a"
+        coEvery { deviceRegistry.getDevices() } returns Result.success(
+            listOf(JellyPlayDevice(deviceId = "device-a", name = "Desk", platform = "desktop")),
+        )
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { viewModel.uiState.value.devices.isNotEmpty() }
+
+        // The gate closes mid-session: the whole pull collapses to the quiet
+        // degrade — every capability lands the same GATE_CLOSED gap, the
+        // derived lists collapse, and no further api call fires.
+        pluginStatus.value = JellyPlayPluginStatus.UNAVAILABLE
+        viewModel.refresh()
+        awaitUntil {
+            viewModel.uiState.value.snapshots == SyncCapabilityState.Unavailable(SyncCapabilityGap.GATE_CLOSED)
+        }
+
+        val state = viewModel.uiState.value
+        assertEquals(SyncLoadPhase.Loaded, state.loadPhase)
+        assertEquals(SyncCapabilityState.Unavailable(SyncCapabilityGap.GATE_CLOSED), state.status)
+        assertEquals(SyncCapabilityState.Unavailable(SyncCapabilityGap.GATE_CLOSED), state.adminUsers)
+        assertEquals(SyncCapabilityState.Unavailable(SyncCapabilityGap.GATE_CLOSED), state.snapshots)
+        assertTrue(state.history.isEmpty())
+        assertTrue(state.namespaceRows.isEmpty())
+        assertEquals(
+            listOf("device-a"),
+            state.devices.map { it.deviceId },
+            "the device rows ride through the degrade — the bulk write never touches them",
+        )
+        // Only the good pull's calls: the degraded refresh touched no route.
+        coVerify(exactly = 1) { pluginApi.getSyncStatus() }
+        coVerify(exactly = 1) { pluginApi.getSnapshots() }
+        coVerify(exactly = 1) { deviceRegistry.getDevices() }
     }
 
     @Test
@@ -360,7 +431,7 @@ class JellyPlaySyncViewModelTest {
 
         val viewModel = viewModel()
         viewModel.refresh()
-        awaitUntil { !viewModel.uiState.value.isLoading }
+        awaitUntil { viewModel.uiState.value.loadPhase is SyncLoadPhase.Loaded }
 
         viewModel.createSnapshot()
         awaitUntil { createCalls.size == 1 }
@@ -378,7 +449,7 @@ class JellyPlaySyncViewModelTest {
 
         val viewModel = viewModel()
         viewModel.refresh()
-        awaitUntil { !viewModel.uiState.value.isLoading }
+        awaitUntil { viewModel.uiState.value.loadPhase is SyncLoadPhase.Loaded }
 
         viewModel.createSnapshot()
         awaitUntil { createCalls.size == 1 }
@@ -411,7 +482,7 @@ class JellyPlaySyncViewModelTest {
 
         val viewModel = viewModel()
         viewModel.refresh()
-        awaitUntil { !viewModel.uiState.value.isLoading }
+        awaitUntil { viewModel.uiState.value.loadPhase is SyncLoadPhase.Loaded }
 
         viewModel.createSnapshot()
         awaitUntil { createCalls.size == 1 }

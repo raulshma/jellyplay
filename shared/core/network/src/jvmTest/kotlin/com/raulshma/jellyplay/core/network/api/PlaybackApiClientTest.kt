@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -41,6 +43,11 @@ class PlaybackApiClientImplTest {
         baseUrl = mockWebServer.url("/").toString().trimEnd('/')
 
         val jellyfin = mockk<Jellyfin>(relaxed = true)
+        // Full-arity createApi stub: the multi-write (updateSession) rebuilds
+        // the client inside its critical section (partial matchers send
+        // mockk's overload auto-hinting into the real final createApi — see
+        // AuthApiClientTest's note).
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returns mockk(relaxed = true)
         val okHttpClient = OkHttpClient()
         engine = JellyfinApiEngine(
             jellyfinLazy = LazyProvider { jellyfin },
@@ -48,8 +55,7 @@ class PlaybackApiClientImplTest {
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = com.raulshma.jellyplay.core.network.failover.ServerAddressRouter(),
         )
-        engine.updateServer(testServer.copy(address = baseUrl))
-        engine.updateUser(testUser.copy(serverAddress = baseUrl))
+        runBlocking { engine.updateSession(testServer.copy(address = baseUrl), testUser.copy(serverAddress = baseUrl)) }
 
         playbackClient = PlaybackApiClientImpl(
             engine = engine,
@@ -88,7 +94,7 @@ class PlaybackApiClientImplTest {
 
     @Test
     fun `getStreamUrl returns empty when no server`() {
-        engine.updateServer(null)
+        runBlocking { engine.updateSession(null, null) }
         val url = playbackClient.getStreamUrl("item-1", "source-1", 0L)
         assertEquals("", url)
     }
@@ -113,7 +119,7 @@ class PlaybackApiClientImplTest {
 
     @Test
     fun `getSubtitleDeliveryUrl returns empty when no server`() {
-        engine.updateServer(null)
+        runBlocking { engine.updateSession(null, null) }
         val url = playbackClient.getSubtitleDeliveryUrl("/video.srt")
         assertEquals("", url)
     }
@@ -138,7 +144,7 @@ class PlaybackApiClientImplTest {
 
     @Test
     fun `buildSubtitleDeliveryUrl returns empty when no server`() {
-        engine.updateServer(null)
+        runBlocking { engine.updateSession(null, null) }
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "srt")
         assertEquals("", url)
     }

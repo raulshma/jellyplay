@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.requests
 
+import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import kotlin.test.assertEquals
@@ -120,5 +121,77 @@ class RequestsFilterStateTest {
             ),
         )
         assertEquals(1, next.currentPage)
+    }
+
+    // ── the selection clear on visible-set axis changes (declared fix) ────
+    // "Bulk approve can no longer approve invisible requests": a filter
+    // write used to leave the picked ids standing while the rows they
+    // pointed at vanished (the 5 s list refreshes make the drift routine),
+    // so the count bar showed a phantom count and bulk-approve fired
+    // server-side against INVISIBLE requests.
+
+    @Test
+    fun withFilterState_clears_the_selection_when_a_visible_set_axis_changes() {
+        val selected = RequestsUiState(selection = SelectionState(setOf(1, 2)))
+
+        // Each visible-set axis clears on a change…
+        assertEquals(
+            SelectionState<Int>(),
+            selected.withFilterState { it.withFilter(SeerrRequestFilter.ALL) }.selection,
+        )
+        assertEquals(
+            SelectionState<Int>(),
+            selected.withFilterState { it.withMediaType("tv") }.selection,
+        )
+        assertEquals(
+            SelectionState<Int>(),
+            selected.withFilterState { it.withSearchQuery("dune") }.selection,
+        )
+        assertEquals(
+            SelectionState<Int>(),
+            selected.withFilterState { it.withMyRequestsOnlyToggled() }.selection,
+        )
+    }
+
+    @Test
+    fun withFilterState_keeps_the_selection_for_order_only_writes() {
+        val selected = RequestsUiState(selection = SelectionState(setOf(1, 2)))
+
+        // Sort and direction only re-order the same rows — the non-stale
+        // path is preserved byte-identically.
+        assertEquals(
+            setOf(1, 2),
+            selected.withFilterState { it.withSort(SeerrRequestSort.MODIFIED) }.selection.ids,
+        )
+        assertEquals(
+            setOf(1, 2),
+            selected.withFilterState { it.withSortDirectionToggled() }.selection.ids,
+        )
+    }
+
+    @Test
+    fun withFilterState_keeps_the_selection_when_a_value_is_unchanged() {
+        // A same-value write (tap the already-active filter) changes nothing
+        // visible — the selection survives.
+        val selected = RequestsUiState(
+            filter = SeerrRequestFilter.APPROVED,
+            mediaType = "movie",
+            searchQuery = "dune",
+            showMyRequestsOnly = true,
+            selection = SelectionState(setOf(1, 2)),
+        )
+
+        assertEquals(
+            setOf(1, 2),
+            selected.withFilterState { it.withFilter(SeerrRequestFilter.APPROVED) }.selection.ids,
+        )
+        assertEquals(
+            setOf(1, 2),
+            selected.withFilterState { it.withMediaType("movie") }.selection.ids,
+        )
+        assertEquals(
+            setOf(1, 2),
+            selected.withFilterState { it.withSearchQuery("dune") }.selection.ids,
+        )
     }
 }

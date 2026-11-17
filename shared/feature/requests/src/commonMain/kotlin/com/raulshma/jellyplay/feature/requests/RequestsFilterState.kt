@@ -64,11 +64,24 @@ data class RequestsFilterState(
  * pagination reset to page 1 — the single write shape every filter change
  * carries (the read side is [RequestsUiState.filters]). Lives beside the
  * value type so the read/write pair can be unit-tested without the VM.
+ *
+ * DECLARED FIX (preventive half of "bulk approve can no longer approve
+ * invisible requests"): a write that changes a visible-set axis — filter,
+ * mediaType, searchQuery, showMyRequestsOnly ([visibleSetChanges]) — clears
+ * the bulk selection. The selected ids used to survive verbatim, so rows
+ * picked before a filter move (or a 400 ms-debounced search landing) stayed
+ * "selected" after vanishing from the list: the count bar showed a phantom
+ * count and bulk-approve fired against INVISIBLE requests server-side (the
+ * 5 s-cadence list refreshes make the drift routine). Order-only axes (sort,
+ * direction) and same-value writes keep the selection — today's non-stale
+ * paths are byte-identical; the dispatch-time re-read in
+ * [RequestsViewModel.runBulk] guards every remaining drift path.
  */
 internal fun RequestsUiState.withFilterState(
     transform: (RequestsFilterState) -> RequestsFilterState,
 ): RequestsUiState {
-    val next = transform(filters)
+    val previous = filters
+    val next = transform(previous)
     return copy(
         filter = next.filter,
         mediaType = next.mediaType,
@@ -77,5 +90,19 @@ internal fun RequestsUiState.withFilterState(
         showMyRequestsOnly = next.showMyRequestsOnly,
         searchQuery = next.searchQuery,
         currentPage = 1,
+        selection = if (previous.visibleSetChanged(next)) selection.cleared() else selection,
     )
 }
+
+/**
+ * Whether moving from [this] to [next] can change WHICH requests render —
+ * the axes the Seerr query filters rows on — as opposed to only re-ordering
+ * them (sort, direction). The trigger for the selection clear in
+ * [withFilterState]; kept beside the algebra so the rule is pinnable
+ * without the VM.
+ */
+private fun RequestsFilterState.visibleSetChanged(next: RequestsFilterState): Boolean =
+    filter != next.filter ||
+        mediaType != next.mediaType ||
+        searchQuery != next.searchQuery ||
+        showMyRequestsOnly != next.showMyRequestsOnly

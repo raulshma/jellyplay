@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
+import android.view.SurfaceHolder
 import android.view.View
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
@@ -27,6 +28,7 @@ import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -59,6 +61,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStylePh
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvUserSubtitleKeys
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvVideoEffectChain
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertySurface
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSurfaceReattachDecision
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSurfaceReattachPolicy
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.resolveMpvFramePresentation
 
 class MpvPlayerEngine(
     private val context: Context,
@@ -67,6 +72,10 @@ class MpvPlayerEngine(
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
+        // The reattach vo-restore's last-resort fallback (both stashes null —
+        // unreachable while the view initializes normally). Matches the
+        // engine's default output (MpvVideoOutput.GPU_NEXT).
+        private const val DEFAULT_VO = "gpu-next"
         // The stall watchdog's pulse cadence — matches the position ticker's
         // 1 Hz default the watchdog's confirm windows were tuned against.
         private const val WATCHDOG_TICK_MS = 1_000L
@@ -448,6 +457,177 @@ class MpvPlayerEngine(
         ctx: Context,
     ) : BaseMPVView(ctx, null) {
 
+        // ── Surface-reload policy state (issue #220 guard) ─────────────────
+        // Both live on the VIEW because they describe THIS mpv handle's
+        // session epoch; every surfaceCreated consults them through
+        // [MpvSurfaceReattachPolicy]. Main-looper only (the surface
+        // callbacks and the observer both run there) — no sync needed.
+
+        /**
+         * A `playFile` is armed on this handle and its start-file has not
+         * arrived yet — the lib's one-shot surfaceCreated-loadfile is still
+         * the pending (and only) initial-load issuer. Armed in [playDirect],
+         * closed by the observer's START_FILE arm below.
+         */
+        var awaitingInitialStartFile: Boolean = false
+
+        /**
+         * At least one file has fully started on this handle — the
+         * initial-load window has closed at least once; every LATER surface
+         * recreation is a mid-session re-attach that must never reload.
+         */
+        var hasEverStartedFile: Boolean = false
+
+        private val surfaceReattachPolicy = MpvSurfaceReattachPolicy()
+
+        // The video output the reattach arm restores. Most-truthful first:
+        // the live `vo` property read the moment the surface dies (the ACTIVE
+        // driver, captured before the lib's `surfaceDestroyed` nulls it), then
+        // the app's configured output recorded at view creation, then the
+        // engine default.
+        private var voAtSurfaceLoss: String? = null
+        var configuredVo: String? = null
+
+        override fun surfaceDestroyed(holder: SurfaceHolder) {
+            // Stash the ACTIVE video output before the lib's surfaceDestroyed
+            // nulls it (setPropertyString("vo", "null")) — the reattach arm
+            // restores exactly this driver. Reading the property (not the
+            // config) honors anything that legitimately moved vo at runtime.
+            voAtSurfaceLoss = runCatching { mpv.getPropertyString("vo") }
+                .getOrNull()
+                ?.takeUnless { it.isBlank() || it == "null" }
+            // The counter sample deliberately stays OUT of the destroy path:
+            // the VO is being torn down, and a teardown-time miss must not
+            // latch the watchdog's "counter unavailable" state. The
+            // reattach-side capture owns the epoch.
+            Log.d(TAG, "MPV surface destroyed: vo stash '${voAtSurfaceLoss ?: "<none>"}'")
+            super.surfaceDestroyed(holder)
+        }
+
+        /**
+         * The issue-#220 guard. The lib's `surfaceCreated` has two arms
+         * (bytecode-verified): an ARMED ONE-SHOT `loadfile` for its recorded
+         * path — the sole initial-load issuer — and a no-reload arm that
+         * restores the video output. Two failure shapes hang off it:
+         *
+         * - RESTART: `playFile` records the path, but no surface event may
+         *   ever consume the one-shot (the surface usually ALREADY exists
+         *   when `load()` arms it, and the load-verification bridge issues
+         *   its loadfile directly), so the FIRST later surface re-create — a
+         *   screen lock/unlock — hits the loadfile arm and RESTARTS the
+         *   session: position lost to the request's start, fresh decode
+         *   pipeline on the re-attached surface.
+         *
+         * - BLACK (device-proven on the POCO F1, round 2): `surfaceDestroyed`
+         *   writes the runtime property `vo=null`, and a re-attach that does
+         *   not restore `vo` leaves the video output DOWN —
+         *   `VO: [null] 1920x804 nv12`, `h264_mediacodec: Both surface and
+         *   native_window are NULL` — the playhead advances and audio plays
+         *   over a black screen. And even with the VO back, a PAUSED session
+         *   pushes no frame on its own.
+         *
+         * The policy splits the events: the initial-load window still
+         * delegates to the lib (its one-shot is the sole initial-load issuer
+         * — the v0.11.8 attach-race semantics the load-verification bridge
+         * repairs are untouched); every mid-session re-attach attaches
+         * WITHOUT any loadfile, restores the video output stashed at
+         * destroy, and re-presents the paused frame explicitly.
+         */
+        override fun surfaceCreated(holder: SurfaceHolder) {
+            // The kick gate is READY-paused, not just "not playing":
+            // - ENDED (keep-open holds EOF paused): the kick's absolute seek
+            //   would flip mpv's eof-reached and silently break core.play()'s
+            //   designed seek-to-0 restart — the frame is re-presented by
+            //   that flow instead.
+            // - BUFFERING: mpv is not actually paused — it pushes frames the
+            //   moment the buffer fills, so the re-attach presents on its own.
+            // - IDLE / ERROR: nothing presentable / the error veil owns the
+            //   screen; a seek there is noise.
+            val pausedMidFile = !_isPlaying.value &&
+                _playbackState.value == EnginePlaybackState.READY
+            val decision = surfaceReattachPolicy.onSurfaceCreated(
+                awaitingInitialStartFile = awaitingInitialStartFile,
+                hasEverStartedFile = hasEverStartedFile,
+                paused = pausedMidFile,
+            )
+            when (decision) {
+                MpvSurfaceReattachDecision.LibraryInitialLoad -> {
+                    super.surfaceCreated(holder)
+                    // After a real destroy, the lib's loadfile arm does NOT
+                    // restore vo (its `vo = voInUse` restore lives only in the
+                    // no-path arm of surfaceCreated — bytecode-verified), so a
+                    // destroy→create INSIDE the initial-load window would fire
+                    // the one-shot loadfile with runtime `vo` still null and
+                    // render audio over black — issue #220's BLACK half inside
+                    // the very window it was supposed to cover. Restore the
+                    // stashed driver AFTER delegating: the lib has attached
+                    // the new surface by now, and a runtime vo write re-inits
+                    // the VO and renders the current track (the same
+                    // choreography the Reattach arm relies on). Gated on the
+                    // stash so the virgin pre-playFile attach — where the
+                    // lib's own no-path restore applies — is not double-written.
+                    voAtSurfaceLoss?.let { stash ->
+                        // Same force-window the destroy half flipped to "no".
+                        runCatching { mpv.setOptionString("force-window", "yes") }
+                        runCatching { mpv.setPropertyString("vo", stash) }
+                            .onFailure { Log.w(TAG, "MPV initial-load reattach: vo restore failed", it) }
+                        Log.d(TAG, "MPV initial-load reattach: restored video output '$stash'")
+                    }
+                }
+                is MpvSurfaceReattachDecision.Reattach -> {
+                    Log.i(
+                        TAG,
+                        "MPV surface re-created mid-session (paused=${decision.rePresentFrame}) — " +
+                            "re-attaching without reload (issue #220 guard)",
+                    )
+                    runCatching { mpv.attachSurface(holder.surface) }
+                        .onFailure { Log.w(TAG, "MPV reattach: attachSurface failed", it) }
+                    // Same force-window the lib's own surfaceCreated writes —
+                    // the detach half (surfaceDestroyed) flipped it to "no".
+                    runCatching { mpv.setOptionString("force-window", "yes") }
+                    // Restore the video output the lib's surfaceDestroyed tore
+                    // down (its `vo=null` runtime write). This mirrors the
+                    // lib's own no-reload surfaceCreated arm (`vo = voInUse`),
+                    // but with the ACTIVE driver stashed at destroy — the
+                    // app's real configured output, not the lib's tracked
+                    // default. Device-proven (POCO F1): without this the VO
+                    // re-initializes as `[null]` and the screen stays black
+                    // with a live playhead — the playhead+audio half of
+                    // issue #220.
+                    val voRestore = voAtSurfaceLoss ?: configuredVo ?: DEFAULT_VO
+                    runCatching { mpv.setPropertyString("vo", voRestore) }
+                        .onFailure { Log.w(TAG, "MPV reattach: vo restore failed", it) }
+                    Log.d(TAG, "MPV reattach: restored video output '$voRestore'")
+                    // Open the presentation epoch for the stall watchdog: the
+                    // displayed-frame-count is cumulative for the handle, so
+                    // pre-lock frames must not read as "frames presented".
+                    // Null when the counter cannot answer on this libmpv
+                    // build — no epoch then: an epoch against an unreadable
+                    // counter deltas nothing and would suppress every
+                    // post-reattach frame (see [displayedFrameCountUnavailable]).
+                    reattachFrameEpoch = readDisplayedFrameCount(mpv)
+                    Log.d(
+                        TAG,
+                        "MPV reattach: captured presentation epoch=${reattachFrameEpoch ?: "<counter unavailable>"}",
+                    )
+                    if (decision.rePresentFrame) {
+                        val posMs = core.cachedPositionMs
+                        if (posMs >= 0L) {
+                            Log.d(TAG, "MPV reattach: paused session — re-presenting frame at ${posMs}ms")
+                            // Frame-exact absolute seek: re-decodes and
+                            // presents exactly the paused frame through the
+                            // re-created video output. Inaudible — audio is
+                            // paused. This is the SAME kick the stall
+                            // watchdog's recovery uses, at the SAME position.
+                            core.seekTo(posMs)
+                        } else {
+                            Log.d(TAG, "MPV reattach: paused session with no cached position — no re-present kick")
+                        }
+                    }
+                }
+            }
+        }
+
         /**
          * The observer is a pure TRANSLATOR now: native callback shapes →
          * the shared [MpvCore.onPropertyChange] / event entries. Extraction
@@ -517,6 +697,12 @@ class MpvPlayerEngine(
                         // and the retry budget resets for the next load.
                         loadVerify = null
                         loadRetryCount = 0
+                        // The surface-reload policy's initial-load window
+                        // closes with the start-file: every LATER surface
+                        // recreation is a mid-session re-attach that must
+                        // never reload (see MpvSurfaceReattachPolicy).
+                        awaitingInitialStartFile = false
+                        hasEverStartedFile = true
                         core.onStartFile()
                     }
                     MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
@@ -849,6 +1035,12 @@ class MpvPlayerEngine(
         // demuxer resolves. The playhead seeds from the request's start.
         core.resetPlaybackCaches(positionMs = request.startPositionMs)
         timePosDedupe.reset()
+        // The new item's presentation story starts fresh — a re-attach epoch
+        // from the previous item must not delta-suppress this one's frames,
+        // and the missing-counter latch is re-probed once per item (a libmpv
+        // build that registers the property gets a fresh answer).
+        reattachFrameEpoch = null
+        displayedFrameCountUnavailable = false
         pendingRequest = request
         Log.d(
             TAG,
@@ -877,6 +1069,72 @@ class MpvPlayerEngine(
     private var loadRetryCount = 0
 
     /**
+     * The presentation epoch opened by a mid-session surface re-attach (issue
+     * #220 guard): the `displayed-frame-count` read at the moment the new
+     * surface attached, or null when no re-attach is in flight — and also null
+     * when the counter is unreadable on this libmpv build (the 2026-11-17
+     * POCO F1 capture: `property not found` on every read; see
+     * [displayedFrameCountUnavailable]). An epoch against a counter that can
+     * never answer would delta nothing and suppress every post-reattach frame
+     * — the same false video-only wedge the missing-counter path fixes.
+     *
+     * When the counter DOES resolve, the delta makes "presenting" mean the
+     * count ADVANCED past the re-attach checkpoint. A session that wedges ON
+     * the re-attached surface (the fresh zero-copy hwdec pipeline is exactly
+     * the AImageReader wedge class) would read as healthy without it: the
+     * pre-lock frames already made the count non-zero. The watchdog's
+     * consumption re-baselines the epoch whenever the count reads BELOW it
+     * (the re-created VO's counter reset — unreachable under the cumulative
+     * assumption, hence a no-op there), and the epoch retires the moment
+     * frames present again (back to the cheap flag-gated read) and resets per
+     * item with [load]. Main-thread only (the surface callback and the
+     * watchdog ticker share the main dispatcher). The resolution itself is
+     * the shared [resolveMpvFramePresentation].
+     */
+    private var reattachFrameEpoch: Int? = null
+
+    /**
+     * `displayed-frame-count` is absent from the bundled libmpv build — the
+     * 2026-11-17 POCO F1 capture showed
+     * `mpv_get_property(displayed-frame-count) format 4 returned error
+     * property not found` once per watchdog tick while playback was healthy.
+     * The first failed read latches this flag so the gated read stops paying
+     * a failing JNI call (and its native error-log line) every second, and
+     * the re-attach epoch never opens against a counter that cannot answer.
+     *
+     * Unreadable is UNKNOWN presentation, NOT "no frames presented": the
+     * ticker hands the watchdog `videoFramesPresented = true` for it. The
+     * shipped `?: 0` mapped the absence to zero, so a transient `aimagereader`
+     * log armed the video-only wedge window on a healthy zero-copy session
+     * and the recovery downgraded it to `mediacodec-copy` — the v0.11.13
+     * report: smooth for ~9 s, then ~6 display FPS and A/V desync. Reset per
+     * [load] and on [release], so a libmpv build that registers the property
+     * is re-probed once per item.
+     */
+    private var displayedFrameCountUnavailable = false
+
+    /**
+     * The gated `displayed-frame-count` read behind the video-only wedge
+     * detector: the counter when this build resolves it, null when it cannot
+     * answer (latched via [displayedFrameCountUnavailable]) or no handle is up
+     * yet. Null is UNKNOWN — the caller feeds the watchdog through
+     * [resolveMpvFramePresentation], never a synthetic zero.
+     */
+    private fun readDisplayedFrameCount(mpv: MPV? = mpvView?.mpv): Int? {
+        if (displayedFrameCountUnavailable || mpv == null) return null
+        val count = runCatching { mpv.getPropertyInt("displayed-frame-count") }.getOrNull()
+        if (count == null) {
+            displayedFrameCountUnavailable = true
+            Log.w(
+                TAG,
+                "displayed-frame-count is unavailable on this libmpv build — " +
+                    "video-only stall detection disarmed (unknown presentation is not a stall)",
+            )
+        }
+        return count
+    }
+
+    /**
      * The single direct-play path shared by [load]'s arm, the
      * pendingRequest-consume arm and the ticker's load-verification re-issue:
      * audio effects, the per-request option ladder, playFile, speed + pause.
@@ -887,6 +1145,10 @@ class MpvPlayerEngine(
             applyAndroidAudioEffects()
             configureMpvForRequest(view, request)
             view.playFile(request.uri)
+            // Arm the surface-reload policy's initial-load window: until this
+            // load's start-file arrives, a surfaceCreated must delegate to the
+            // lib's one-shot loadfile issuer (see MpvSurfaceReattachPolicy).
+            view.awaitingInitialStartFile = true
             loadVerify = request to android.os.SystemClock.elapsedRealtime()
             core.setPlaybackSpeed(requestedPlaybackSpeed)
             if (pauseRequested) core.pause()
@@ -906,6 +1168,8 @@ class MpvPlayerEngine(
         pendingRequest = null
         loadVerify = null
         loadRetryCount = 0
+        reattachFrameEpoch = null
+        displayedFrameCountUnavailable = false
         core.clearPendingSubtitles()
         core.resetSideLoadedRegistry()
         core.resetFoldLatches()
@@ -1309,6 +1573,9 @@ class MpvPlayerEngine(
             refreshUserOwnedSubtitleKeys()
             view.initialize(configDir.absolutePath, context.cacheDir.absolutePath)
             view.setVo(mpvCfg.videoOutput.key)
+            // The reattach vo-restore's config fallback — mirrors the value
+            // the lib tracks as voInUse (setVo is final; record it ourselves).
+            view.configuredVo = mpvCfg.videoOutput.key
             // No style apply here: initialize()'s initOptions ran the INIT
             // phase for the pre-load window, and EVERY playFile goes through
             // configureMpvForRequest (the pendingRequest arm below, or a later
@@ -1452,7 +1719,11 @@ class MpvPlayerEngine(
      * monotonic clock and the flag-gated `displayed-frame-count` read that
      * feeds the video-only wedge detector (zero JNI on the healthy path — the
      * perf bar; the read only runs once the log detector has implicated the
-     * zero-copy path for this file).
+     * zero-copy path for this file). An unreadable counter is UNKNOWN
+     * presentation, never a stall — the bundled libmpv has no
+     * `displayed-frame-count`, and treating its absence as zero false-fired
+     * the hwdec downgrade (v0.11.13 lag regression); see
+     * [readDisplayedFrameCount] + [resolveMpvFramePresentation].
      */
     private fun startWatchdogTicker() {
         watchdogTickerJob?.cancel()
@@ -1481,11 +1752,15 @@ class MpvPlayerEngine(
                                 )
                                 // playFile only RECORDS the path — the lib's
                                 // surfaceCreated callback is the sole loadfile
-                                // issuer, and a surface that attached before
-                                // playFile consumed that one-shot with an empty
-                                // path (bytecode-verified: playFile is just
-                                // `filePath = path`; surfaceCreated is the only
-                                // `loadfile` site). Bridge the lost race:
+                                // issuer FOR THE INITIAL-LOAD WINDOW, and a
+                                // surface that attached before playFile
+                                // consumed that one-shot with an empty path
+                                // (bytecode-verified: playFile is just
+                                // `filePath = path`; surfaceCreated is the
+                                // only lib-side `loadfile` site — the
+                                // MpvSurfaceReattachPolicy keeps this window
+                                // delegating to it and owns the mid-session
+                                // re-attach, issue #220). Bridge the lost race:
                                 // re-attach the current surface (benign if the
                                 // lib already attached it) and issue the load
                                 // against the handle directly. A late lib-side
@@ -1512,10 +1787,43 @@ class MpvPlayerEngine(
                         }
                     }
                 }
-                val framesPresented = if (!core.hasObservedAimagereaderFailure) {
+                val framesPresented = if (!core.hasObservedAimagereaderFailure && reattachFrameEpoch == null) {
                     true
                 } else {
-                    (runCatching { mpvView?.mpv?.getPropertyInt("displayed-frame-count") }.getOrNull() ?: 0) > 0
+                    // Delta-aware when a re-attach epoch is open (the counter
+                    // is ASSUMED cumulative for the handle — the raw >0 check
+                    // cannot see a wedge that started ON the re-attached
+                    // surface); the epoch retires the moment frames present
+                    // again. A null read is UNKNOWN presentation mapped to
+                    // true (never arms the window): the bundled libmpv has no
+                    // displayed-frame-count, and the old `?: 0` made that
+                    // absence read as a stall — see [displayedFrameCountUnavailable].
+                    val count = readDisplayedFrameCount()
+                    val epoch = reattachFrameEpoch
+                    val presentation = resolveMpvFramePresentation(count = count, epoch = epoch)
+                    when {
+                        epoch != null && count != null && count > epoch ->
+                            Log.d(TAG, "MPV reattach epoch retired: count=$count > epoch=$epoch — frame presented")
+                        epoch != null && count != null && count < epoch ->
+                            // The counter went BACKWARDS: displayed-frame-count
+                            // reset with the re-created VO (or a JNI read
+                            // glitch). Holding the stale epoch would suppress
+                            // every post-reattach frame until the fresh count
+                            // re-climbed past it — forever on a paused+kicked
+                            // session — false-firing the video-only wedge
+                            // window's SwitchHwdecThenKick hwdec downgrade.
+                            // Re-baseline to the fresh counter (the helper
+                            // returns it as nextEpoch). Under the cumulative
+                            // assumption this arm is unreachable, so it is a
+                            // no-op if the assumption holds.
+                            Log.w(
+                                TAG,
+                                "MPV reattach: displayed-frame-count went backwards " +
+                                    "(count=$count < epoch=$epoch) — counter reset on VO re-init; re-baselining epoch",
+                            )
+                    }
+                    reattachFrameEpoch = presentation.nextEpoch
+                    presentation.framesPresented
                 }
                 core.onStallWatchdogTick(
                     nowMs = android.os.SystemClock.elapsedRealtime(),

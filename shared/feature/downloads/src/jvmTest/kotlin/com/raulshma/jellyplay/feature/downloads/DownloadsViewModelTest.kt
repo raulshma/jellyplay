@@ -347,6 +347,60 @@ class DownloadsViewModelTest {
         assertFalse(viewModel.uiState.value.selectionMode)
     }
 
+    // ── filter writes clear a drifted selection (declared fix) ────────────
+    // The requests runBulk twin: a filter change used to leave the picked
+    // ids standing while the rows they pointed at left the view — the count
+    // bar kept showing the phantom count (dispatch still resolved against
+    // the live list, so stale ids no-op'd, but the bar lied).
+
+    @Test
+    fun setFilter_clears_the_selection_when_the_value_changes() = runTest(mainDispatcher) {
+        pushItems(listOf(item("a"), item("b")))
+        advanceUntilIdle()
+        viewModel.selectAll()
+        assertEquals(setOf("a", "b"), viewModel.uiState.value.selectedIds)
+
+        viewModel.setFilter(DownloadListFilter.MOVIES)
+        advanceUntilIdle()
+
+        assertEquals(emptySet(), viewModel.uiState.value.selectedIds)
+        assertFalse(viewModel.uiState.value.selectionMode)
+        // The filter write itself still lands (and persists).
+        assertEquals(DownloadListFilter.MOVIES, viewModel.filter.value)
+        coVerify(exactly = 1) { downloadsStore.setDownloadsListFilter("MOVIES") }
+    }
+
+    @Test
+    fun setStatusFilter_clears_the_selection_when_the_value_changes() = runTest(mainDispatcher) {
+        pushItems(listOf(item("a", status = DownloadStatus.FAILED)))
+        advanceUntilIdle()
+        viewModel.toggleSelection(item("a", status = DownloadStatus.FAILED))
+        assertEquals(setOf("a"), viewModel.uiState.value.selectedIds)
+
+        viewModel.setStatusFilter(DownloadStatusFilter.FAILED)
+        advanceUntilIdle()
+
+        assertEquals(emptySet(), viewModel.uiState.value.selectedIds)
+        assertFalse(viewModel.uiState.value.selectionMode)
+        coVerify(exactly = 1) { downloadsStore.setDownloadsListStatusFilter("FAILED") }
+    }
+
+    @Test
+    fun same_value_filter_writes_keep_the_selection() = runTest(mainDispatcher) {
+        pushItems(listOf(item("a")))
+        advanceUntilIdle()
+        viewModel.toggleSelection(item("a"))
+
+        // Tapping the already-active filter changes nothing visible — the
+        // non-stale path is preserved byte-identically.
+        viewModel.setFilter(DownloadListFilter.ALL)
+        viewModel.setStatusFilter(DownloadStatusFilter.ALL)
+        advanceUntilIdle()
+
+        assertEquals(setOf("a"), viewModel.uiState.value.selectedIds)
+        assertTrue(viewModel.uiState.value.selectionMode)
+    }
+
     // ── Grouped rows (gh-175) ─────────────────────────────────────────────
     // rows hops to Dispatchers.Default and back (a real thread) like the
     // OfflineLibrary pipeline — the virtual scheduler can't see the returning

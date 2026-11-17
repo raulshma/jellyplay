@@ -291,6 +291,12 @@ class AudioPlaybackManager(
         lyricsManager.initialize(scope)
         effectsProcessor.initialize(scope)
         effectsProcessor.playerProvider = { exoPlayer }
+        // REVIEW FIX (defect cohort): the night-mode volume writes (the enable
+        // arm's night level, the disable arm's `1f` unwind) leave the engine
+        // audible the same way the crossfade restore ports do — an audible
+        // write must end an explicit mute exactly as the deleted
+        // `volume > 0f` inference verdict did at the same edge.
+        effectsProcessor.onNightModeVolumeWrite = { reconcileMuteWithEngineVolume() }
         // Bind the prefetch engine to this manager's live queue/position.
         audioPrefetchEngine.bindProviders(
             queueProvider = { state.queue.value },
@@ -533,6 +539,10 @@ class AudioPlaybackManager(
         playerListener = playerListener,
         exoPlayerProvider = { exoPlayer },
         exoPlayerSetter = { exoPlayer = it },
+        // The crossfade restore edges (cancel's `1f` unwind + the swap's
+        // full-volume secondary) land the live engine audible — the same
+        // reconcile the manager's own volume writes run.
+        onEngineVolumeRestored = { reconcileMuteWithEngineVolume() },
         mediaSessionProvider = { mediaSession },
         mediaSessionSetter = { mediaSession = it },
         audioBufferProvider = {
@@ -670,7 +680,12 @@ class AudioPlaybackManager(
         // guard read the field, so an unassigned factory result would leave
         // the chassis's engine gate dead (the queue-semantics suite's former
         // reflection write existed precisely for this).
-        return exoPlayer ?: testPlayerFactory?.invoke()?.also { player -> exoPlayer = player }
+        return exoPlayer ?: testPlayerFactory?.invoke()?.also { player ->
+            exoPlayer = player
+            // A fresh engine is the engine-volume edge (full volume) — the
+            // same reconcile the construction path below runs.
+            reconcileMuteWithEngineVolume()
+        }
             ?: createPlayer()
     }
 
@@ -776,6 +791,12 @@ class AudioPlaybackManager(
         sessionManager.setActiveSession(session)
 
         effectsProcessor.attachAudioEffects(player.audioSessionId)
+
+        // A fresh engine sits at full volume — the engine-volume edge where
+        // the mute state reconciles (a mute never survives a rebuild as a
+        // stale capture; the former inference would have judged the engine
+        // audible, and the state lands on the same verdict).
+        reconcileMuteWithEngineVolume()
 
         return player
     }
@@ -1407,6 +1428,7 @@ class AudioPlaybackManager(
         exoPlayer?.volume = pct
         crossfader.setVolume(pct)
         MediaStreamVolume.setNormalized(context, pct)
+        reconcileMuteWithEngineVolume()
     }
 
     /**
@@ -1428,6 +1450,7 @@ class AudioPlaybackManager(
     override fun setVolume(volume: Float, isUserChange: Boolean) {
         assertMainThread("setVolume")
         exoPlayer?.volume = volume.coerceIn(0f, 1f)
+        reconcileMuteWithEngineVolume()
     }
 
     /**
@@ -1451,30 +1474,55 @@ class AudioPlaybackManager(
     }
 
     /**
-     * Mute / unmute the audio player. Uses an internal flag so [toggleMute]
-     * can restore the prior volume.
+     * The explicit mute/duck machine ([MuteDuckVolumeState] — the two former
+     * capture fields plus the mute truth the class used to INFER from
+     * `volume > 0f` at the [toggleMute]/[duck] decision sites). The decision
+     * sites read the state; every enumerated engine-volume edge reconciles it
+     * ([reconcileMuteWithEngineVolume] + the crossfade restore ports), so an
+     * external write that leaves the engine audible ends a mute exactly as
+     * the former inference verdict did — byte-preserving, pinned by the
+     * `AudioPlaybackManagerMuteDuckStateTest` suite. Main-thread-only, like
+     * every writer it replaced.
      */
-    private var preMuteVolume: Float = 1f
+    private var muteDuck: MuteDuckVolumeState = MuteDuckVolumeState.INITIAL
 
-    /** The level captured at [duck] time, restored by [restoreFromDuck]. */
-    private var preDuckVolume: Float? = null
+    /**
+     * The engine-volume reconcile — the enumerated edges where the engine's
+     * level leaves the manager's hands (the two [setVolume] overloads, the
+     * crossfade cancel/swap restore ports, the effects processor's
+     * night-mode volume writes, the player construction/release edges): the
+     * explicit mute state ends when a write leaves the engine audible,
+     * exactly as the former `volume > 0f` inference would have judged.
+     * Deliberately NOT re-introduced at the decision sites —
+     * [toggleMute]/[duck] read the state now; the reconcile keeps the state's
+     * byte-contract with the engine.
+     */
+    private fun reconcileMuteWithEngineVolume() {
+        muteDuck = muteDuck.onEngineVolume(exoPlayer?.volume ?: 1f)
+    }
 
     /** [AudioRemoteControlSurface.setMuted] — the remote Mute/Unmute arms. */
     override fun setMuted(muted: Boolean) {
         assertMainThread("setMuted")
         val current = exoPlayer?.volume ?: 1f
         if (muted) {
-            preMuteVolume = if (current > 0f) current else 1f
+            muteDuck = muteDuck.mute(current)
             setVolume(0f)
         } else {
-            setVolume(preMuteVolume.coerceIn(0f, 1f))
+            muteDuck = muteDuck.unmute()
+            setVolume(muteDuck.unmuteVolume)
         }
     }
 
+    /**
+     * The remote's Mute toggle. Formerly `setMuted(current > 0f)` — the
+     * volume inference this migration deletes; the explicit state is the
+     * truth now, reconciled at the write edges so the two agree everywhere
+     * the inference used to decide.
+     */
     override fun toggleMute() {
         assertMainThread("toggleMute")
-        val current = exoPlayer?.volume ?: 1f
-        setMuted(current > 0f)
+        setMuted(!muteDuck.muted)
     }
 
     /**
@@ -1482,30 +1530,35 @@ class AudioPlaybackManager(
      * command when the shared "Duck on Phone Call" pref upgrades the MUSIC
      * row. Software gain only (the same `isUserChange = false` write the
      * sleep-timer fade uses, so the level never lands in user-volume
-     * memory); a muted player stays silent (volume ≤ 0 is never re-raised —
-     * the video surface's mute rule); re-ducks are idempotent and re-capture
-     * only a level louder than the duck target, so a stale marker from a
+     * memory); a muted player stays silent ([MuteDuckVolumeState.duckRefuses] —
+     * the explicit mute arm of the pinned rule; the volume arm keeps the
+     * unmuted-at-zero case byte-identical); re-ducks are idempotent and
+     * re-capture only a level louder than the duck target
+     * ([MuteDuckVolumeState.captureDuckIfLouder]), so a stale marker from a
      * suspended-then-resumed session can never store the duck level itself.
      */
     override fun duck(volume: Float) {
         assertMainThread("duck")
         val player = exoPlayer ?: return
         val target = volume.coerceIn(0f, 1f)
-        if (player.volume <= 0f) return
-        if (player.volume > target) preDuckVolume = player.volume
+        if (muteDuck.duckRefuses(player.volume)) return
+        muteDuck = muteDuck.captureDuckIfLouder(player.volume, target)
         setVolume(target, isUserChange = false)
     }
 
     /**
      * The regain half of the duck: restore the level captured at [duck]
      * time. No marker (never ducked, or the loss was permanent and no regain
-     * ever followed) is a no-op — resume stays manual either way.
+     * ever followed) is a no-op — resume stays manual either way. The restore
+     * write is an engine-volume edge: a mute captured mid-duck ends here, as
+     * the former inference verdict did (pinned).
      */
     override fun restoreFromDuck() {
         assertMainThread("restoreFromDuck")
-        val pre = preDuckVolume ?: return
-        preDuckVolume = null
-        setVolume(pre.coerceIn(0f, 1f), isUserChange = false)
+        if (!muteDuck.ducked) return
+        val pre = muteDuck.duckRestoreVolume
+        muteDuck = muteDuck.releaseDuck()
+        setVolume(pre, isUserChange = false)
     }
 
     override fun playFromQueue(index: Int) {
@@ -1769,6 +1822,11 @@ class AudioPlaybackManager(
         mediaSession = null
         exoPlayer?.release()
         exoPlayer = null
+        // The engine is gone: the volume getter reads the no-engine `1f`, and
+        // the mute state lands on the same verdict the former inference would
+        // have reached (a stale mute must not resurface onto a rebuilt
+        // engine's unmute arm).
+        reconcileMuteWithEngineVolume()
         effectsProcessor.releaseAll()
 
         // Display resets + the session's item claim + the tracker clear

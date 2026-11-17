@@ -24,7 +24,7 @@ private const val DEVICE_ID_RESOLVE_TIMEOUT_MS = 10_000L
  * REST/session API, the WebSocket connection, and the server all agree on one
  * identity per install.
  *
- * [ServerIdentityStore.identity] is a StateFlow shared with
+ * [ServerIdentityStore.deviceId] is a StateFlow shared with
  * `SharingStarted.Eagerly`, so after the very first process launch its current
  * value is the persisted UUID held in memory. Reading `.value` is non-blocking
  * and avoids a DataStore disk read on the DI critical path (every screen
@@ -50,7 +50,7 @@ internal fun resolveDeviceId(
     serverIdentityStore: ServerIdentityStore,
     applicationScope: CoroutineScope,
 ): String =
-    serverIdentityStore.identity.value.deviceId
+    serverIdentityStore.deviceId.value
         ?: runBlocking {
             withTimeoutOrNull(DEVICE_ID_RESOLVE_TIMEOUT_MS) { serverIdentityStore.ensureDeviceId() }
         }

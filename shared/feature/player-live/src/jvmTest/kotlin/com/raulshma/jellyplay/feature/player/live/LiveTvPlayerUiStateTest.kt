@@ -12,10 +12,10 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Pins the default/initial shape of [LiveTvPlayerUiState] and its derived
- * zap-navigation flags. The VM constructs this state before its channel-load
- * coroutine runs, so the defaults ARE the first frame the player chrome
- * renders: channels must read as loading, the engine as idle, and no error
- * may be showing.
+ * zap-navigation + buffering-chrome flags. The VM constructs this state
+ * before its channel-load coroutine runs, so the defaults ARE the first
+ * frame the player chrome renders: channels must read as loading, the engine
+ * as idle, and no error may be showing.
  */
 class LiveTvPlayerUiStateTest {
 
@@ -58,6 +58,65 @@ class LiveTvPlayerUiStateTest {
         assertFalse(state.isPlaying)
         assertTrue(state.isAtLiveEdge, "live TV starts pinned to the live edge")
         assertFalse(state.isSwitchingChannel)
+    }
+
+    // ── the buffering chrome is DERIVED (phase fold + error precedence) ──
+    // The stored `isBuffering` flag is deleted (the recorded Tier 1
+    // LiveTvPlayerUiState drift: one derivation arm + four independent
+    // clearing arms could disagree with engineState). The projection is the
+    // pure [liveBufferingChrome] fold, pinned here per phase.
+
+    @Test
+    fun `buffering chrome is the phase fold with no error`() {
+        // IDLE (the pre-load first frame and the post-stop reset) and
+        // BUFFERING (a load/rebuffer in flight) spin; READY/ENDED/ERROR don't.
+        assertTrue(liveBufferingChrome(LiveEngineState.IDLE, hasError = false))
+        assertTrue(liveBufferingChrome(LiveEngineState.BUFFERING, hasError = false))
+        assertFalse(liveBufferingChrome(LiveEngineState.READY, hasError = false))
+        assertFalse(liveBufferingChrome(LiveEngineState.ENDED, hasError = false))
+        assertFalse(liveBufferingChrome(LiveEngineState.ERROR, hasError = false))
+    }
+
+    @Test
+    fun `error precedence - an error message lifts the buffering face on every engine state`() {
+        // The explicit precedence locked in by the migration: a standing
+        // error wins over the buffering faces on EVERY phase (the watchdog
+        // arm's engine stays BUFFERING while its spinner must lift — the
+        // pre-migration pins' "the stuck rebuffer spinner must lift with the
+        // error").
+        LiveEngineState.entries.forEach { state ->
+            assertFalse(
+                liveBufferingChrome(state, hasError = true),
+                "$state with a standing error must render the error, not the spinner",
+            )
+        }
+    }
+
+    @Test
+    fun `isBuffering projects the phase and error on the state itself`() {
+        assertTrue(LiveTvPlayerUiState().isBuffering, "fresh state: IDLE with no error spins")
+        assertTrue(
+            LiveTvPlayerUiState(engineState = LiveEngineState.BUFFERING).isBuffering,
+            "a rebuffer in flight spins",
+        )
+        assertFalse(
+            LiveTvPlayerUiState(engineState = LiveEngineState.READY).isBuffering,
+            "declared fix: `READY && isBuffering` (the mid-switch drift combo) is unrepresentable",
+        )
+        assertFalse(
+            LiveTvPlayerUiState(
+                engineState = LiveEngineState.BUFFERING,
+                errorMessage = UiMessage.Raw("tuner timed out"),
+            ).isBuffering,
+            "declared fix: `BUFFERING && !isBuffering` post-watchdog is now the error precedence",
+        )
+        assertFalse(
+            LiveTvPlayerUiState(
+                engineState = LiveEngineState.IDLE,
+                errorMessage = UiMessage.Raw("no channels"),
+            ).isBuffering,
+            "IDLE with a standing error renders the error, not the spinner",
+        )
     }
 
     @Test

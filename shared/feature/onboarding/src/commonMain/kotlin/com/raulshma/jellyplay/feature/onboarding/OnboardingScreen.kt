@@ -1,19 +1,17 @@
 package com.raulshma.jellyplay.feature.onboarding
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
@@ -23,17 +21,15 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,11 +37,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.graphicsLayer
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -59,14 +53,13 @@ import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.Res
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_next
-import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_skip
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowRight
 import com.raulshma.jellyplay.feature.onboarding.components.AppearanceStep
 import com.raulshma.jellyplay.feature.onboarding.components.AudioPlayerStep
 import com.raulshma.jellyplay.feature.onboarding.components.CompletionStep
 import com.raulshma.jellyplay.feature.onboarding.components.HomeLayoutStep
-import com.raulshma.jellyplay.feature.onboarding.components.OnboardingPagerIndicator
+import com.raulshma.jellyplay.feature.onboarding.components.OnboardingProgressHeader
 import com.raulshma.jellyplay.feature.onboarding.components.PerformanceStep
 import com.raulshma.jellyplay.feature.onboarding.components.SeerrStep
 import com.raulshma.jellyplay.feature.onboarding.components.SecurityStep
@@ -86,16 +79,27 @@ fun OnboardingScreen(
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { OnboardingStep.count })
     val scope = rememberCoroutineScope()
+    val lastPage = OnboardingStep.count - 1
     var bottomBarVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { bottomBarVisible = true }
 
+    // Every page turn lands a pending debounced Seerr field write first, so the
+    // last keystroke isn't lost when a step is left by button, D-pad or system
+    // back. Targets are clamped so a fast double-tap can never leave the wizard.
+    fun navigateToPage(target: Int) {
+        scope.launch {
+            viewModel.seerrEditActions.flushPendingFieldWrites()
+            pagerState.animateScrollToPage(target.coerceIn(0, lastPage))
+        }
+    }
+
     // Wizard Back: step to the previous page, or fall through to the system (exit)
-    // when on the first page. Without this, remote BACK relies solely on the nav-
-    // host pop and skips the in-wizard step-back the D-pad left arrow already
+    // when on the first page. Without this, remote/system BACK relies solely on the
+    // nav-host pop and skips the in-wizard step-back the D-pad left arrow already
     // provides — inconsistent on TV.
     JellyPlayBackHandler(enabled = pagerState.currentPage > 0) {
-        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+        navigateToPage(pagerState.currentPage - 1)
     }
 
     Surface(
@@ -106,6 +110,22 @@ fun OnboardingScreen(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.statusBars),
         ) {
+            OnboardingProgressHeader(
+                currentPage = pagerState.currentPage,
+                pageCount = OnboardingStep.count,
+                onBack = { navigateToPage(pagerState.currentPage - 1) },
+                onSkip = {
+                    // Skip exits onboarding from any page. Land the pending
+                    // debounced Seerr write first so the last keystroke isn't
+                    // lost; the wizard can be re-run from Settings → Setup wizard.
+                    scope.launch {
+                        viewModel.seerrEditActions.flushPendingFieldWrites()
+                        viewModel.completeOnboarding()
+                        onComplete()
+                    }
+                },
+            )
+
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -117,22 +137,14 @@ fun OnboardingScreen(
                         .fillMaxSize()
                         .onDpadKey(
                             onRight = {
-                                if (pagerState.currentPage < OnboardingStep.count - 1) {
-                                    scope.launch {
-                                        // Land a pending debounced Seerr field
-                                        // write before the page turns, so the
-                                        // last keystroke isn't lost.
-                                        viewModel.seerrEditActions.flushPendingFieldWrites()
-                                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                    }
+                                if (pagerState.currentPage < lastPage) {
+                                    navigateToPage(pagerState.currentPage + 1)
                                     true
                                 } else false
                             },
                             onLeft = {
                                 if (pagerState.currentPage > 0) {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                    }
+                                    navigateToPage(pagerState.currentPage - 1)
                                     true
                                 } else false
                             },
@@ -288,143 +300,73 @@ fun OnboardingScreen(
             }
 
             AnimatedVisibility(
-                visible = bottomBarVisible,
+                visible = bottomBarVisible && pagerState.currentPage < lastPage,
                 enter = slideInVertically(
                     animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     initialOffsetY = { it },
                 ) + fadeIn(),
+                exit = slideOutVertically(
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    targetOffsetY = { it },
+                ) + fadeOut(),
             ) {
                 OnboardingBottomBar(
-                    pagerState = pagerState,
-                    onSkip = {
-                        // Skip now jumps to the review/finish step (CompletionStep)
-                        // instead of instantly completing — see OnboardingViewModel
-                        // .skipOnboarding. Animate the pager there and let the user
-                        // confirm via "Start Watching"; do NOT call onComplete() here
-                        // or an accidental Skip permanently dismisses the wizard.
-                        viewModel.skipOnboarding()
-                        scope.launch {
-                            // Land a pending debounced Seerr field write before
-                            // the page turns, so the last keystroke isn't lost.
-                            viewModel.seerrEditActions.flushPendingFieldWrites()
-                            pagerState.animateScrollToPage(OnboardingStep.count - 1)
-                        }
-                    },
-                    onNext = {
-                        scope.launch {
-                            // Land a pending debounced Seerr field write before
-                            // the page turns, so the last keystroke isn't lost.
-                            viewModel.seerrEditActions.flushPendingFieldWrites()
-                            if (pagerState.currentPage < OnboardingStep.count - 1) {
-                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // max(nav bar, IME) so the bar rises above the keyboard too
-                        .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
-                        .padding(horizontal = 24.dp)
-                        .padding(top = 12.dp),
+                    onNext = { navigateToPage(pagerState.currentPage + 1) },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
     }
 }
 
+/**
+ * Sticky primary action: one full-width Next button, matching the completion
+ * step's Start Watching button. Back and skip live in [OnboardingProgressHeader]
+ * so the bottom bar never splits attention between competing controls.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun OnboardingBottomBar(
-    pagerState: PagerState,
-    onSkip: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isLastPage = pagerState.currentPage == OnboardingStep.count - 1
     val isTv = LocalTvMode.current
     val nextFocusRequester = remember { FocusRequester() }
-    val skipFocusState = rememberTvFocusState(focusedScale = 1.04f)
     val nextFocusState = rememberTvFocusState(focusedScale = 1.04f)
-    // Capture once in composable scope; AnimatedContent's transitionSpec is not composable.
-    val fadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
 
     LaunchedEffect(Unit) {
         if (isTv) nextFocusRequester.tryRequestFocus("onboarding_next")
     }
 
     Surface(
+        modifier = modifier,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
         tonalElevation = 3.dp,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
-        Row(
-            modifier = modifier.padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Button(
+            onClick = onNext,
+            modifier = Modifier
+                .fillMaxWidth()
+                // max(nav bar, IME) so the button rises above the keyboard too
+                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .height(56.dp)
+                .focusRequester(nextFocusRequester)
+                .then(nextFocusState.focusModifier)
+                .tvFocusIndicator(nextFocusState, ShapeCache.smooth16),
+            shape = ShapeCache.smooth16,
         ) {
-            AnimatedContent(
-                targetState = isLastPage,
-                transitionSpec = {
-                    fadeIn(fadeSpec) togetherWith
-                            fadeOut(fadeSpec)
-                },
-                label = "skipButtonTransition",
-            ) { last ->
-                if (!last) {
-                    TextButton(
-                        onClick = onSkip,
-                        modifier = Modifier.then(skipFocusState.focusModifier).tvFocusIndicator(skipFocusState, ShapeCache.smooth12),
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.onboarding_skip),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                } else {
-                    Spacer(Modifier.width(48.dp))
-                }
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            OnboardingPagerIndicator(
-                pageCount = OnboardingStep.count,
-                currentPage = pagerState.currentPage,
+            Text(
+                text = stringResource(Res.string.onboarding_next),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
             )
-
-            Spacer(Modifier.weight(1f))
-
-            AnimatedContent(
-                targetState = isLastPage,
-                transitionSpec = {
-                    fadeIn(fadeSpec) togetherWith
-                            fadeOut(fadeSpec)
-                },
-                label = "nextButtonTransition",
-            ) { last ->
-                if (!last) {
-                    FilledTonalButton(
-                        onClick = onNext,
-                        modifier = Modifier.focusRequester(nextFocusRequester)
-                            .then(nextFocusState.focusModifier)
-                            .tvFocusIndicator(nextFocusState, ShapeCache.smooth12),
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.onboarding_next),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Tabler.Outline.ArrowRight,
-                            contentDescription = null,
-                        )
-                    }
-                } else {
-                    Spacer(Modifier.width(96.dp))
-                }
-            }
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                imageVector = Tabler.Outline.ArrowRight,
+                contentDescription = null,
+            )
         }
     }
 }

@@ -4,6 +4,7 @@
 
     <string name="onboarding_skip">跳过</string>
     <string name="onboarding_next">下一步</string>
+    <string name="onboarding_step_progress">第 %1$d 步，共 %2$d 步</string>
     <string name="onboarding_completion_title">全部就绪！</string>
     <string name="onboarding_completion_subtitle">您的 JellyPlay 已配置完成，可以开始使用。您可以稍后随时更改这些设置。</string>
     <string name="onboarding_completion_start_watching">开始观看</string>

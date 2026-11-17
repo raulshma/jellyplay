@@ -10,7 +10,10 @@ import com.raulshma.jellyplay.core.model.ClientCertificateImport
 import com.raulshma.jellyplay.core.model.ClientCertificateStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.normalizeServerAddress
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_switch_failed
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -35,6 +38,59 @@ sealed interface CertificateUserMessage {
     data class ImportFailed(val text: String?) : CertificateUserMessage
 }
 
+/** The server-address operation an [AddressOperationPhase] reports. */
+enum class AddressOperationVerb {
+    /** [ServerManagementViewModel.addServerAddress] — the Add Address sheet's save. */
+    Add,
+
+    /** [ServerManagementViewModel.switchServerAddress] — the address row's "switch to" action. */
+    Switch,
+}
+
+/**
+ * The server-address operation machine ([addServerAddress] /
+ * [switchServerAddress]) — one phase where the former
+ * `_addressOperationMessage: String?` + `_isAddressOperationInProgress`
+ * pair settled by hand. Shape mirrors the landed `SnapshotActionPhase`
+ * (Idle/Running(verb) + a terminal face); the verb is carried so a fresh
+ * in-flight run's face is distinguishable in principle even though today's
+ * screen renders every terminal the same way.
+ *
+ * Byte-preserving map (the state the pair could hold → the variant):
+ *  - no operation / the parked message handed to the bus → [Idle];
+ *  - operation in flight, parked message cleared at entry → [Running]
+ *    (the entry clear is ATOMIC now — the former two-write window where
+ *    `inProgress=true` but the old message still stood is unrepresentable;
+ *    it was unobservable in composition, so no behavior moved);
+ *  - terminal outcome text parked until the screen posts it to the
+ *    UserMessageBus (or the next operation clears it) → [Completed].
+ *    [Completed] deliberately carries BOTH faces: the former shape never
+ *    distinguished success from failure in state — the screen posted either
+ *    text verbatim (`bus.info`) — and the exact strings are preserved
+ *    ("Address added" / "Failed to add address" /
+ *    "Switched to <address>" / "Failed to switch address", with the
+ *    exception-message fallbacks).
+ *
+ * Preserved verbatim, flagged (the former shape's own semantics, NOT
+ * declared fixes): there is NO re-entry guard on the address operations
+ * (the switch half's guard is the precedent if one is ever added) — two
+ * concurrent operations each set [Running] and each land [Completed], so
+ * the first settle already drops `isAddressOperationInProgress` while the
+ * second still runs, exactly as the pair's per-op writes did; and there is
+ * no `finally` — a cancellation mid-operation strands [Running] the same
+ * way it stranded `inProgress=true`.
+ */
+sealed interface AddressOperationPhase {
+    /** No operation in flight and no parked outcome. */
+    data object Idle : AddressOperationPhase
+
+    /** An add/switch is in flight; the parked outcome (if any) was cleared at entry. */
+    data class Running(val verb: AddressOperationVerb) : AddressOperationPhase
+
+    /** The outcome text parked for the screen's bus post, until handed off or overwritten. */
+    data class Completed(val message: String) : AddressOperationPhase
+}
+
 class ServerManagementViewModel(
     private val authRepository: AuthRepository,
     private val serverIdentityStore: ServerIdentityStore,
@@ -52,11 +108,38 @@ class ServerManagementViewModel(
     private val _isSwitching = composeState(false)
     val isSwitching: Boolean get() = _isSwitching.value
 
-    private val _addressOperationMessage = composeState<String?>(null)
-    val addressOperationMessage: String? get() = _addressOperationMessage.value
+    /**
+     * One-shot switch-server failure outcome (the
+     * [CertificateUserMessage] pattern: the screen resolves the resource
+     * fallback and posts to the shared UserMessageBus). DECLARED FIX: a
+     * failed switch previously settled the spinner with no feedback — the
+     * cards just re-enabled and nothing told the user the active server had
+     * NOT changed. Cleared at the start of the next switch attempt.
+     */
+    private val _switchServerFailure = composeState<UiMessage?>(null)
+    val switchServerFailure: UiMessage? get() = _switchServerFailure.value
 
-    private val _isAddressOperationInProgress = composeState(false)
-    val isAddressOperationInProgress: Boolean get() = _isAddressOperationInProgress.value
+    /**
+     * The address operation machine ([AddressOperationPhase] — the former
+     * `_addressOperationMessage: String?` one-shot + `_isAddressOperationInProgress`
+     * boolean folded into one phase; [isAddressOperationInProgress] below is its
+     * DERIVED projection, kept so the screen's spinner/guard surface reads
+     * unchanged). The screen posts [AddressOperationPhase.Completed]'s text to
+     * the UserMessageBus exactly once and hands the phase back to
+     * [Idle][AddressOperationPhase.Idle] via [clearAddressOperationMessage] —
+     * the same clear-after-handling timing the parked String had.
+     */
+    private val _addressOperationPhase =
+        composeState<AddressOperationPhase>(AddressOperationPhase.Idle)
+    val addressOperationPhase: AddressOperationPhase get() = _addressOperationPhase.value
+
+    /**
+     * True while an add/switch address operation is in flight — the derived
+     * [AddressOperationPhase.Running] projection (the screen's address-row
+     * switch guard and the legacy pins read this Boolean unchanged).
+     */
+    val isAddressOperationInProgress: Boolean
+        get() = _addressOperationPhase.value is AddressOperationPhase.Running
 
     /** Addresses the user granted self-signed-certificate trust for. */
     private val _selfSignedTrustHosts = composeState<Set<String>>(emptySet())
@@ -99,12 +182,36 @@ class ServerManagementViewModel(
         }
     }
 
+    /**
+     * Switches the active server. Failure parks [switchServerFailure] (the
+     * declared fix above) and settles the spinner exactly as before; success
+     * still fires [onSuccess] for the caller's navigation. A switch attempt
+     * clears any parked failure first.
+     *
+     * Re-entry guard: a second switch while one is in flight is dropped. The
+     * screen disables the whole server card while switching, so this guards
+     * the paths that bypass it. The guard is checked-and-set SYNCHRONOUSLY,
+     * before the coroutine is queued — setting it inside the launched
+     * coroutine left a window (until the dispatcher ran the coroutine) where
+     * a second caller still read `false` and re-entered, so the documented
+     * single-flight behavior was unenforced. The coroutine owns every
+     * terminal clear (success, failure, cancellation — the `finally`).
+     */
     fun switchServer(serverId: String, onSuccess: () -> Unit) {
+        if (_isSwitching.value) return
+        _isSwitching.value = true
+        _switchServerFailure.value = null
         launch {
-            _isSwitching.value = true
-            authRepository.switchServer(serverId)
-                .onSuccess { onSuccess() }
-            _isSwitching.value = false
+            try {
+                authRepository.switchServer(serverId)
+                    .onSuccess { onSuccess() }
+                    .onFailure {
+                        _switchServerFailure.value =
+                            UiMessage.of(it, Res.string.settings_server_switch_failed)
+                    }
+            } finally {
+                _isSwitching.value = false
+            }
         }
     }
 
@@ -121,14 +228,22 @@ class ServerManagementViewModel(
         }
     }
 
+    /** Dismisses a parked switch failure once the screen has surfaced it. */
+    fun clearSwitchServerFailure() {
+        _switchServerFailure.value = null
+    }
+
     fun addServerAddress(serverId: String, address: String) {
         launch {
-            _isAddressOperationInProgress.value = true
-            _addressOperationMessage.value = null
+            _addressOperationPhase.value = AddressOperationPhase.Running(AddressOperationVerb.Add)
             authRepository.addServerAddress(serverId, address)
-                .onSuccess { _addressOperationMessage.value = "Address added" }
-                .onFailure { _addressOperationMessage.value = it.message ?: "Failed to add address" }
-            _isAddressOperationInProgress.value = false
+                .onSuccess {
+                    _addressOperationPhase.value = AddressOperationPhase.Completed("Address added")
+                }
+                .onFailure {
+                    _addressOperationPhase.value =
+                        AddressOperationPhase.Completed(it.message ?: "Failed to add address")
+                }
         }
     }
 
@@ -141,17 +256,25 @@ class ServerManagementViewModel(
 
     fun switchServerAddress(serverId: String, address: String) {
         launch {
-            _isAddressOperationInProgress.value = true
-            _addressOperationMessage.value = null
+            _addressOperationPhase.value = AddressOperationPhase.Running(AddressOperationVerb.Switch)
             authRepository.switchServerAddress(serverId, address)
-                .onSuccess { _addressOperationMessage.value = "Switched to $address" }
-                .onFailure { _addressOperationMessage.value = it.message ?: "Failed to switch address" }
-            _isAddressOperationInProgress.value = false
+                .onSuccess {
+                    _addressOperationPhase.value =
+                        AddressOperationPhase.Completed("Switched to $address")
+                }
+                .onFailure {
+                    _addressOperationPhase.value =
+                        AddressOperationPhase.Completed(it.message ?: "Failed to switch address")
+                }
         }
     }
 
+    /**
+     * Hands the parked outcome back to [AddressOperationPhase.Idle] once the
+     * screen has posted it (the former clear-the-parked-String write).
+     */
     fun clearAddressOperationMessage() {
-        _addressOperationMessage.value = null
+        _addressOperationPhase.value = AddressOperationPhase.Idle
     }
 
     // ------------------------------------------------- self-signed trust

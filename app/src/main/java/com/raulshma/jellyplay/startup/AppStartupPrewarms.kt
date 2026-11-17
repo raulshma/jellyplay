@@ -96,9 +96,9 @@ class AppStartupPrewarms(
     private val networkOfflineStore: Lazy<NetworkOfflineStore>,
     // Resolved ONLY inside the IO prewarm block
     // (same deferred-construction pattern as networkOfflineStore above).
-    // ServerIdentityStore.identity is stateIn(Eagerly) on Dispatchers.Default,
-    // so on a first-launch cold start the network single's `identity.value
-    // .deviceId ?: runBlocking { ensureDeviceId() }` fallback
+    // ServerIdentityStore.deviceId is stateIn(Eagerly) on Dispatchers.Default,
+    // so on a first-launch cold start the network single's `deviceId.value
+    // ?: runBlocking { ensureDeviceId() }` fallback
     // (AndroidNetworkModule) could win the race against that eager DataStore
     // read and block MainViewModel construction on main. The prewarm calls the
     // idempotent ensureDeviceId() itself and awaits the published id, so the
@@ -267,7 +267,7 @@ class AppStartupPrewarms(
                 // timeout mid-persist safe to abandon.
                 withTimeoutOrNull(DEVICE_ID_PREWARM_TIMEOUT_MS) {
                     serverIdentityStore.value.ensureDeviceId()
-                    serverIdentityStore.value.identity.first { !it.deviceId.isNullOrEmpty() }
+                    serverIdentityStore.value.deviceId.first { !it.isNullOrEmpty() }
                 }
             }
             // Hydrate the persisted security slice for PlayerActivity's

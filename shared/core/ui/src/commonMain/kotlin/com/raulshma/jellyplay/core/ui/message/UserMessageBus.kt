@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.message
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.raulshma.jellyplay.core.ui.components.logUiWarning
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -47,9 +48,27 @@ class UserMessageBus {
 
     val messages: Flow<UserMessage> = channel.receiveAsFlow()
 
-    /** Post a message; safe to call from any thread (non-suspending). */
+    /**
+     * Post a message; safe to call from any thread (non-suspending).
+     *
+     * DECLARED FIX (drop observability): [Channel.trySend] into a full buffer
+     * (64 in-flight messages with no live root collector) fails WITHOUT
+     * throwing, and the failure result used to be ignored — a burst of
+     * failure messages posted while no host was collecting silently vanished.
+     * The drop is now reported through the module's [logUiWarning] seam (no
+     * new logging dependency, no API change): the channel shape, capacity,
+     * one-shot semantics and the fire-and-forget signature are all unchanged,
+     * and a successful post stays completely silent.
+     */
     fun emit(message: UserMessage) {
-        channel.trySend(message)
+        val result = channel.trySend(message)
+        if (result.isFailure) {
+            logUiWarning(
+                tag = "UserMessageBus",
+                message = "dropped user message (${message.severity}, no live collector or buffer full)",
+                error = result.exceptionOrNull(),
+            )
+        }
     }
 
     /** Post an info message built from a localizable [UiText]. */

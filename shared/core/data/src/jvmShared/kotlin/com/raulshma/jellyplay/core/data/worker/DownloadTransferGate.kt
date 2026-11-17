@@ -117,7 +117,12 @@ class DownloadTransferGate(
         onInactive: suspend () -> T,
         transfer: suspend (Preparation) -> T,
     ): T {
-        val activeUserId = serverIdentityStore.activeUserId.firstOrNull()
+        // Disk-backed one-shot read (see ServerIdentityStore.readIdentity) —
+        // the activeUserId projection derives from the eagerly-seeded identity
+        // StateFlow, whose NoSession seed is instantly readable during the
+        // DataStore-read window (the transfer would run tokenless despite a
+        // persisted session).
+        val activeUserId = serverIdentityStore.readIdentity().userId
         val accessToken = activeUserId?.let { uid ->
             // Tokens are stored encrypted in Room. Decrypt before use as the
             // `Authorization: MediaBrowser` header value.

@@ -28,10 +28,6 @@ fun OnboardingStepScaffold(
     title: String,
     subtitle: String,
     icon: ImageVector? = null,
-    isLastStep: Boolean = false,
-    canSkip: Boolean = true,
-    onNext: () -> Unit,
-    onSkip: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     var visible by remember { mutableStateOf(false) }

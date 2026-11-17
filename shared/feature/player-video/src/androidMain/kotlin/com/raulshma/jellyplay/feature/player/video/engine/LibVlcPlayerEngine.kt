@@ -57,6 +57,14 @@ class LibVlcPlayerEngine(
         // hedge for a track movement libVLC never announced through an ES*
         // event.
         private const val FULL_STATS_REREAD_MS = 2_000L
+
+        // The deferred-play verify window (mpv's LOAD_CONFIRM_MS precedent —
+        // a healthy loadfile→start-file hop measured 0.5–1.2 s there): a
+        // healthy surface attach + play completes well inside it. Past this
+        // with the pendingPlay latch still armed, the surface never attached
+        // and mp.play() will never have run — the silent-dead-air case the
+        // verifier turns into a published, retryable failure.
+        private const val DEFERRED_PLAY_CONFIRM_MS = 3_000L
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
@@ -193,6 +201,104 @@ class LibVlcPlayerEngine(
     private var pendingPlay = false
     private var hasRenderer = false
     private var pendingRendererItem: RendererItem? = null
+
+    /**
+     * The deferred-play verify machine for [pendingPlay] — the mpv
+     * load-verify cluster's mirror ([DeferredPlayVerifier], pure commonMain;
+     * the v0.11.8 black-screen fix's libVLC twin). The latch arms on [load]
+     * and its only consumers are the inline attach+play arm and the
+     * surface-attach listener; if the surface never attaches, `mp.play()` is
+     * never issued, no VLC event ever arrives and `playbackState` stays at
+     * its pre-start value forever with nothing surfaced — and the session
+     * guard cannot catch it (EngineEventCoordinator's buffering watchdog
+     * arms only on BUFFERING, a state the stranded latch never reaches).
+     *
+     * Verdict execution ([DEFERRED_PLAY_CONFIRM_MS] elapsed, latch still
+     * armed): the latch clears (one-shot) and `EngineError.Timeout` publishes
+     * on [_errorFlow] — the channel EngineEventCoordinator's errors policy
+     * consumes, surfacing a user-visible, retryable failure (or the automatic
+     * transcode fallback under FORCE_DIRECT_PLAY with the one-shot latch
+     * unspent). Timeout is the taxonomy-appropriate code: its own contract is
+     * "playback failed to start … the engine never reached READY" — literally
+     * this failure's observable — and it is retryable, which a stranded
+     * surface attach may genuinely reward. Decoder/Unknown would publish
+     * non-retryable affordances for a failure with no codec evidence; mpv's
+     * verify arm publishes `Source` for its command-drop shape (the loadfile
+     * was ISSUED and silently dropped), while this shape is "play never
+     * issued at all" — the same never-started family the coordinator's 20 s
+     * buffering watchdog publishes `EngineError.Timeout` for.
+     *
+     * The stalled-vs-stopped guard (mpv's verify closes its record on
+     * START_FILE): this engine's equivalents — `Event.Playing` (playback
+     * began), `Event.Stopped` (deliberately stopped) and
+     * `Event.EncounteredError` (an error is already surfacing; never stack
+     * the synthetic timeout behind a real one) — stand the verifier down via
+     * [deferredPlayTimeoutTick]'s siblings in [eventListener]. DECLARED:
+     * `pendingPlay` itself is NOT cleared by those events (the stop→detach→
+     * re-attach replay nuance stays exactly as it was) — only the verify
+     * record closes, so the latch can outlive a disarmed verifier and a
+     * later re-attach still replays the play.
+     *
+     * DECLARED residuals: pre-play the engine has no richer "accepted" signal
+     * than the latch, so the timeout gates on the same state the
+     * inline-consume arm checks (latch armed + live player) — a deliberate
+     * `stop()` before the surface ever attached emits no Stopped event (the
+     * player was never playing) and will surface the timeout; a renderer-only
+     * load whose local layout never attaches follows the same window (the old
+     * behavior stayed silent there too). The timeout does not write
+     * `playbackState` (mpv's verify arm doesn't either) — the published error
+     * drives the dialog.
+     *
+     * Transport: the timeout post rides [mainHandler] (the slave-registration
+     * poll's scheduling idiom) — one shared runnable token below, so both the
+     * machine's cancel seam and [resetForNextMedia]'s existing
+     * `removeCallbacksAndMessages(null)` sweep address the same post.
+     */
+    private val deferredPlayVerifier: DeferredPlayVerifier = DeferredPlayVerifier(
+        confirmMs = DEFERRED_PLAY_CONFIRM_MS,
+        nowMs = android.os.SystemClock::elapsedRealtime,
+        scheduleTimeout = { delayMs -> mainHandler.postDelayed(deferredPlayTimeoutTick, delayMs) },
+        cancelTimeout = { mainHandler.removeCallbacks(deferredPlayTimeoutTick) },
+    )
+
+    /**
+     * The verify timeout's transport token. The body only EXECUTES the
+     * machine's verdict — the decision (armed? window elapsed? one-shot?)
+     * stays in the pure verifier, the latch clear + error publish are the
+     * engine half. (The explicit [Runnable] type breaks the mutual
+     * property-initializer inference cycle with [deferredPlayVerifier] above
+     * — its schedule/cancel seams capture this token, its body calls back
+     * into the machine.)
+     */
+    private val deferredPlayTimeoutTick: Runnable = Runnable {
+        when (val verdict = deferredPlayVerifier.evaluate()) {
+            is DeferredPlayVerifier.Verdict.TimedOut -> {
+                // Gate the execution on the same state the inline-consume arm
+                // checks (its `mediaPlayer ?: return` + latch read): the
+                // machine's armed record structurally implies a live player
+                // (the only mediaPlayer-nulling sites are the ones that disarm
+                // via reset), but the gate is stated literally so the
+                // declared residual stays honest if that invariant ever
+                // drifts.
+                if (mediaPlayer == null) return@Runnable
+                // The stranded latch: the surface never attached, so mp.play()
+                // never ran and no VLC event will ever arrive. Clear the latch
+                // (one-shot — the machine already disarmed) and surface the
+                // failure: the silent dead air becomes a user-visible,
+                // retryable error.
+                pendingPlay = false
+                Log.w(TAG, "Deferred play never consumed within ${DEFERRED_PLAY_CONFIRM_MS}ms — surfacing timeout")
+                _errorFlow.tryEmit(
+                    EngineError.Timeout(
+                        IllegalStateException(
+                            "libVLC deferred play latch was never consumed (no surface attach within ${DEFERRED_PLAY_CONFIRM_MS}ms)",
+                        ),
+                    ),
+                )
+            }
+            DeferredPlayVerifier.Verdict.Quiet -> {}
+        }
+    }
     private var cachedDurationMs: Long = 0L
 
     /**
@@ -260,6 +366,11 @@ class LibVlcPlayerEngine(
     private val eventListener = MediaPlayer.EventListener { event ->
         when (event.type) {
             MediaPlayer.Event.Playing -> {
+                // Playback actually began — close the deferred-play verify
+                // record (the mpv START_FILE-close analog). The latch itself
+                // is untouched: pendingPlay survives this event by declaration
+                // (the verifier's KDoc carries the nuance).
+                deferredPlayVerifier.standDown()
                 _isPlaying.value = true
                 _playbackState.value = EnginePlaybackState.READY
                 // Apply saved subtitle delay after tracks are initialized.
@@ -273,6 +384,10 @@ class LibVlcPlayerEngine(
                 _playbackState.value = EnginePlaybackState.READY
             }
             MediaPlayer.Event.Stopped -> {
+                // A deliberately stopped player must not error via the verify
+                // timeout (the stalled-vs-stopped guard); the latch replay
+                // nuance is declared in the verifier's KDoc.
+                deferredPlayVerifier.standDown()
                 _isPlaying.value = false
                 _playbackState.value = EnginePlaybackState.IDLE
             }
@@ -335,6 +450,10 @@ class LibVlcPlayerEngine(
                 trackRefresh.request()
             }
             MediaPlayer.Event.EncounteredError -> {
+                // An error is already surfacing on this load — stand the
+                // verify record down so the synthetic timeout never stacks a
+                // second failure behind a real one.
+                deferredPlayVerifier.standDown()
                 _playbackState.value = EnginePlaybackState.ERROR
                 _errorFlow.tryEmit(VlcErrorMapper.fromMessage("VLC encountered an error during playback"))
             }
@@ -398,13 +517,18 @@ class LibVlcPlayerEngine(
         // after tracks are loaded (matching VLC Android behaviour).
 
         pendingPlay = true
-        
+        // The verify record opens with the latch: if neither the inline arm
+        // below nor the surface-attach listener consumes the latch within
+        // DEFERRED_PLAY_CONFIRM_MS, the timeout surfaces the stranded load.
+        deferredPlayVerifier.arm()
+
         // Re-attach view if it exists
         videoLayout?.let {
             try {
                 mp.attachPreviewViews(it)
                 mp.play()
                 pendingPlay = false
+                deferredPlayVerifier.consume()
             } catch (e: Exception) {
                 Log.e(TAG, "attachViews/play failed", e)
             }
@@ -475,6 +599,9 @@ class LibVlcPlayerEngine(
         slaveRegistration.reset()
         sideLoadedSubtitleIds = emptyMap()
         pendingPlay = false
+        // The verify record dies with the media too — the handler sweep above
+        // already removed its post; this closes the machine's half.
+        deferredPlayVerifier.reset()
         currentPlaybackRequest = null
         pendingStartPositionMs = 0L
         // The event caches die with the media too: on a reused engine a stale
@@ -770,6 +897,11 @@ class LibVlcPlayerEngine(
                     mp.attachPreviewViews(layout)
                     if (pendingPlay) {
                         pendingPlay = false
+                        // The deferred play verified — close the record before
+                        // the play issues (the site's existing order: the
+                        // latch clears first, a throwing play() still swallows
+                        // into the catch below).
+                        deferredPlayVerifier.consume()
                         mp.play()
                     }
                 } catch (e: Exception) {

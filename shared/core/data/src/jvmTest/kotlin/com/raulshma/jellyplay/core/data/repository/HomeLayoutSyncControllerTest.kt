@@ -173,7 +173,7 @@ class HomeLayoutSyncControllerTest {
 
     @Test
     fun `uploadNow serializes the current layout with the payload schema version`() = runTest {
-        identityStore.setActiveUser(USER)
+        identityStore.setActiveSession("srv-1", USER)
         stubWrites()
         store.applyLayout(layoutFixture())
 
@@ -204,7 +204,7 @@ class HomeLayoutSyncControllerTest {
 
     @Test
     fun `fetchServerLayout resolves Empty, Undecodable and Offer`() = runTest {
-        identityStore.setActiveUser(USER)
+        identityStore.setActiveSession("srv-1", USER)
 
         // Nothing ever uploaded.
         coEvery { apiClient.readHomeLayoutDisplayPreferences(USER) } returns
@@ -236,7 +236,7 @@ class HomeLayoutSyncControllerTest {
 
     @Test
     fun `autopush debounces a burst into one push of the current layout`() = runTest {
-        identityStore.setActiveUser(USER)
+        identityStore.setActiveSession("srv-1", USER)
         store.setLayoutAutopush(true)
         stubWrites()
         backgroundScope.launch { controller.runAutopush() }
@@ -263,7 +263,7 @@ class HomeLayoutSyncControllerTest {
 
     @Test
     fun `autopush never pushes while the pref is off`() = runTest {
-        identityStore.setActiveUser(USER)
+        identityStore.setActiveSession("srv-1", USER)
         // pref OFF (the default) — layout writes happen regardless.
         stubWrites()
         backgroundScope.launch { controller.runAutopush() }
@@ -280,7 +280,7 @@ class HomeLayoutSyncControllerTest {
 
     @Test
     fun `autopush does not replay a dirty revision on arming`() = runTest {
-        identityStore.setActiveUser(USER)
+        identityStore.setActiveSession("srv-1", USER)
         stubWrites()
         backgroundScope.launch { controller.runAutopush() }
         runCurrent()
@@ -305,7 +305,7 @@ class HomeLayoutSyncControllerTest {
 
     @Test
     fun `autopush failure is silent and the next change re-arms the push`() = runTest {
-        identityStore.setActiveUser(USER)
+        identityStore.setActiveSession("srv-1", USER)
         store.setLayoutAutopush(true)
         // First push fails, later ones succeed.
         var calls = 0
@@ -341,9 +341,9 @@ class HomeLayoutSyncControllerTest {
 
         // Both users armed (the autopush pref is per-user namespaced): arm B,
         // return to A and arm A too.
-        identityStore.setActiveUser(USER_B)
+        identityStore.setActiveSession("srv-1", USER_B)
         store.setLayoutAutopush(true)
-        identityStore.setActiveUser(USER)
+        identityStore.setActiveSession("srv-1", USER)
         store.setLayoutAutopush(true)
         runCurrent()
 
@@ -352,7 +352,7 @@ class HomeLayoutSyncControllerTest {
         // Half-way through the debounce window the active user switches back
         // to B — who is armed just the same.
         advanceTimeBy(DEBOUNCE_MS / 2)
-        identityStore.setActiveUser(USER_B)
+        identityStore.setActiveSession("srv-1", USER_B)
         // The identity write rides DataStore IO — wait for the switch to
         // PROPAGATE (real time) before the virtual-time choreography, or the
         // assertions below race the still-live outgoing flow.

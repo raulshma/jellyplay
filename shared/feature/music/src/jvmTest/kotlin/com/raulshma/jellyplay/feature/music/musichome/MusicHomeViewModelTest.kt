@@ -570,6 +570,128 @@ class MusicHomeViewModelTest {
         assertEquals(1, viewModel.uiState.value.sections.size)
     }
 
+    // ── Fetch mode: loud/silent carried explicitly, not inferred ────────────
+    //
+    // The fetch body's loud/silent split rides the coordinator's explicit
+    // mode hand-off (load = loud, the deferred regeneration = silent); it
+    // used to be inferred from uiState.isLoading at body entry — safe only
+    // while loadSections's synchronous spinner write stayed the last write
+    // before the body ran, a one-dispatch-wide window any future isLoading
+    // writer would have silently corrupted into a mode flip. These pins
+    // exercise both modes' divergent decisions end-to-end (the silent throw
+    // stays quiet, the offline-return loud failure shows the error face,
+    // and the mode survives the dispatch window).
+
+    @Test
+    fun deferredRefresh_silentThrowKeepsSectionsAndNeverRaisesTheErrorFace() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+        coVerify(exactly = 1) { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+
+        // The silent regeneration parks inside the fetch body, then fails
+        // with a THROWN path (not a swallowed Result.failure): the mode the
+        // body runs with is the coordinator's silent one, so the loud-only
+        // failure choreography — error face with nothing cached, transient
+        // toast with cached sections, spinner clear — must all stay OFF.
+        val gate = CompletableDeferred<Unit>()
+        var artistQueries = 1 // the initial loud load consumed one call
+        coEvery { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
+            if (++artistQueries > 1) {
+                gate.await()
+                throw RuntimeException("silent boom")
+            }
+            Result.success(SearchResult(listOf(item("a1", "Artist")), 1, 0))
+        }
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // Parked mid-fetch: the silent body raised no spinner and touched no
+        // failure face.
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertNull(viewModel.uiState.value.error)
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        // Fail the parked regeneration.
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        // The throw published NOTHING: the stale sections stay (serve-stale),
+        // no error face, no toast, the spinner never rose.
+        coVerify(exactly = 2) { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertEquals(1, viewModel.uiState.value.sections.size)
+        assertNull(viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isLoading)
+        verify(exactly = 0) { userMessageBus.error(any()) }
+
+        // The throw-shaped silent failure re-arms through the coordinator's
+        // error arm: the next re-entry retries (its own failure stays quiet).
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 3) { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertNull(viewModel.uiState.value.error)
+        verify(exactly = 0) { userMessageBus.error(any()) }
+    }
+
+    @Test
+    fun offlineReturn_loudFailureShowsTheErrorFaceAndClearsTheSpinner() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        // Offline clears the sections; the return-online emission is the
+        // offline-mode collector's LOUD entry. Fail that load with a thrown
+        // path: with nothing on screen the loud failure must surface the
+        // error face, not the cached-sections toast. (The cache grant rode
+        // only the first online emission — the return-online load re-fetches.)
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.sections.isEmpty())
+
+        coEvery { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } throws
+            RuntimeException("return boom")
+        offlineModeFlow.value = OfflineMode.ONLINE
+        advanceUntilIdle()
+
+        assertEquals("return boom", viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.sections.isEmpty())
+        verify(exactly = 0) { userMessageBus.error(any()) }
+    }
+
+    @Test
+    fun fetchMode_carriedByTheCallerAcrossTheDispatchWindow_loudGateClearsTheSpinner() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        // The one-dispatch window the old isLoading inference was keyed on:
+        // loadSections publishes the spinner synchronously, the fetch body
+        // runs a dispatch LATER, and a uiState write queued in between (here
+        // the offline collector's — the shape of any future isLoading-
+        // adjacent writer) lands before the body reads anything. The mode
+        // now rides the load call, so the body must still run LOUD.
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        viewModel.loadSections()
+        advanceUntilIdle()
+
+        // The body ran with the mode the CALLER passed: the offline gate's
+        // LOUD arm fired — the spinner the load published is cleared (a
+        // silent body would strand it on true), no query ran past the gate,
+        // and the write that landed in the window never touched the mode.
+        assertFalse(viewModel.uiState.value.isLoading, "the loud gate arm cleared the spinner the load published")
+        assertTrue(viewModel.uiState.value.sections.isEmpty())
+        assertNull(viewModel.uiState.value.error)
+        coVerify(exactly = 1) { libraryApiClient.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+    }
+
     @Test
     fun surpriseMe_invokesCallbackWithRandomTrackId() = runTest(mainDispatcher) {
         stubHomeQueries()

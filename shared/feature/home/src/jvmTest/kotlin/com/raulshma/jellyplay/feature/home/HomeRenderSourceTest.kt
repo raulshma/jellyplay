@@ -13,10 +13,25 @@ import kotlin.test.Test
  * tests below pin BOTH directions of
  * `offlineMode != ONLINE ⟺ renderSource == Offline.Explicit` — the license
  * `homeSurface` relies on to read `renderSource` alone.
+ *
+ * The healthy-direction tests iterate EVERY non-[HomeLoadPhase.Failed]
+ * variant: the fold's exhaustive `when` routes all of them to Online, and a
+ * new phase variant added later must declare its treatment here to compile.
  */
 class HomeRenderSourceTest {
 
     private val library = listOf(OfflineMediaItem(id = "d1", name = "Downloaded", mediaType = com.raulshma.jellyplay.core.model.MediaType.MOVIE))
+
+    /** Every non-Failed phase — all render Online in online mode. */
+    private val healthyPhases = listOf(
+        HomeLoadPhase.ColdLoading,
+        HomeLoadPhase.Ready,
+        HomeLoadPhase.InlineRefreshing,
+        HomeLoadPhase.Handshaking,
+    )
+
+    private fun failed(fetchFailed: Boolean): HomeLoadPhase =
+        if (fetchFailed) HomeLoadPhase.Failed("server down") else HomeLoadPhase.Ready
 
     @Test
     fun everyNonOnlineMode_isExplicitOffline() {
@@ -24,12 +39,12 @@ class HomeRenderSourceTest {
         // when downloads exist — otherwise an implicit-before-explicit branch
         // reorder in computeHomeRenderSource would slip through.
         for (mode in OfflineMode.entries.filter { it != OfflineMode.ONLINE }) {
-            for (fetchFailed in listOf(false, true)) {
+            for (phase in healthyPhases + HomeLoadPhase.Failed("boom")) {
                 for (fallbackPending in listOf(false, true)) {
                     for (offlineLibrary in listOf(emptyList(), library)) {
                         assertEquals(
                             HomeRenderSource.Offline.Explicit,
-                            computeHomeRenderSource(mode, fetchFailed, offlineLibrary, fallbackPending),
+                            computeHomeRenderSource(mode, phase, offlineLibrary, fallbackPending),
                         )
                     }
                 }
@@ -39,11 +54,11 @@ class HomeRenderSourceTest {
 
     @Test
     fun onlineMode_neverYieldsExplicitOffline() {
-        for (fetchFailed in listOf(false, true)) {
+        for (phase in healthyPhases + HomeLoadPhase.Failed("boom")) {
             for (fallbackPending in listOf(false, true)) {
                 for (offlineLibrary in listOf(emptyList(), library)) {
                     assertFalse(
-                        computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed, offlineLibrary, fallbackPending)
+                        computeHomeRenderSource(OfflineMode.ONLINE, phase, offlineLibrary, fallbackPending)
                             is HomeRenderSource.Offline.Explicit,
                     )
                 }
@@ -53,17 +68,19 @@ class HomeRenderSourceTest {
 
     @Test
     fun healthyOnlineFetch_rendersOnline_evenWithStaleLibrary() {
-        assertEquals(
-            HomeRenderSource.Online,
-            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed = false, offlineLibrary = library, fallbackPending = false),
-        )
+        for (phase in healthyPhases) {
+            assertEquals(
+                HomeRenderSource.Online,
+                computeHomeRenderSource(OfflineMode.ONLINE, phase, offlineLibrary = library, fallbackPending = false),
+            )
+        }
     }
 
     @Test
     fun failedFetch_beforeFirstEmission_isFallbackPending() {
         assertEquals(
             HomeRenderSource.FallbackPending,
-            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed = true, offlineLibrary = emptyList(), fallbackPending = true),
+            computeHomeRenderSource(OfflineMode.ONLINE, failed(fetchFailed = true), offlineLibrary = emptyList(), fallbackPending = true),
         )
     }
 
@@ -71,7 +88,7 @@ class HomeRenderSourceTest {
     fun failedFetch_withDownloads_isImplicitOffline() {
         assertEquals(
             HomeRenderSource.Offline.Implicit,
-            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed = true, offlineLibrary = library, fallbackPending = false),
+            computeHomeRenderSource(OfflineMode.ONLINE, failed(fetchFailed = true), offlineLibrary = library, fallbackPending = false),
         )
     }
 
@@ -79,7 +96,7 @@ class HomeRenderSourceTest {
     fun failedFetch_confirmedEmpty_rendersOnline_hardError() {
         assertEquals(
             HomeRenderSource.Online,
-            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed = true, offlineLibrary = emptyList(), fallbackPending = false),
+            computeHomeRenderSource(OfflineMode.ONLINE, failed(fetchFailed = true), offlineLibrary = emptyList(), fallbackPending = false),
         )
     }
 }

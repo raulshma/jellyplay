@@ -180,6 +180,36 @@ private val searchActiveFilterDimensions = listOf(
 )
 
 /**
+ * Which composition-held auxiliary overlay the Search screen has open, if any:
+ * the Sort / Status single-select sheets and the clear-history confirm. ONE
+ * nullable slot behind the former three parallel `remember` booleans
+ * (`openSortSheet` / `openStatusSheet` / `showClearHistoryDialog`) — the
+ * StateManagementConventions "one of N" encoding, so opening one structurally
+ * replaces any other (the modal overlays could never actually coexist — each
+ * blocks the controls that raise the others — the booleans just allowed the
+ * combination to be represented). Newest show() wins.
+ *
+ * Cross-owner relationship (deliberately loose, preserved verbatim): the
+ * multi-dimension filter sheet is NOT in this slot — it stays VM-owned
+ * ([SearchViewModel.showFilters], out of this consolidation's scope) — and
+ * neither owner closes the other. A slot overlay can still open ON TOP of the
+ * VM-owned filter sheet (the always-visible chips stay reachable while it is
+ * up); the slot's render block sits after the filter sheet's, so the slot
+ * overlay's window stacks above it — the same newest-window-wins order the
+ * old separate `if`s produced.
+ *
+ * Back: slot overlays are deliberately NOT rungs of the screen's back ladder
+ * (`isSearchFocused → queryHasText → hasActiveFilters`) — they never were.
+ * Each overlay dismisses itself through its own window-level back handling
+ * ([TvSafeSheet]'s Dialog `dismissOnBackPress` / ModalBottomSheet, and
+ * [ConfirmDialog]'s `dismissOnBackPress` routed through its guarded
+ * `onDismiss`), which takes the press before the screen handler sees it. The
+ * ladder's semantics are preserved exactly, and the slot must not be added
+ * to it.
+ */
+internal enum class SearchSheet { Sort, Status, ClearHistory }
+
+/**
  * @param pendingSearchQuery the shell's prefill channel: a non-null value
  *   fires one search, then [onConsumeSearchQuery] must clear it — the armed
  *   value survives until consumed, so it never re-triggers on its own.
@@ -249,19 +279,18 @@ internal fun SearchScreen(
     // filter set and the two screens can't drift apart again.
     val hasActiveFilters = filters.hasActiveFilters()
 
-    // Which immediate-apply single-select sheet is open (Sort / Status). The full
-    // multi-dimension sheet is still driven by [showFilters] below; these are the
-    // two always-visible chips that mirror the Library filter chip row.
-    var openSortSheet by remember { mutableStateOf(false) }
-    var openStatusSheet by remember { mutableStateOf(false) }
+    // Which immediate-apply single-select sheet / confirm is open (Sort /
+    // Status / ClearHistory) — ONE slot ([SearchSheet]; newest show() replaces).
+    // The full multi-dimension sheet is still VM-owned via [showFilters] below;
+    // the Sort/Status chips are the two always-visible chips that mirror the
+    // Library filter chip row. The slot also carries the destructive "Clear
+    // all" recent-searches confirmation guard, since clearing is irreversible
+    // and one tap away.
+    var activeSheet by remember { mutableStateOf<SearchSheet?>(null) }
 
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var isSearchFocused by remember { mutableStateOf(false) }
-
-    // Guards the destructive "Clear all" recent-searches action behind a
-    // confirmation, since clearing is irreversible and one tap away.
-    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     // Grab focus into the search field on TV entry. Without this the first D-pad press drifts to
     // the drawer rail and expands it. LaunchedEffect(Unit) re-fires on every composition entry
@@ -272,6 +301,10 @@ internal fun SearchScreen(
         debugKey = "search_field",
     )
 
+    // The screen's back ladder: focus → query → filters. [SearchSheet] overlays
+    // are deliberately NOT rungs — they never were: each dismisses itself via
+    // its own window-level back handling, which takes a back press before this
+    // handler sees it. Do not add the slot here (see [SearchSheet]'s KDoc).
     JellyPlayBackHandler(enabled = isSearchFocused || queryHasText || hasActiveFilters) {
         when {
             isSearchFocused -> focusManager.clearFocus()
@@ -460,7 +493,7 @@ internal fun SearchScreen(
                     GlassFilterChip(
                         label = filters.sortBy.displayName,
                         selected = filters.sortBy != SortOption.YEAR_DESC,
-                        onClick = { openSortSheet = true },
+                        onClick = { activeSheet = SearchSheet.Sort },
                     )
                     GlassFilterChip(
                         label = if (filters.playedStatus == PlayedStatus.ALL) {
@@ -469,7 +502,7 @@ internal fun SearchScreen(
                             filters.playedStatus.playedStatusLabel()
                         },
                         selected = filters.playedStatus != PlayedStatus.ALL,
-                        onClick = { openStatusSheet = true },
+                        onClick = { activeSheet = SearchSheet.Status },
                     )
                 }
 
@@ -799,7 +832,7 @@ internal fun SearchScreen(
                                                 .then(clearHistoryFocusState.focusModifier)
                                                 .tvFocusIndicator(clearHistoryFocusState, CircleShape)
                                                 .clip(CircleShape)
-                                                .clickable { showClearHistoryDialog = true }
+                                                .clickable { activeSheet = SearchSheet.ClearHistory }
                                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                                         )
                                     }
@@ -1056,24 +1089,25 @@ internal fun SearchScreen(
         )
     }
 
-    if (openSortSheet) {
-        SearchSortSheet(
+    // The slot's render site: ONE overlay at a time (the slot IS the mutual
+    // exclusion), composed after the VM-owned filter sheet so a slot overlay's
+    // window stacks above it — the same newest-window-wins order the former
+    // separate `if`s produced when Sort/Status opened on top of the filter
+    // sheet.
+    when (activeSheet) {
+        SearchSheet.Sort -> SearchSortSheet(
             current = filters.sortBy,
             onApply = { viewModel.onEvent(SearchUiEvent.SetSortBy(it)) },
-            onDismiss = { openSortSheet = false },
+            onDismiss = { activeSheet = null },
         )
-    }
 
-    if (openStatusSheet) {
-        SearchStatusSheet(
+        SearchSheet.Status -> SearchStatusSheet(
             current = filters.playedStatus,
             onApply = { viewModel.onEvent(SearchUiEvent.SetPlayedStatus(it)) },
-            onDismiss = { openStatusSheet = false },
+            onDismiss = { activeSheet = null },
         )
-    }
 
-    if (showClearHistoryDialog) {
-        ConfirmDialog(
+        SearchSheet.ClearHistory -> ConfirmDialog(
             title = stringResource(Res.string.search_clear_search_history),
             message = stringResource(Res.string.search_clear_history_confirm),
             confirmText = stringResource(Res.string.search_action_clear),
@@ -1081,11 +1115,13 @@ internal fun SearchScreen(
             tone = ConfirmTone.DESTRUCTIVE,
             icon = Tabler.Outline.Trash,
             onConfirm = {
-                showClearHistoryDialog = false
+                activeSheet = null
                 viewModel.onEvent(SearchUiEvent.ClearSearchHistory)
             },
-            onDismiss = { showClearHistoryDialog = false },
+            onDismiss = { activeSheet = null },
         )
+
+        null -> Unit
     }
 }
 

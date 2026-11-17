@@ -9,10 +9,14 @@ import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ClientCertificateImport
 import com.raulshma.jellyplay.core.model.ClientCertificateStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.ui.message.UiMessage
+import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_switch_failed
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +55,14 @@ import kotlin.test.assertTrue
  * message-less-exception fallbacks), the banner dismissal, the active-server
  * removal failover to the first remaining server, and the grant path's
  * address normalization (trim + trailing slash + https scheme default).
+ *
+ * Phase-machine round: the address operations' former parked-String +
+ * in-progress boolean pair is now the [AddressOperationPhase] machine
+ * (Idle/Running(verb)/Completed(message), the SnapshotActionPhase shape) —
+ * the message pins above read the phase's Completed face unchanged, and the
+ * machine pins below add the Running observability (verb carried, derived
+ * `isAddressOperationInProgress` true mid-flight), the entry-clear of a
+ * parked outcome, and the preserved guard-free re-entry.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServerManagementViewModelTest {
@@ -244,7 +256,84 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `addServerAddress success posts the confirmation and settles the spinner`() = runTest(testDispatcher) {
+    fun `switchServer failure parks a message for the bus and it dismisses`() = runTest(testDispatcher) {
+        // DECLARED FIX pin: a failed switch used to settle the spinner with no
+        // feedback — the cards just re-enabled and nothing said the active
+        // server had NOT changed. The VM now parks a UiMessage the screen
+        // posts to the UserMessageBus exactly once.
+        coEvery { authRepository.switchServer("s3") } returns Result.failure(RuntimeException("unreachable"))
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.switchServer("s3") {}
+        advanceUntilIdle()
+
+        assertEquals(UiMessage.Raw("unreachable"), vm.switchServerFailure)
+
+        vm.clearSwitchServerFailure()
+        assertNull(vm.switchServerFailure)
+    }
+
+    @Test
+    fun `switchServer failure without a message falls back to the localized resource`() = runTest(testDispatcher) {
+        coEvery { authRepository.switchServer("s3") } returns Result.failure(IllegalStateException())
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.switchServer("s3") {}
+        advanceUntilIdle()
+
+        assertEquals(
+            UiMessage.Resource(Res.string.settings_server_switch_failed),
+            vm.switchServerFailure,
+        )
+    }
+
+    @Test
+    fun `a new switch attempt clears the parked failure`() = runTest(testDispatcher) {
+        coEvery { authRepository.switchServer("s3") } returns Result.failure(RuntimeException("down"))
+        coEvery { authRepository.switchServer("s2") } returns Result.success(Unit)
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.switchServer("s3") {}
+        advanceUntilIdle()
+        assertEquals(UiMessage.Raw("down"), vm.switchServerFailure)
+
+        vm.switchServer("s2") {}
+        advanceUntilIdle()
+
+        assertNull(vm.switchServerFailure)
+        assertEquals(false, vm.isSwitching)
+    }
+
+    @Test
+    fun `switchServer re-entry while switching is dropped`() = runTest(testDispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        coEvery { authRepository.switchServer("s2") } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { authRepository.switchServer("s3") } returns Result.success(Unit)
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.switchServer("s2") {}
+        advanceUntilIdle()
+        assertTrue(vm.isSwitching, "the first switch must be in flight")
+
+        vm.switchServer("s3") {}
+        advanceUntilIdle()
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { authRepository.switchServer("s3") }
+        assertEquals(false, vm.isSwitching)
+    }
+
+    @Test
+    fun `addServerAddress success parks the confirmation face and settles the spinner`() = runTest(testDispatcher) {
         coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } returns Result.success(Unit)
         val vm = viewModel()
         advanceUntilIdle()
@@ -252,12 +341,12 @@ class ServerManagementViewModelTest {
         vm.addServerAddress("s1", "https://alt.example.com")
         advanceUntilIdle()
 
-        assertEquals("Address added", vm.addressOperationMessage)
+        assertEquals(AddressOperationPhase.Completed("Address added"), vm.addressOperationPhase)
         assertEquals(false, vm.isAddressOperationInProgress)
     }
 
     @Test
-    fun `addServerAddress failure posts the error message and settles the spinner`() = runTest(testDispatcher) {
+    fun `addServerAddress failure parks the error face and settles the spinner`() = runTest(testDispatcher) {
         coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } returns
             Result.failure(RuntimeException("address already exists"))
         val vm = viewModel()
@@ -266,7 +355,10 @@ class ServerManagementViewModelTest {
         vm.addServerAddress("s1", "https://alt.example.com")
         advanceUntilIdle()
 
-        assertEquals("address already exists", vm.addressOperationMessage)
+        assertEquals(
+            AddressOperationPhase.Completed("address already exists"),
+            vm.addressOperationPhase,
+        )
         assertEquals(false, vm.isAddressOperationInProgress)
     }
 
@@ -280,7 +372,10 @@ class ServerManagementViewModelTest {
         vm.addServerAddress("s1", "https://alt.example.com")
         advanceUntilIdle()
 
-        assertEquals("Failed to add address", vm.addressOperationMessage)
+        assertEquals(
+            AddressOperationPhase.Completed("Failed to add address"),
+            vm.addressOperationPhase,
+        )
     }
 
     @Test
@@ -293,7 +388,10 @@ class ServerManagementViewModelTest {
         vm.switchServerAddress("s1", "https://mirror.example.com")
         advanceUntilIdle()
 
-        assertEquals("Switched to https://mirror.example.com", vm.addressOperationMessage)
+        assertEquals(
+            AddressOperationPhase.Completed("Switched to https://mirror.example.com"),
+            vm.addressOperationPhase,
+        )
         assertEquals(false, vm.isAddressOperationInProgress)
     }
 
@@ -307,7 +405,10 @@ class ServerManagementViewModelTest {
         vm.switchServerAddress("s1", "https://mirror.example.com")
         advanceUntilIdle()
 
-        assertEquals("Failed to switch address", vm.addressOperationMessage)
+        assertEquals(
+            AddressOperationPhase.Completed("Failed to switch address"),
+            vm.addressOperationPhase,
+        )
     }
 
     @Test
@@ -317,12 +418,137 @@ class ServerManagementViewModelTest {
         advanceUntilIdle()
         vm.addServerAddress("s1", "https://alt.example.com")
         advanceUntilIdle()
-        assertEquals("Address added", vm.addressOperationMessage)
+        assertEquals(AddressOperationPhase.Completed("Address added"), vm.addressOperationPhase)
 
         vm.clearAddressOperationMessage()
 
-        assertNull(vm.addressOperationMessage)
+        assertEquals(AddressOperationPhase.Idle, vm.addressOperationPhase)
     }
+
+    // --------------------------------- address operation phase (the machine)
+
+    @Test
+    fun `addServerAddress runs the phase observable - Running carries the Add verb and the derived spinner`() =
+        runTest(testDispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } coAnswers {
+                gate.await()
+                Result.success(Unit)
+            }
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            vm.addServerAddress("s1", "https://alt.example.com")
+            advanceUntilIdle()
+
+            assertEquals(AddressOperationPhase.Running(AddressOperationVerb.Add), vm.addressOperationPhase)
+            assertTrue(vm.isAddressOperationInProgress, "Running must drive the derived spinner projection")
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(AddressOperationPhase.Completed("Address added"), vm.addressOperationPhase)
+            assertEquals(false, vm.isAddressOperationInProgress)
+        }
+
+    @Test
+    fun `switchServerAddress runs the phase with the Switch verb`() = runTest(testDispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        coEvery { authRepository.switchServerAddress("s1", "https://mirror.example.com") } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.switchServerAddress("s1", "https://mirror.example.com")
+        advanceUntilIdle()
+
+        assertEquals(AddressOperationPhase.Running(AddressOperationVerb.Switch), vm.addressOperationPhase)
+        assertTrue(vm.isAddressOperationInProgress)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(
+            AddressOperationPhase.Completed("Switched to https://mirror.example.com"),
+            vm.addressOperationPhase,
+        )
+        assertEquals(false, vm.isAddressOperationInProgress)
+    }
+
+    @Test
+    fun `starting the next address operation clears a parked outcome at entry`() = runTest(testDispatcher) {
+        // The analog of the switch half's "a new attempt clears the parked
+        // failure": the parked Completed face is gone the moment the next
+        // operation's Running lands (the former clear-at-start write).
+        val gate = CompletableDeferred<Unit>()
+        coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } returns Result.success(Unit)
+        coEvery { authRepository.addServerAddress("s1", "https://other.example.com") } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.addServerAddress("s1", "https://alt.example.com")
+        advanceUntilIdle()
+        assertEquals(AddressOperationPhase.Completed("Address added"), vm.addressOperationPhase)
+
+        vm.addServerAddress("s1", "https://other.example.com")
+        advanceUntilIdle()
+
+        assertEquals(AddressOperationPhase.Running(AddressOperationVerb.Add), vm.addressOperationPhase)
+        assertTrue(
+            vm.addressOperationPhase is AddressOperationPhase.Running,
+            "Running carries no outcome text — the parked face is cleared at entry",
+        )
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(AddressOperationPhase.Completed("Address added"), vm.addressOperationPhase)
+    }
+
+    @Test
+    fun `refiring from a parked outcome is allowed - the address ops keep no re-entry guard`() =
+        runTest(testDispatcher) {
+            // PRESERVED VERBATIM (flagged in AddressOperationPhase's KDoc, not
+            // a declared fix): unlike the switch half, the address operations
+            // have no re-entry guard — from a parked Completed (or even mid-
+            // Running) a second operation starts and each settle writes the
+            // shared machine, exactly as the former per-op flag/message
+            // writes interleaved.
+            val gate = CompletableDeferred<Unit>()
+            coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } coAnswers {
+                gate.await()
+                Result.success(Unit)
+            }
+            coEvery { authRepository.addServerAddress("s1", "https://other.example.com") } returns Result.success(Unit)
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            vm.addServerAddress("s1", "https://alt.example.com")
+            advanceUntilIdle()
+            assertTrue(vm.isAddressOperationInProgress)
+
+            vm.addServerAddress("s1", "https://other.example.com")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { authRepository.addServerAddress("s1", "https://other.example.com") }
+            // The first op settles the shared machine (Running → Completed)
+            // while the second is still in flight — the former shape's
+            // per-op `inProgress=false` write, preserved.
+            assertEquals(AddressOperationPhase.Completed("Address added"), vm.addressOperationPhase)
+            assertEquals(false, vm.isAddressOperationInProgress)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(
+                AddressOperationPhase.Completed("Address added"),
+                vm.addressOperationPhase,
+                "the second op's success text is byte-identical here",
+            )
+        }
 
     @Test
     fun `removing the active server fails over to the first remaining one`() = runTest(testDispatcher) {

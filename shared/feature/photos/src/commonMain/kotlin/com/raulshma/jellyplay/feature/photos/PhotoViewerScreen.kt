@@ -160,6 +160,7 @@ private class NeighborPhotoPrefetcher {
 
 /** One arm of the photo viewer's ordered back ladder. */
 sealed interface PhotoViewerBackAction {
+    data object CloseAdjustments : PhotoViewerBackAction
     data object DismissInfo : PhotoViewerBackAction
     data object CloseFilmstrip : PhotoViewerBackAction
     data object StopSlideshow : PhotoViewerBackAction
@@ -167,16 +168,18 @@ sealed interface PhotoViewerBackAction {
 }
 
 /**
- * The viewer's exhaustive back fold: info overlay → filmstrip → slideshow →
- * exit. Pure so both back sites (the predictive-back callback and the TV
- * remote's D-pad Back) consume the SAME ladder — the two used to hand-copy it
- * and could drift apart.
+ * The viewer's exhaustive back fold: adjustments panel → info overlay →
+ * filmstrip → slideshow → exit. Pure so both back sites (the predictive-back
+ * callback and the TV remote's D-pad Back) consume the SAME ladder — the two
+ * used to hand-copy it and could drift apart.
  */
 fun photoViewerBackAction(
+    showAdjustments: Boolean,
     showInfo: Boolean,
     showFilmstrip: Boolean,
     isSlideshowActive: Boolean,
 ): PhotoViewerBackAction = when {
+    showAdjustments -> PhotoViewerBackAction.CloseAdjustments
     showInfo -> PhotoViewerBackAction.DismissInfo
     showFilmstrip -> PhotoViewerBackAction.CloseFilmstrip
     isSlideshowActive -> PhotoViewerBackAction.StopSlideshow
@@ -207,8 +210,10 @@ fun PhotoViewerScreen(
     val error = viewerState.error
     val photoDetail = viewerState.photoDetail
     val isSlideshowActive by viewModel.isSlideshowActive
-    val isSaving by viewModel.isSaving
-    val saveResult by viewModel.saveResult
+    // The save machine's derived projection (a plain Boolean getter over the
+    // phase) — the save button's spinner gate reads it exactly as before.
+    val isSaving = viewModel.isSaving
+    val savePhase by viewModel.savePhase
     val showAdjustments by viewModel.showAdjustments
     val brightness by viewModel.brightness
     val contrast by viewModel.contrast
@@ -295,17 +300,21 @@ fun PhotoViewerScreen(
         }
     }
 
-    LaunchedEffect(saveResult) {
-        when (val result = saveResult) {
-            is SaveResult.Success -> {
+    // The save machine folds exhaustively over the phase — Idle/Saving are
+    // explicitly armless (no snackbar while no save ran or one is in flight),
+    // the terminal faces post to the bus and dismiss back to Idle.
+    LaunchedEffect(savePhase) {
+        when (val phase = savePhase) {
+            SavePhotoPhase.Idle -> Unit
+            SavePhotoPhase.Saving -> Unit
+            SavePhotoPhase.Succeeded -> {
                 bus.info(photoSavedMessage)
                 viewModel.clearSaveResult()
             }
-            is SaveResult.Error -> {
-                bus.error(result.message)
+            is SavePhotoPhase.Failed -> {
+                bus.error(phase.message)
                 viewModel.clearSaveResult()
             }
-            else -> {}
         }
     }
 
@@ -316,7 +325,8 @@ fun PhotoViewerScreen(
     // onBack directly) and the 3-button nav back work. Consumes the same pure
     // layer-peel as the TV remote's onBack (see [photoViewerBackAction]).
     JellyPlayBackHandler(enabled = true) {
-        when (photoViewerBackAction(showInfo, showFilmstrip, isSlideshowActive)) {
+        when (photoViewerBackAction(showAdjustments, showInfo, showFilmstrip, isSlideshowActive)) {
+            PhotoViewerBackAction.CloseAdjustments -> viewModel.hideAdjustments()
             PhotoViewerBackAction.DismissInfo -> showInfo = false
             PhotoViewerBackAction.CloseFilmstrip -> showFilmstrip = false
             PhotoViewerBackAction.StopSlideshow -> viewModel.stopSlideshow()
@@ -337,7 +347,8 @@ fun PhotoViewerScreen(
             .onDpadKeyEvent(
                 onBack = { e ->
                     if (e.isKeyUp) {
-                        when (photoViewerBackAction(showInfo, showFilmstrip, isSlideshowActive)) {
+                        when (photoViewerBackAction(showAdjustments, showInfo, showFilmstrip, isSlideshowActive)) {
+                            PhotoViewerBackAction.CloseAdjustments -> viewModel.hideAdjustments()
                             PhotoViewerBackAction.DismissInfo -> showInfo = false
                             PhotoViewerBackAction.CloseFilmstrip -> showFilmstrip = false
                             PhotoViewerBackAction.StopSlideshow -> viewModel.stopSlideshow()
@@ -362,6 +373,9 @@ fun PhotoViewerScreen(
                     if (e.isKeyUp) {
                         showInfo = !showInfo
                         showFilmstrip = false
+                        if (showInfo) {
+                            viewModel.hideAdjustments()
+                        }
                     }
                     true
                 },
@@ -369,6 +383,9 @@ fun PhotoViewerScreen(
                     if (e.isKeyUp && siblings.size > 1) {
                         showFilmstrip = !showFilmstrip
                         showInfo = false
+                        if (showFilmstrip) {
+                            viewModel.hideAdjustments()
+                        }
                     }
                     true
                 },

@@ -50,14 +50,59 @@ data class TranscodeRow(
     val isPaused: Boolean,
 )
 
+/**
+ * The transcodes monitor's load phase — the sealed machine that replaced the
+ * former `isLoading` / `isRefreshing` / `error` flag trio plus the separate
+ * nullable-state `rows` list (convention §1): those three flags could
+ * co-derive unreachable combinations (`isLoading` beside a shown `error`, an
+ * `isRefreshing` no render ever read) and the row list's nullabilityencoding
+ * ("no rows yet" vs "poll answered empty") rode the same soup. The rows now
+ * live ON the phase ([Loaded] / [Refreshing]), so a failed face can no longer
+ * coexist with a visible list.
+ */
+@Immutable
+sealed interface TranscodesLoadPhase {
+    /**
+     * The gate is unresolved ([JellyPlayCapabilityState.Unknown], pre-probe) or
+     * the gate-on initial load is in flight — the full-screen spinner. While
+     * the gate is OFF the screen renders the gate face and this phase is
+     * unobserved (no load ever ran, so it stays here).
+     */
+    data object Loading : TranscodesLoadPhase
+
+    /**
+     * A manual refresh is in flight — the pre-refresh [staleRows] stay visible
+     * underneath (the refresh-failure idiom: a failed refresh keeps the stale
+     * list). Raised ONLY from [Loaded]; a retry from [Failed] keeps the error
+     * face until the fetch settles, matching the former behavior where
+     * `isRefreshing` never displaced a shown error.
+     */
+    data class Refreshing(val staleRows: List<TranscodeRow>) : TranscodesLoadPhase
+
+    /**
+     * The last fetch settled — the gate-on initial load, a poll tick, a
+     * manual refresh or a cancel-reload. A poll/refresh success resolving a
+     * previously shown [Failed] face into content is the phase's honest
+     * behavior: the former boolean soup left the stale `error` flag stranded
+     * under fresh rows (the screen kept showing the error face), a
+     * combination this machine cannot encode.
+     */
+    data class Loaded(val rows: List<TranscodeRow>) : TranscodesLoadPhase
+
+    /** The gate-on initial load failed — the only surfaced error; refresh/poll retries silently. */
+    data class Failed(val message: String?) : TranscodesLoadPhase
+}
+
 @Immutable
 data class TranscodesState(
-    val isLoading: Boolean = true,
-    val isRefreshing: Boolean = false,
-    val error: String? = null,
     val gate: JellyPlayCapabilityState = JellyPlayCapabilityState.Unknown,
-    val rows: List<TranscodeRow> = emptyList(),
-    /** True while a cancel request is in flight — the dialog's confirmLoading + guard. */
+    val loadPhase: TranscodesLoadPhase = TranscodesLoadPhase.Loading,
+    /**
+     * True while a cancel request is in flight — the dialog's confirmLoading +
+     * guard. Genuinely two-state (one request's in-flight fact, read by the
+     * [ConfirmationHost] settle rule), not a lifecycle — deliberately a
+     * boolean, not a phase arm.
+     */
     val isCancelling: Boolean = false,
 )
 
@@ -113,7 +158,14 @@ class JellyPlayTranscodesViewModel(
      */
     val cancelConfirmation = ConfirmationHost<TranscodeRow>()
 
-    /** Whether the initial gated load has been kicked off (exactly once per gate-on). */
+    /**
+     * Whether the initial gated load has been kicked off for the CURRENT
+     * gate-on stretch (exactly once per gate-on). The gate collector CLEARS
+     * this whenever the gate leaves Available — an identity reset / plugin
+     * reinstall re-arms the store's probe, the next gate-on is a fresh
+     * stretch, and the monitor must reload rather than show the first
+     * visit's rows forever.
+     */
     private var initialLoadStarted = false
 
     /**
@@ -151,20 +203,32 @@ class JellyPlayTranscodesViewModel(
         autoRefreshCycle.stop()
     }
 
-    /** Manual refresh (scaffold action): silent on failure — the stale list stays; success clears a shown error. */
+    /**
+     * Manual refresh (scaffold action): silent on failure — the stale list
+     * stays; success clears a shown error (settles the phase to
+     * [TranscodesLoadPhase.Loaded]). Raised only from [TranscodesLoadPhase.Loaded]
+     * as [TranscodesLoadPhase.Refreshing]; a retry from
+     * [TranscodesLoadPhase.Failed] keeps the error face until the fetch settles.
+     */
     fun refresh() {
         capabilityGate?.arm()
         if (_uiState.value.gate != JellyPlayCapabilityState.Available) return
         launch {
-            _uiState.update { it.copy(isRefreshing = true) }
+            val priorPhase = _uiState.value.loadPhase
+            if (priorPhase is TranscodesLoadPhase.Loaded) {
+                _uiState.update { it.copy(loadPhase = TranscodesLoadPhase.Refreshing(priorPhase.rows)) }
+            }
             pluginApiClient.getActiveTranscodes()
                 .onSuccess { rows ->
-                    _uiState.update {
-                        it.copy(rows = rows.map(::toRow), isRefreshing = false, error = null)
-                    }
+                    _uiState.update { it.copy(loadPhase = TranscodesLoadPhase.Loaded(rows.map(::toRow))) }
                 }
                 .onFailure {
-                    _uiState.update { it.copy(isRefreshing = false) }
+                    // The refresh-failure idiom: restore the pre-refresh face —
+                    // unless a concurrent writer already moved the phase past
+                    // Refreshing on its own.
+                    _uiState.update { s ->
+                        if (s.loadPhase is TranscodesLoadPhase.Refreshing) s.copy(loadPhase = priorPhase) else s
+                    }
                 }
         }
     }
@@ -173,26 +237,31 @@ class JellyPlayTranscodesViewModel(
      * The gate collector — rides the shared capability gate's verdict. The
      * first transcode load rides the Available transition (never before — a
      * gated-off screen must not touch the plugin route), so the screen opens
-     * on data rather than on a wasted 404.
+     * on data rather than on a wasted 404 — and the load latch RE-ARMS
+     * whenever the gate leaves Available, so a gate drop + re-gate-on
+     * (identity reset / plugin reinstall) reloads.
      */
     private fun observeGate() {
         val gateFlow = capabilityGate?.state(JellyPlayPluginFeatures.Transcodes, featureGate)
         if (gateFlow == null) {
             // Direct-construction without the plugin seam: gated off, final.
-            _uiState.update { it.copy(gate = JellyPlayCapabilityState.Unavailable, isLoading = false) }
+            // The phase is unobserved here (the screen renders the gate face).
+            _uiState.update { it.copy(gate = JellyPlayCapabilityState.Unavailable) }
             return
         }
         launch {
             gateFlow.collect { gate ->
-                _uiState.update {
-                    it.copy(
-                        gate = gate,
-                        isLoading = if (gate == JellyPlayCapabilityState.Unknown) it.isLoading else false,
-                    )
-                }
-                if (gate == JellyPlayCapabilityState.Available && !initialLoadStarted) {
-                    initialLoadStarted = true
-                    loadTranscodes()
+                _uiState.update { it.copy(gate = gate) }
+                if (gate == JellyPlayCapabilityState.Available) {
+                    if (!initialLoadStarted) {
+                        initialLoadStarted = true
+                        loadTranscodes()
+                    }
+                } else {
+                    // Gate dropped (Unknown after an identity reset, or
+                    // Unavailable): re-arm the latch — the next Available
+                    // transition is a fresh stretch and must reload.
+                    initialLoadStarted = false
                 }
             }
         }
@@ -202,16 +271,14 @@ class JellyPlayTranscodesViewModel(
     private fun loadTranscodes() {
         launch {
             loadInto(
-                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                start = { _uiState.update { it.copy(loadPhase = TranscodesLoadPhase.Loading) } },
                 fetch = { pluginApiClient.getActiveTranscodes() },
                 onSuccess = { rows ->
-                    _uiState.update {
-                        it.copy(rows = rows.map(::toRow), isLoading = false)
-                    }
+                    _uiState.update { it.copy(loadPhase = TranscodesLoadPhase.Loaded(rows.map(::toRow))) }
                 },
                 onFailure = { e ->
                     Log.e("JellyPlayTranscodes", "Failed to fetch active transcodes", e)
-                    _uiState.update { it.copy(error = e.message, isLoading = false) }
+                    _uiState.update { it.copy(loadPhase = TranscodesLoadPhase.Failed(e.message)) }
                 },
             )
         }
@@ -219,12 +286,13 @@ class JellyPlayTranscodesViewModel(
 
     /**
      * Silent poll/reload fetch: a failure keeps the stale list (the
-     * refresh-failure idiom), the next tick (or cancel settle) retries.
+     * refresh-failure idiom — the phase is untouched), the next tick (or
+     * cancel settle) retries; a success settles [TranscodesLoadPhase.Loaded].
      */
     private suspend fun fetchTranscodes() {
         pluginApiClient.getActiveTranscodes()
             .onSuccess { rows ->
-                _uiState.update { it.copy(rows = rows.map(::toRow), isLoading = false) }
+                _uiState.update { it.copy(loadPhase = TranscodesLoadPhase.Loaded(rows.map(::toRow))) }
             }
             .onFailure { e ->
                 Log.w("JellyPlayTranscodes", "Transcode fetch failed", e)

@@ -10,6 +10,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -126,6 +127,42 @@ class WidgetConfigViewModelTest {
         }
         coVerify(exactly = 0) { widgetDataStore.setWidgetConfig(any()) }
     }
+
+    @Test
+    fun `rapid toggles serialize - the first write lands before the second read-copy-write starts`() =
+        runTest(mainDispatcher) {
+            val perWidget = MutableStateFlow(WidgetConfig())
+            every { widgetDataStore.getWidgetConfigForId(7) } returns perWidget
+            val landedWrites = mutableListOf<LibraryRecommendationsSource>()
+            coEvery { widgetDataStore.setWidgetConfigForId(any(), any()) } coAnswers {
+                // The first write is slow (a cold DataStore), the second fast;
+                // the landing order, not the invocation order, is what a lost
+                // update corrupts.
+                if (landedWrites.isEmpty()) delay(1_000) else delay(10)
+                landedWrites += secondArg<WidgetConfig>().librarySource
+            }
+            val vm = WidgetConfigViewModel(widgetDataStore)
+            vm.initWidgetId(7)
+
+            vm.selectLibrarySource(LibraryRecommendationsSource.FAVORITES)
+            vm.selectLibrarySource(LibraryRecommendationsSource.LATEST)
+            advanceUntilIdle()
+
+            // DECLARED FIX pin: the persist is serialized under the update
+            // mutex, so write 1 fully lands before write 2's read-copy-write
+            // begins and the LAST toggle wins. Pre-fix the two updates
+            // interleaved across the first() suspension and the suspending
+            // DataStore write: the slow FIRST write landed after the second
+            // and silently reverted it (landedWrites would read
+            // [LATEST, FAVORITES]).
+            assertEquals(
+                listOf(
+                    LibraryRecommendationsSource.FAVORITES,
+                    LibraryRecommendationsSource.LATEST,
+                ),
+                landedWrites,
+            )
+        }
 
     @Test
     fun `state mirrors the store and setters mutate the projected copy`() = runTest(mainDispatcher) {
