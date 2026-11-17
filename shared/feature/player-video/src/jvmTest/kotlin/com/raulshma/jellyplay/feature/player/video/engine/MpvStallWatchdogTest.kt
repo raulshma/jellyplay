@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStallRecoveryAction
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStallWatchdog
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.isAimagereaderFailureLog
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.resolveMpvFramePresentation
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -330,5 +331,71 @@ class MpvStallWatchdogTest {
         )
         // attempts == MAX: everything stands down from here.
         assertNull(frozen(watchdog, fromMs = 19_000L, toMs = 30_000L, positionMs = 9_000L, aimagereader = true))
+    }
+
+    // ── the presentation-counter read (v0.11.13 lag regression) ─────────────
+    //
+    // The bundled libmpv build has NO displayed-frame-count (2026-11-17 POCO
+    // F1 capture: `property not found` once per tick while playback was
+    // healthy). The host's former `?: 0` turned that absence into "0 frames
+    // presented", so a transient aimagereader log armed the video-only window
+    // on a healthy zero-copy session; the recovery downgraded hwdec to
+    // mediacodec-copy, which could not keep up — smooth ~9 s, then ~6 display
+    // FPS and A/V desync. These tests pin unreadable = UNKNOWN (presented).
+
+    @Test
+    fun unreadableFrameCounter_isUnknownPresentation_notAbsent() {
+        val presentation = resolveMpvFramePresentation(count = null, epoch = null)
+        assertTrue(
+            presentation.framesPresented,
+            "a missing counter must never read as 'no frames presented'",
+        )
+        assertNull(presentation.nextEpoch)
+    }
+
+    @Test
+    fun unreadableFrameCounter_withOpenReattachEpoch_doesNotSuppressFrames() {
+        // A re-attach opened an epoch, then the counter cannot answer: the
+        // epoch cannot delta anything, so it must not read as "no frame yet".
+        val presentation = resolveMpvFramePresentation(count = null, epoch = 1_000)
+        assertTrue(presentation.framesPresented)
+        assertEquals(1_000, presentation.nextEpoch)
+    }
+
+    @Test
+    fun readableFrameCounter_opensAndRetiresTheReattachEpoch() {
+        // No epoch: >0 means frames are on screen, 0 means none yet.
+        assertTrue(resolveMpvFramePresentation(count = 1, epoch = null).framesPresented)
+        assertFalse(resolveMpvFramePresentation(count = 0, epoch = null).framesPresented)
+        // Epoch open: the attach sample itself (count == epoch) is not yet a
+        // presented frame; the first advance past it retires the epoch.
+        val atEpoch = resolveMpvFramePresentation(count = 100, epoch = 100)
+        assertFalse(atEpoch.framesPresented)
+        assertEquals(100, atEpoch.nextEpoch)
+        val retired = resolveMpvFramePresentation(count = 101, epoch = 100)
+        assertTrue(retired.framesPresented)
+        assertNull(retired.nextEpoch)
+    }
+
+    @Test
+    fun backwardsFrameCounter_rebaselinesTheReattachEpoch() {
+        // Re-created VO reset the counter below the captured epoch: delta from
+        // the fresh counter (not a stale epoch that would suppress forever).
+        val rebased = resolveMpvFramePresentation(count = 4, epoch = 100)
+        assertFalse(rebased.framesPresented)
+        assertEquals(4, rebased.nextEpoch)
+    }
+
+    @Test
+    fun advancingPositionWithAimagereaderFailureAndUnreadableCounter_neverFires() {
+        // The exact device regression: the playhead advances, a transient
+        // aimagereader line was seen, and displayed-frame-count cannot be read
+        // on this libmpv build. The video-only window must stay closed for the
+        // whole session (the host feeds the resolver's verdict here).
+        val watchdog = MpvStallWatchdog()
+        val presented = resolveMpvFramePresentation(count = null, epoch = null).framesPresented
+        assertNull(
+            advancing(watchdog, fromMs = 1_000L, toMs = 60_000L, aimagereader = true, presented = presented),
+        )
     }
 }

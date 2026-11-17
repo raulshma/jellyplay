@@ -711,6 +711,9 @@ public class MpvCore(
      * wedged session's only observable is the frozen position on these very
      * ticks). [nowMs] is the host's monotonic clock (Android
      * `SystemClock.elapsedRealtime`, desktop `System.nanoTime`/1e6).
+     * [videoFramesPresented] stays `true` for hosts that cannot observe
+     * presentation; a host whose counter read fails must also pass `true`
+     * (unknown, not "nothing presented" — see [MpvStallWatchdog.onTick]).
      */
     public fun onStallWatchdogTick(nowMs: Long, videoFramesPresented: Boolean = true) {
         stallWatchdog.onTick(

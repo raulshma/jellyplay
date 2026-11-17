@@ -126,7 +126,12 @@ class MpvStallWatchdog {
      *   once [aimagereaderFailureObserved] is set (the host reads it
      *   flag-gated, so the healthy path pays no extra property read). The
      *   default keeps the detector disarmed for callers that don't track
-     *   presentation.
+     *   presentation. An UNREADABLE counter must be passed as `true`
+     *   (unknown presentation, not "nothing presented") — a missing counter
+     *   cannot prove this wedge, and treating it as zero false-fired the
+     *   hwdec downgrade on healthy zero-copy sessions (the v0.11.13 lag
+     *   regression; the host resolves reads through
+     *   [resolveMpvFramePresentation]).
      */
     fun onTick(
         nowMs: Long,
@@ -224,6 +229,63 @@ class MpvStallWatchdog {
         const val HWDEC_STALL_FALLBACK = "mediacodec-copy"
     }
 }
+
+/**
+ * One gated `displayed-frame-count` read resolved into the watchdog's inputs.
+ */
+public data class MpvFramePresentation(
+    /**
+     * The `videoFramesPresented` verdict for [MpvStallWatchdog.onTick]. An
+     * unreadable counter is `true` — presentation UNKNOWN, never "nothing
+     * presented": absent evidence must not arm the video-only wedge window.
+     */
+    public val framesPresented: Boolean,
+    /** The re-attach epoch to carry into the next tick; null = no epoch open. */
+    public val nextEpoch: Int?,
+)
+
+/**
+ * Resolves the host's flag-gated `displayed-frame-count` read into the
+ * watchdog's inputs, including the mid-session re-attach epoch.
+ *
+ * Two device-proven rules live here:
+ *
+ * - **A missing counter is UNKNOWN, not zero.** The bundled libmpv build has
+ *   no `displayed-frame-count` (2026-11-17 POCO F1 capture:
+ *   `mpv_get_property(displayed-frame-count) format 4 returned error property
+ *   not found` once per watchdog tick during healthy playback). The Android
+ *   host's former `?: 0` mapped that absence to "no frame ever presented", so
+ *   a transient `aimagereader` log armed the video-only window on a healthy
+ *   zero-copy session; the recovery then downgraded it to `mediacodec-copy`,
+ *   which could not keep up (v0.11.13 report: smooth ~9 s, then ~6 display
+ *   FPS and A/V desync). Unknown must read as presented so the window stays
+ *   closed.
+ * - **An open epoch only suppresses frames it can actually observe.** When the
+ *   counter is unreadable the epoch cannot delta anything; reporting
+ *   "not presented" would false-fire the same downgrade, so the read is
+ *   UNKNOWN and the epoch is left as-is (a later readable sample resumes the
+ *   delta).
+ *
+ * @param count the `displayed-frame-count` read; null when the property (or
+ *   the handle) cannot answer.
+ * @param epoch the re-attach presentation epoch; null when no mid-session
+ *   re-attach is open.
+ */
+public fun resolveMpvFramePresentation(count: Int?, epoch: Int?): MpvFramePresentation =
+    when {
+        // Unreadable counter — UNKNOWN presentation, never a stall signal.
+        count == null -> MpvFramePresentation(framesPresented = true, nextEpoch = epoch)
+        epoch == null -> MpvFramePresentation(framesPresented = count > 0, nextEpoch = null)
+        count > epoch -> MpvFramePresentation(framesPresented = true, nextEpoch = null)
+        // The counter went BACKWARDS: the counter reset with a re-created VO
+        // (or a JNI read glitch). Re-baseline so the fresh count is delta-ed
+        // from zero instead of being suppressed until it re-clears the stale
+        // epoch. Under the cumulative assumption this arm is unreachable.
+        count < epoch -> MpvFramePresentation(framesPresented = false, nextEpoch = count)
+        // count == epoch: the epoch's own attach sample — nothing presented
+        // since the re-attach yet.
+        else -> MpvFramePresentation(framesPresented = false, nextEpoch = epoch)
+    }
 
 /**
  * The host-side mpv log detector feeding [MpvStallWatchdog.onTick]'s
