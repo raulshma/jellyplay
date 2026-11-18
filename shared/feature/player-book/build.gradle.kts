@@ -46,6 +46,10 @@ kotlin {
         getByName("jvmTest").dependencies {
             // (kotlin("test") comes from the convention plugin.)
             implementation(libs.coroutines.test)
+            // The shared MainDispatcherRule fixture, replacing this lane's
+            // hand-inlined setMain/resetMain boilerplate (test-scoped only —
+            // see the fixtures module's house rules).
+            implementation(project(":shared:core:test-fixtures"))
             implementation(libs.mockk)
             // Compose UI regression for the TOC tick rail (ReaderTocRailUiTest):
             // injected tap/drag through the real gesture detectors. The UI

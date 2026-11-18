@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
@@ -17,27 +18,22 @@ import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProgramsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: LiveTvApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -48,20 +44,14 @@ class ProgramsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         coEvery { mediaRepository.getRecommendedPrograms(any(), any()) } returns Result.success(emptyList())
         viewModel = ProgramsViewModel(mediaRepository, imageUrlProvider, fakeTimeSource)
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun init_fires_On_Now_airing_query_and_5_category_queries() = runTest(mainDispatcher) {
+    fun init_fires_On_Now_airing_query_and_5_category_queries() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         coVerify { mediaRepository.getRecommendedPrograms(match { it.isAiring == true }, any()) }
         coVerify { mediaRepository.getRecommendedPrograms(match { it.isSeries == true && it.hasAired == false }, any()) }
@@ -72,7 +62,7 @@ class ProgramsViewModelTest {
     }
 
     @Test
-    fun rows_are_built_only_for_non_empty_categories() = runTest(mainDispatcher) {
+    fun rows_are_built_only_for_non_empty_categories() = runTest(mainDispatcherRule.testDispatcher) {
         val onNow = listOf(sampleProgram("On Air Show"))
         coEvery {
             mediaRepository.getRecommendedPrograms(match<ProgramFilters> { it.isAiring == true }, any())
@@ -98,7 +88,7 @@ class ProgramsViewModelTest {
     }
 
     @Test
-    fun recordOnce_calls_createTimer_with_the_program_id() = runTest(mainDispatcher) {
+    fun recordOnce_calls_createTimer_with_the_program_id() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createTimer("prog-1") } returns Result.success(Unit)
         val program = sampleProgram(id = "prog-1")
         viewModel.recordOnce(program)
@@ -108,7 +98,7 @@ class ProgramsViewModelTest {
     }
 
     @Test
-    fun recordSeries_calls_createSeriesTimer_with_the_program_id() = runTest(mainDispatcher) {
+    fun recordSeries_calls_createSeriesTimer_with_the_program_id() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createSeriesTimer("prog-1") } returns Result.success(Unit)
         viewModel.recordSeries(sampleProgram(id = "prog-1"))
         advanceUntilIdle()
@@ -117,7 +107,7 @@ class ProgramsViewModelTest {
     }
 
     @Test
-    fun cancelTimer_forwards_the_program_timerId() = runTest(mainDispatcher) {
+    fun cancelTimer_forwards_the_program_timerId() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.cancelTimer("timer-9") } returns Result.success(Unit)
         viewModel.cancelTimer(sampleProgram(id = "prog-1", timerId = "timer-9"))
         advanceUntilIdle()
@@ -128,7 +118,7 @@ class ProgramsViewModelTest {
     // ── Row building ─────────────────────────────────────────────────────────
 
     @Test
-    fun rows_are_empty_when_every_category_query_comes_back_empty() = runTest(mainDispatcher) {
+    fun rows_are_empty_when_every_category_query_comes_back_empty() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.rows.isEmpty())
@@ -138,7 +128,7 @@ class ProgramsViewModelTest {
     // ── The 5-minute full-render throttle ────────────────────────────────────
 
     @Test
-    fun reload_within_5_minutes_only_refreshes_the_on_now_row() = runTest(mainDispatcher) {
+    fun reload_within_5_minutes_only_refreshes_the_on_now_row() = runTest(mainDispatcherRule.testDispatcher) {
         val onNow1 = listOf(sampleProgram(name = "Now A", id = "now-1"))
         val shows = listOf(sampleProgram(name = "Show", id = "show-1"))
         coEvery {
@@ -179,7 +169,7 @@ class ProgramsViewModelTest {
     }
 
     @Test
-    fun full_render_throttle_boundary_is_strict_at_the_5_minute_mark() = runTest(mainDispatcher) {
+    fun full_render_throttle_boundary_is_strict_at_the_5_minute_mark() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel = ProgramsViewModel(mediaRepository, imageUrlProvider, fakeTimeSource)
         advanceUntilIdle()
         clearMocks(mediaRepository, answers = false)
@@ -207,7 +197,7 @@ class ProgramsViewModelTest {
     // ── Record-flow dialog state machine ─────────────────────────────────────
 
     @Test
-    fun recordOnce_success_shows_Success_resets_dialog_and_reloads() = runTest(mainDispatcher) {
+    fun recordOnce_success_shows_Success_resets_dialog_and_reloads() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createTimer("prog-1") } returns Result.success(Unit)
         viewModel.recordOnce(sampleProgram(id = "prog-1"))
         assertEquals(RecordDialogState.Requesting, viewModel.uiState.value.recordDialog)
@@ -222,7 +212,7 @@ class ProgramsViewModelTest {
     }
 
     @Test
-    fun recordOnce_failure_shows_Error_with_the_exception_message() = runTest(mainDispatcher) {
+    fun recordOnce_failure_shows_Error_with_the_exception_message() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createTimer("prog-1") } returns Result.failure(RuntimeException("conflict"))
         viewModel.recordOnce(sampleProgram(id = "prog-1"))
         advanceUntilIdle()
@@ -231,7 +221,7 @@ class ProgramsViewModelTest {
     }
 
     @Test
-    fun recordOnce_failure_with_null_message_falls_back_to_the_resource() = runTest(mainDispatcher) {
+    fun recordOnce_failure_with_null_message_falls_back_to_the_resource() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createTimer("prog-1") } returns
             Result.failure(RuntimeException(null as String?))
         viewModel.recordOnce(sampleProgram(id = "prog-1"))
@@ -244,7 +234,7 @@ class ProgramsViewModelTest {
     }
 
     @Test
-    fun recordSeries_failure_shows_Error() = runTest(mainDispatcher) {
+    fun recordSeries_failure_shows_Error() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createSeriesTimer("prog-1") } returns Result.failure(RuntimeException("no"))
         viewModel.recordSeries(sampleProgram(id = "prog-1"))
         advanceUntilIdle()
@@ -262,7 +252,7 @@ class ProgramsViewModelTest {
     }
 
     @Test
-    fun cancelSeries_forwards_the_seriesTimerId_and_shows_Success() = runTest(mainDispatcher) {
+    fun cancelSeries_forwards_the_seriesTimerId_and_shows_Success() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.cancelSeriesTimer("st-9") } returns Result.success(Unit)
 
         viewModel.cancelSeries(sampleProgram(id = "prog-1", seriesTimerId = "st-9"))

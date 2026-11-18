@@ -7,11 +7,11 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.descriptor
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -19,15 +19,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Direct [DiscoverRowsCoordinator] tests — the cheap end of the dice-roll
@@ -47,7 +46,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class DiscoverRowsCoordinatorTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeFeed: HomeFeed
     private lateinit var state: MutableStateFlow<HomeRefreshState>
@@ -56,7 +56,6 @@ class DiscoverRowsCoordinatorTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         homeFeed = mockk(relaxed = true)
         state = MutableStateFlow(HomeRefreshState(sections = listOf(discoverSection("dr_x", item("m1")))))
     }
@@ -64,7 +63,6 @@ class DiscoverRowsCoordinatorTest {
     @AfterTest
     fun tearDown() {
         if (this::scope.isInitialized) scope.cancel()
-        Dispatchers.resetMain()
     }
 
     private fun TestScope.buildCoordinator(): DiscoverRowsCoordinator {

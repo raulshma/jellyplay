@@ -12,24 +12,21 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import org.junit.Rule
 
 /**
  * Image-upload and no-item-guard gaps in [EditorViewModel] NOT pinned by
@@ -54,9 +51,8 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelImageAndSaveGapsTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module (EditorViewModelMetadataTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var editorRepository: MetadataEditorRepository
     private lateinit var authRepository: AuthRepository
@@ -72,7 +68,6 @@ class EditorViewModelImageAndSaveGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         editorRepository = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
         subtitleProviderRepository = mockk(relaxed = true)
@@ -105,11 +100,6 @@ class EditorViewModelImageAndSaveGapsTest {
                 override suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?) = Unit
             },
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     // ── uploadImageFromUrl ────────────────────────────────────────────────

@@ -11,16 +11,34 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Onboarding-wizard preferences, projected centrally off the owning store
- * slices by [PreferenceProjections]. The fields span 8 domains (appearance,
- * home discovery, navigation, playback, video player, audio, subtitle,
- * security) and are combined into one holder so the screen keeps its single
- * `preferences.field` read pattern.
+ * The onboarding wizard's one flow module. Owns the three things the wizard's
+ * screens share:
+ *
+ *  - **Preferences**, projected centrally off the owning store slices by
+ *    [PreferenceProjections]. The fields span 8 domains (appearance, home
+ *    discovery, navigation, playback, video player, audio, subtitle,
+ *    security) and are combined into one holder so the screen keeps its
+ *    single `preferences.field` read pattern.
+ *
+ *  - **Page truth** — [currentPage] is the single source for which wizard
+ *    page is live; the pager only mirrors it. Every turn (Next button,
+ *    D-pad, header back, system back, user drag) funnels through
+ *    [navigateToPage] / [onPageSettled], which land a pending debounced
+ *    Seerr field write first, so the last keystroke is never lost to the
+ *    300 ms debounce window when a step is left.
+ *
+ *  - **Exit** — [exitWizard] is the one verb for leaving the wizard: flush,
+ *    then write the completion flag only when [markComplete], then signal
+ *    [WizardExit] on [exits] (the screen pops the nav route). Skip and
+ *    Start Watching both pass `markComplete = true`; system back on the
+ *    first page passes `false`.
  */
 class OnboardingViewModel(
     private val projections: PreferenceProjections,
@@ -37,15 +55,66 @@ class OnboardingViewModel(
 
     val seerrPreferences = seerrPreferencesStore.preferences
 
-    private val _currentStep = stateFlow(0)
-    val currentStep = _currentStep.flow
+    /**
+     * The live wizard page, clamped to `0..[OnboardingStep.count] - 1`. The
+     * screen mirrors this into its pager and reports drag-settled pages back
+     * through [onPageSettled].
+     */
+    private val _currentPage = stateFlow(0)
+    val currentPage = _currentPage.flow
 
-    fun setStep(step: Int) {
-        _currentStep.set(step.coerceIn(0, OnboardingStep.count - 1))
+    /** One-shot wizard exits, consumed exactly once by the screen. */
+    private val _exits = Channel<WizardExit>(Channel.BUFFERED)
+    val exits = _exits.receiveAsFlow()
+
+    /**
+     * Turns to [target]: lands a pending debounced Seerr field write first,
+     * then sets [currentPage] (clamped, so a fast double-tap can never leave
+     * the wizard). Every page-turn verb the screen has routes here.
+     */
+    fun navigateToPage(target: Int) {
+        launch {
+            seerrEditActions.flushPendingFieldWrites()
+            _currentPage.set(target.coerceIn(0, OnboardingStep.count - 1))
+        }
     }
 
-    fun nextStep() {
-        setStep(_currentStep.value + 1)
+    /**
+     * Acknowledges a pager page the user dragged to (the pager's settled
+     * `currentPage`, not a turn this ViewModel initiated). Rides the same
+     * flush+clamp+set as [navigateToPage] — flush-on-turn is universal — but
+     * short-circuits when the pager already matches [currentPage], so the
+     * screen's settle collector and this ViewModel never feed each other a
+     * loop: each side only acts on a difference.
+     */
+    fun onPageSettled(page: Int) {
+        if (page == _currentPage.value) return
+        navigateToPage(page)
+    }
+
+    /**
+     * Wizard back: one page up, or — on the first page — leave the wizard
+     * without completing ([WizardExit.Abandon]). The flush still runs on that
+     * exit: WELCOME has no fields today, so it is a no-op, but the first page
+     * must keep the flush-on-every-verb invariant when fields move onto it.
+     */
+    fun onBack() {
+        val page = _currentPage.value
+        if (page > 0) navigateToPage(page - 1) else exitWizard(markComplete = false)
+    }
+
+    /**
+     * Leaves the wizard: lands a pending debounced Seerr field write, then
+     * (only when [markComplete]) persists the completion flag, then signals
+     * [WizardExit.Complete] / [WizardExit.Abandon] on [exits]. Skip and
+     * Start Watching pass `true`; back on the first page passes `false`.
+     */
+    fun exitWizard(markComplete: Boolean) {
+        launch {
+            seerrEditActions.flushPendingFieldWrites()
+            if (markComplete) completeOnboarding()
+            _exits.trySend(if (markComplete) WizardExit.Complete else WizardExit.Abandon)
+        }
     }
 
     fun completeOnboarding() {
@@ -182,4 +251,26 @@ class SeerrEditActions(
             block()
         }
     }
+}
+
+/**
+ * One wizard exit, fired on [OnboardingViewModel.exits] and consumed exactly
+ * once by the screen (the `VideoPlayerViewModel.closePlayer` idiom: Channel
+ * BUFFERED + `receiveAsFlow()`, never a nullable StateFlow field that would
+ * replay the exit to every new collector). The variants are the only two ways
+ * the wizard can end:
+ *
+ *  - [Complete] — skip or Start Watching: the completion flag was persisted
+ *    before this exit (the gate never re-fires for a completer).
+ *  - [Abandon] — system back on the first page: the wizard closed without
+ *    completing (re-runs on the next gate pass).
+ *
+ * The screen pops the nav route through its existing `onComplete` callback
+ * for both variants — the callback is a composable parameter the ViewModel
+ * cannot own, which is why exits ride a channel instead.
+ */
+@Immutable
+sealed interface WizardExit {
+    data object Complete : WizardExit
+    data object Abandon : WizardExit
 }

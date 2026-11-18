@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaylistItem
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.Called
 import io.mockk.coEvery
 import io.mockk.every
@@ -18,11 +19,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
-import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -31,6 +29,7 @@ import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import java.util.concurrent.CopyOnWriteArrayList
+import org.junit.Rule
 
 /**
  * Plain-JVM test over the facade's three mocked seams ([AudioQueueManager],
@@ -44,7 +43,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 @OptIn(ExperimentalCoroutinesApi::class)
 class AudioQueueFacadeTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val queueManager: AudioQueueManager = mockk(relaxed = true)
     private val libraryApiClient: LibraryApiClient = mockk()
@@ -54,18 +54,12 @@ class AudioQueueFacadeTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         facade = DefaultAudioQueueFacade(
             queueManager = queueManager,
             libraryApiClient = libraryApiClient,
             imageUrlProvider = imageUrlProvider,
-            radioScope = CoroutineScope(SupervisorJob() + testDispatcher),
+            radioScope = CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher),
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun track(id: String, album: String? = null) = MediaItem(
@@ -78,7 +72,7 @@ class AudioQueueFacadeTest {
     // ── Image-width propagation ─────────────────────────────────────────
 
     @Test
-    fun `playTracks resolves image urls at the default width 400`() = runTest(testDispatcher) {
+    fun `playTracks resolves image urls at the default width 400`() = runTest(mainDispatcherRule.testDispatcher) {
         facade.playTracks(listOf(track("t1"), track("t2")))
 
         verify(exactly = 1) { imageUrlProvider.getImageUrl("t1", maxWidth = ImageUrlProvider.DEFAULT_MAX_WIDTH) }
@@ -87,7 +81,7 @@ class AudioQueueFacadeTest {
     }
 
     @Test
-    fun `playTracks honors MUSIC_MAX_WIDTH 300 for dense music lists`() = runTest(testDispatcher) {
+    fun `playTracks honors MUSIC_MAX_WIDTH 300 for dense music lists`() = runTest(mainDispatcherRule.testDispatcher) {
         facade.playTracks(listOf(track("t1"), track("t2"), track("t3")), imageMaxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)
 
         verify(exactly = 3) { imageUrlProvider.getImageUrl(any(), maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH) }
@@ -96,7 +90,7 @@ class AudioQueueFacadeTest {
     // ── Album fallback ──────────────────────────────────────────────────
 
     @Test
-    fun `playTracks fills null albums from albumFallback and keeps non-null albums`() = runTest(testDispatcher) {
+    fun `playTracks fills null albums from albumFallback and keeps non-null albums`() = runTest(mainDispatcherRule.testDispatcher) {
         val withoutAlbum = track("t1", album = null)
         val withAlbum = track("t2", album = "Own Album")
 
@@ -110,7 +104,7 @@ class AudioQueueFacadeTest {
     // ── Shuffle + startIndex passthrough ────────────────────────────────
 
     @Test
-    fun `playTracks passes startIndex through and preserves order unshuffled`() = runTest(testDispatcher) {
+    fun `playTracks passes startIndex through and preserves order unshuffled`() = runTest(mainDispatcherRule.testDispatcher) {
         val tracks = (1..3).map { track("t$it") }
 
         val outcome = facade.playTracks(tracks, startIndex = 2)
@@ -122,7 +116,7 @@ class AudioQueueFacadeTest {
     }
 
     @Test
-    fun `playTracks shuffled=true permutes the queue and keeps the same tracks`() = runTest(testDispatcher) {
+    fun `playTracks shuffled=true permutes the queue and keeps the same tracks`() = runTest(mainDispatcherRule.testDispatcher) {
         val tracks = (1..12).map { track("t%02d".format(it)) }
         val originalIds = tracks.map { it.id }
 
@@ -139,7 +133,7 @@ class AudioQueueFacadeTest {
     // ── Empty / Failed / Suppressed ─────────────────────────────────────
 
     @Test
-    fun `playTracks on empty input returns Empty without touching the queue`() = runTest(testDispatcher) {
+    fun `playTracks on empty input returns Empty without touching the queue`() = runTest(mainDispatcherRule.testDispatcher) {
         val outcome = facade.playTracks(emptyList<MediaItem>())
 
         assertEquals(AudioQueueOutcome.Empty, outcome)
@@ -147,7 +141,7 @@ class AudioQueueFacadeTest {
     }
 
     @Test
-    fun `enqueueTracks appends every item and reports Started with no start index`() = runTest(testDispatcher) {
+    fun `enqueueTracks appends every item and reports Started with no start index`() = runTest(mainDispatcherRule.testDispatcher) {
         val outcome = facade.enqueueTracks(listOf(track("t1"), track("t2")))
 
         val started = outcome as AudioQueueOutcome.Started
@@ -160,13 +154,13 @@ class AudioQueueFacadeTest {
     }
 
     @Test
-    fun `enqueueTracks on empty input returns Empty without touching the queue`() = runTest(testDispatcher) {
+    fun `enqueueTracks on empty input returns Empty without touching the queue`() = runTest(mainDispatcherRule.testDispatcher) {
         assertEquals(AudioQueueOutcome.Empty, facade.enqueueTracks(emptyList()))
         verify { queueManager wasNot Called }
     }
 
     @Test
-    fun `enqueueTrack appends the single item and reports Started with no start index`() = runTest(testDispatcher) {
+    fun `enqueueTrack appends the single item and reports Started with no start index`() = runTest(mainDispatcherRule.testDispatcher) {
         val outcome = facade.enqueueTrack(track("t1"))
 
         val started = outcome as AudioQueueOutcome.Started
@@ -176,7 +170,7 @@ class AudioQueueFacadeTest {
     }
 
     @Test
-    fun `startInstantMix plays the fetched mix at index 0 with the fallback applied`() = runTest(testDispatcher) {
+    fun `startInstantMix plays the fetched mix at index 0 with the fallback applied`() = runTest(mainDispatcherRule.testDispatcher) {
         val guardThreads = CopyOnWriteArrayList<String>()
         coEvery { libraryApiClient.getInstantMix("seed", 100) } returns Result.success(
             listOf(track("m1", album = null), track("m2", album = "Own Album")),
@@ -199,7 +193,7 @@ class AudioQueueFacadeTest {
     }
 
     @Test
-    fun `startInstantMix on empty mix returns Empty without playing`() = runTest(testDispatcher) {
+    fun `startInstantMix on empty mix returns Empty without playing`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { libraryApiClient.getInstantMix("seed", 100) } returns Result.success(emptyList())
 
         assertEquals(AudioQueueOutcome.Empty, facade.startInstantMix("seed"))
@@ -207,7 +201,7 @@ class AudioQueueFacadeTest {
     }
 
     @Test
-    fun `startInstantMix on repository failure returns Failed with the cause`() = runTest(testDispatcher) {
+    fun `startInstantMix on repository failure returns Failed with the cause`() = runTest(mainDispatcherRule.testDispatcher) {
         val boom = RuntimeException("boom")
         coEvery { libraryApiClient.getInstantMix("seed", 100) } returns Result.failure(boom)
 
@@ -219,7 +213,7 @@ class AudioQueueFacadeTest {
     }
 
     @Test
-    fun `startInstantMix on guard veto returns Suppressed without playing`() = runTest(testDispatcher) {
+    fun `startInstantMix on guard veto returns Suppressed without playing`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { libraryApiClient.getInstantMix("seed", 100) } returns Result.success(listOf(track("m1")))
 
         val outcome = facade.startInstantMix("seed") { false }
@@ -231,7 +225,7 @@ class AudioQueueFacadeTest {
     // ── Dispatcher contract (the structural fix for the live crash) ─────
 
     @Test
-    fun `queue mutations run on Main even when the caller is on Dispatchers Default`() = runTest(testDispatcher) {
+    fun `queue mutations run on Main even when the caller is on Dispatchers Default`() = runTest(mainDispatcherRule.testDispatcher) {
         val mutationThreads = CopyOnWriteArrayList<String>()
         every { queueManager.playQueue(any(), any()) } answers { mutationThreads.add(Thread.currentThread().name) }
         every { queueManager.addToQueue(any()) } answers { mutationThreads.add(Thread.currentThread().name) }
@@ -254,7 +248,7 @@ class AudioQueueFacadeTest {
     // ── Playlist overload (imageless mapper, untouched) ─────────────────
 
     @Test
-    fun `playPlaylist maps items with imageUrl null and passes startIndex`() = runTest(testDispatcher) {
+    fun `playPlaylist maps items with imageUrl null and passes startIndex`() = runTest(mainDispatcherRule.testDispatcher) {
         val items = listOf(
             PlaylistItem(id = "p1", name = "Song 1", artist = "Artist", album = "Album", runTimeTicks = 10_000_000L),
         )
@@ -277,13 +271,13 @@ class AudioQueueFacadeTest {
     }
 
     @Test
-    fun `playPlaylist on empty input returns Empty without touching the queue`() = runTest(testDispatcher) {
+    fun `playPlaylist on empty input returns Empty without touching the queue`() = runTest(mainDispatcherRule.testDispatcher) {
         assertEquals(AudioQueueOutcome.Empty, facade.playPlaylist(emptyList()))
         verify { queueManager wasNot Called }
     }
 
     @Test
-    fun `enqueuePlaylistItem appends the imageless queue item`() = runTest(testDispatcher) {
+    fun `enqueuePlaylistItem appends the imageless queue item`() = runTest(mainDispatcherRule.testDispatcher) {
         facade.enqueuePlaylistItem(PlaylistItem(id = "p1", name = "Song 1"))
 
         val captured = slot<AudioQueueItem>()
@@ -295,7 +289,7 @@ class AudioQueueFacadeTest {
     // ── Endless-radio lifecycle ─────────────────────────────────────────
 
     @Test
-    fun `a fresh queue disarms a live radio without an explicit stopRadio`() = runTest(testDispatcher) {
+    fun `a fresh queue disarms a live radio without an explicit stopRadio`() = runTest(mainDispatcherRule.testDispatcher) {
         val queueFlow = MutableStateFlow<List<AudioQueueItem>>(emptyList())
         val indexFlow = MutableStateFlow(0)
         every { queueManager.queue } returns queueFlow

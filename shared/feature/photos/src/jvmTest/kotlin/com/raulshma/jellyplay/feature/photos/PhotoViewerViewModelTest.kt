@@ -12,35 +12,33 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 class PhotoViewerViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — same
-    // harness as LibraryViewModelTest (runTest reuses the Main TestDispatcher's
-    // scheduler, so the VM's viewModelScope coroutines run on this scheduler).
-    private val mainDispatcher = StandardTestDispatcher()
+    // Same harness as LibraryViewModelTest (runTest reuses the Main
+    // TestDispatcher's scheduler, so the VM's viewModelScope coroutines run on
+    // this scheduler).
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var detailFeed: DetailFeed
     private lateinit var libraryApiClient: LibraryApiClient
@@ -53,7 +51,6 @@ class PhotoViewerViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         detailFeed = mockk(relaxed = true)
 
         libraryApiClient = mockk(relaxed = true)
@@ -66,11 +63,6 @@ class PhotoViewerViewModelTest {
         // slideshow navigations included).
         coEvery { detailFeed.getMediaDetail(any(), force = false) } returns
             Result.success(MediaDetail(item = photo1))
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun createViewModel(): PhotoViewerViewModel = PhotoViewerViewModel(

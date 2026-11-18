@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.network.api.JellyPlaySnapshot
 import com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotContent
 import com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotProfile
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingWrite
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.wizard_reject_bucket_other
@@ -99,7 +100,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -107,6 +107,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * The unified restore wizard's model gate: source loading + degrade, the file
@@ -126,7 +127,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class RestoreWizardViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var settingsBackupIo: SettingsBackupIo
     private lateinit var userPreferencesStore: UserPreferencesStore
@@ -166,7 +168,6 @@ class RestoreWizardViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         settingsBackupIo = mockk()
         userPreferencesStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
@@ -228,11 +229,6 @@ class RestoreWizardViewModelTest {
 
         bus = UserMessageBus()
         busMessages.clear()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** Drains the scheduler until [condition] holds, pumping across real-thread hops. */
@@ -465,7 +461,7 @@ class RestoreWizardViewModelTest {
     // ---------------------------------------------------------------- source loading + degrade
 
     @Test
-    fun `gate closed degrades the server arm quietly without touching the api`() = runTest(testDispatcher) {
+    fun `gate closed degrades the server arm quietly without touching the api`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         vm.start(uri = null, snapshotId = null)
         advanceUntilIdle()
@@ -479,7 +475,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `gate open loads the restore points and an old-plugin 404 degrades to unavailable`() = runTest(testDispatcher) {
+    fun `gate open loads the restore points and an old-plugin 404 degrades to unavailable`() = runTest(mainDispatcherRule.testDispatcher) {
         gateOpen()
         coEvery { pluginApi.getSnapshots() } returns Result.success(
             listOf(JellyPlaySnapshot(id = 1L, createdAt = 1_700_000_000_000, origin = "manual", keys = 4)),
@@ -501,7 +497,7 @@ class RestoreWizardViewModelTest {
 
     @Test
     fun `source unavailable carries each cause - gate closed, no client, old plugin, read failed`() =
-        runTest(testDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             // 1. gate closed (the plugin-gating contract).
             val closed = viewModel()
             closed.start(uri = null, snapshotId = null)
@@ -540,7 +536,7 @@ class RestoreWizardViewModelTest {
         }
 
     @Test
-    fun `a nav-carried snapshot id jumps straight into the snapshot diff`() = runTest(testDispatcher) {
+    fun `a nav-carried snapshot id jumps straight into the snapshot diff`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = openSnapshotVm()
 
         assertEquals(WizardStep.DIFF, vm.uiState.step)
@@ -549,7 +545,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `staging a backup file after a snapshot diff leaves exactly one face`() = runTest(testDispatcher) {
+    fun `staging a backup file after a snapshot diff leaves exactly one face`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = openSnapshotVm()
         assertIs<DiffStage.Snapshot>(vm.uiState.diffStage)
 
@@ -581,7 +577,7 @@ class RestoreWizardViewModelTest {
     // ---------------------------------------------------------------- file diff
 
     @Test
-    fun `v2 backup loads the file diff with current-version flags`() = runTest(testDispatcher) {
+    fun `v2 backup loads the file diff with current-version flags`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedWithFile(appearanceBackupJson())
 
         assertNull(vm.uiState.loadFailure)
@@ -601,7 +597,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `v2 security slice flags the lock-config opt-in`() = runTest(testDispatcher) {
+    fun `v2 security slice flags the lock-config opt-in`() = runTest(mainDispatcherRule.testDispatcher) {
         val json = v2Json(
             slices = mapOf(
                 BackupSliceKey.SECURITY to sliceElement(
@@ -616,7 +612,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `future schema version flags a mismatch but still previews`() = runTest(testDispatcher) {
+    fun `future schema version flags a mismatch but still previews`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedWithFile(
             v2Json(schemaVersion = SettingsBackup.CURRENT_SCHEMA_VERSION + 1),
             uri = "backup:future",
@@ -628,7 +624,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `unopenable backup file surfaces the inline load error and allows a retry`() = runTest(testDispatcher) {
+    fun `unopenable backup file surfaces the inline load error and allows a retry`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { settingsBackupIo.readImportPayload("backup:missing") } returns null
         val vm = viewModel()
         advanceUntilIdle()
@@ -653,7 +649,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `legacy v0 backups are rejected by the parser into the load error`() = runTest(testDispatcher) {
+    fun `legacy v0 backups are rejected by the parser into the load error`() = runTest(mainDispatcherRule.testDispatcher) {
         stubImport("backup:v0", """{"schemaVersion":0}""")
         val vm = viewModel()
         vm.loadBackupFile("backup:v0")
@@ -667,7 +663,7 @@ class RestoreWizardViewModelTest {
     // ---------------------------------------------------------------- wave-2 slices + extras
 
     @Test
-    fun `wave-2 slices in the backup stage external cards with human labels`() = runTest(testDispatcher) {
+    fun `wave-2 slices in the backup stage external cards with human labels`() = runTest(mainDispatcherRule.testDispatcher) {
         val currentIntegrations = buildJsonObject { put("seerr_server_url", "https://old.local") }
         val incomingIntegrations = buildJsonObject { put("seerr_server_url", "https://new.local") }
         val incomingPlaylists = buildJsonObject { put("smart/pl-1", buildJsonObject { put("name", "Night") }) }
@@ -713,7 +709,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `extras card diffs the app-runtime block`() = runTest(testDispatcher) {
+    fun `extras card diffs the app-runtime block`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedWithFile(
             v2Json(extras = AppRuntimeState(favoriteChannels = setOf("chan-1"))),
         )
@@ -726,7 +722,7 @@ class RestoreWizardViewModelTest {
     // ---------------------------------------------------------------- selection consistency
 
     @Test
-    fun `selection toggles keep the parent tier consistent`() = runTest(testDispatcher) {
+    fun `selection toggles keep the parent tier consistent`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedWithFile(appearanceBackupJson())
         val declared = PreferenceCategoryViews.map { it.category }
 
@@ -758,7 +754,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `snapshot selection keeps the prefs parent aligned with its domains`() = runTest(testDispatcher) {
+    fun `snapshot selection keeps the prefs parent aligned with its domains`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = openSnapshotVm()
 
         vm.toggle(WizardSelectionTarget.PrefDomain("appearance"))
@@ -781,7 +777,7 @@ class RestoreWizardViewModelTest {
     // ---------------------------------------------------------------- file apply
 
     @Test
-    fun `file apply fans to the store seams per selection and syncs after`() = runTest(testDispatcher) {
+    fun `file apply fans to the store seams per selection and syncs after`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         val vm = loadedWithFile(appearanceBackupJson())
         collectBus()
@@ -812,7 +808,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `completed apply phase consumes one-shot back to idle`() = runTest(testDispatcher) {
+    fun `completed apply phase consumes one-shot back to idle`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         val vm = loadedWithFile(appearanceBackupJson())
         vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
@@ -828,7 +824,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `empty selection applies nothing and never completes`() = runTest(testDispatcher) {
+    fun `empty selection applies nothing and never completes`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         val vm = loadedWithFile(appearanceBackupJson())
 
@@ -841,7 +837,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `pre-apply capture failure warns on the bus and never blocks the apply`() = runTest(testDispatcher) {
+    fun `pre-apply capture failure warns on the bus and never blocks the apply`() = runTest(mainDispatcherRule.testDispatcher) {
         gateOpen()
         coEvery { pluginApi.createSnapshot() } returns Result.failure(IllegalStateException("500"))
         val vm = loadedWithFile(appearanceBackupJson())
@@ -862,7 +858,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `closed gate skips the capture entirely`() = runTest(testDispatcher) {
+    fun `closed gate skips the capture entirely`() = runTest(mainDispatcherRule.testDispatcher) {
         // Defaults: probe UNAVAILABLE — the gate is closed.
         val vm = loadedWithFile(appearanceBackupJson())
         vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
@@ -874,7 +870,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `security opt-in rides the categories restore`() = runTest(testDispatcher) {
+    fun `security opt-in rides the categories restore`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         val json = v2Json(
             slices = mapOf(
@@ -899,7 +895,7 @@ class RestoreWizardViewModelTest {
     // ---------------------------------------------------------------- cross-account
 
     @Test
-    fun `origin ids from another account warn, own or absent stay silent`() = runTest(testDispatcher) {
+    fun `origin ids from another account warn, own or absent stay silent`() = runTest(mainDispatcherRule.testDispatcher) {
         val foreign = loadedWithFile(
             v2Json(originUserId = "user-2", originServerId = "srv-1"),
             uri = "backup:foreign",
@@ -938,7 +934,7 @@ class RestoreWizardViewModelTest {
     )
 
     @Test
-    fun `backup with secrets stages the locked card and unlock surfaces the counts`() = runTest(testDispatcher) {
+    fun `backup with secrets stages the locked card and unlock surfaces the counts`() = runTest(mainDispatcherRule.testDispatcher) {
         val assembler = mockk<SecretsBackupAssembler>(relaxed = true)
         every { assembler.summarize(any()) } returns SecretsRestoreSummary(
             servers = 2, arrServers = 1, subtitleProviders = 0, hasSeerr = false,
@@ -960,7 +956,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `unlock with the wrong passphrase flags the inline error and stays locked`() = runTest(testDispatcher) {
+    fun `unlock with the wrong passphrase flags the inline error and stays locked`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedWithFile(
             v2Json(secrets = secretsEnvelope("open-sesame-9")),
             uri = "backup:secrets",
@@ -977,7 +973,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `applySecrets fans the unlocked payload through the assembler and a locked apply is a no-op`() = runTest(testDispatcher) {
+    fun `applySecrets fans the unlocked payload through the assembler and a locked apply is a no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         val assembler = mockk<SecretsBackupAssembler>(relaxed = true)
         coEvery { assembler.apply(any()) } returns SecretsApplyResult(1, 0, false, 2)
         val vm = loadedWithFile(
@@ -1008,7 +1004,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `unlockSecrets zeroes the passphrase material`() = runTest(testDispatcher) {
+    fun `unlockSecrets zeroes the passphrase material`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedWithFile(
             v2Json(secrets = secretsEnvelope("open-sesame-9")),
             uri = "backup:secrets",
@@ -1025,7 +1021,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `unlockSecrets zeroes the passphrase on the early returns`() = runTest(testDispatcher) {
+    fun `unlockSecrets zeroes the passphrase on the early returns`() = runTest(mainDispatcherRule.testDispatcher) {
         // Early return 1: the staged file carries NO secrets envelope.
         val vm = loadedWithFile(appearanceBackupJson())
         val noEnvelope = "zero-me-now-1".toCharArray()
@@ -1061,7 +1057,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `a rapid double confirmation queues only one KDF run`() = runTest(testDispatcher) {
+    fun `a rapid double confirmation queues only one KDF run`() = runTest(mainDispatcherRule.testDispatcher) {
         val entries = java.util.concurrent.atomic.AtomicInteger()
         val entryGate = CompletableDeferred<Unit>()
         mockkObject(BackupSecretsCodec)
@@ -1097,7 +1093,7 @@ class RestoreWizardViewModelTest {
 
     @Test
     fun `an unlock settling after a re-stage is discarded - no summary and its apply is a no-op`() =
-        runTest(testDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val assembler = mockk<SecretsBackupAssembler>(relaxed = true)
             val envelopeA = secretsEnvelope("open-sesame-9")
             val entryGate = CompletableDeferred<Unit>()
@@ -1142,7 +1138,7 @@ class RestoreWizardViewModelTest {
     // ---------------------------------------------------------------- snapshot diff + apply
 
     @Test
-    fun `snapshot diff classifies changed, added and removed and sub-groups prefs by domain`() = runTest(testDispatcher) {
+    fun `snapshot diff classifies changed, added and removed and sub-groups prefs by domain`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = openSnapshotVm()
 
         val groups = vm.uiState.stagedSnapshot()!!.groups
@@ -1175,7 +1171,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `snapshot apply builds one base-profile batch with fresh stamps, tombstones, and syncs after`() = runTest(testDispatcher) {
+    fun `snapshot apply builds one base-profile batch with fresh stamps, tombstones, and syncs after`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         coEvery { pluginApi.applySettings(any(), any(), any()) } returns Result.success(
             JellyPlaySettingsBatchResult(
@@ -1214,7 +1210,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `snapshot apply fans one applySettings per origin profile - base rides profile null`() = runTest(testDispatcher) {
+    fun `snapshot apply fans one applySettings per origin profile - base rides profile null`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         coEvery { pluginApi.getSnapshotContent("s-mp") } returns Result.success(
             JellyPlaySnapshotContent(
@@ -1266,7 +1262,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `snapshot apply chunks at the page limit and aggregates the summary`() = runTest(testDispatcher) {
+    fun `snapshot apply chunks at the page limit and aggregates the summary`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         val rows = (1..250).map { entry("search", "k$it", "v$it") }
         coEvery { pluginApi.getSnapshotContent("s-big") } returns Result.success(
@@ -1300,7 +1296,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `snapshot apply failure surfaces the error face and never claims success`() = runTest(testDispatcher) {
+    fun `snapshot apply failure surfaces the error face and never claims success`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         coEvery { pluginApi.applySettings(any(), any(), any()) } returns Result.failure(RuntimeException("socket boom"))
         val vm = openSnapshotVm()
@@ -1318,7 +1314,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `a second restoreSelected while applying is refused - exactly one batch`() = runTest(testDispatcher) {
+    fun `a second restoreSelected while applying is refused - exactly one batch`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         val applyGate = CompletableDeferred<Unit>()
         coEvery { pluginApi.applySettings(any(), any(), any()) } coAnswers {
@@ -1340,7 +1336,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `a failed live export read is a load error - never an empty diff`() = runTest(testDispatcher) {
+    fun `a failed live export read is a load error - never an empty diff`() = runTest(mainDispatcherRule.testDispatcher) {
         gateOpen()
         coEvery { pluginApi.getSnapshotContent("s1") } returns Result.success(
             JellyPlaySnapshotContent(
@@ -1367,7 +1363,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `a failed snapshot content read is a load error - never the degrade face`() = runTest(testDispatcher) {
+    fun `a failed snapshot content read is a load error - never the degrade face`() = runTest(mainDispatcherRule.testDispatcher) {
         gateOpen()
         coEvery { pluginApi.getSnapshotContent("s-broken") } returns Result.failure(RuntimeException("500"))
         val vm = viewModel()
@@ -1380,7 +1376,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `partial prefs selection never tombstones the unselected domains`() = runTest(testDispatcher) {
+    fun `partial prefs selection never tombstones the unselected domains`() = runTest(mainDispatcherRule.testDispatcher) {
         gateCaptureOk()
         val vm = openSnapshotVm()
 
@@ -1402,7 +1398,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `old-plugin null content degrades to full restore only`() = runTest(testDispatcher) {
+    fun `old-plugin null content degrades to full restore only`() = runTest(mainDispatcherRule.testDispatcher) {
         gateOpen()
         coEvery { pluginApi.getSnapshotContent("s-gone") } returns Result.success(null)
         val vm = viewModel()
@@ -1425,7 +1421,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `rejects map to short human buckets and surface in the summary`() = runTest(testDispatcher) {
+    fun `rejects map to short human buckets and surface in the summary`() = runTest(mainDispatcherRule.testDispatcher) {
         // The pure mapping first.
         assertEquals(RejectReason.STALE_WRITE, rejectReason("stale-write"))
         assertEquals(RejectReason.CLOCK_SKEW, rejectReason("clock-skew"))

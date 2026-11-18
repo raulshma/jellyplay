@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_grab_sent
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_import_sent
@@ -19,23 +20,19 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * ArrQueue ViewModel coverage: the DIRECT_ARR_INTEGRATION flag gate on refresh,
@@ -59,9 +56,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArrQueueViewModelTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var arrRepository: ArrRepository
     private lateinit var experimentalStore: ExperimentalStore
@@ -74,7 +70,6 @@ class ArrQueueViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         arrRepository = mockk()
         experimentalStore = mockk()
         experimentalSlice = MutableStateFlow(ExperimentalSlice())
@@ -82,11 +77,6 @@ class ArrQueueViewModelTest {
         every { experimentalStore.experimental } returns experimentalSlice
         every { arrRepository.queue() } returns queueFlow
         coEvery { arrRepository.refreshQueue() } returns Result.success(Unit)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun enableDirectArr() {
@@ -97,7 +87,7 @@ class ArrQueueViewModelTest {
 
     private fun newViewModel(): ArrQueueViewModel = ArrQueueViewModel(
         arrRepository = arrRepository,
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     private fun item(
@@ -118,7 +108,7 @@ class ArrQueueViewModelTest {
     // ── flag gate + refresh ───────────────────────────────────────────────
 
     @Test
-    fun flag_disabled_refresh_is_noop_and_clears_transient_state() = runTest(mainDispatcher) {
+    fun flag_disabled_refresh_is_noop_and_clears_transient_state() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -132,7 +122,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun flag_on_init_refresh_noops_then_warmed_refresh_drives_load_and_error() = runTest(mainDispatcher) {
+    fun flag_on_init_refresh_noops_then_warmed_refresh_drives_load_and_error() = runTest(mainDispatcherRule.testDispatcher) {
         enableDirectArr()
         coEvery { arrRepository.refreshQueue() } returns Result.failure(RuntimeException("offline"))
 
@@ -155,7 +145,7 @@ class ArrQueueViewModelTest {
     // ── queue-flow mirror ─────────────────────────────────────────────────
 
     @Test
-    fun queue_flow_mirrors_into_state() = runTest(mainDispatcher) {
+    fun queue_flow_mirrors_into_state() = runTest(mainDispatcherRule.testDispatcher) {
         val first = item(1)
         queueFlow.value = listOf(first)
 
@@ -172,7 +162,7 @@ class ArrQueueViewModelTest {
     // ── selection + rowKey format ─────────────────────────────────────────
 
     @Test
-    fun selection_toggle_select_all_and_clear_drive_selection_state() = runTest(mainDispatcher) {
+    fun selection_toggle_select_all_and_clear_drive_selection_state() = runTest(mainDispatcherRule.testDispatcher) {
         queueFlow.value = listOf(item(1), item(2))
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -195,7 +185,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun rowKey_formats_kind_queueid_serverid_with_underscore_fallback() = runTest(mainDispatcher) {
+    fun rowKey_formats_kind_queueid_serverid_with_underscore_fallback() = runTest(mainDispatcherRule.testDispatcher) {
         queueFlow.value = listOf(
             item(1, kind = ArrServiceKind.RADARR, serverId = "srv-a"),
             item(2, kind = ArrServiceKind.SONARR, serverId = ""),
@@ -214,7 +204,7 @@ class ArrQueueViewModelTest {
     // ── pending-action dialog state ───────────────────────────────────────
 
     @Test
-    fun pending_action_dialog_state_transitions() = runTest(mainDispatcher) {
+    fun pending_action_dialog_state_transitions() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
         assertNull(viewModel.state.value.pendingAction)
@@ -245,7 +235,7 @@ class ArrQueueViewModelTest {
     // the flag hand-off and the guard ladder around it.
 
     @Test
-    fun deleteItem_hands_the_dialog_flags_to_the_deep_delete() = runTest(mainDispatcher) {
+    fun deleteItem_hands_the_dialog_flags_to_the_deep_delete() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.success(Unit)
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -262,7 +252,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun deleteItem_passes_each_row_through_regardless_of_tmdb() = runTest(mainDispatcher) {
+    fun deleteItem_passes_each_row_through_regardless_of_tmdb() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.success(Unit)
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -281,7 +271,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun deleteSelected_filters_to_selected_rows_fans_out_searches_and_clears() = runTest(mainDispatcher) {
+    fun deleteSelected_filters_to_selected_rows_fans_out_searches_and_clears() = runTest(mainDispatcherRule.testDispatcher) {
         queueFlow.value = listOf(item(1, tmdbId = 11), item(2, tmdbId = 22), item(3, tmdbId = 33))
         val itemsSlot = slot<List<ArrQueueItem>>()
         coEvery { arrRepository.deleteQueueItems(capture(itemsSlot), any()) } returns Result.success(Unit)
@@ -310,7 +300,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun deleteSelected_without_selection_is_a_noop() = runTest(mainDispatcher) {
+    fun deleteSelected_without_selection_is_a_noop() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -323,7 +313,7 @@ class ArrQueueViewModelTest {
     // ── message seal emissions ────────────────────────────────────────────
 
     @Test
-    fun deleteItem_failure_with_message_emits_raw() = runTest(mainDispatcher) {
+    fun deleteItem_failure_with_message_emits_raw() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.failure(RuntimeException("boom"))
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -335,7 +325,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun deleteItem_failure_without_message_emits_unknown_error_resource() = runTest(mainDispatcher) {
+    fun deleteItem_failure_without_message_emits_unknown_error_resource() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.failure(RuntimeException(null as String?))
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -347,7 +337,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun grabItem_success_emits_info_with_title_arg_and_refreshes() = runTest(mainDispatcher) {
+    fun grabItem_success_emits_info_with_title_arg_and_refreshes() = runTest(mainDispatcherRule.testDispatcher) {
         enableDirectArr()
         coEvery { arrRepository.grabQueueItem(any()) } returns Result.success(Unit)
         val viewModel = newViewModel()
@@ -366,7 +356,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun grabItem_failure_emits_error_fallback() = runTest(mainDispatcher) {
+    fun grabItem_failure_emits_error_fallback() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { arrRepository.grabQueueItem(any()) } returns Result.failure(RuntimeException(null as String?))
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -378,7 +368,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun importItem_success_emits_info_with_title_arg_and_refreshes() = runTest(mainDispatcher) {
+    fun importItem_success_emits_info_with_title_arg_and_refreshes() = runTest(mainDispatcherRule.testDispatcher) {
         enableDirectArr()
         coEvery { arrRepository.importQueueItem(any()) } returns Result.success(Unit)
         val viewModel = newViewModel()
@@ -395,7 +385,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun importItem_failure_emits_raw_message() = runTest(mainDispatcher) {
+    fun importItem_failure_emits_raw_message() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { arrRepository.importQueueItem(any()) } returns Result.failure(RuntimeException("stuck"))
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -408,7 +398,7 @@ class ArrQueueViewModelTest {
     }
 
     @Test
-    fun successful_delete_emits_no_message() = runTest(mainDispatcher) {
+    fun successful_delete_emits_no_message() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.success(Unit)
         val viewModel = newViewModel()
         advanceUntilIdle()

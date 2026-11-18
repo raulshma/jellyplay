@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_cancel_recording
@@ -12,31 +13,26 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChannelDetailViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: LiveTvApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -55,7 +51,6 @@ class ChannelDetailViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         // Non-suspend folds → stub with `every`, not `coEvery`.
@@ -66,13 +61,8 @@ class ChannelDetailViewModelTest {
         viewModel = ChannelDetailViewModel(mediaRepository, imageUrlProvider, fakeTimeSource)
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun loadChannel_populates_channel_meta_and_today_programs() = runTest(mainDispatcher) {
+    fun loadChannel_populates_channel_meta_and_today_programs() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(
             listOf(
                 LiveTvChannel(id = "chan-1", name = "BBC One", number = "101", imageTag = "tag-1")
@@ -105,7 +95,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun ended_programs_are_dropped_from_the_timeline() = runTest(mainDispatcher) {
+    fun ended_programs_are_dropped_from_the_timeline() = runTest(mainDispatcherRule.testDispatcher) {
         val now = fakeNow
         val ended = program(id = "p-old", name = "Gone", start = now.minusHours(2), end = now.minusHours(1))
         val airing = program(id = "p-now", name = "Live", start = now.minusMinutes(5), end = now.plusMinutes(25))
@@ -135,7 +125,7 @@ class ChannelDetailViewModelTest {
     // check and the hero agree.
 
     @Test
-    fun ended_program_with_offset_less_dates_is_dropped_from_the_timeline() = runTest(mainDispatcher) {
+    fun ended_program_with_offset_less_dates_is_dropped_from_the_timeline() = runTest(mainDispatcherRule.testDispatcher) {
         val now = Instant.ofEpochMilli(fakeTimeSource.nowMs)
         val ended = LiveTvProgram(
             id = "p-old", name = "Gone", channelId = "chan-1",
@@ -151,7 +141,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun airing_program_with_offset_less_dates_resolves_as_current_program() = runTest(mainDispatcher) {
+    fun airing_program_with_offset_less_dates_resolves_as_current_program() = runTest(mainDispatcherRule.testDispatcher) {
         val now = Instant.ofEpochMilli(fakeTimeSource.nowMs)
         val airing = LiveTvProgram(
             id = "p-now", name = "Live", channelId = "chan-1",
@@ -174,7 +164,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun getProgramBackdropUrl_falls_back_to_channel_logo_when_neither_present() = runTest(mainDispatcher) {
+    fun getProgramBackdropUrl_falls_back_to_channel_logo_when_neither_present() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(
             listOf(LiveTvChannel(id = "chan-1", name = "Ch", imageTag = "tag"))
         )
@@ -187,7 +177,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun programs_load_error_sets_error_and_keeps_channel_name() = runTest(mainDispatcher) {
+    fun programs_load_error_sets_error_and_keeps_channel_name() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.failure(RuntimeException("boom"))
         viewModel.loadChannel("chan-1", "BBC One")
         advanceUntilIdle()
@@ -198,7 +188,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun channel_meta_load_failure_sets_error_and_skips_programs_load() = runTest(mainDispatcher) {
+    fun channel_meta_load_failure_sets_error_and_skips_programs_load() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("no channels"))
 
@@ -213,7 +203,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun channel_not_found_in_list_still_resolves_currentProgram_from_programs() = runTest(mainDispatcher) {
+    fun channel_not_found_in_list_still_resolves_currentProgram_from_programs() = runTest(mainDispatcherRule.testDispatcher) {
         // Channels list does NOT contain chan-1.
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(
             listOf(LiveTvChannel(id = "other", name = "Other", imageTag = "tag"))
@@ -240,7 +230,7 @@ class ChannelDetailViewModelTest {
     // it; the commonMain port pins the replacement one-shot message flow.
 
     @Test
-    fun recordProgram_success_emits_RecordSuccess_message() = runTest(mainDispatcher) {
+    fun recordProgram_success_emits_RecordSuccess_message() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createTimer("prog-9") } returns Result.success(Unit)
 
         viewModel.recordProgram(program(id = "prog-9", name = "X"))
@@ -250,7 +240,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun cancelTimer_failure_emits_Raw_message_with_exception_text() = runTest(mainDispatcher) {
+    fun cancelTimer_failure_emits_Raw_message_with_exception_text() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.cancelTimer(any()) } returns Result.failure(RuntimeException("nope"))
 
         viewModel.cancelTimer(program(id = "prog-9", name = "X", timerId = "timer-9"))
@@ -263,7 +253,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun cancelTimer_failure_with_null_message_emits_the_resource_fallback() = runTest(mainDispatcher) {
+    fun cancelTimer_failure_with_null_message_emits_the_resource_fallback() = runTest(mainDispatcherRule.testDispatcher) {
         // Throwable.message == null falls to the localized fallback resource
         // (the former baked "Failed to cancel recording" literal).
         coEvery { mediaRepository.cancelTimer(any()) } returns Result.failure(RuntimeException(null as String?))
@@ -280,7 +270,7 @@ class ChannelDetailViewModelTest {
     // ── Remaining record/cancel actions and guards ───────────────────────────
 
     @Test
-    fun recordProgram_failure_emits_Raw_message_and_skips_the_programs_refresh() = runTest(mainDispatcher) {
+    fun recordProgram_failure_emits_Raw_message_and_skips_the_programs_refresh() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createTimer("prog-9") } returns Result.failure(RuntimeException("disk full"))
         coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
 
@@ -293,7 +283,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun recordSeries_success_emits_RecordSuccess_and_refreshes_the_program_window() = runTest(mainDispatcher) {
+    fun recordSeries_success_emits_RecordSuccess_and_refreshes_the_program_window() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createSeriesTimer("prog-9") } returns Result.success(Unit)
         coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
 
@@ -305,7 +295,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun recordSeries_failure_emits_Raw_message() = runTest(mainDispatcher) {
+    fun recordSeries_failure_emits_Raw_message() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createSeriesTimer("prog-9") } returns Result.failure(RuntimeException("nope"))
 
         viewModel.recordSeries(program(id = "prog-9", name = "X"))
@@ -315,7 +305,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun cancelTimer_without_a_timerId_is_a_no_op() = runTest(mainDispatcher) {
+    fun cancelTimer_without_a_timerId_is_a_no_op() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.cancelTimer(program(id = "prog-9", name = "X", timerId = null))
         advanceUntilIdle()
 
@@ -323,7 +313,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun cancelSeries_success_emits_RecordCanceled_and_refreshes_the_program_window() = runTest(mainDispatcher) {
+    fun cancelSeries_success_emits_RecordCanceled_and_refreshes_the_program_window() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.cancelSeriesTimer("st-9") } returns Result.success(Unit)
         coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
 
@@ -336,7 +326,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun cancelSeries_without_a_seriesTimerId_is_a_no_op() = runTest(mainDispatcher) {
+    fun cancelSeries_without_a_seriesTimerId_is_a_no_op() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.cancelSeries(program(id = "prog-9", name = "X", seriesTimerId = null))
         advanceUntilIdle()
 
@@ -346,7 +336,7 @@ class ChannelDetailViewModelTest {
     // ── Hero/currentProgram refresh sync ─────────────────────────────────────
 
     @Test
-    fun successful_record_refresh_keeps_the_hero_on_the_same_program_id() = runTest(mainDispatcher) {
+    fun successful_record_refresh_keeps_the_hero_on_the_same_program_id() = runTest(mainDispatcherRule.testDispatcher) {
         // Initial load resolves the airing hero from the programs list…
         val now = fakeNow
         val airing = program(
@@ -376,7 +366,7 @@ class ChannelDetailViewModelTest {
     // ── Channel meta details ─────────────────────────────────────────────────
 
     @Test
-    fun blank_server_channel_name_falls_back_to_the_nav_argument() = runTest(mainDispatcher) {
+    fun blank_server_channel_name_falls_back_to_the_nav_argument() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(
             listOf(LiveTvChannel(id = "chan-1", name = "  ", number = "7")),
         )
@@ -390,7 +380,7 @@ class ChannelDetailViewModelTest {
     }
 
     @Test
-    fun channel_without_an_image_tag_gets_an_empty_logo_url() = runTest(mainDispatcher) {
+    fun channel_without_an_image_tag_gets_an_empty_logo_url() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(
             listOf(LiveTvChannel(id = "chan-1", name = "No Logo", number = "7", imageTag = null)),
         )

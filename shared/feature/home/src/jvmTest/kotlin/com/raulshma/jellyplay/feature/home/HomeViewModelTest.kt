@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
@@ -84,11 +85,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -100,6 +98,7 @@ import java.io.IOException
 import java.time.LocalDate
 import java.time.ZoneId
 import androidx.lifecycle.viewModelScope
+import org.junit.Rule
 
 /**
  * Real HomeViewModel tests. Instantiates the VM with MockK deps + a fake
@@ -107,7 +106,7 @@ import androidx.lifecycle.viewModelScope
  * test suite skipped: section fetch + ordering, offline transitions, and
  * sign-in reset.
  *
- * Harness: MockK + inlined StandardTestDispatcher (Dispatchers.setMain) + runTest.
+ * Harness: MockK + MainDispatcherRule (StandardTestDispatcher on Main) + runTest.
  * Uses [runCurrent] (not `advanceUntilIdle`) so the refresher's periodic
  * `while(true)` loop's `delay` doesn't drive virtual time unbounded. The
  * concern-owned extractions from this VM each have their own JVM suite —
@@ -122,9 +121,8 @@ import androidx.lifecycle.viewModelScope
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
 
-    // MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeFeed: HomeFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -232,7 +230,7 @@ class HomeViewModelTest {
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val sessionApiClient: AuthApiClient = mockk(relaxed = true)
     private val homeSession: HomeSession by lazy {
-        HomeSession(sessionApiClient, CoroutineScope(SupervisorJob() + mainDispatcher))
+        HomeSession(sessionApiClient, CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher))
     }
 
     /**
@@ -262,7 +260,6 @@ class HomeViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         homeFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
         episodeCatalogue = mockk(relaxed = true)
@@ -320,11 +317,6 @@ class HomeViewModelTest {
         coEvery { statsCardLoader.load(any(), any()) } returns null
         coEvery { genreRailCache.genres(any(), any()) } returns emptyList()
         coEvery { presenceChips.refresh(any()) } returns emptyList()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun buildViewModel(): HomeViewModel = HomeViewModel(

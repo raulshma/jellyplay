@@ -66,7 +66,8 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // commonMain and live-resolvable here, the SwingPanel/HWND video surface
     // composes inside Route.VideoPlayer, and desktopPlayerModule supplies the
     // per-session mpv PlayerEngineFactory binding (this module deliberately
-    // does not — MpvDesktopEngine is an app-layer type). Windows only:
+    // does not — the factory carries the app-layer session-harness recorder
+    // and the store/path providers). Windows only:
     // DesktopAppRoot keeps Route.VideoPlayer dead-end-guarded on other OSes
     // where no embedded surface exists. The no-op seam bindings in the module
     // still cover those guarded OSes.

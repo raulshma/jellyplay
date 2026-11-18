@@ -10,22 +10,19 @@ import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the ONE projection fold behind AudioPlayerUiState's flow-driven half
@@ -44,7 +41,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class AudioStateProjectionTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var engine: AudioPlayerEngine
     private lateinit var queueManager: AudioQueueManager
@@ -54,7 +52,6 @@ class AudioStateProjectionTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         engine = mockk()
         queueManager = mockk()
         sleepCountdown = mockk()
@@ -97,21 +94,16 @@ class AudioStateProjectionTest {
         every { effectsManager.setBassBoostStrength(any()) } returns Unit
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun newProjection() = AudioStateProjection(
         engine = engine,
         queueManager = queueManager,
         sleepCountdown = sleepCountdown,
         audioStore = audioStore,
-        scope = kotlinx.coroutines.CoroutineScope(testDispatcher),
+        scope = kotlinx.coroutines.CoroutineScope(mainDispatcherRule.testDispatcher),
     )
 
     @Test
-    fun `engine and queue fields map onto the projection slice`() = runTest(testDispatcher) {
+    fun `engine and queue fields map onto the projection slice`() = runTest(mainDispatcherRule.testDispatcher) {
         every { engine.title } returns MutableStateFlow("Song")
         every { engine.artist } returns MutableStateFlow("Artist")
         every { engine.artistId } returns MutableStateFlow("a-1")
@@ -163,7 +155,7 @@ class AudioStateProjectionTest {
     }
 
     @Test
-    fun `sleep and prefs fields map onto the projection slice`() = runTest(testDispatcher) {
+    fun `sleep and prefs fields map onto the projection slice`() = runTest(mainDispatcherRule.testDispatcher) {
         every { sleepCountdown.isSleepTimerActive } returns MutableStateFlow(true)
         every { sleepCountdown.isEndOfEpisodeMode } returns MutableStateFlow(true)
         every { audioStore.audio } returns MutableStateFlow(AudioSlice(sleepTimerDurationMs = 900_000L))
@@ -184,7 +176,7 @@ class AudioStateProjectionTest {
      * must not re-run the combine tree.
      */
     @Test
-    fun `projection does not emit on a lyric-line flip`() = runTest(testDispatcher) {
+    fun `projection does not emit on a lyric-line flip`() = runTest(mainDispatcherRule.testDispatcher) {
         val lyricIndex = MutableStateFlow(-1)
         every { engine.currentLyricIndex } returns lyricIndex
 

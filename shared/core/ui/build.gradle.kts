@@ -65,6 +65,10 @@ kotlin {
             implementation(compose.desktop.currentOs)
             // runTest/UnconfinedTestDispatcher for the Channel/StateFlow pure-logic tests.
             implementation(libs.coroutines.test)
+            // The shared MainDispatcherRule fixture, replacing this lane's
+            // hand-inlined setMain/resetMain boilerplate (test-scoped only —
+            // see the fixtures module's house rules).
+            implementation(project(":shared:core:test-fixtures"))
             // Catalog fixtures fake StringResource (the compose-resources type
             // is not constructible in tests) — same pattern as the feature
             // modules' policy suites.

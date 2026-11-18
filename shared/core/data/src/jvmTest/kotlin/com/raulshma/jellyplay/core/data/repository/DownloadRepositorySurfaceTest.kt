@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
  *     delegate consumes) is deliberately NOT counted here: that port has its
  *     own narrow contract and its own consumer, so its member count is a
  *     different budget, not part of this interface's.
- *  2. **The four promoted read seams (+4)** — [DownloadQueue] (11),
+ *  2. **The four promoted read seams (+4)** — [DownloadQueue] (13),
  *     [TrackDownloadStatusWindow] (3), [ActiveDownloadCount] (1),
  *     [SeriesEpisodeDownloads] (1): the DownloadIntake-precedent surfaces
  *     `DownloadRepositoryImpl` implements DIRECTLY (commonMain-crossing reads
@@ -31,6 +31,12 @@ import kotlin.test.assertTrue
  * when its surface shrinks; never raise it. A genuinely new download read
  * should land as a new narrow commonMain seam (the DownloadIntake precedent)
  * rather than growing any of these.
+ *
+ * One sanctioned raise on record: the queue-placement composites
+ * ([DownloadQueue.moveToFront]/[moveToBack]) joined DownloadQueue (11 → 13)
+ * when the placement policy moved out of DownloadsViewModel into the queue
+ * engine — the placement number must be computed where the authoritative
+ * queue state lives, which is behind this seam, not in the feature VM.
  */
 class DownloadRepositorySurfaceTest {
 
@@ -42,7 +48,7 @@ class DownloadRepositorySurfaceTest {
      * engine implements directly (see class KDoc).
      */
     private val maxSeamMembers = mapOf(
-        "DownloadQueue" to 11,
+        "DownloadQueue" to 13,
         "TrackDownloadStatusWindow" to 3,
         "ActiveDownloadCount" to 1,
         "SeriesEpisodeDownloads" to 1,

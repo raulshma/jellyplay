@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.network.api.JellyPlayActiveTranscode
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilities
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlayTranscodesRoutes
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -18,23 +19,19 @@ import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.slot
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the JellyPlay companion-plugin admin transcodes flow
@@ -59,9 +56,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class JellyPlayTranscodesViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var pluginApi: JellyPlayTranscodesRoutes
     private lateinit var capabilitiesApi: JellyPlayCapabilitiesRoutes
@@ -102,7 +98,6 @@ class JellyPlayTranscodesViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         pluginApi = mockk()
         capabilitiesApi = mockk()
         sessionCacheRegistry = mockk(relaxed = true)
@@ -113,11 +108,6 @@ class JellyPlayTranscodesViewModelTest {
     /** Fires the store's captured identity-reset action — the gate drops to Unknown. */
     private suspend fun simulateIdentityReset() {
         resetAction.captured.invoke(HomeSessionTransition.UserSwitched(SessionIdentity("srv-1", "user-2")))
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** Probes the real store: the capabilities stub decides AVAILABLE + feature set. */
@@ -145,7 +135,7 @@ class JellyPlayTranscodesViewModelTest {
     // ── gating ──
 
     @Test
-    fun `plugin unavailable gates the list off and never fetches transcodes`() = runTest(mainDispatcher) {
+    fun `plugin unavailable gates the list off and never fetches transcodes`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { capabilitiesApi.getCapabilities() } returns Result.failure(RuntimeException("plugin absent"))
         statusStore.refresh()
 
@@ -161,7 +151,7 @@ class JellyPlayTranscodesViewModelTest {
     }
 
     @Test
-    fun `available plugin without the transcodes feature stays gated off`() = runTest(mainDispatcher) {
+    fun `available plugin without the transcodes feature stays gated off`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable(features = listOf("settings-sync"))
 
         val viewModel = JellyPlayTranscodesViewModel(pluginApi, statusStore)
@@ -172,7 +162,7 @@ class JellyPlayTranscodesViewModelTest {
     }
 
     @Test
-    fun `a null status store defaults to gated off with no requests at all`() = runTest(mainDispatcher) {
+    fun `a null status store defaults to gated off with no requests at all`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = JellyPlayTranscodesViewModel(pluginApi, statusStore = null)
         advanceUntilIdle()
 
@@ -186,7 +176,7 @@ class JellyPlayTranscodesViewModelTest {
     // ── load + mapping ──
 
     @Test
-    fun `available plugin with the transcodes feature loads mapped rows`() = runTest(mainDispatcher) {
+    fun `available plugin with the transcodes feature loads mapped rows`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         val viewModel = loadedViewModel()
 
@@ -216,7 +206,7 @@ class JellyPlayTranscodesViewModelTest {
     }
 
     @Test
-    fun `initial load failure surfaces the error`() = runTest(mainDispatcher) {
+    fun `initial load failure surfaces the error`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         coEvery { pluginApi.getActiveTranscodes() } returns Result.failure(RuntimeException("offline"))
 
@@ -265,7 +255,7 @@ class JellyPlayTranscodesViewModelTest {
 
     @Test
     fun `auto refresh polls every five seconds while started and stops on stop`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             makeStoreAvailable()
             val viewModel = loadedViewModel() // fetch #1 — the initial load
             coEvery { pluginApi.getActiveTranscodes() } returns Result.success(listOf(transcoding))
@@ -286,7 +276,7 @@ class JellyPlayTranscodesViewModelTest {
         }
 
     @Test
-    fun `a failed poll keeps the stale list silently`() = runTest(mainDispatcher) {
+    fun `a failed poll keeps the stale list silently`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         val viewModel = loadedViewModel()
         coEvery { pluginApi.getActiveTranscodes() } returns Result.failure(RuntimeException("offline"))
@@ -306,7 +296,7 @@ class JellyPlayTranscodesViewModelTest {
     // ── gate re-arm (the load latch) ──
 
     @Test
-    fun `a gate drop re-arms the load - the next gate-on reloads`() = runTest(mainDispatcher) {
+    fun `a gate drop re-arms the load - the next gate-on reloads`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         val viewModel = loadedViewModel() // visit 1: rows loaded, latch raised
 
@@ -337,7 +327,7 @@ class JellyPlayTranscodesViewModelTest {
     }
 
     @Test
-    fun `the poll loop never fetches while gated off`() = runTest(mainDispatcher) {
+    fun `the poll loop never fetches while gated off`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { capabilitiesApi.getCapabilities() } returns Result.failure(RuntimeException("plugin absent"))
         statusStore.refresh()
         val viewModel = JellyPlayTranscodesViewModel(pluginApi, statusStore)
@@ -352,7 +342,7 @@ class JellyPlayTranscodesViewModelTest {
     }
 
     @Test
-    fun `start is idempotent - a second call does not stack a second loop`() = runTest(mainDispatcher) {
+    fun `start is idempotent - a second call does not stack a second loop`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         val viewModel = loadedViewModel()
 
@@ -369,7 +359,7 @@ class JellyPlayTranscodesViewModelTest {
     // ── cancel flow ──
 
     @Test
-    fun `cancel routes to the api clears the dialog and reloads`() = runTest(mainDispatcher) {
+    fun `cancel routes to the api clears the dialog and reloads`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         val viewModel = loadedViewModel()
         coEvery { pluginApi.cancelTranscode("s-1") } returns Result.success(Unit)
@@ -388,7 +378,7 @@ class JellyPlayTranscodesViewModelTest {
     }
 
     @Test
-    fun `cancel without a selection is a no-op`() = runTest(mainDispatcher) {
+    fun `cancel without a selection is a no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         val viewModel = loadedViewModel()
 
@@ -399,7 +389,7 @@ class JellyPlayTranscodesViewModelTest {
     }
 
     @Test
-    fun `dismiss during an in-flight cancel retains the pending row`() = runTest(mainDispatcher) {
+    fun `dismiss during an in-flight cancel retains the pending row`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         val viewModel = loadedViewModel()
         // Park the cancel mid-flight so isCancelling stays raised.
@@ -424,7 +414,7 @@ class JellyPlayTranscodesViewModelTest {
     }
 
     @Test
-    fun `a second confirm while a cancel is in flight is refused`() = runTest(mainDispatcher) {
+    fun `a second confirm while a cancel is in flight is refused`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         val viewModel = loadedViewModel()
         val gate = CompletableDeferred<Unit>()

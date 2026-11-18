@@ -12,25 +12,22 @@ import com.raulshma.jellyplay.core.model.MetadataEditorInfo
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleFile
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import org.junit.Rule
 
 /**
  * Focused pins for the v0.11.10 sealed-phase migration of [EditorUiState]
@@ -71,9 +68,8 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelPhasePinsTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module (EditorViewModelMetadataTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var editorRepository: MetadataEditorRepository
     private lateinit var authRepository: AuthRepository
@@ -95,7 +91,6 @@ class EditorViewModelPhasePinsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         editorRepository = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
         subtitleProviderRepository = mockk(relaxed = true)
@@ -129,11 +124,6 @@ class EditorViewModelPhasePinsTest {
                 override suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?) = Unit
             },
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     // ── 1. the load ladder's Loading raise is mid-flight observable ──────

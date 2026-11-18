@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ClientCertificateImport
 import com.raulshma.jellyplay.core.model.ClientCertificateStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_switch_failed
@@ -17,7 +18,6 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +26,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -34,6 +33,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the Server Management trust-toggle semantics through the real
@@ -67,7 +67,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServerManagementViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var authRepository: AuthRepository
     private lateinit var serverIdentityStore: ServerIdentityStore
@@ -77,18 +78,12 @@ class ServerManagementViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
         serverIdentityStore = mockk(relaxed = true)
         networkOfflineStore = mockk(relaxed = true)
         every { authRepository.servers } returns serversState
         every { serverIdentityStore.activeServerId } returns MutableStateFlow(null)
         every { networkOfflineStore.networkOffline } returns trustState
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun viewModel(): ServerManagementViewModel = ServerManagementViewModel(
@@ -132,7 +127,7 @@ class ServerManagementViewModelTest {
     // ------------------------------------------------------- toggle semantics
 
     @Test
-    fun `portless grant shows toggle ON for ported primary`() = runTest(testDispatcher) {
+    fun `portless grant shows toggle ON for ported primary`() = runTest(mainDispatcherRule.testDispatcher) {
         trustState.value = NetworkOfflineSlice(selfSignedTrustHosts = setOf("https://media.example.com"))
         val server = ServerInfo(id = "s1", name = "Media", address = "https://media.example.com:8920")
         val vm = viewModel()
@@ -145,7 +140,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `exact-address grant still shows ON and foreign grants show OFF`() = runTest(testDispatcher) {
+    fun `exact-address grant still shows ON and foreign grants show OFF`() = runTest(mainDispatcherRule.testDispatcher) {
         trustState.value = NetworkOfflineSlice(selfSignedTrustHosts = setOf("https://media.example.com:8920"))
         val vm = viewModel()
         advanceUntilIdle()
@@ -156,7 +151,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `revoke drops a portless grant covering a ported primary`() = runTest(testDispatcher) {
+    fun `revoke drops a portless grant covering a ported primary`() = runTest(mainDispatcherRule.testDispatcher) {
         trustState.value = NetworkOfflineSlice(selfSignedTrustHosts = setOf("https://media.example.com"))
         val server = ServerInfo(id = "s1", name = "Media", address = "https://media.example.com:8920")
         val vm = viewModel()
@@ -171,7 +166,7 @@ class ServerManagementViewModelTest {
     // ------------------------------------------------------- orphan cleanup
 
     @Test
-    fun `orphaned grant removed after address removal`() = runTest(testDispatcher) {
+    fun `orphaned grant removed after address removal`() = runTest(mainDispatcherRule.testDispatcher) {
         serversState.value = listOf(
             ServerInfo(id = "s1", name = "Media", address = "https://media.example.com:8920"),
         )
@@ -191,7 +186,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `grant still covering another address survives removal`() = runTest(testDispatcher) {
+    fun `grant still covering another address survives removal`() = runTest(mainDispatcherRule.testDispatcher) {
         // Portless grant covers BOTH the remaining primary (:8920) and the
         // removed alternate (:8921) — it must survive the alternate's removal.
         serversState.value = listOf(
@@ -208,7 +203,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `removing a server drops its grant but keeps another server's grant`() = runTest(testDispatcher) {
+    fun `removing a server drops its grant but keeps another server's grant`() = runTest(mainDispatcherRule.testDispatcher) {
         serversState.value = listOf(
             ServerInfo(id = "s2", name = "Keep", address = "https://keep.example.com"),
         )
@@ -228,7 +223,7 @@ class ServerManagementViewModelTest {
     // ------------------------------------------- top-ups: switch + address ops
 
     @Test
-    fun `switchServer calls the repository and settles the spinner on success`() = runTest(testDispatcher) {
+    fun `switchServer calls the repository and settles the spinner on success`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.switchServer("s2") } returns Result.success(Unit)
         val vm = viewModel()
         advanceUntilIdle()
@@ -242,7 +237,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `switchServer failure skips the callback and settles the spinner`() = runTest(testDispatcher) {
+    fun `switchServer failure skips the callback and settles the spinner`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.switchServer("s3") } returns Result.failure(RuntimeException("unreachable"))
         val vm = viewModel()
         advanceUntilIdle()
@@ -256,7 +251,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `switchServer failure parks a message for the bus and it dismisses`() = runTest(testDispatcher) {
+    fun `switchServer failure parks a message for the bus and it dismisses`() = runTest(mainDispatcherRule.testDispatcher) {
         // DECLARED FIX pin: a failed switch used to settle the spinner with no
         // feedback — the cards just re-enabled and nothing said the active
         // server had NOT changed. The VM now parks a UiMessage the screen
@@ -275,7 +270,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `switchServer failure without a message falls back to the localized resource`() = runTest(testDispatcher) {
+    fun `switchServer failure without a message falls back to the localized resource`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.switchServer("s3") } returns Result.failure(IllegalStateException())
         val vm = viewModel()
         advanceUntilIdle()
@@ -290,7 +285,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `a new switch attempt clears the parked failure`() = runTest(testDispatcher) {
+    fun `a new switch attempt clears the parked failure`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.switchServer("s3") } returns Result.failure(RuntimeException("down"))
         coEvery { authRepository.switchServer("s2") } returns Result.success(Unit)
         val vm = viewModel()
@@ -308,7 +303,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `switchServer re-entry while switching is dropped`() = runTest(testDispatcher) {
+    fun `switchServer re-entry while switching is dropped`() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = CompletableDeferred<Unit>()
         coEvery { authRepository.switchServer("s2") } coAnswers {
             gate.await()
@@ -333,7 +328,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `addServerAddress success parks the confirmation face and settles the spinner`() = runTest(testDispatcher) {
+    fun `addServerAddress success parks the confirmation face and settles the spinner`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } returns Result.success(Unit)
         val vm = viewModel()
         advanceUntilIdle()
@@ -346,7 +341,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `addServerAddress failure parks the error face and settles the spinner`() = runTest(testDispatcher) {
+    fun `addServerAddress failure parks the error face and settles the spinner`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } returns
             Result.failure(RuntimeException("address already exists"))
         val vm = viewModel()
@@ -363,7 +358,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `addServerAddress failure without a message falls back to the generic wording`() = runTest(testDispatcher) {
+    fun `addServerAddress failure without a message falls back to the generic wording`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } returns
             Result.failure(IllegalStateException())
         val vm = viewModel()
@@ -379,7 +374,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `switchServerAddress success names the new address`() = runTest(testDispatcher) {
+    fun `switchServerAddress success names the new address`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.switchServerAddress("s1", "https://mirror.example.com") } returns
             Result.success(Unit)
         val vm = viewModel()
@@ -396,7 +391,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `switchServerAddress failure falls back to the generic wording`() = runTest(testDispatcher) {
+    fun `switchServerAddress failure falls back to the generic wording`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.switchServerAddress("s1", "https://mirror.example.com") } returns
             Result.failure(IllegalStateException())
         val vm = viewModel()
@@ -412,7 +407,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `clearAddressOperationMessage dismisses the banner`() = runTest(testDispatcher) {
+    fun `clearAddressOperationMessage dismisses the banner`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } returns Result.success(Unit)
         val vm = viewModel()
         advanceUntilIdle()
@@ -429,7 +424,7 @@ class ServerManagementViewModelTest {
 
     @Test
     fun `addServerAddress runs the phase observable - Running carries the Add verb and the derived spinner`() =
-        runTest(testDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val gate = CompletableDeferred<Unit>()
             coEvery { authRepository.addServerAddress("s1", "https://alt.example.com") } coAnswers {
                 gate.await()
@@ -452,7 +447,7 @@ class ServerManagementViewModelTest {
         }
 
     @Test
-    fun `switchServerAddress runs the phase with the Switch verb`() = runTest(testDispatcher) {
+    fun `switchServerAddress runs the phase with the Switch verb`() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = CompletableDeferred<Unit>()
         coEvery { authRepository.switchServerAddress("s1", "https://mirror.example.com") } coAnswers {
             gate.await()
@@ -478,7 +473,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `starting the next address operation clears a parked outcome at entry`() = runTest(testDispatcher) {
+    fun `starting the next address operation clears a parked outcome at entry`() = runTest(mainDispatcherRule.testDispatcher) {
         // The analog of the switch half's "a new attempt clears the parked
         // failure": the parked Completed face is gone the moment the next
         // operation's Running lands (the former clear-at-start write).
@@ -511,7 +506,7 @@ class ServerManagementViewModelTest {
 
     @Test
     fun `refiring from a parked outcome is allowed - the address ops keep no re-entry guard`() =
-        runTest(testDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             // PRESERVED VERBATIM (flagged in AddressOperationPhase's KDoc, not
             // a declared fix): unlike the switch half, the address operations
             // have no re-entry guard — from a parked Completed (or even mid-
@@ -551,7 +546,7 @@ class ServerManagementViewModelTest {
         }
 
     @Test
-    fun `removing the active server fails over to the first remaining one`() = runTest(testDispatcher) {
+    fun `removing the active server fails over to the first remaining one`() = runTest(mainDispatcherRule.testDispatcher) {
         serversState.value = listOf(
             ServerInfo(id = "s1", name = "Active", address = "https://a.example.com"),
             ServerInfo(id = "s2", name = "Backup", address = "https://b.example.com"),
@@ -570,7 +565,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `granting trust writes the normalized primary address`() = runTest(testDispatcher) {
+    fun `granting trust writes the normalized primary address`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -584,7 +579,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `granting trust adds the https scheme to a schemeless address`() = runTest(testDispatcher) {
+    fun `granting trust adds the https scheme to a schemeless address`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -601,7 +596,7 @@ class ServerManagementViewModelTest {
 
     @Test
     fun `certificate status flows from the facade and import success surfaces a message`() =
-        runTest(testDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val vm = viewModel()
             advanceUntilIdle()
 
@@ -617,7 +612,7 @@ class ServerManagementViewModelTest {
         }
 
     @Test
-    fun `import failure surfaces the facade's user-presentable message`() = runTest(testDispatcher) {
+    fun `import failure surfaces the facade's user-presentable message`() = runTest(mainDispatcherRule.testDispatcher) {
         certificateFacade.importResult = Result.failure(IllegalArgumentException("not a readable PKCS#12 file"))
         val vm = viewModel()
         advanceUntilIdle()
@@ -630,7 +625,7 @@ class ServerManagementViewModelTest {
     }
 
     @Test
-    fun `toggle and remove route to the facade`() = runTest(testDispatcher) {
+    fun `toggle and remove route to the facade`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 

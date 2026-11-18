@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCache
@@ -63,10 +64,8 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import java.time.LocalDate
 import java.time.ZoneId
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withTimeoutOrNull
+import org.junit.Rule
 
 /**
  * Direct [HomeRefresher] tests: refresh cadence, throttle, CW side-effects and user-data-push deferral
@@ -88,9 +87,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeRefresherTest {
 
-    // MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeFeed: HomeFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -177,7 +175,6 @@ class HomeRefresherTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         homeFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
@@ -200,7 +197,6 @@ class HomeRefresherTest {
         refresher?.stop()
         refresherScope?.cancel()
 
-        Dispatchers.resetMain()
     }
 
     /**

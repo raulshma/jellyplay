@@ -4,10 +4,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.player.findActivity
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.distribution.DistributionPlatform
 import com.raulshma.jellyplay.feature.onboarding.OnboardingScreen
@@ -16,6 +20,8 @@ import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
 import com.raulshma.jellyplay.feature.shell.navigation.SignedOutAuthHost
 import com.raulshma.jellyplay.shell.ShellInfra
 import com.raulshma.jellyplay.shell.shellSurface
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The Android app shell's root dispatcher. One `when` over the session state
@@ -99,17 +105,49 @@ internal fun JellyPlayApp(
             phase == LaunchPhase.Restoring -> {}
             // First-run wizard gate — the shared pure decision both shells run
             // (feature/shell OnboardingGateRoute); the TV build auto-completes
-            // in the LaunchedEffect below instead of gating. No onComplete
-            // wiring here: the wizard persists completion itself
-            // (OnboardingViewModel writes the same onboarding_completed pref on
-            // both platforms — see OnboardingGate), and the phase flip below
-            // swaps this branch out.
+            // in the LaunchedEffect below instead of gating. The COMPLETE exit
+            // arm leaves through the state flip, exactly as it always has: the
+            // wizard persists completion itself (OnboardingViewModel writes
+            // the same onboarding_completed pref on both platforms — see
+            // OnboardingGate) and the pref flip below swaps this branch out.
+            //
+            // The ABANDON arm (system back on the first page) needs host
+            // wiring here. The wizard's back handler is always enabled: it
+            // consumes the press, routes it through the ViewModel, and the
+            // screen fires its single no-arg onComplete for BOTH exit arms —
+            // the host cannot tell them apart at call time (and must not:
+            // that seam belongs to the shared screen). But the arms have
+            // different leaves: abandon never writes the pref, so without
+            // wiring the gate would hold the user in the wizard forever.
+            // Pre-change, back on the first page fell through to the system
+            // default — no enabled callback above this branch, no nav stack
+            // behind it — which finished the activity: the user left the
+            // wizard by leaving the app, and the gate re-fired on the next
+            // launch (nothing was persisted). Restore exactly that, by
+            // letting the gate ANSWER the exit: onComplete bumps the exit
+            // counter, the effect gives the completion pref a bounded window
+            // to flip (a Complete exit ends the wait the moment the pref
+            // lands — the finish is unreachable on that arm), and an exit the
+            // gate never answers IS an abandon: finish the activity the way
+            // the fall-through back press did. [ONBOARDING_ABANDON_GRACE_MS]
+            // is an order of magnitude over the fire-and-forget pref write +
+            // slice propagation, so a slow completion is never misclassified
+            // — the wrong side of that race would kill the app right after
+            // the user finished the wizard.
             onboardingGateRoute(
                 authenticated = phase == LaunchPhase.Authenticated,
                 onboardingCompleted = onboardingCompleted,
                 isTv = isTv,
             ) != null -> {
-                OnboardingScreen(onComplete = {})
+                val activity = remember(context) { context.findActivity() }
+                var wizardExits by remember { mutableIntStateOf(0) }
+                LaunchedEffect(wizardExits) {
+                    if (wizardExits == 0) return@LaunchedEffect
+                    withTimeoutOrNull(ONBOARDING_ABANDON_GRACE_MS) {
+                        snapshotFlow { onboardingCompleted }.first { it }
+                    } ?: activity?.finish()
+                }
+                OnboardingScreen(onComplete = { wizardExits++ })
             }
             phase == LaunchPhase.Authenticated -> {
                 // "Surprise Me" launcher-shortcut controller. Built
@@ -206,3 +244,16 @@ internal fun JellyPlayApp(
         )
     }
 }
+
+/**
+ * How long the wizard gate branch waits for the completion pref to answer a
+ * wizard exit before classifying it as an Abandon and finishing the activity
+ * (the pre-change fall-through system back). The Complete arm commits the
+ * pref fire-and-forget before the exit signal fires, so the wait is really
+ * propagation latency — DataStore commit + the merged preference pipeline +
+ * the gate slice — comfortably two orders of magnitude under this window.
+ * The misfire it prevents (finishing a session that is mid-COMPLETE) is
+ * catastrophic, the cost of the window on a real abandon is invisible, so
+ * the margin leans long on purpose.
+ */
+private const val ONBOARDING_ABANDON_GRACE_MS = 500L

@@ -8,10 +8,7 @@ import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.UserEditorContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_could_not_reload
 import io.mockk.coEvery
@@ -26,17 +23,16 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserDetailViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var adminRepository: AdminRepository
 
@@ -46,7 +42,6 @@ class UserDetailViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         adminRepository = mockk(relaxed = true)
     }
 
@@ -288,10 +283,6 @@ class UserDetailViewModelTest {
         assertEquals(0, vm.profileDirtyCount())
         assertEquals(0, vm.accessDirtyCount())
         assertEquals(0, vm.parentalDirtyCount())
-    }
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
 }

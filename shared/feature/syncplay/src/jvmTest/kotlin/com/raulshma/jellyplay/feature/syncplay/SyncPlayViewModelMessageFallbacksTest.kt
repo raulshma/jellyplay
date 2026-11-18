@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.Res
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_error_create_group
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_error_leave_group
@@ -13,16 +14,11 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,6 +26,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 /**
  * Message-seam and guard gaps in [SyncPlayViewModel] NOT pinned by
@@ -49,9 +46,8 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncPlayViewModelMessageFallbacksTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (SyncPlayViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: SyncPlayRepository
     private lateinit var syncPlaySession: SyncPlaySession
@@ -61,7 +57,6 @@ class SyncPlayViewModelMessageFallbacksTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
         syncPlaySession = mockk()
         syncPlayCastStore = mockk()
@@ -74,11 +69,6 @@ class SyncPlayViewModelMessageFallbacksTest {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun newViewModel() = SyncPlayViewModel(
         syncPlayRepository = mediaRepository,
         syncPlaySession = syncPlaySession,
@@ -89,7 +79,7 @@ class SyncPlayViewModelMessageFallbacksTest {
         SyncPlayGroup(groupId = id, groupName = name, participantCount = 1)
 
     @Test
-    fun createGroup_failureWithMessage_mapsToRaw() = runTest(mainDispatcher) {
+    fun createGroup_failureWithMessage_mapsToRaw() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createSyncPlayGroup("Party") } returns
             Result.failure(RuntimeException("name taken"))
         val viewModel = newViewModel()
@@ -104,7 +94,7 @@ class SyncPlayViewModelMessageFallbacksTest {
     }
 
     @Test
-    fun leaveGroup_failureWithMessage_mapsToRaw_andKeepsMembershipState() = runTest(mainDispatcher) {
+    fun leaveGroup_failureWithMessage_mapsToRaw_andKeepsMembershipState() = runTest(mainDispatcherRule.testDispatcher) {
         every { syncPlaySession.activeGroupId } returns "g1"
         coEvery { syncPlaySession.joinGroup("g1") } returns Result.success(Unit)
         coEvery { mediaRepository.getSyncPlayInfo("g1") } returns Result.success(
@@ -132,7 +122,7 @@ class SyncPlayViewModelMessageFallbacksTest {
 
     @Test
     fun joinGroup_success_withoutActiveGroupId_keepsCurrentGroupNull_butListensForEvents() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             // The manager accepted the join but hasn't asserted the active group
             // yet: the info fetch is skipped (early return), the header stays
             // blank until the first WebSocket event.
@@ -176,7 +166,7 @@ class SyncPlayViewModelMessageFallbacksTest {
         }
 
     @Test
-    fun loadGroups_error_isClearedByALaterSuccessfulReload() = runTest(mainDispatcher) {
+    fun loadGroups_error_isClearedByALaterSuccessfulReload() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.failure(RuntimeException("offline"))
         val viewModel = newViewModel()
         advanceUntilIdle()

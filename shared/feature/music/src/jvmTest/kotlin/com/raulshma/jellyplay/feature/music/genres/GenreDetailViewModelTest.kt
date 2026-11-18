@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.genres
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
@@ -17,18 +18,14 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.Rule
 
 /**
  * Pins the genre detail contract: the nav-entry [SavedStateHandle] supplies
@@ -39,23 +36,13 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class GenreDetailViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
 
-    @BeforeTest
-    fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
 
     private fun createViewModel(handle: SavedStateHandle = SavedStateHandle(mapOf("genreId" to "g1", "genreName" to "Rock"))): GenreDetailViewModel {
         every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
@@ -70,7 +57,7 @@ class GenreDetailViewModelTest {
     }
 
     @Test
-    fun init_routesGenreNameIntoPagedAudioFilters() = runTest(mainDispatcher) {
+    fun init_routesGenreNameIntoPagedAudioFilters() = runTest(mainDispatcherRule.testDispatcher) {
         createViewModel()
 
         verify(exactly = 1) {
@@ -88,7 +75,7 @@ class GenreDetailViewModelTest {
     }
 
     @Test
-    fun init_missingHandleKeys_fallBackToEmptyStrings() = runTest(mainDispatcher) {
+    fun init_missingHandleKeys_fallBackToEmptyStrings() = runTest(mainDispatcherRule.testDispatcher) {
         createViewModel(SavedStateHandle(emptyMap()))
 
         verify(exactly = 1) {
@@ -106,7 +93,7 @@ class GenreDetailViewModelTest {
     }
 
     @Test
-    fun getImageUrl_delegatesWithMusicMaxWidth() = runTest(mainDispatcher) {
+    fun getImageUrl_delegatesWithMusicMaxWidth() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = createViewModel()
         every { imageUrlProvider.getImageUrl("i1", ImageUrlProvider.MUSIC_MAX_WIDTH) } returns "img"
 
@@ -114,7 +101,7 @@ class GenreDetailViewModelTest {
     }
 
     @Test
-    fun addToQueue_delegatesSingleTrackWithMusicMaxWidth() = runTest(mainDispatcher) {
+    fun addToQueue_delegatesSingleTrackWithMusicMaxWidth() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = createViewModel()
         val track = MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO)
         coEvery { audioQueueFacade.enqueueTrack(any(), any(), any()) } returns
@@ -129,7 +116,7 @@ class GenreDetailViewModelTest {
     }
 
     @Test
-    fun playAll_delegatesWithMusicMaxWidthAndStartIndex() = runTest(mainDispatcher) {
+    fun playAll_delegatesWithMusicMaxWidthAndStartIndex() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = createViewModel()
         val tracks = listOf(
             MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO),

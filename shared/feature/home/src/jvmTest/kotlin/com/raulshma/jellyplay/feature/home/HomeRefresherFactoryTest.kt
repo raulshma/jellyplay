@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import kotlin.test.Test
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
@@ -27,7 +28,6 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -37,12 +37,11 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Invariants pinned for the [HomeRefresherFactory] construction seam (it
@@ -55,13 +54,14 @@ import kotlin.test.assertTrue
  *    mirrors) are passed through from [create]'s arguments, not silently
  *    dropped: an offline manager reporting offline short-circuits the fetch.
  *
- * Harness mirrors [HomeRefresherTest]: MockK collaborators, inlined
- * StandardTestDispatcher, refresher torn down in @After.
+ * Harness mirrors [HomeRefresherTest]: MockK collaborators, the
+ * MainDispatcherRule fixture, refresher torn down in @After.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeRefresherFactoryTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeFeed: HomeFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -83,7 +83,6 @@ class HomeRefresherFactoryTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         homeFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
@@ -106,7 +105,6 @@ class HomeRefresherFactoryTest {
         refresher?.stop()
         refresherScope?.cancel()
 
-        Dispatchers.resetMain()
     }
 
     private fun TestScope.createRefresher(): HomeRefresher {

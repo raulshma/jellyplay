@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.syncplay
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayPlaybackCommand
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -12,16 +13,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.Rule
 
 /**
  * Pins the core-owned position reconcile and item-load handshake of
@@ -42,7 +41,8 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncPlayPlaybackCoreReconcileTest {
 
-    private val scheduler = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private val timeSyncManager: TimeSyncManager = mockk()
     private val controller: SyncPlayController = mockk(relaxed = true)
     private val castStore: SyncPlayCastStore = mockk()
@@ -81,7 +81,6 @@ class SyncPlayPlaybackCoreReconcileTest {
 
     @BeforeTest
     fun setup() {
-        Dispatchers.setMain(scheduler)
         every { timeSyncManager.remoteNow() } returns fixedNowMs
         every { timeSyncManager.toLocal(any()) } answers { firstArg<Long>() }
         every { castStore.syncPlayCast } returns MutableStateFlow(SyncPlayCastSlice())
@@ -93,7 +92,6 @@ class SyncPlayPlaybackCoreReconcileTest {
     @AfterTest
     fun tearDown() {
         core.reset()
-        Dispatchers.resetMain()
     }
 
     private fun msToTicks(ms: Long) = TimeSyncManager.msToTicks(ms)
@@ -109,7 +107,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     // ── reconcileToServerPosition (QUEUE_UPDATE lane) ─────────────────────────
 
     @Test
-    fun `queue-update reconcile does not seek within its 300ms tolerance but mirrors playback`() = runTest(scheduler) {
+    fun `queue-update reconcile does not seek within its 300ms tolerance but mirrors playback`() = runTest(mainDispatcherRule.testDispatcher) {
         val cb = RecordingCallbacks(position = 0L, playing = false)
         core.attachCallbacks(cb)
 
@@ -129,7 +127,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     }
 
     @Test
-    fun `queue-update reconcile seeks beyond its 300ms tolerance`() = runTest(scheduler) {
+    fun `queue-update reconcile seeks beyond its 300ms tolerance`() = runTest(mainDispatcherRule.testDispatcher) {
         val cb = RecordingCallbacks(position = 0L, playing = false)
         core.attachCallbacks(cb)
 
@@ -148,7 +146,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     }
 
     @Test
-    fun `queue-update reconcile clamps the estimated position to the media duration`() = runTest(scheduler) {
+    fun `queue-update reconcile clamps the estimated position to the media duration`() = runTest(mainDispatcherRule.testDispatcher) {
         val cb = RecordingCallbacks(position = 0L, playing = false, duration = 1_000L)
         core.attachCallbacks(cb)
 
@@ -164,7 +162,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     }
 
     @Test
-    fun `queue-update reconcile pauses a playing engine when the group is paused`() = runTest(scheduler) {
+    fun `queue-update reconcile pauses a playing engine when the group is paused`() = runTest(mainDispatcherRule.testDispatcher) {
         val cb = RecordingCallbacks(position = 0L, playing = true)
         core.attachCallbacks(cb)
 
@@ -192,7 +190,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     )
 
     @Test
-    fun `unpause within the 500ms echo tolerance moves nothing`() = runTest(scheduler) {
+    fun `unpause within the 500ms echo tolerance moves nothing`() = runTest(mainDispatcherRule.testDispatcher) {
         val cb = RecordingCallbacks(position = 5_000L, playing = true)
         core.attachCallbacks(cb)
 
@@ -207,7 +205,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     }
 
     @Test
-    fun `unpause beyond the 500ms echo tolerance lands the engine on the server position`() = runTest(scheduler) {
+    fun `unpause beyond the 500ms echo tolerance lands the engine on the server position`() = runTest(mainDispatcherRule.testDispatcher) {
         val cb = RecordingCallbacks(position = 5_000L, playing = true)
         core.attachCallbacks(cb)
 
@@ -223,7 +221,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     // ── beginPendingItemLoad → READY-clear lifecycle ──────────────────────────
 
     @Test
-    fun `commands drop while an item load is pending and apply after READY clears it`() = runTest(scheduler) {
+    fun `commands drop while an item load is pending and apply after READY clears it`() = runTest(mainDispatcherRule.testDispatcher) {
         val cb = RecordingCallbacks(position = 0L, playing = false)
         core.attachCallbacks(cb)
 

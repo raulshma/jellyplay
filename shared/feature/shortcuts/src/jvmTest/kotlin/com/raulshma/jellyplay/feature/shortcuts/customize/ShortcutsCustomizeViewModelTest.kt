@@ -9,28 +9,25 @@ import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
 import com.raulshma.jellyplay.core.model.ShortcutSurface
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.feature.shortcuts.DefaultShortcutCatalog
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * The customize editor's ViewModel bootstrap: the adopt-then-prune
@@ -47,9 +44,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShortcutsCustomizeViewModelTest {
 
-    // MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var sliceFlow: MutableStateFlow<ShortcutsSlice>
     private lateinit var shortcutsStore: ShortcutsStore
@@ -59,7 +55,6 @@ class ShortcutsCustomizeViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         sliceFlow = MutableStateFlow(ShortcutsSlice())
         shortcutsStore = mockk {
             every { shortcuts } returns sliceFlow
@@ -104,11 +99,6 @@ class ShortcutsCustomizeViewModelTest {
                 Job().apply { complete() }
             }
         }
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun buildViewModel(supportedActions: Set<ShortcutAction>): ShortcutsCustomizeViewModel =

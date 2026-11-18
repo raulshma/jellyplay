@@ -4,6 +4,7 @@ import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserDataChange
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,20 +12,16 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Decision-table pins for [PagedMediaGridHost], the paged-grid choreography
@@ -39,19 +36,11 @@ import kotlin.test.assertTrue
 class PagedMediaGridHostTest {
 
     // paging's cachedIn launches its bootstrap eagerly on Dispatchers.Main —
-    // each test points Main at ITS OWN scheduler (unconfined, so the bootstrap
+    // each test points Main at its own unconfined dispatcher so the bootstrap
     // and the seam-forwarding launches run deterministically under
-    // advanceUntilIdle) and tearDown restores it (:core:testing is not a
-    // jvmTest dependency of core:ui, so the rule is inlined).
-    @BeforeTest
-    fun setUp() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
+    // advanceUntilIdle.
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     // ── generation bump → fresh pager ──────────────────────────────────────
 

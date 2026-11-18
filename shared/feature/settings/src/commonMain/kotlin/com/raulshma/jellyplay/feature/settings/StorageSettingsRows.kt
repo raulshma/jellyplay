@@ -610,6 +610,32 @@ internal val StorageDownloadsRows: List<SettingsRow> = listOf(
     StorageRows.DownloadStorageLocation,
 )
 
+// ── The downloads group's parent-gated exception sets ────────────────────
+// The [RowAdmission.WhenOn] clusters, named where the rows are declared so
+// the contract tests' count arithmetic derives from these lists instead of
+// restating hand-counted literals.
+
+/** The three schedule-window rows riding [StorageRows.DownloadSchedule]. */
+internal val StorageDownloadScheduleWindowRows: List<SettingsRow> = listOf(
+    StorageRows.DownloadScheduleStart,
+    StorageRows.DownloadScheduleEnd,
+    StorageRows.DownloadScheduleWifiOnly,
+)
+
+/** The five auto-download retention rows riding [StorageRows.AutoDownloadMode] (check-now included). */
+internal val StorageAutoDownloadRetentionRows: List<SettingsRow> = listOf(
+    StorageRows.AutoDownloadCheckNow,
+    StorageRows.AutoDownloadLookahead,
+    StorageRows.AutoDownloadMaxPerPass,
+    StorageRows.AutoDownloadKeepDays,
+    StorageRows.AutoDownloadServers,
+)
+
+/** The clean-up action riding [StorageRows.AutoDownloadKeepDays] (the non-zero keep-days window the screen feeds). */
+internal val StorageAutoDownloadCleanUpNowRows: List<SettingsRow> = listOf(
+    StorageRows.AutoDownloadCleanUpNow,
+)
+
 /**
  * The screen groups — items AND per-row admissions derive from the row
  * lists above in one act ([List.asRowGroup]), so the declaration is the

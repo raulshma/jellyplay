@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -14,38 +15,26 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_manage_series_load_error
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ManageSeriesViewModelTest {
 
-    // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
-    @BeforeTest
-    fun setUpMainDispatcher() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDownMainDispatcher() {
-        Dispatchers.resetMain()
-    }
 
     private lateinit var strings: DetailStrings
     private lateinit var detailFeed: DetailFeed
@@ -129,7 +118,7 @@ class ManageSeriesViewModelTest {
     // ── load() happy path ───────────────────────────────────────────────
 
     @Test
-    fun `load resolves tvdb then Sonarr then episodes`() = runTest(mainDispatcher) {
+    fun `load resolves tvdb then Sonarr then episodes`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, hasFile = true), ep(2, hasFile = false))
@@ -146,7 +135,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `load without tvdb id surfaces error`() = runTest(mainDispatcher) {
+    fun `load without tvdb id surfaces error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1", providerIds = emptyMap())
 
@@ -160,7 +149,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `load detail failure surfaces error`() = runTest(mainDispatcher) {
+    fun `load detail failure surfaces error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("s1", any()) } returns Result.failure(RuntimeException("boom"))
 
@@ -173,7 +162,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `load Sonarr resolution failure surfaces error`() = runTest(mainDispatcher) {
+    fun `load Sonarr resolution failure surfaces error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         coEvery { arrRepository.resolveSonarrSeries(123) } returns Result.failure(RuntimeException("no sonarr"))
@@ -187,7 +176,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `load episodes failure surfaces error and clears loading`() = runTest(mainDispatcher) {
+    fun `load episodes failure surfaces error and clears loading`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.failure(RuntimeException("eps boom"))
@@ -201,7 +190,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `load dedupes concurrent reload for same series`() = runTest(mainDispatcher) {
+    fun `load dedupes concurrent reload for same series`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1)))
@@ -216,7 +205,7 @@ class ManageSeriesViewModelTest {
     // ── season grouping & default expansion ─────────────────────────────
 
     @Test
-    fun `seasons grouped with specials sorted last`() = runTest(mainDispatcher) {
+    fun `seasons grouped with specials sorted last`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         // Episodes across seasons 0 (specials), 1, 2 — deliberately out of order.
@@ -236,7 +225,7 @@ class ManageSeriesViewModelTest {
 
     @Test
     fun `default expanded season is first non-specials season with missing monitored episodes`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             stubSeriesDetail("s1")
             // Season 1 fully downloaded; season 2 has a missing monitored episode.
@@ -254,7 +243,7 @@ class ManageSeriesViewModelTest {
 
     @Test
     fun `default expanded season falls back to first non-specials season when none missing`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             stubSeriesDetail("s1")
             val eps = listOf(
@@ -273,7 +262,7 @@ class ManageSeriesViewModelTest {
     // ── toggleEpisodeMonitored ──────────────────────────────────────────
 
     @Test
-    fun `toggleEpisodeMonitored optimistically flips then refreshes`() = runTest(mainDispatcher) {
+    fun `toggleEpisodeMonitored optimistically flips then refreshes`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, monitored = false))
@@ -294,7 +283,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `toggleEpisodeMonitored failure reverts optimistic flip`() = runTest(mainDispatcher) {
+    fun `toggleEpisodeMonitored failure reverts optimistic flip`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
@@ -317,7 +306,7 @@ class ManageSeriesViewModelTest {
     // ── searchEpisode ───────────────────────────────────────────────────
 
     @Test
-    fun `searchEpisode success emits the searching message and clears actionTarget`() = runTest(mainDispatcher) {
+    fun `searchEpisode success emits the searching message and clears actionTarget`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
@@ -338,7 +327,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `searchEpisode failure emits the error message`() = runTest(mainDispatcher) {
+    fun `searchEpisode failure emits the error message`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
@@ -358,7 +347,7 @@ class ManageSeriesViewModelTest {
     // ── delete flow ─────────────────────────────────────────────────────
 
     @Test
-    fun `requestDeleteEpisode stages pending episode`() = runTest(mainDispatcher) {
+    fun `requestDeleteEpisode stages pending episode`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, hasFile = true, episodeFileId = 99))
@@ -374,7 +363,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `cancelDeleteEpisode clears pending`() = runTest(mainDispatcher) {
+    fun `cancelDeleteEpisode clears pending`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, hasFile = true, episodeFileId = 99))
@@ -391,7 +380,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `confirmDeleteEpisode deletes file then refreshes`() = runTest(mainDispatcher) {
+    fun `confirmDeleteEpisode deletes file then refreshes`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
@@ -413,7 +402,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `confirmDeleteEpisode failure emits the error message`() = runTest(mainDispatcher) {
+    fun `confirmDeleteEpisode failure emits the error message`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
@@ -434,7 +423,7 @@ class ManageSeriesViewModelTest {
     // ── season-level actions ────────────────────────────────────────────
 
     @Test
-    fun `toggleSeasonMonitor monitors all when any unmonitored`() = runTest(mainDispatcher) {
+    fun `toggleSeasonMonitor monitors all when any unmonitored`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, monitored = false), ep(2, monitored = true))
@@ -451,7 +440,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `toggleSeasonMonitor unmonitors all when all monitored`() = runTest(mainDispatcher) {
+    fun `toggleSeasonMonitor unmonitors all when all monitored`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         val eps = listOf(ep(1, monitored = true), ep(2, monitored = true))
@@ -468,7 +457,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `toggleSeasonMonitor on empty season is no-op`() = runTest(mainDispatcher) {
+    fun `toggleSeasonMonitor on empty season is no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(emptyList())
@@ -483,7 +472,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `searchSeason success emits the searching message`() = runTest(mainDispatcher) {
+    fun `searchSeason success emits the searching message`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
@@ -504,7 +493,7 @@ class ManageSeriesViewModelTest {
     // ── series-level actions ────────────────────────────────────────────
 
     @Test
-    fun `refreshSeries success clears actionTarget and sets message`() = runTest(mainDispatcher) {
+    fun `refreshSeries success clears actionTarget and sets message`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1)))
@@ -521,7 +510,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `refreshAndScan fires both refresh and rescan`() = runTest(mainDispatcher) {
+    fun `refreshAndScan fires both refresh and rescan`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1)))
@@ -540,7 +529,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `searchSeries success emits the searching message`() = runTest(mainDispatcher) {
+    fun `searchSeries success emits the searching message`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val received = sinkMessagesFrom(viewModel)
         stubSeriesDetail("s1")
@@ -558,7 +547,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `series actions before load complete are no-ops`() = runTest(mainDispatcher) {
+    fun `series actions before load complete are no-ops`() = runTest(mainDispatcherRule.testDispatcher) {
         // Without load(), tvdbId is null — every action short-circuits.
         viewModel.onEvent(ManageSeriesUiEvent.RefreshSeries)
         viewModel.onEvent(ManageSeriesUiEvent.RefreshAndScan)
@@ -573,7 +562,7 @@ class ManageSeriesViewModelTest {
     // ── refresh() ───────────────────────────────────────────────────────
 
     @Test
-    fun `refresh before load is no-op`() = runTest(mainDispatcher) {
+    fun `refresh before load is no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
 
         viewModel.onEvent(ManageSeriesUiEvent.Refresh)
@@ -585,7 +574,7 @@ class ManageSeriesViewModelTest {
     // ── expand toggles, error clearing & one-shot message semantics ─────
 
     @Test
-    fun `toggleSeasonExpanded adds then removes season`() = runTest(mainDispatcher) {
+    fun `toggleSeasonExpanded adds then removes season`() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonExpanded(2))
         assertTrue(viewModel.uiState.value.expandedSeasons.contains(2))
 
@@ -594,7 +583,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `messages never replay to a late collector`() = runTest(mainDispatcher) {
+    fun `messages never replay to a late collector`() = runTest(mainDispatcherRule.testDispatcher) {
         // THE migration pin: the former userMessage field rode the uiState
         // StateFlow, so the snackbar text re-fired for every new collector
         // (state restoration, re-subscription) until the screen's
@@ -627,7 +616,7 @@ class ManageSeriesViewModelTest {
     // ── ManageSeriesUiState derived helpers ─────────────────────────────
 
     @Test
-    fun `seasonStats computes total downloaded and monitored counts`() = runTest(mainDispatcher) {
+    fun `seasonStats computes total downloaded and monitored counts`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         val eps = listOf(
@@ -647,7 +636,7 @@ class ManageSeriesViewModelTest {
     }
 
     @Test
-    fun `totalStorageBytes sums downloaded episode sizes across seasons`() = runTest(mainDispatcher) {
+    fun `totalStorageBytes sums downloaded episode sizes across seasons`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1")
         val eps = listOf(

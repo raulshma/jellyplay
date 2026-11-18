@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -30,17 +31,12 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.reflect.KClass
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -49,6 +45,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Requests ViewModel coverage (downloads/syncplay conveyor test style, no
@@ -62,10 +59,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class RequestsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (downloads/music/livetv conveyor port
-    // pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var arrRepository: ArrRepository
@@ -90,7 +85,6 @@ class RequestsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         seerrRepository = mockk()
         arrRepository = mockk()
         experimentalStore = mockk()
@@ -104,11 +98,6 @@ class RequestsViewModelTest {
         coEvery { seerrRepository.getMovieDetails(any()) } returns Result.success(SeerrMovieDetails())
         coEvery { seerrRepository.getTvDetails(any()) } returns Result.success(SeerrTvDetails())
         stubRequests { Result.success(SeerrRequestPage()) }
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** Routes every getRequests call into [requestCalls] and answers [response]. */
@@ -133,7 +122,7 @@ class RequestsViewModelTest {
     private fun newViewModel(): RequestsViewModel = RequestsViewModel(
         seerrRepository = seerrRepository,
         arrRepository = arrRepository,
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     private fun page(items: List<SeerrRequestItem>, pages: Int = 1) =
@@ -153,7 +142,7 @@ class RequestsViewModelTest {
     // ── init: first load (polling is now the screen binding's job) ────────
 
     @Test
-    fun init_does_not_start_polling_but_loads_first_page() = runTest(mainDispatcher) {
+    fun init_does_not_start_polling_but_loads_first_page() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
 
         val viewModel = newViewModel()
@@ -174,7 +163,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun init_without_pending_requests_falls_back_to_all_filter() = runTest(mainDispatcher) {
+    fun init_without_pending_requests_falls_back_to_all_filter() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { seerrRepository.getRequestCount() } returns Result.success(SeerrRequestCount(pending = 0))
         stubRequests { Result.success(page(listOf(item(1)))) }
 
@@ -187,7 +176,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun init_count_failure_keeps_pending_filter_but_still_loads() = runTest(mainDispatcher) {
+    fun init_count_failure_keeps_pending_filter_but_still_loads() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { seerrRepository.getRequestCount() } returns Result.failure(RuntimeException("offline"))
 
         val viewModel = newViewModel()
@@ -198,7 +187,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun init_load_failure_surfaces_error_message() = runTest(mainDispatcher) {
+    fun init_load_failure_surfaces_error_message() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.failure(RuntimeException("offline")) }
 
         val viewModel = newViewModel()
@@ -213,7 +202,7 @@ class RequestsViewModelTest {
     // ── debounced search ──────────────────────────────────────────────────
 
     @Test
-    fun search_debounce_coalesces_keystrokes_into_one_query() = runTest(mainDispatcher) {
+    fun search_debounce_coalesces_keystrokes_into_one_query() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
         // Init load + the debounce collector's initial echo of the empty query.
@@ -238,7 +227,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun clearSearch_fires_an_immediate_unfiltered_query() = runTest(mainDispatcher) {
+    fun clearSearch_fires_an_immediate_unfiltered_query() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -255,7 +244,7 @@ class RequestsViewModelTest {
     // ── filter / sort / pagination transitions ────────────────────────────
 
     @Test
-    fun setFilter_resets_page_and_forwards_filter_value() = runTest(mainDispatcher) {
+    fun setFilter_resets_page_and_forwards_filter_value() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(emptyList(), pages = 2)) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -269,7 +258,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun setSort_and_direction_toggle_forward_new_params() = runTest(mainDispatcher) {
+    fun setSort_and_direction_toggle_forward_new_params() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(emptyList(), pages = 2)) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -287,7 +276,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun setMediaType_and_my_requests_only_forward_to_query() = runTest(mainDispatcher) {
+    fun setMediaType_and_my_requests_only_forward_to_query() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(emptyList(), pages = 2)) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -304,7 +293,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun nextPage_increments_page_computes_skip_and_clamps_at_last_page() = runTest(mainDispatcher) {
+    fun nextPage_increments_page_computes_skip_and_clamps_at_last_page() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(emptyList(), pages = 3)) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -328,7 +317,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun prevPage_decrements_page_and_floors_at_one() = runTest(mainDispatcher) {
+    fun prevPage_decrements_page_and_floors_at_one() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(emptyList(), pages = 3)) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -356,7 +345,7 @@ class RequestsViewModelTest {
     // ── bulk selection ────────────────────────────────────────────────────
 
     @Test
-    fun toggleSelection_selectAll_and_clear_drive_selection_state() = runTest(mainDispatcher) {
+    fun toggleSelection_selectAll_and_clear_drive_selection_state() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1), item(2)))) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -378,7 +367,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun approveSelected_fans_out_clears_selection_and_refreshes() = runTest(mainDispatcher) {
+    fun approveSelected_fans_out_clears_selection_and_refreshes() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1), item(2)))) }
         coEvery { seerrRepository.approveRequest(any()) } returns Result.success(item(1))
         val viewModel = newViewModel()
@@ -399,7 +388,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun declineSelected_fans_out_to_every_selected_id() = runTest(mainDispatcher) {
+    fun declineSelected_fans_out_to_every_selected_id() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1), item(2)))) }
         coEvery { seerrRepository.declineRequest(any()) } returns Result.success(item(1))
         val viewModel = newViewModel()
@@ -415,7 +404,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun approveSelected_without_selection_is_a_noop() = runTest(mainDispatcher) {
+    fun approveSelected_without_selection_is_a_noop() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
         val callsAfterInit = requestCalls.size
@@ -430,7 +419,7 @@ class RequestsViewModelTest {
     // ── stale-selection guards (declared fix: no invisible approvals) ─────
 
     @Test
-    fun setFilter_clears_a_drifted_selection() = runTest(mainDispatcher) {
+    fun setFilter_clears_a_drifted_selection() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1), item(2)))) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -447,7 +436,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun approveSelected_drops_selection_ids_that_left_the_current_list() = runTest(mainDispatcher) {
+    fun approveSelected_drops_selection_ids_that_left_the_current_list() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1), item(2)))) }
         coEvery { seerrRepository.approveRequest(any()) } returns Result.success(item(1))
         val viewModel = newViewModel()
@@ -476,7 +465,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun approveSelected_with_a_fully_stale_selection_is_a_full_noop() = runTest(mainDispatcher) {
+    fun approveSelected_with_a_fully_stale_selection_is_a_full_noop() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -516,7 +505,7 @@ class RequestsViewModelTest {
     // ── single-request actions ────────────────────────────────────────────
 
     @Test
-    fun approveRequest_failure_sets_actionError_then_clears() = runTest(mainDispatcher) {
+    fun approveRequest_failure_sets_actionError_then_clears() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         coEvery { seerrRepository.approveRequest(1) } returns Result.failure(RuntimeException("nope"))
         val viewModel = newViewModel()
@@ -533,7 +522,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun removeFromService_forwards_media_id_and_4k_flag() = runTest(mainDispatcher) {
+    fun removeFromService_forwards_media_id_and_4k_flag() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         coEvery { seerrRepository.deleteMedia(any(), any()) } returns Result.success(Unit)
         val viewModel = newViewModel()
@@ -549,7 +538,7 @@ class RequestsViewModelTest {
     // ── media enrichment (Semaphore(4)) ───────────────────────────────────
 
     @Test
-    fun enrichRequests_populates_media_info_for_movies_and_tv() = runTest(mainDispatcher) {
+    fun enrichRequests_populates_media_info_for_movies_and_tv() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1, tmdbId = 11), item(2, tmdbId = 30, type = "tv")))) }
         coEvery { seerrRepository.getMovieDetails(11) } returns Result.success(
             SeerrMovieDetails(title = "Movie", overview = "A movie", releaseDate = "2024-05-05"),
@@ -572,7 +561,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun enrichRequests_recycles_semaphore_permits_beyond_four_concurrent_items() = runTest(mainDispatcher) {
+    fun enrichRequests_recycles_semaphore_permits_beyond_four_concurrent_items() = runTest(mainDispatcherRule.testDispatcher) {
         val items = (1..6).map { item(it, tmdbId = 100 + it) }
         stubRequests { Result.success(page(items)) }
         coEvery { seerrRepository.getMovieDetails(any()) } answers {
@@ -590,7 +579,7 @@ class RequestsViewModelTest {
     // ── DIRECT_ARR_INTEGRATION gating + queue management ──────────────────
 
     @Test
-    fun direct_arr_flag_off_skips_queue_enrichment_entirely() = runTest(mainDispatcher) {
+    fun direct_arr_flag_off_skips_queue_enrichment_entirely() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1, tmdbId = 42)))) }
         coEvery { arrRepository.getQueueForTmdb(any()) } returns null
 
@@ -603,7 +592,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun direct_arr_flag_on_enriches_download_progress_and_queue_items() = runTest(mainDispatcher) {
+    fun direct_arr_flag_on_enriches_download_progress_and_queue_items() = runTest(mainDispatcherRule.testDispatcher) {
         experimentalSlice.value = ExperimentalSlice(
             enabledExperimentalFeatures = setOf(ExperimentalFeature.DIRECT_ARR_INTEGRATION),
         )
@@ -635,7 +624,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun removeQueueItem_success_drops_entry_and_searches_when_asked() = runTest(mainDispatcher) {
+    fun removeQueueItem_success_drops_entry_and_searches_when_asked() = runTest(mainDispatcherRule.testDispatcher) {
         experimentalSlice.value = ExperimentalSlice(
             enabledExperimentalFeatures = setOf(ExperimentalFeature.DIRECT_ARR_INTEGRATION),
         )
@@ -673,7 +662,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun removeQueueItem_without_cached_item_is_a_noop() = runTest(mainDispatcher) {
+    fun removeQueueItem_without_cached_item_is_a_noop() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -684,7 +673,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun removeQueueItem_failure_surfaces_actionError_and_keeps_cached_entry() = runTest(mainDispatcher) {
+    fun removeQueueItem_failure_surfaces_actionError_and_keeps_cached_entry() = runTest(mainDispatcherRule.testDispatcher) {
         experimentalSlice.value = ExperimentalSlice(
             enabledExperimentalFeatures = setOf(ExperimentalFeature.DIRECT_ARR_INTEGRATION),
         )
@@ -712,7 +701,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun searchAgainForTmdb_surfaces_failure_via_actionError() = runTest(mainDispatcher) {
+    fun searchAgainForTmdb_surfaces_failure_via_actionError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { arrRepository.searchForTmdb(any(), any()) } returns Result.failure(RuntimeException("no server"))
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -727,7 +716,7 @@ class RequestsViewModelTest {
     // ── polling lifecycle ─────────────────────────────────────────────────
 
     @Test
-    fun the_visibility_binding_pairs_start_and_stop() = runTest(mainDispatcher) {
+    fun the_visibility_binding_pairs_start_and_stop() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -744,7 +733,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun clearing_the_viewmodel_does_not_touch_the_refcounted_poll() = runTest(mainDispatcher) {
+    fun clearing_the_viewmodel_does_not_touch_the_refcounted_poll() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         val store = ViewModelStore()
         val factory = object : ViewModelProvider.Factory {
@@ -765,7 +754,7 @@ class RequestsViewModelTest {
     // ── single-request retry / delete / decline ───────────────────────────
 
     @Test
-    fun retryRequest_delegates_to_the_repository_and_refreshes() = runTest(mainDispatcher) {
+    fun retryRequest_delegates_to_the_repository_and_refreshes() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         coEvery { seerrRepository.retryRequest(1) } returns Result.success(item(1))
         val viewModel = newViewModel()
@@ -784,7 +773,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun deleteRequest_delegates_to_the_repository_and_refreshes() = runTest(mainDispatcher) {
+    fun deleteRequest_delegates_to_the_repository_and_refreshes() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         coEvery { seerrRepository.deleteRequest(1) } returns Result.success(Unit)
         val viewModel = newViewModel()
@@ -802,7 +791,7 @@ class RequestsViewModelTest {
     }
 
     @Test
-    fun single_declineRequest_failure_sets_actionError_and_skips_the_refresh() = runTest(mainDispatcher) {
+    fun single_declineRequest_failure_sets_actionError_and_skips_the_refresh() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         coEvery { seerrRepository.declineRequest(1) } returns Result.failure(RuntimeException("denied"))
         val viewModel = newViewModel()

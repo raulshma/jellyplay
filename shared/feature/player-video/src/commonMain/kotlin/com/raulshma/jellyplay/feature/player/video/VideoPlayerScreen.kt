@@ -12,7 +12,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,7 +45,6 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences.Companion.SKIP_PROMPT_WHOLE_SEGMENT_MS
@@ -54,7 +52,6 @@ import com.raulshma.jellyplay.core.model.PlayerCenterDoubleTapAction
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_capturing_frame
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_not_ready
@@ -70,7 +67,6 @@ import com.raulshma.jellyplay.feature.player.video.state.PlayerActionExecutor
 import com.raulshma.jellyplay.feature.player.video.state.PlayerInputGates
 import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
-import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeBackVerdict
 import com.raulshma.jellyplay.feature.player.video.chrome.rememberPlayerChromeController
 import com.raulshma.jellyplay.feature.player.video.state.SeekChipCommitClock
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
@@ -180,35 +176,21 @@ fun VideoPlayerScreen(
     // Resume-reminder chip: when playback resumes from a saved position, offer a
     // one-tap "Restart" so the user isn't forced to scrub back.
     // Upstream c64d5baf4 removed the seekbar resume-position marker; only the
-    // chip remains, so no marker state is collected here.
+    // chip remains, so no marker state is collected here. The snackbar dance
+    // (the Indefinite show + the pref-window auto-dismiss + the join) lives in
+    // the chip-host tier's rememberResumeChipEffect; its decision folds (the
+    // off arm, the window math, the tap semantics) in the state module's
+    // ResumeChipPolicy.
     val resumedMessage = stringResource(Res.string.player_resumed_message)
     val restartLabel = stringResource(CoreUiRes.string.core_restart)
-    LaunchedEffect(viewModel) {
-        viewModel.resumeReminder.collect {
-            // 0 = never show the chip (the pref's documented off arm).
-            val chipDisplayMs = uiState.uiPrefs.resumeChipMs
-            if (chipDisplayMs <= 0L) return@collect
-            // Specified as a 3s chip by default (the pref). SnackbarDuration
-            // has no 3s preset (Short ≈ 1.5s), so show it Indefinite and
-            // auto-dismiss after the pref's window unless the user taps
-            // "Restart" first.
-            val snackbarJob = scope.launch {
-                val result = resumeChipHostState.showSnackbar(
-                    message = resumedMessage,
-                    actionLabel = restartLabel,
-                    duration = SnackbarDuration.Indefinite,
-                )
-                if (result == SnackbarResult.ActionPerformed) {
-                    viewModel.onEvent(VideoPlayerUiEvent.RestartPlayback)
-                }
-            }
-            scope.launch {
-                delay(chipDisplayMs)
-                resumeChipHostState.currentSnackbarData?.dismiss()
-            }
-            snackbarJob.join()
-        }
-    }
+    rememberResumeChipEffect(
+        reminder = viewModel.resumeReminder,
+        resumeChipHostState = resumeChipHostState,
+        message = resumedMessage,
+        actionLabel = restartLabel,
+        resumeChipMs = { uiState.uiPrefs.resumeChipMs },
+        onRestartRequested = { viewModel.onEvent(VideoPlayerUiEvent.RestartPlayback) },
+    )
 
     val isInPipMode by viewModel.pipController.isInPipMode.collectAsStateWithLifecycle()
 
@@ -370,36 +352,23 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Capture the latest onBack via rememberUpdatedState — the collector
-    // below keys on Unit, so without this the screen keeps invoking the
-    // onBack lambda captured at first composition (a nav lambda that may have
-    // been rebuilt by the parent).
+    // Capture the latest onBack via rememberUpdatedState — the
+    // programmatic-close collector and the ladder's exit arm read the LIVE
+    // nav lambda (the parent may rebuild it mid-session).
     val currentOnBack by rememberUpdatedState(onBack)
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    // Programmatic closes must never run against a STOPPED
-    // activity. The old collectors were plain LaunchedEffects, which keep
-    // collecting behind the keyguard — an episode ending (background audio,
-    // SyncPlay, a lockscreen play) or a late PiP-dismiss signal while the
-    // phone was locked called finish() on a hidden window, and unlock revealed
-    // the browse UI with the player silently gone. PiP dismiss is now handled
-    // solely by the ViewModel (its collector folds it into closePlayer); the
-    // screen consumes only closePlayer, parked via repeatOnLifecycle(RESUMED).
-    // closePlayer is Channel(BUFFERED), so events raised while stopped are
-    // deferred and delivered on the next resume instead of tearing the window
-    // down unseen.
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
-            viewModel.closePlayer.collect { currentOnBack() }
-        }
-    }
-    // The eight window/lifecycle effects (PiP immersive restore, window-focus
-    // immersive re-hide, teardown, keep-screen-on, frame-rate match, brightness
-    // apply + ON_RESUME re-apply, ON_STOP lock reset) moved verbatim into ONE
-    // composable beside PlayerScreenPolicies. This single call sits at the
-    // SAME position in composition order the contiguous block occupied, so
-    // effect dispatch order — and the race guards documented in its bodies
-    // (PiP-transition focus flip, ON_RESUME brightness) — is unchanged.
-    PlayerWindowSessionEffects(
+    // The window/lifecycle cluster's ONE registration — the #145 parked
+    // closePlayer collector followed by the eight window/lifecycle effects
+    // (PiP immersive restore, window-focus immersive re-hide, teardown,
+    // keep-screen-on, frame-rate match, brightness apply + ON_RESUME
+    // re-apply, ON_STOP lock reset) — lives in PlayerWindowSession's
+    // rememberPlayerWindowSession, at the SAME position in composition order
+    // the contiguous block occupied. Its decision folds are the state
+    // module's WindowLifecyclePolicy.
+    rememberPlayerWindowSession(
+        lifecycleOwner = lifecycleOwner,
+        closePlayer = viewModel.closePlayer,
+        onClosePlayer = { currentOnBack() },
         windowOps = windowOps,
         isInPipMode = isInPipMode,
         isTv = isTv,
@@ -415,7 +384,6 @@ fun VideoPlayerScreen(
         rememberBrightness = uiState.gestures.rememberBrightness,
         brightnessLevel = uiState.gestures.brightnessLevel,
         isScreenLocked = isScreenLocked,
-        lifecycleOwner = lifecycleOwner,
         pipController = viewModel.pipController,
         cast = viewModel.sessionSlices.cast,
         releasePlayer = { viewModel.release() },
@@ -424,28 +392,15 @@ fun VideoPlayerScreen(
         clearPlayerView = { playerViewRef = null },
     )
 
-    // Always-on back interception (the seam's Android actual wires the system
-    // back; the desktop actual is a no-op and Esc is the shell's concern).
-    // This ladder IS the single BACK decision-maker for the screen, and it
-    // runs exactly once per press on every pipeline pairing: the TV D-pad arm
-    // set deliberately carries no BACK_OR_HIDE arm (the arm acting on the
-    // KeyDown AND the predictive-back callback replaying the same press on
-    // the KeyUp's Pre-IME stage double-acted: one press hid the controls AND
-    // exited), and PlayerActivity.onBackPressed suppresses the legacy key
-    // path on API 33+ whenever a back callback IS registered — on API <33
-    // (and in any no-callback window) the legacy path is the ONLY dispatch,
-    // so there is nothing to suppress. The ladder's verdict is the chrome
-    // module's (sheet → close, TV-visible → hide, else exit — the hide arm
-    // is TV-only: a touch BACK exits with the controls up).
-    val exitConfirm = rememberExitConfirmController({ uiState.uiPrefs.confirmExit }) { currentOnBack() }
-    JellyPlayBackHandler(enabled = true) {
-        when (chrome.backVerdict(hideArm = isTv)) {
-            PlayerChromeBackVerdict.CloseSheet -> currentSheet = PlayerSheet.None
-            PlayerChromeBackVerdict.HideControls -> chrome.hide()
-            PlayerChromeBackVerdict.SummonControls -> {}
-            PlayerChromeBackVerdict.Exit -> exitConfirm.onBackPress()
-        }
-    }
+    // The BACK hide-or-exit ladder (the seam's Android actual wires the
+    // system back; the desktop actual is a no-op and Esc is the shell's
+    // concern) + the overlay-priority focus handoff edge now live in ONE
+    // remembered holder — the overlay tier's rememberPlayerBackLadder, called
+    // below at the handoff effect's composition position (its exit
+    // interposer is that holder's return value, rendered beside the lock
+    // overlay). The verdict engine is the chrome module's backVerdict; the
+    // arm set, the verdict dispatch and the handoff priority ladder are the
+    // state module's PlayerBackFocusLadder.
 
     val engine by viewModel.sessionSlices.controls.engineFlow.collectAsStateWithLifecycle()
     val title = uiState.title
@@ -612,28 +567,25 @@ fun VideoPlayerScreen(
         skipPrompt.progress.takeIf { skipPrompt.isInitialPromptActive }
     }
 
-    LaunchedEffect(chrome.visible, isTv, isNextEpisodeVisible, isSkipSegmentVisible, isCinemaIntroVisible) {
-        if (isTv && !chrome.visible) {
-            // The overlay-priority handoff: overlays own focus while visible,
-            // the surface Box otherwise. [PlayerTvFocusGrabEffect] below owns
-            // the plain Box case with retry + re-assert (the single
-            // un-retried attempt here was the whole recovery path and it lost
-            // races); this effect stays the overlay-targeting arm.
-            when {
-                isCinemaIntroVisible -> tvCinemaIntroFocusRequester.tryRequestFocus("tv_cinema_intro")
-                isNextEpisodeVisible -> tvNextEpisodeFocusRequester.tryRequestFocus("tv_next_episode")
-                isSkipSegmentVisible -> tvSkipSegmentFocusRequester.tryRequestFocus("tv_skip_segment")
-                else -> harnessFocusDiag(
-                    "hide-edge handoff: box case deferred to the grab effect (showControls=false)",
-                )
-            }
-        } else if (!isTv && hasHardwareKeyboard && !chrome.visible) {
-            // Same call on every platform (Android behavior untouched); the
-            // captured result is a desktop-only harness-gated diag line.
-            val autoHideEdgeOk = keyboardFocusRequester.tryRequestFocus("keyboard_player")
-            harnessFocusDiag("auto-hide edge regrab ok=$autoHideEdgeOk")
-        }
-    }
+    // The ladder holder: the back-handler registration + the hide-edge
+    // focus handoff, at the handoff effect's former composition position
+    // (see the pointer above for the cluster's split).
+    val exitConfirm = rememberPlayerBackLadder(
+        isTv = isTv,
+        hasHardwareKeyboard = hasHardwareKeyboard,
+        chrome = chrome,
+        controlsVisible = chrome.visible,
+        cinemaIntroVisible = isCinemaIntroVisible,
+        nextEpisodeVisible = isNextEpisodeVisible,
+        skipSegmentVisible = isSkipSegmentVisible,
+        closeSheet = { currentSheet = PlayerSheet.None },
+        confirmExit = { uiState.uiPrefs.confirmExit },
+        onExit = { currentOnBack() },
+        tvCinemaIntroFocusRequester = tvCinemaIntroFocusRequester,
+        tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
+        tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
+        keyboardFocusRequester = keyboardFocusRequester,
+    )
 
     // TV focus grab + re-assert: the surface Box's D-pad tier
     // receives keys only while its subtree holds focus. The grab runs whenever

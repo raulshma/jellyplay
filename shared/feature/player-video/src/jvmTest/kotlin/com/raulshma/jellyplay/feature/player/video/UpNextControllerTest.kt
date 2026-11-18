@@ -7,23 +7,20 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -31,6 +28,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Tests for [UpNextController] — the Up Next module extracted from the
@@ -54,7 +52,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class UpNextControllerTest {
 
-    private val dispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private val catalogue: EpisodeCatalogue = mockk(relaxed = true)
 
     private lateinit var sessionState: MutableStateFlow<PlayerSessionState>
@@ -123,7 +122,7 @@ class UpNextControllerTest {
      * VERBS (advance, queue consumption, marks) keep their normal launch
      * timing — the shared [dispatcher] drives this scope and runTest's alike.
      */
-    private val controllerScope = CoroutineScope(SupervisorJob() + dispatcher)
+    private val controllerScope = CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher)
 
     private fun controller(): UpNextController =
         UpNextController(
@@ -165,7 +164,6 @@ class UpNextControllerTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(dispatcher)
         sessionState = MutableStateFlow(PlayerSessionState(currentItemId = "ep2"))
         episodes = EpisodeBrowserState()
     }
@@ -175,13 +173,12 @@ class UpNextControllerTest {
         // Kill the never-completing projection collectors the controller
         // launched — the structural counterpart of the dedicated scope above.
         controllerScope.cancel()
-        Dispatchers.resetMain()
     }
 
     // ── next-episode advance + overlay flag ────────────────────────────────
 
     @Test
-    fun `playNextEpisode advances to the sibling and settles the overlay flag`() = runTest(dispatcher) {
+    fun `playNextEpisode advances to the sibling and settles the overlay flag`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
         val c = controller()
 
@@ -196,7 +193,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `playNextEpisode flips the overlay flag on and holds it until settle`() = runTest(dispatcher) {
+    fun `playNextEpisode flips the overlay flag on and holds it until settle`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         val c = controller()
 
@@ -216,7 +213,7 @@ class UpNextControllerTest {
 
     @Test
     fun `playNextEpisode routes through the SyncPlay queue when the group holds the sibling`() =
-        runTest(dispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             stubSeason(episode("ep2"), episode("ep3"))
             syncGroupLive = true
             group = SyncPlayGroup(
@@ -244,7 +241,7 @@ class UpNextControllerTest {
 
     @Test
     fun `playNextEpisode with a queued head plays the head without episode resolution`() =
-        runTest(dispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             queuedMovie("movie-1")
             val c = controller()
 
@@ -256,7 +253,7 @@ class UpNextControllerTest {
         }
 
     @Test
-    fun `queue advance settles on the head and consumes it`() = runTest(dispatcher) {
+    fun `queue advance settles on the head and consumes it`() = runTest(mainDispatcherRule.testDispatcher) {
         queuedMovie("movie-1")
         val c = controller()
 
@@ -268,7 +265,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `queue advance that errors keeps the head queued`() = runTest(dispatcher) {
+    fun `queue advance that errors keeps the head queued`() = runTest(mainDispatcherRule.testDispatcher) {
         queuedMovie("movie-1")
         val c = controller()
 
@@ -282,7 +279,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `queue advance superseded by another item keeps the head`() = runTest(dispatcher) {
+    fun `queue advance superseded by another item keeps the head`() = runTest(mainDispatcherRule.testDispatcher) {
         queuedMovie("movie-1")
         stubSeason(episode("ep2"), episode("ep3"))
         val c = controller()
@@ -304,7 +301,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `queue advance re-tap while settling does not double-initialize`() = runTest(dispatcher) {
+    fun `queue advance re-tap while settling does not double-initialize`() = runTest(mainDispatcherRule.testDispatcher) {
         queuedMovie("movie-1")
         val c = controller()
 
@@ -328,7 +325,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `queue arm is suppressed during SyncPlay even with a head`() = runTest(dispatcher) {
+    fun `queue arm is suppressed during SyncPlay even with a head`() = runTest(mainDispatcherRule.testDispatcher) {
         queuedMovie("movie-1")
         stubSeason(episode("ep2"), episode("ep3"))
         syncGroupLive = true
@@ -354,7 +351,7 @@ class UpNextControllerTest {
     // ── the Up Next card projection (display precedence == advance) ─────────
 
     @Test
-    fun `upNextCard queue head beats the episode sibling`() = runTest(dispatcher) {
+    fun `upNextCard queue head beats the episode sibling`() = runTest(mainDispatcherRule.testDispatcher) {
         queuedMovie("movie-1")
         stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
         val c = controller()
@@ -370,7 +367,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `upNextCard shows the queued movie when there is no episode sibling`() = runTest(dispatcher) {
+    fun `upNextCard shows the queued movie when there is no episode sibling`() = runTest(mainDispatcherRule.testDispatcher) {
         // The headline case the old `episode?.name ?: queued?.title` display
         // read failed: a movie has no sibling, yet the card must show it.
         queuedMovie("movie-1")
@@ -385,7 +382,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `upNextCard falls back to the episode sibling when the queue is empty`() = runTest(dispatcher) {
+    fun `upNextCard falls back to the episode sibling when the queue is empty`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
         val c = controller()
 
@@ -399,7 +396,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `upNextCard is null with no queue and no sibling`() = runTest(dispatcher) {
+    fun `upNextCard is null with no queue and no sibling`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         advanceUntilIdle()
 
@@ -408,7 +405,7 @@ class UpNextControllerTest {
 
     @Test
     fun `upNextCard is null while a SyncPlay session owns the order and returns on leave`() =
-        runTest(dispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             queuedMovie("movie-1")
             val c = controller()
             advanceUntilIdle()
@@ -427,7 +424,7 @@ class UpNextControllerTest {
     // ── manual queue-row activation (the settle-then-consume protocol) ─────
 
     @Test
-    fun `playQueueItem settles on the row and consumes it`() = runTest(dispatcher) {
+    fun `playQueueItem settles on the row and consumes it`() = runTest(mainDispatcherRule.testDispatcher) {
         videoQueue = VideoQueueController().apply {
             enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
             enqueueLast(VideoQueueItem(itemId = "b", title = "b"))
@@ -447,7 +444,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `playQueueItem that errors keeps the row`() = runTest(dispatcher) {
+    fun `playQueueItem that errors keeps the row`() = runTest(mainDispatcherRule.testDispatcher) {
         videoQueue = VideoQueueController().apply {
             enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
             enqueueLast(VideoQueueItem(itemId = "b", title = "b"))
@@ -464,7 +461,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `playQueueItem with a moved row leaves the queue intact`() = runTest(dispatcher) {
+    fun `playQueueItem with a moved row leaves the queue intact`() = runTest(mainDispatcherRule.testDispatcher) {
         videoQueue = VideoQueueController().apply {
             enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
             enqueueLast(VideoQueueItem(itemId = "b", title = "b"))
@@ -485,7 +482,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `playQueueItem re-tap while settling does not double-initialize`() = runTest(dispatcher) {
+    fun `playQueueItem re-tap while settling does not double-initialize`() = runTest(mainDispatcherRule.testDispatcher) {
         videoQueue = VideoQueueController().apply {
             enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
             enqueueLast(VideoQueueItem(itemId = "b", title = "b"))
@@ -504,7 +501,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `playQueueItem out of bounds starts nothing`() = runTest(dispatcher) {
+    fun `playQueueItem out of bounds starts nothing`() = runTest(mainDispatcherRule.testDispatcher) {
         videoQueue = VideoQueueController().apply {
             enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
         }
@@ -519,7 +516,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `playQueueItem during a settling advance preempts it`() = runTest(dispatcher) {
+    fun `playQueueItem during a settling advance preempts it`() = runTest(mainDispatcherRule.testDispatcher) {
         // A manual "play now" is a deliberate pick: it must NOT be dropped
         // because the queue-head ADVANCE happens to be settling (separate
         // latches — the advance's settle guard then keeps its row).
@@ -544,7 +541,7 @@ class UpNextControllerTest {
 
     @Test
     fun `markWatchedAndSkip marks played server-side and advances to the next episode`() =
-        runTest(dispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
             hasNext = true
             val c = controller()
@@ -562,7 +559,7 @@ class UpNextControllerTest {
 
     @Test
     fun `markWatchedAndSkip without a next episode marks played and closes the player`() =
-        runTest(dispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             hasNext = false
             syncPlayMirror = false
             val c = controller()
@@ -577,7 +574,7 @@ class UpNextControllerTest {
 
     @Test
     fun `markWatchedAndSkip in incognito records the offline-local mark instead`() =
-        runTest(dispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             stubSeason(episode("ep2"), episode("ep3"))
             hasNext = true
             incognito = true
@@ -596,7 +593,7 @@ class UpNextControllerTest {
     // ── mark unwatched & quit ──────────────────────────────────────────────
 
     @Test
-    fun `markUnwatchedAndQuit clears the played flag and closes the player`() = runTest(dispatcher) {
+    fun `markUnwatchedAndQuit clears the played flag and closes the player`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         c.markUnwatchedAndQuit()
@@ -608,7 +605,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `markUnwatchedAndQuit in incognito is a no-op mark that still closes`() = runTest(dispatcher) {
+    fun `markUnwatchedAndQuit in incognito is a no-op mark that still closes`() = runTest(mainDispatcherRule.testDispatcher) {
         incognito = true
         val c = controller()
 
@@ -622,7 +619,7 @@ class UpNextControllerTest {
     // ── autoplay-cancel wiring ─────────────────────────────────────────────
 
     @Test
-    fun `cancelAutoplay flips the decision clock and the overlay mirror`() = runTest(dispatcher) {
+    fun `cancelAutoplay flips the decision clock and the overlay mirror`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         c.cancelAutoplay()
@@ -634,7 +631,7 @@ class UpNextControllerTest {
     // ── autoplay episode limit (the #17 binge controls) ────────────────────
 
     @Test
-    fun `engine-end auto-advances grow the streak and arm the cap`() = runTest(dispatcher) {
+    fun `engine-end auto-advances grow the streak and arm the cap`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         autoplayLimit.value = 2
         val c = controller()
@@ -650,7 +647,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `countdown expiry counts as an auto-advance too`() = runTest(dispatcher) {
+    fun `countdown expiry counts as an auto-advance too`() = runTest(mainDispatcherRule.testDispatcher) {
         autoplayLimit.value = 1
         stubSeason(episode("ep2"), episode("ep3"))
         val c = controller()
@@ -663,7 +660,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `manual play-next resets the streak`() = runTest(dispatcher) {
+    fun `manual play-next resets the streak`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         autoplayLimit.value = 1
         val c = controller()
@@ -679,7 +676,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `manual verbs reset the streak - episode pick and queue row and mark-and-skip`() = runTest(dispatcher) {
+    fun `manual verbs reset the streak - episode pick and queue row and mark-and-skip`() = runTest(mainDispatcherRule.testDispatcher) {
         // The queue must exist BEFORE the controller: the projections capture
         // the queue's flow at construction.
         videoQueue = VideoQueueController()
@@ -712,7 +709,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `player-open reset arm clears an armed cap`() = runTest(dispatcher) {
+    fun `player-open reset arm clears an armed cap`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         autoplayLimit.value = 1
         val c = controller()
@@ -726,7 +723,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `limit 0 is unlimited - the cap never arms`() = runTest(dispatcher) {
+    fun `limit 0 is unlimited - the cap never arms`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         val c = controller()
         repeat(5) {
@@ -738,7 +735,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `raising the cap leaf mid-session disarms a reached limit`() = runTest(dispatcher) {
+    fun `raising the cap leaf mid-session disarms a reached limit`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         autoplayLimit.value = 1
         val c = controller()
@@ -755,7 +752,7 @@ class UpNextControllerTest {
     // ── the after-finish keep gate (#17 showNextEpisodeDetailsAfterFinish) ──
 
     @Test
-    fun `after-finish card is kept when the pref is on with autoplay off`() = runTest(dispatcher) {
+    fun `after-finish card is kept when the pref is on with autoplay off`() = runTest(mainDispatcherRule.testDispatcher) {
         queuedMovie("movie-1")
         showDetailsAfterFinish = true
         val c = controller()
@@ -769,7 +766,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `after-finish card is kept when the autoplay cap is reached`() = runTest(dispatcher) {
+    fun `after-finish card is kept when the autoplay cap is reached`() = runTest(mainDispatcherRule.testDispatcher) {
         queuedMovie("movie-1")
         showDetailsAfterFinish = true
         autoplayLimit.value = 1
@@ -784,7 +781,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `after-finish keep is gated by the pref and the cancelled and no-next arms`() = runTest(dispatcher) {
+    fun `after-finish keep is gated by the pref and the cancelled and no-next arms`() = runTest(mainDispatcherRule.testDispatcher) {
         queuedMovie("movie-1")
         val c = controller()
         advanceUntilIdle()
@@ -817,7 +814,7 @@ class UpNextControllerTest {
     // ── smart-download cleanup ─────────────────────────────────────────────
 
     @Test
-    fun `smartDownloadCleanup deletes the download and surfaces the deletion`() = runTest(dispatcher) {
+    fun `smartDownloadCleanup deletes the download and surfaces the deletion`() = runTest(mainDispatcherRule.testDispatcher) {
         smartDownloadsEnabled = true
         durationMs = 6 * 60 * 1000L
         deleteResult = true
@@ -831,7 +828,7 @@ class UpNextControllerTest {
     }
 
     @Test
-    fun `smartDownloadCleanup is gated by the preference and the duration floor`() = runTest(dispatcher) {
+    fun `smartDownloadCleanup is gated by the preference and the duration floor`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         // Gate 1: the pref is off.

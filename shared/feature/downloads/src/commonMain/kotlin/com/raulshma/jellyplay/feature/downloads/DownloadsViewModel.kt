@@ -507,18 +507,18 @@ class DownloadsViewModel(
         }
     }
 
+    /**
+     * One-line forwards to the queue's placement composites — the placement
+     * number is computed by the implementation over the authoritative queue
+     * state, not this VM's (possibly-stale) list snapshot (see
+     * [DownloadQueue.moveToFront]); no explicit refresh needed.
+     */
     fun moveToFront(item: DownloadItem) {
-        launch {
-            val maxPriority = _uiState.value.downloads.maxOfOrNull { it.priority } ?: 0
-            queue.setDownloadPriority(item.id, maxPriority + 1)
-        }
+        launch { queue.moveToFront(item.id) }
     }
 
     fun lowerPriority(item: DownloadItem) {
-        launch {
-            val minPriority = _uiState.value.downloads.minOfOrNull { it.priority } ?: 0
-            queue.setDownloadPriority(item.id, minPriority - 1)
-        }
+        launch { queue.moveToBack(item.id) }
     }
 
     // ── Selection ────────────────────────────────────────────────────────

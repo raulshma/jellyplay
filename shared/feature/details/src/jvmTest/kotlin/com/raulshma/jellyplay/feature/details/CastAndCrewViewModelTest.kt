@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -17,32 +18,19 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CastAndCrewViewModelTest {
 
-    // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
-    @BeforeTest
-    fun setUpMainDispatcher() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDownMainDispatcher() {
-        Dispatchers.resetMain()
-    }
 
     private lateinit var detailFeed: DetailFeed
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -63,7 +51,7 @@ class CastAndCrewViewModelTest {
     }
 
     @Test
-    fun `load success partitions cast and crew`() = runTest(mainDispatcher) {
+    fun `load success partitions cast and crew`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "m1", name = "Movie 1", mediaType = MediaType.MOVIE)
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(
@@ -88,7 +76,7 @@ class CastAndCrewViewModelTest {
     }
 
     @Test
-    fun `load failure emits Error and calls the repository exactly once`() = runTest(mainDispatcher) {
+    fun `load failure emits Error and calls the repository exactly once`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(RuntimeException("boom"))
 
@@ -101,7 +89,7 @@ class CastAndCrewViewModelTest {
     }
 
     @Test
-    fun `load failure with null message falls back to the generic error`() = runTest(mainDispatcher) {
+    fun `load failure with null message falls back to the generic error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(IllegalStateException())
 
@@ -114,7 +102,7 @@ class CastAndCrewViewModelTest {
     }
 
     @Test
-    fun `load resets a prior Success state to Loading before resolving`() = runTest(mainDispatcher) {
+    fun `load resets a prior Success state to Loading before resolving`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.success(
             MediaDetail(

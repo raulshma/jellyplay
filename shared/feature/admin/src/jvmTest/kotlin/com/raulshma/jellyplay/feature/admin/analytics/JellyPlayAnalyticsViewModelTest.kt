@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsUser
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilities
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.admin.transcodes.TranscodePlayMethod
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -26,22 +27,18 @@ import io.mockk.runs
 import io.mockk.slot
 
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the JellyPlay companion-plugin admin analytics flow
@@ -69,9 +66,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class JellyPlayAnalyticsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var pluginApi: JellyPlayAnalyticsRoutes
     private lateinit var capabilitiesApi: JellyPlayCapabilitiesRoutes
@@ -137,7 +133,6 @@ class JellyPlayAnalyticsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         pluginApi = mockk()
         capabilitiesApi = mockk()
         sessionCacheRegistry = mockk(relaxed = true)
@@ -148,11 +143,6 @@ class JellyPlayAnalyticsViewModelTest {
     /** Fires the store's captured identity-reset action — the gate drops to Unknown. */
     private suspend fun simulateIdentityReset() {
         resetAction.captured.invoke(HomeSessionTransition.UserSwitched(SessionIdentity("srv-1", "user-2")))
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** Probes the real store: the capabilities stub decides AVAILABLE + feature set. */
@@ -194,7 +184,7 @@ class JellyPlayAnalyticsViewModelTest {
     // ── gating ──
 
     @Test
-    fun `plugin unavailable gates the screen off and never fetches analytics`() = runTest(mainDispatcher) {
+    fun `plugin unavailable gates the screen off and never fetches analytics`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { capabilitiesApi.getCapabilities() } returns Result.failure(RuntimeException("plugin absent"))
         statusStore.refresh()
 
@@ -211,7 +201,7 @@ class JellyPlayAnalyticsViewModelTest {
     }
 
     @Test
-    fun `available plugin without the analytics feature stays gated off`() = runTest(mainDispatcher) {
+    fun `available plugin without the analytics feature stays gated off`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable(features = listOf("settings-sync"))
 
         val viewModel = JellyPlayAnalyticsViewModel(pluginApi, statusStore)
@@ -223,7 +213,7 @@ class JellyPlayAnalyticsViewModelTest {
     }
 
     @Test
-    fun `a null status store defaults to gated off with no requests at all`() = runTest(mainDispatcher) {
+    fun `a null status store defaults to gated off with no requests at all`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = JellyPlayAnalyticsViewModel(pluginApi, statusStore = null)
         advanceUntilIdle()
 
@@ -238,7 +228,7 @@ class JellyPlayAnalyticsViewModelTest {
 
     @Test
     fun `available plugin with the analytics feature loads the mapped overview and sessions`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val viewModel = loadedViewModel()
 
             val state = viewModel.uiState.value
@@ -286,7 +276,7 @@ class JellyPlayAnalyticsViewModelTest {
         }
 
     @Test
-    fun `initial overview failure surfaces the error`() = runTest(mainDispatcher) {
+    fun `initial overview failure surfaces the error`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         coEvery { pluginApi.getAnalyticsOverview(any()) } returns Result.failure(RuntimeException("offline"))
         stubSessions(listOf(transcodeSession))
@@ -302,7 +292,7 @@ class JellyPlayAnalyticsViewModelTest {
     }
 
     @Test
-    fun `an overview 404 degrades quietly instead of erroring`() = runTest(mainDispatcher) {
+    fun `an overview 404 degrades quietly instead of erroring`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = loadedViewModel(overviewPayload = null)
 
         // Adapted from the former `overviewDegraded` + null `overview` pair:
@@ -314,7 +304,7 @@ class JellyPlayAnalyticsViewModelTest {
     }
 
     @Test
-    fun `a sessions failure keeps the overview and stays silent`() = runTest(mainDispatcher) {
+    fun `a sessions failure keeps the overview and stays silent`() = runTest(mainDispatcherRule.testDispatcher) {
         makeStoreAvailable()
         stubOverview()
         coEvery { pluginApi.getAnalyticsSessions(any(), any(), any()) } returns
@@ -348,7 +338,7 @@ class JellyPlayAnalyticsViewModelTest {
     // ── window chips ──
 
     @Test
-    fun `selecting a days range refetches the overview with that window`() = runTest(mainDispatcher) {
+    fun `selecting a days range refetches the overview with that window`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = loadedViewModel()
         viewModel.selectDays(7)
         advanceUntilIdle()
@@ -358,7 +348,7 @@ class JellyPlayAnalyticsViewModelTest {
     }
 
     @Test
-    fun `selecting the already-selected window is a no-op`() = runTest(mainDispatcher) {
+    fun `selecting the already-selected window is a no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = loadedViewModel()
 
         viewModel.selectDays(30)
@@ -371,7 +361,7 @@ class JellyPlayAnalyticsViewModelTest {
 
     @Test
     fun `selecting a user re-scopes the sessions fetch and tapping again clears it`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val viewModel = loadedViewModel()
 
             viewModel.selectUser("u-1")
@@ -392,7 +382,7 @@ class JellyPlayAnalyticsViewModelTest {
 
     @Test
     fun `a full page offers load more and the next page appends with the since cursor`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val firstPage = List(JellyPlayAnalyticsViewModel.SESSIONS_PAGE_SIZE) { index ->
                 JellyPlayAnalyticsSession(
                     userId = "u-1",
@@ -440,7 +430,7 @@ class JellyPlayAnalyticsViewModelTest {
         }
 
     @Test
-    fun `an appended page de-duplicates a session already loaded`() = runTest(mainDispatcher) {
+    fun `an appended page de-duplicates a session already loaded`() = runTest(mainDispatcherRule.testDispatcher) {
         val firstPage = List(JellyPlayAnalyticsViewModel.SESSIONS_PAGE_SIZE) { index ->
             JellyPlayAnalyticsSession(
                 userId = "u-1",
@@ -473,7 +463,7 @@ class JellyPlayAnalyticsViewModelTest {
     }
 
     @Test
-    fun `load more without a full page is refused`() = runTest(mainDispatcher) {
+    fun `load more without a full page is refused`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = loadedViewModel()
 
         viewModel.loadMoreSessions()
@@ -487,7 +477,7 @@ class JellyPlayAnalyticsViewModelTest {
 
     @Test
     fun `refresh refetches both surfaces and a failure keeps the stale data silently`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val viewModel = loadedViewModel()
 
             coEvery { pluginApi.getAnalyticsOverview(any()) } returns Result.failure(RuntimeException("offline"))
@@ -507,7 +497,7 @@ class JellyPlayAnalyticsViewModelTest {
     // ── gate re-arm (the load latch) ──
 
     @Test
-    fun `a gate drop re-arms the load - the next gate-on reloads`() = runTest(mainDispatcher) {
+    fun `a gate drop re-arms the load - the next gate-on reloads`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = loadedViewModel() // visit 1: data loaded, latch raised
 
         // Identity reset (user switch / plugin reinstall): the store's
@@ -538,7 +528,7 @@ class JellyPlayAnalyticsViewModelTest {
 
     @Test
     fun `a user switch during an in-flight refresh serializes - the late refresh write never lands under the old filter`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val viewModel = loadedViewModel()
 
             // Park any further sessions fetch: refresh()'s session reset lands

@@ -42,6 +42,8 @@ import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
+import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.feature.player.video.engine.EngineDecision
@@ -206,7 +208,7 @@ internal class PlaybackSession(
     sessionLoadPipelineOverride: SessionLoadPipeline? = null,
     /** Test override; production builds it from the session stack's factory. */
     mediaSessionControllerOverride: MediaSessionController? = null,
-    /** Test override; production the session itself implements the hooks. */
+    /** Test override; production the session's own `sessionHooks` delegate provides the hooks. */
     private val hooksOverride: SessionLifecycleHooks? = null,
     /** Test override; production resolves the localized FORCE_DIRECT_PLAY fallback notice. */
     directPlayFallbackNotice: (suspend (String) -> String)? = null,
@@ -277,7 +279,7 @@ internal class PlaybackSession(
     private val detailFeed: DetailFeed,
     /** The process-death resume-position persistence; production: the SavedStateHandle store. */
     positionStoreOverride: SessionPositionStore? = null,
-) : SessionLoadOutputs, SessionLifecycleHooks {
+) : SessionLoadOutputs {
 
     // ── The state-holder bundle, unpacked ────────────────────────────────────
     //
@@ -1150,8 +1152,15 @@ internal class PlaybackSession(
         },
         // Toggle: the cue preview (declared below — the lambda defers every
         // read, so the forward reference is init-order safe) refreshes like a
-        // sheet pick when the toggle flips the active subtitle.
+        // sheet pick when the toggle flips the active subtitle — and when the
+        // downloaded-subtitle "Use" arm activates one (useDownloadedSubtitle's
+        // selected verdict).
         onSubtitleSelectionChanged = { subtitlePreview.onTrackSelectionChanged() },
+        // The downloaded-subtitle "Use" action's ready-hint read (the helper's
+        // useDownloadedSubtitle resolves the sheet row through it): the
+        // SubtitleManager's per-row ready map, same lookup the former VM body
+        // made.
+        findReadySubtitleHint = { rowKey -> subtitles.state.value.readySubtitles[rowKey] },
         scope = scope,
     )
 
@@ -1477,11 +1486,37 @@ internal class PlaybackSession(
 
 
     /**
-     * The lifecycle hooks the session calls on the owner's behalf —
-     * production: the session itself (the owner's slices are
-     * session-internal); tests: recording doubles.
+     * The session's own hook implementation: an object expression delegating
+     * to the private hook funs below, so the load choreography's dispatch
+     * keeps riding the [SessionLifecycleHooks] seam (the behavioral suites
+     * substitute recording doubles through `hooksOverride`) while the root
+     * interface stays narrow — the session implements only
+     * [SessionLoadOutputs].
      */
-    private val lifecycleHooks: SessionLifecycleHooks get() = hooksOverride ?: this
+    private val sessionHooks: SessionLifecycleHooks = object : SessionLifecycleHooks {
+        override fun rearmTransports() = this@PlaybackSession.rearmTransports()
+        override fun resetForNewItem(selection: MediaStreamSelection) =
+            this@PlaybackSession.resetForNewItem(selection)
+        override fun routeToRemotePlaySession(request: LoadRequest): Boolean =
+            this@PlaybackSession.routeToRemotePlaySession(request)
+        override fun tryReclaimMiniPlayer(itemId: String): MediaEngine? =
+            this@PlaybackSession.tryReclaimMiniPlayer(itemId)
+        override fun onMiniPlayerReclaimed() = this@PlaybackSession.onMiniPlayerReclaimed()
+        override fun hydrateReclaimedItem(itemId: String, detail: MediaDetail) =
+            this@PlaybackSession.hydrateReclaimedItem(itemId, detail)
+        override fun releaseMiniPlayerState() = this@PlaybackSession.releaseMiniPlayerState()
+        override fun releaseInternalsVmPart() = this@PlaybackSession.releaseInternalsVmPart()
+        override fun clearTrickplay() = this@PlaybackSession.clearTrickplay()
+        override fun reattachSyncPlay() = this@PlaybackSession.reattachSyncPlay()
+        override fun wasInSyncPlay(): Boolean = this@PlaybackSession.wasInSyncPlay()
+    }
+
+    /**
+     * The lifecycle hooks the session calls on the owner's behalf —
+     * production: the session's own [sessionHooks] delegate (the owner's
+     * slices are session-internal); tests: recording doubles.
+     */
+    private val lifecycleHooks: SessionLifecycleHooks get() = hooksOverride ?: sessionHooks
 
     /**
      * The immediate engine-config rebuild trigger: the collaborators'
@@ -1611,6 +1646,40 @@ internal class PlaybackSession(
                 forceStream = forceStream,
             )
         )
+    }
+
+    /**
+     * The user-driven advance verb: the six manual "move to another item"
+     * arms ([UserAdvance]) folded into ONE choreography. The order is the
+     * contract the former per-arm VM bodies shared:
+     * [AutoPlayController.onUserInteraction] runs FIRST — a user-driven
+     * advance resets the still-watching engagement streak (auto-advance loads
+     * bypass this verb and keep it) — then the variant's own dispatch. The
+     * binge-streak reset (#17) is deliberately NOT duplicated here: it stays
+     * inside UpNext (every manual entry point resets it itself); only
+     * [UserAdvance.FreshOpen], the full player-open funnel, resets it
+     * explicitly beside the load.
+     */
+    fun userAdvance(variant: UserAdvance) {
+        autoplayController.onUserInteraction()
+        when (variant) {
+            is UserAdvance.FreshOpen -> {
+                upNext.resetAutoAdvanceStreak()
+                initialize(
+                    itemId = variant.itemId,
+                    mediaSourceId = variant.mediaSourceId,
+                    startPositionTicks = variant.startPositionTicks,
+                    subtitleStreamIndex = variant.subtitleStreamIndex,
+                    audioStreamIndex = variant.audioStreamIndex,
+                    forceStream = variant.forceStream,
+                )
+            }
+            is UserAdvance.Episode -> upNext.playEpisode(variant.episodeId, variant.startPositionTicks)
+            UserAdvance.Previous -> upNext.playPreviousEpisode()
+            UserAdvance.Next -> upNext.playNextManually()
+            UserAdvance.WatchedAndSkip -> upNext.markWatchedAndSkip()
+            is UserAdvance.QueueItem -> upNext.playQueueItem(variant.index)
+        }
     }
 
     /**
@@ -1929,6 +1998,28 @@ internal class PlaybackSession(
      */
     fun switchMediaSource(mediaSourceId: String) {
         reloadCoordinator.reload(ReloadVariant.SourceSwitch(mediaSourceId))
+    }
+
+    // ── SyncPlay group-mode verbs ────────────────────────────────────────────
+    //
+    //    The group repeat/shuffle picks (the playback sheet's SyncPlay rows)
+    //    ride the session scope through the manager — the same launch shape
+    //    every session arm uses; no extra guards exist at the call sites.
+    //    The VM forwards one-line (the syncPlayManager threading moved the
+    //    manager into the session's [PlayerSessionSources] bundle).
+
+    /** The SyncPlay group repeat mode pick. */
+    fun setSyncPlayRepeatMode(mode: SyncPlayRepeatMode) {
+        scope.launch {
+            syncPlayManager.setGroupRepeatMode(mode)
+        }
+    }
+
+    /** The SyncPlay group shuffle mode pick. */
+    fun setSyncPlayShuffleMode(mode: SyncPlayShuffleMode) {
+        scope.launch {
+            syncPlayManager.setGroupShuffleMode(mode)
+        }
     }
 
     // ── Mini-player reclaim ───────────────────────────────────────────────────
@@ -2706,17 +2797,18 @@ internal class PlaybackSession(
 
     // ── SessionLifecycleHooks (the per-item teardown slices + gates) ────────
     //
-    // The session implements its own hooks (production `hooks` arg = null →
-    // [lifecycleHooks] resolves to `this`); the behavioral suites substitute
-    // recording doubles to pin the ORDER of the choreography.
+    // The session provides its own hook bodies (production `hooks` arg = null
+    // → [lifecycleHooks] resolves to [sessionHooks], the delegate above); the
+    // behavioral suites substitute recording doubles to pin the ORDER of the
+    // choreography.
 
-    override fun rearmTransports() {
+    private fun rearmTransports() {
         // The engine-event coordinator re-arm is session-owned —
         // PlaybackSession.initialize performs it directly after this hook.
         pipTransport.registerPipTransport()
     }
 
-    override fun resetForNewItem(selection: MediaStreamSelection) {
+    private fun resetForNewItem(selection: MediaStreamSelection) {
         autoplayController.resetForNewItem()
         // Defensive: a prompt can never survive an item switch (its own
         // Continue/Stop arms clear it first; this catches a racing load).
@@ -2732,10 +2824,10 @@ internal class PlaybackSession(
     // player-contract MediaEngine through the capability the depositing
     // video feature registered at deposit time — the asMedia3Player
     // "typed capability, not a cast" rule.
-    override fun tryReclaimMiniPlayer(itemId: String): MediaEngine? =
+    private fun tryReclaimMiniPlayer(itemId: String): MediaEngine? =
         videoMiniPlayerState.tryReclaimMediaEngine(itemId)
 
-    override fun onMiniPlayerReclaimed() {
+    private fun onMiniPlayerReclaimed() {
         // Reclaim promotes an already-playing mini-player engine to
         // fullscreen — playback is continuous, so no load screen. The reclaim
         // BODY is session-side; this is the veil write, before the body
@@ -2743,7 +2835,7 @@ internal class PlaybackSession(
         uiState.update { it.copy(isInitializing = false) }
     }
 
-    override fun hydrateReclaimedItem(itemId: String, detail: MediaDetail) {
+    private fun hydrateReclaimedItem(itemId: String, detail: MediaDetail) {
         // The hydration fetches: segments (the pipeline's offline-first
         // fetch, shared with the load spine) then the episode fetches.
         sessionLoadPipeline.fetchMediaSegments(scope, itemId)
@@ -2751,11 +2843,11 @@ internal class PlaybackSession(
         upNext.loadSeries(detail)
     }
 
-    override fun releaseMiniPlayerState() {
+    private fun releaseMiniPlayerState() {
         videoMiniPlayerState.release()
     }
 
-    override fun releaseInternalsVmPart() {
+    private fun releaseInternalsVmPart() {
         // The controller/ui-state teardown half (every collaborator it
         // touches is session-internal).
         // Raise the loading screen across the state reset + fresh load so
@@ -2820,15 +2912,15 @@ internal class PlaybackSession(
         sessionStack.playerLifecycleManager.reset()
     }
 
-    override fun clearTrickplay() {
+    private fun clearTrickplay() {
         trickplayManager.clear()
     }
 
-    override fun reattachSyncPlay() {
+    private fun reattachSyncPlay() {
         syncPlay.reattachSession()
     }
 
-    override fun wasInSyncPlay(): Boolean {
+    private fun wasInSyncPlay(): Boolean {
         // Pure flag read — the outgoing session's stop-report
         // fires directly after this read inside PlaybackSession.initialize.
         return syncPlayManager.isInSyncPlaySession
@@ -2844,7 +2936,7 @@ internal class PlaybackSession(
      * CastManager cast state. Returns true when the load was routed away and
      * initialization is complete.
      */
-    override fun routeToRemotePlaySession(request: LoadRequest): Boolean {
+    private fun routeToRemotePlaySession(request: LoadRequest): Boolean {
         if (!jellyfinRemotePlayCastStrategy.isConnected.value) return false
         jellyfinRemotePlayCastStrategy.loadMedia(
             itemId = request.itemId,
@@ -2858,102 +2950,6 @@ internal class PlaybackSession(
         uiState.update { it.copy(isInitializing = false) }
         return true
     }
-}
-
-/**
- * ViewModel-bound slices of [PlaybackSession.initialize], in the exact order
- * the session calls them (see [PlaybackSession.initialize] for the numbered
- * sequence). The session owns the sequence; the hooks own the per-item
- * teardown slices and the gates whose knowledge lives outside the session
- * (the remote-play strategy probe, the mini-player reclaim, the SyncPlay
- * re-attach flag). The session implements this interface ITSELF (the
- * production `hooks` argument is null); the behavioral suites substitute
- * recording doubles to pin the call ORDER without weakening the pins.
- */
-internal interface SessionLifecycleHooks {
-    /**
-     * Re-arms the PiP transport bridge for a new load: release()
-     * nulled it and `init` does not re-run on this Activity-scoped, reused
-     * VM. The engine-event coordinator re-arm is session-owned and
-     * [PlaybackSession.initialize] performs it directly after this hook.
-     */
-    fun rearmTransports()
-
-    /**
-     * Synchronous-prefix resets for the new item — all direct writes, none
-     * pipelined: the autoplay controller reset, the autoplay-cancelled clear,
-     * the coordinator's new-item fallback-latch reset, and the pending
-     * audio/subtitle stream selection for the track selection helper.
-     */
-    fun resetForNewItem(selection: MediaStreamSelection)
-
-    /**
-     * "Play On" routing early-return: when a Jellyfin remote session is
-     * connected, sends the video there instead of playing locally. Returns
-     * true when the load was routed away and initialization is complete.
-     */
-    fun routeToRemotePlaySession(request: LoadRequest): Boolean
-
-    /**
-     * Reclaims the mini-player's live engine when it is playing exactly
-     * [itemId], so the fullscreen load can bind it instead of reloading.
-     * Null when there is nothing to reclaim. The GATE only — the
-     * reclaim BODY (detail fetch, engine bind, media session, tracking
-     * restart) is session-side ([PlaybackSession.loadReclaimedEngine]); the
-     * gate stays a hook because the mini-player state it reads is
-     * owner-lifecycle knowledge.
-     */
-    fun tryReclaimMiniPlayer(itemId: String): MediaEngine?
-
-    /**
-     * Lowers the loading veil when the reclaim routing takes over — playback
-     * is continuous, no load screen. The uiState write stays in the hook
-     * implementation; the session's [PlaybackSession.loadReclaimedEngine]
-     * invokes this synchronously BEFORE launching the body (the veil write's
-     * original position).
-     */
-    fun onMiniPlayerReclaimed()
-
-    /**
-     * Post-bind hydration for a reclaimed mini-player engine: the segments,
-     * adjacent-episodes and series-episodes fetches whose uiState writes and
-     * collaborators keep them in the hook implementation. Called by the
-     * session's reclaim body (after the engine bind, media session and
-     * tracking restart).
-     */
-    fun hydrateReclaimedItem(itemId: String, detail: MediaDetail)
-
-    /** Releases the mini-player state when its engine was not reclaimed. */
-    fun releaseMiniPlayerState()
-
-    /**
-     * The controller/ui-state part of the per-item teardown, prefixed by the
-     * loading-veil raise. Called back-to-back AFTER the session-owned teardown
-     * half — the session cancels the in-flight load, reporter jobs, media
-     * session and PSM, and clears the seek latches directly before this hook —
-     * from the same synchronous call chain (no dispatch hop). Also invoked by
-     * [PlaybackSession.release] on full teardown, where the veil raise is a
-     * same-value write (the ui-state rebuild constructs a fresh state whose
-     * `isInitializing` default is already true). The play-session id restore
-     * is session-side.
-     */
-    fun releaseInternalsVmPart()
-
-    /** Clears the trickplay cache for the outgoing item. */
-    fun clearTrickplay()
-
-    /** Re-attaches the SyncPlay bridge to the (surviving) group session. */
-    fun reattachSyncPlay()
-
-    /**
-     * Reads whether playback was in a SyncPlay session before this load
-     * (feeding the conditional [reattachSyncPlay] call). A pure flag read:
-     * the outgoing session's stop-report is session-owned
-     * ([PlaybackSession.initialize] fires
-     * [PlaybackSession.reportCurrentPlaybackStopped] directly after this
-     * read).
-     */
-    fun wasInSyncPlay(): Boolean
 }
 
 /**

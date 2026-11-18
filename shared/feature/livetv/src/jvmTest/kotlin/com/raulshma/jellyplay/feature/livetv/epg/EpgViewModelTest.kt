@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
@@ -21,14 +22,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,6 +35,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the EPG guide-window math and the record-confirmation side effects the
@@ -80,7 +80,8 @@ import kotlin.test.assertTrue
  */
 class EpgViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: LiveTvApiClient
 
@@ -92,16 +93,10 @@ class EpgViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns Result.success(
             EpgGuide(channels = emptyList(), programs = emptyList())
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** Runs the init loadGuide; any auto-refresh loop a test starts parks on its delay. */
@@ -229,7 +224,7 @@ class EpgViewModelTest {
         vm.confirmRecord()
         // The in-flight state is set synchronously, before the repo answers.
         assertEquals(RecordDialogState.Requesting, vm.recordDialog)
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
         assertEquals(RecordDialogState.Success("Evening News"), vm.recordDialog)
         coVerify(exactly = 1) { mediaRepository.createTimer("prog-1") }
@@ -248,7 +243,7 @@ class EpgViewModelTest {
         coEvery { mediaRepository.createTimer("prog-1") } returns Result.failure(RuntimeException("dvr busy"))
 
         vm.confirmRecord()
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
         assertEquals(RecordDialogState.Error(UiMessage.Raw("dvr busy")), vm.recordDialog)
         vm.stopLoops()
@@ -262,7 +257,7 @@ class EpgViewModelTest {
             Result.failure(RuntimeException(null as String?))
 
         vm.confirmRecord()
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
         assertEquals(
             RecordDialogState.Error(UiMessage.Resource(Res.string.livetv_error_record)),
@@ -276,7 +271,7 @@ class EpgViewModelTest {
         val vm = createViewModel()
 
         vm.confirmRecord()
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
         assertNull(vm.recordDialog)
         coVerify(exactly = 0) { mediaRepository.createTimer(any()) }
@@ -290,7 +285,7 @@ class EpgViewModelTest {
         vm.dismissRecordDialog()
 
         vm.confirmRecord()
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
         assertNull(vm.recordDialog)
         coVerify(exactly = 0) { mediaRepository.createTimer(any()) }
@@ -333,21 +328,21 @@ class EpgViewModelTest {
         coVerify(exactly = 1) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
 
         // 4:59.999 — not yet.
-        mainDispatcher.scheduler.advanceTimeBy(4 * 60 * 1000L + 59_999L)
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(4 * 60 * 1000L + 59_999L)
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
         coVerify(exactly = 1) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
 
         // The 5-minute boundary fires the next refresh.
-        mainDispatcher.scheduler.advanceTimeBy(1L)
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(1L)
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
         coVerify(exactly = 2) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
 
         // And it keeps going on schedule. The runCurrent lets the second loop
         // iteration finish — its rebuildGrid hop is queued on the shared
         // scheduler — before the next delay is scheduled.
-        mainDispatcher.scheduler.runCurrent()
-        mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
         coVerify(exactly = 3) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
         vm.stopLoops()
     }
@@ -360,9 +355,9 @@ class EpgViewModelTest {
         coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns
             Result.success(EpgGuide(channels = listOf(channel), programs = emptyList()))
 
-        mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
-        mainDispatcher.scheduler.runCurrent()
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
         assertEquals(listOf(channel), vm.channels)
         assertEquals(listOf("chan-9"), vm.gridData.rows.map { it.channel.id })
@@ -384,9 +379,9 @@ class EpgViewModelTest {
         // the window identical too): the row must keep its INSTANCE across
         // the rebuild, not merely its content.
         vm.startAutoRefresh()
-        mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
-        mainDispatcher.scheduler.runCurrent()
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
         assertEquals(1, vm.gridData.rows.size)
         assertSame(rowsBefore.single(), vm.gridData.rows.single())

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.musichome
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -38,18 +39,15 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the music home contract: section building in canonical
@@ -67,9 +65,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class MusicHomeViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val userDataChanges: UserDataChanges = mockk()
     private val musicCatalogue: MusicCatalogue = mockk()
@@ -93,7 +90,6 @@ class MusicHomeViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { homeDiscoveryStore.homeDiscovery } returns homeModeFlow
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         every { activeDownloads.getActiveDownloadCount() } returns flowOf(0)
@@ -106,11 +102,6 @@ class MusicHomeViewModelTest {
         every { sessionIdentity.cacheIdentitySnapshot() } returns CacheIdentity.UNKNOWN
         // The deferred refresher collects this for the whole VM lifetime.
         every { userDataChanges.userDataChanges } returns userDataEvents
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun item(id: String, name: String = id) =
@@ -152,7 +143,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun init_reflectsHomeModeFromDiscoverySlice() = runTest(mainDispatcher) {
+    fun init_reflectsHomeModeFromDiscoverySlice() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         homeModeFlow.value = HomeDiscoverySlice(homeMode = HomeMode.MUSIC)
         createViewModel()
@@ -163,7 +154,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun loadSections_buildsSectionsInCanonicalOrderSkippingEmpty() = runTest(mainDispatcher) {
+    fun loadSections_buildsSectionsInCanonicalOrderSkippingEmpty() = runTest(mainDispatcherRule.testDispatcher) {
         val artists = listOf(MediaItem(id = "a1", name = "Artist", mediaType = MediaType.ARTIST))
         val latest = listOf(item("l1", "Latest Album"))
         val recent = listOf(item("r1", "Recent Track"))
@@ -223,7 +214,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun loadSections_allQueriesEmpty_yieldsNoSections() = runTest(mainDispatcher) {
+    fun loadSections_allQueriesEmpty_yieldsNoSections() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         createViewModel()
 
@@ -236,7 +227,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun loadSections_secondEntryAfterSuccess_stillFetches() = runTest(mainDispatcher) {
+    fun loadSections_secondEntryAfterSuccess_stillFetches() = runTest(mainDispatcherRule.testDispatcher) {
         // The coordinator adapts with Unit and forces every loud entry —
         // no identity to guard, unlike the detail hosts' same-id re-entry
         // no-op. A second loadSections after a SUCCESSFUL first load must
@@ -257,7 +248,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun freshEntryWithinTtl_servesCachedAggregateAndStaysRefreshable() = runTest(mainDispatcher) {
+    fun freshEntryWithinTtl_servesCachedAggregateAndStaysRefreshable() = runTest(mainDispatcherRule.testDispatcher) {
         // One cache shared by two VM instances — a fresh music home
         // navigation (new ViewModel) replays the last complete aggregate
         // within the TTL instead of re-running the five-query fan-out.
@@ -283,7 +274,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun offlineMode_clearsSectionsAndUpdatesState() = runTest(mainDispatcher) {
+    fun offlineMode_clearsSectionsAndUpdatesState() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         createViewModel()
         advanceUntilIdle()
@@ -297,7 +288,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun loadSections_whileOffline_neverQueriesRepository() = runTest(mainDispatcher) {
+    fun loadSections_whileOffline_neverQueriesRepository() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         createViewModel()
@@ -310,7 +301,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun loadSections_failureWithNoSections_setsErrorStateOnly() = runTest(mainDispatcher) {
+    fun loadSections_failureWithNoSections_setsErrorStateOnly() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { libraryApiClient.getFavorites(any(), any(), any()) } throws RuntimeException("boom")
         coEvery {
             libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any())
@@ -325,7 +316,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun refresh_failureWithCachedSections_surfacesBusToastAndKeepsSections() = runTest(mainDispatcher) {
+    fun refresh_failureWithCachedSections_surfacesBusToastAndKeepsSections() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         // One answer per matcher; the artist query succeeds on the first load
         // and throws on the refresh — no stub re-recording.
@@ -351,7 +342,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun toggleOfflineMode_delegatesToManager() = runTest(mainDispatcher) {
+    fun toggleOfflineMode_delegatesToManager() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         createViewModel()
 
@@ -364,7 +355,7 @@ class MusicHomeViewModelTest {
     // ── Deferred refresh (user-data changes while off-screen) ───────────────
 
     @Test
-    fun deferredRefresh_reloadsSectionsSilently() = runTest(mainDispatcher) {
+    fun deferredRefresh_reloadsSectionsSilently() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         createViewModel()
         advanceUntilIdle()
@@ -390,7 +381,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_failureKeepsSectionsAndStaysQuiet() = runTest(mainDispatcher) {
+    fun deferredRefresh_failureKeepsSectionsAndStaysQuiet() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         // One answer per matcher: the artist query succeeds on the initial
         // load and fails on the silent regeneration (no stub re-recording).
@@ -436,7 +427,7 @@ class MusicHomeViewModelTest {
     // pin the host adapters' own surfaces.
 
     @Test
-    fun refresh_cancelledByALaterLoudLoad_doesNotMaskAsFailureOrStrandSpinner() = runTest(mainDispatcher) {
+    fun refresh_cancelledByALaterLoudLoad_doesNotMaskAsFailureOrStrandSpinner() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         createViewModel()
         advanceUntilIdle()
@@ -466,7 +457,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_whileOffline_rearmsInsteadOfStrandingThePendingFlag() = runTest(mainDispatcher) {
+    fun deferredRefresh_whileOffline_rearmsInsteadOfStrandingThePendingFlag() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         createViewModel()
         advanceUntilIdle()
@@ -495,7 +486,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun refresh_loudFailureOverArmsTheDeferredRefreshForTheNextReentry() = runTest(mainDispatcher) {
+    fun refresh_loudFailureOverArmsTheDeferredRefreshForTheNextReentry() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         // One answer per matcher: the artist query succeeds on the initial
         // load and throws on every later one (the loud refresh and the
@@ -532,7 +523,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun refresh_partialLoudFailurePublishesWhatItGotAndRearmsToHeal() = runTest(mainDispatcher) {
+    fun refresh_partialLoudFailurePublishesWhatItGotAndRearmsToHeal() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         // Query 1 (initial load) succeeds; query 2 (loud refresh) returns a
         // failure RESULT — swallowed by getOrNull, so the loud load finishes
@@ -583,7 +574,7 @@ class MusicHomeViewModelTest {
     // and the mode survives the dispatch window).
 
     @Test
-    fun deferredRefresh_silentThrowKeepsSectionsAndNeverRaisesTheErrorFace() = runTest(mainDispatcher) {
+    fun deferredRefresh_silentThrowKeepsSectionsAndNeverRaisesTheErrorFace() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         createViewModel()
         advanceUntilIdle()
@@ -639,7 +630,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun offlineReturn_loudFailureShowsTheErrorFaceAndClearsTheSpinner() = runTest(mainDispatcher) {
+    fun offlineReturn_loudFailureShowsTheErrorFaceAndClearsTheSpinner() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         createViewModel()
         advanceUntilIdle()
@@ -666,7 +657,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun fetchMode_carriedByTheCallerAcrossTheDispatchWindow_loudGateClearsTheSpinner() = runTest(mainDispatcher) {
+    fun fetchMode_carriedByTheCallerAcrossTheDispatchWindow_loudGateClearsTheSpinner() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         createViewModel()
         advanceUntilIdle()
@@ -693,7 +684,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun surpriseMe_invokesCallbackWithRandomTrackId() = runTest(mainDispatcher) {
+    fun surpriseMe_invokesCallbackWithRandomTrackId() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         coEvery {
             libraryApiClient.getMediaItems(
@@ -715,7 +706,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun getImageUrl_andBackdrop_delegateToProvider() = runTest(mainDispatcher) {
+    fun getImageUrl_andBackdrop_delegateToProvider() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         createViewModel()
         every { imageUrlProvider.getImageUrl("i1") } returns "img"
@@ -726,7 +717,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun playAll_delegatesWithDefaultsAndStartIndex() = runTest(mainDispatcher) {
+    fun playAll_delegatesWithDefaultsAndStartIndex() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
             AudioQueueOutcome.Started(emptyList(), 0)
@@ -742,7 +733,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun shufflePlay_delegatesWithShuffledFlag() = runTest(mainDispatcher) {
+    fun shufflePlay_delegatesWithShuffledFlag() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
             AudioQueueOutcome.Started(emptyList(), 0)
@@ -758,7 +749,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun playAlbum_fetchesTracksAndPlays() = runTest(mainDispatcher) {
+    fun playAlbum_fetchesTracksAndPlays() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         val tracks = listOf(item("t1"))
         coEvery { musicCatalogue.getAlbumTracks("al1", force = false) } returns Result.success(tracks)
@@ -787,7 +778,7 @@ class MusicHomeViewModelTest {
     // at all (filename-imported tracks have null parentId/album everywhere).
 
     @Test
-    fun playSpotlightTrack_playsTheAlbumStartingAtTheTrackRow() = runTest(mainDispatcher) {
+    fun playSpotlightTrack_playsTheAlbumStartingAtTheTrackRow() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         val album = listOf(item("a0"), item("a1"), item("hit"), item("a3"))
         coEvery { musicCatalogue.getAlbumTracks("al1", force = false) } returns Result.success(album)
@@ -804,7 +795,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun playSpotlightTrack_rowWithoutParentIdResolvesTheAlbumFromTheDetail() = runTest(mainDispatcher) {
+    fun playSpotlightTrack_rowWithoutParentIdResolvesTheAlbumFromTheDetail() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         val album = listOf(item("a0"), item("hit"), item("a2"))
         coEvery { libraryApiClient.getMediaDetail("hit") } returns
@@ -828,7 +819,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun playSpotlightTrack_noAlbumLinkageQueuesTheSectionStartingAtTheTrackRow() = runTest(mainDispatcher) {
+    fun playSpotlightTrack_noAlbumLinkageQueuesTheSectionStartingAtTheTrackRow() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         // The device shape: the row AND the detail read both carry no album
         // linkage, so the section rows themselves become the queue.
@@ -854,7 +845,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun playSpotlightTrack_sectionQueueStartsAtTheTracksOwnRow() = runTest(mainDispatcher) {
+    fun playSpotlightTrack_sectionQueueStartsAtTheTracksOwnRow() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         coEvery { libraryApiClient.getMediaDetail("n2") } returns
             Result.success(
@@ -877,7 +868,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun playSpotlightTrack_unresolvableAlbumFallsBackToTheSectionThenTheSingleRow() = runTest(mainDispatcher) {
+    fun playSpotlightTrack_unresolvableAlbumFallsBackToTheSectionThenTheSingleRow() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         coEvery { libraryApiClient.getMediaDetail("t1") } returns
             Result.failure(RuntimeException("test"))
@@ -903,7 +894,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun playAlbums_playsConcatenatedPairsWithPerAlbumFallback() = runTest(mainDispatcher) {
+    fun playAlbums_playsConcatenatedPairsWithPerAlbumFallback() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         val albumA = MediaItem(id = "a1", name = "Album A", mediaType = MediaType.ALBUM)
         val albumB = MediaItem(id = "a2", name = "Album B", mediaType = MediaType.ALBUM)
@@ -930,7 +921,7 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun playArtist_expandsAlbumsIntoPairedQueue() = runTest(mainDispatcher) {
+    fun playArtist_expandsAlbumsIntoPairedQueue() = runTest(mainDispatcherRule.testDispatcher) {
         stubHomeQueries()
         val albumA = MediaItem(id = "a1", name = "Album A", mediaType = MediaType.ALBUM)
         coEvery { libraryApiClient.getArtistAlbums("ar1", 50) } returns Result.success(listOf(albumA))

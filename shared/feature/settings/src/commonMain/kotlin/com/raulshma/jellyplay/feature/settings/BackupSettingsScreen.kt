@@ -22,6 +22,80 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_back
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_settings
 
+/**
+ * The backup screen's ONE ordered group declaration — the derivation-only
+ * shape (the group id set; the content slot stays empty) that BOTH the screen
+ * and the catalog contract test's section-7 pins consume. Per-group row
+ * emission stays hand-written: the screen maps the slot to its body inline in
+ * [backupScreenGroups] (ADR-0009).
+ */
+internal val BackupSettingsScreenSlots: List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.backup.asScreenGroup(),
+)
+
+/**
+ * The backup screen's group body, mapped onto the ONE ordered declaration
+ * ([BackupSettingsScreenSlots]) with its hand-written body attached — the
+ * shell derives the deep-link scroll resolution from the declaration, and the
+ * four hand rows stay verbatim inside the slot (ADR-0009). The screen takes
+ * no advanced tier (the factory-reset row's advanced tag is search-side
+ * only), so no [PreferenceHiddenHint] rides the declaration.
+ */
+private fun backupScreenGroups(
+    highlightSettingId: String?,
+    onFactoryReset: () -> Unit,
+    onExport: () -> Unit,
+    onSecretsExport: () -> Unit,
+    onImport: () -> Unit,
+): List<PreferenceScreenGroup> =
+    BackupSettingsScreenSlots.withContent(
+        bodies = listOf(
+            { _ ->
+                SettingsGroup(
+                    icon = Tabler.Outline.DatabaseExport,
+                    title = stringResource(Res.string.settings_backup_restore),
+                    summary = { stringResource(Res.string.settings_backup_restore_subtitle) },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = true,
+                ) {
+                    SettingListItem(
+                        icon = Tabler.Outline.FileExport,
+                        title = rowTitle(BackupRows.BackupExport),
+                        subtitle = rowSubtitle(BackupRows.BackupExport),
+                        index = 0, count = 4,
+                        highlighted = highlightSettingId == BackupRows.BackupExport.id,
+                        onClick = onExport,
+                    )
+                    SettingListItem(
+                        icon = BackupRows.BackupExportSecrets.icon,
+                        title = rowTitle(BackupRows.BackupExportSecrets),
+                        subtitle = rowSubtitle(BackupRows.BackupExportSecrets),
+                        index = 1, count = 4,
+                        highlighted = highlightSettingId == BackupRows.BackupExportSecrets.id,
+                        onClick = onSecretsExport,
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.FileImport,
+                        title = rowTitle(BackupRows.BackupImport),
+                        subtitle = rowSubtitle(BackupRows.BackupImport),
+                        index = 2, count = 4,
+                        highlighted = highlightSettingId == BackupRows.BackupImport.id,
+                        onClick = onImport,
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.AlertTriangle,
+                        title = rowTitle(BackupRows.FactoryReset),
+                        subtitle = rowSubtitle(BackupRows.FactoryReset),
+                        index = 3, count = 4,
+                        isDestructive = true,
+                        highlighted = highlightSettingId == BackupRows.FactoryReset.id,
+                        onClick = onFactoryReset,
+                    )
+                }
+            },
+        ),
+    )
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun BackupSettingsScreen(
@@ -65,61 +139,25 @@ fun BackupSettingsScreen(
         title = stringResource(Res.string.settings_backup_restore),
         onBack = onBack,
         focusTag = "backup_init",
-    ) { _ ->
-            item {
-                SettingsGroup(
-                    icon = Tabler.Outline.DatabaseExport,
-                    title = stringResource(Res.string.settings_backup_restore),
-                    summary = { stringResource(Res.string.settings_backup_restore_subtitle) },
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = true,
-                ) {
-                    SettingListItem(
-                        icon = Tabler.Outline.FileExport,
-                        title = rowTitle(BackupRows.BackupExport),
-                        subtitle = rowSubtitle(BackupRows.BackupExport),
-                        index = 0, count = 4,
-                        highlighted = highlightSettingId == BackupRows.BackupExport.id,
-                        onClick = {
-                            // Disarm unconditionally: a cancelled secrets pick
-                            // must not hijack the next plain export.
-                            secretsExportArmed = false
-                            backupPicker?.launchCreateExport("jellyplay-settings.json")
-                        },
-                    )
-                    SettingListItem(
-                        icon = BackupRows.BackupExportSecrets.icon,
-                        title = rowTitle(BackupRows.BackupExportSecrets),
-                        subtitle = rowSubtitle(BackupRows.BackupExportSecrets),
-                        index = 1, count = 4,
-                        highlighted = highlightSettingId == BackupRows.BackupExportSecrets.id,
-                        onClick = {
-                            secretsExportArmed = true
-                            backupPicker?.launchCreateExport("jellyplay-settings.json")
-                        },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.FileImport,
-                        title = rowTitle(BackupRows.BackupImport),
-                        subtitle = rowSubtitle(BackupRows.BackupImport),
-                        index = 2, count = 4,
-                        highlighted = highlightSettingId == BackupRows.BackupImport.id,
-                        onClick = {
-                            backupPicker?.launchOpenImport()
-                        },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.AlertTriangle,
-                        title = rowTitle(BackupRows.FactoryReset),
-                        subtitle = rowSubtitle(BackupRows.FactoryReset),
-                        index = 3, count = 4,
-                        isDestructive = true,
-                        highlighted = highlightSettingId == BackupRows.FactoryReset.id,
-                        onClick = onFactoryReset,
-                    )
-                }
-            }
-    }
+        highlightSettingId = highlightSettingId,
+        // The screen's ONE ordered group declaration (built above) — the
+        // shell derives the deep-link scroll resolution from it.
+        groups = backupScreenGroups(
+            highlightSettingId = highlightSettingId,
+            onFactoryReset = onFactoryReset,
+            onExport = {
+                // Disarm unconditionally: a cancelled secrets pick must not
+                // hijack the next plain export.
+                secretsExportArmed = false
+                backupPicker?.launchCreateExport("jellyplay-settings.json")
+            },
+            onSecretsExport = {
+                secretsExportArmed = true
+                backupPicker?.launchCreateExport("jellyplay-settings.json")
+            },
+            onImport = { backupPicker?.launchOpenImport() },
+        ),
+    )
 
     // One-shot export feedback rides the VM's SettingsUserMessage channel
     // (the codified StateManagementConventions §2 idiom) — the former

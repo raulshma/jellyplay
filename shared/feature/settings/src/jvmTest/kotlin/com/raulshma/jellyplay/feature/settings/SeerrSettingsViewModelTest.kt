@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
 import com.raulshma.jellyplay.core.network.api.JellyPlaySeerrRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySeerrStatus
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -22,20 +23,17 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the Seerr settings wiring (LibraryLayout jvmTest pattern: mockk
@@ -72,7 +70,8 @@ class SeerrSettingsViewModelTest {
         }
     }
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var seerrAuthenticator: SeerrAuthenticator
     private lateinit var seerrPreferencesStore: SeerrPreferencesStore
@@ -95,7 +94,6 @@ class SeerrSettingsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         seerrAuthenticator = mockk(relaxed = true)
         seerrPreferencesStore = mockk(relaxed = true)
         secureCredentialsStore = mockk(relaxed = true)
@@ -115,11 +113,6 @@ class SeerrSettingsViewModelTest {
         every { secureCredentialsStore.getApiKey() } returns ""
         every { secureCredentialsStore.getPassword() } returns ""
         every { secureCredentialsStore.getSessionCookie() } returns ""
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /**

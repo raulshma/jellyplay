@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeasonDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTmdbRating
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,19 +30,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 /**
  * Tests the [SeerrDetailViewModel] surfaces NOT covered by
@@ -53,18 +50,9 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class SeerrDetailViewModelTest {
 
-    // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
-    @BeforeTest
-    fun setUpMainDispatcher() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDownMainDispatcher() {
-        Dispatchers.resetMain()
-    }
 
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
@@ -99,7 +87,7 @@ class SeerrDetailViewModelTest {
     // ── loadDetails: movie happy path ───────────────────────────────────
 
     @Test
-    fun `loadDetails movie populates movieDetails and clears loading`() = runTest(mainDispatcher) {
+    fun `loadDetails movie populates movieDetails and clears loading`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val movie = SeerrMovieDetails(id = 123, title = "Test Movie", voteAverage = 7.5f)
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(movie)
@@ -115,7 +103,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `loadDetails movie with rt ratings skips secondary ratings fetch`() = runTest(mainDispatcher) {
+    fun `loadDetails movie with rt ratings skips secondary ratings fetch`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val movie = SeerrMovieDetails(
             id = 123,
@@ -133,7 +121,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `loadDetails movie with imdb ratings skips secondary ratings fetch`() = runTest(mainDispatcher) {
+    fun `loadDetails movie with imdb ratings skips secondary ratings fetch`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val movie = SeerrMovieDetails(
             id = 123,
@@ -148,7 +136,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `loadDetails movie merges tmdb score into ratings when none present`() = runTest(mainDispatcher) {
+    fun `loadDetails movie merges tmdb score into ratings when none present`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val movie = SeerrMovieDetails(id = 123, voteAverage = 8.2f)
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(movie)
@@ -169,7 +157,7 @@ class SeerrDetailViewModelTest {
     // ── loadDetails: tv path ────────────────────────────────────────────
 
     @Test
-    fun `loadDetails tv populates tvDetails`() = runTest(mainDispatcher) {
+    fun `loadDetails tv populates tvDetails`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val tv = SeerrTvDetails(id = 456, name = "Test Show", voteAverage = 9.0f)
         coEvery { seerrRepository.getTvDetails(456) } returns Result.success(tv)
@@ -184,7 +172,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `loadDetails is case-insensitive on mediaType`() = runTest(mainDispatcher) {
+    fun `loadDetails is case-insensitive on mediaType`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getTvDetails(any()) } returns Result.success(SeerrTvDetails(id = 456, name = "TV"))
         coEvery { seerrRepository.getRecommendations(456, MediaType.SERIES) } returns Result.success(
@@ -201,7 +189,7 @@ class SeerrDetailViewModelTest {
     // ── loadDetails: recommendations & similar folding ──────────────────
 
     @Test
-    fun `loadDetails folds recommendations and similar into state`() = runTest(mainDispatcher) {
+    fun `loadDetails folds recommendations and similar into state`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val rec = SeerrSearchItem(id = 1, title = "Rec")
         val sim = SeerrSearchItem(id = 2, title = "Sim")
@@ -223,7 +211,7 @@ class SeerrDetailViewModelTest {
     // ── loadDetails: error + available-item resolution ──────────────────
 
     @Test
-    fun `loadDetails movie failure surfaces error`() = runTest(mainDispatcher) {
+    fun `loadDetails movie failure surfaces error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.failure(RuntimeException("boom"))
 
@@ -234,7 +222,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `loadDetails available movie resolves jellyfinItemId via tmdb`() = runTest(mainDispatcher) {
+    fun `loadDetails available movie resolves jellyfinItemId via tmdb`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             SeerrMovieDetails(
@@ -251,7 +239,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `loadDetails pending movie does not resolve jellyfinItemId`() = runTest(mainDispatcher) {
+    fun `loadDetails pending movie does not resolve jellyfinItemId`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             SeerrMovieDetails(
@@ -268,7 +256,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `loadDetails partially available tv resolves via tmdb then tvdb fallback`() = runTest(mainDispatcher) {
+    fun `loadDetails partially available tv resolves via tmdb then tvdb fallback`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getTvDetails(123) } returns Result.success(
             SeerrTvDetails(
@@ -287,7 +275,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `loadDetails resets prior state for a new load`() = runTest(mainDispatcher) {
+    fun `loadDetails resets prior state for a new load`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             SeerrMovieDetails(id = 123, title = "First"),
@@ -311,7 +299,7 @@ class SeerrDetailViewModelTest {
     // ── toggleSeason / episode loading ──────────────────────────────────
 
     @Test
-    fun `toggleSeason selects season and loads its episodes`() = runTest(mainDispatcher) {
+    fun `toggleSeason selects season and loads its episodes`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val eps = listOf(SeerrEpisode(id = 1, episodeNumber = 1, name = "Pilot"))
         coEvery { seerrRepository.getTvSeasonDetails(456, 1) } returns Result.success(
@@ -328,7 +316,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `toggleSeason toggling same season deselects without refetching`() = runTest(mainDispatcher) {
+    fun `toggleSeason toggling same season deselects without refetching`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getTvSeasonDetails(456, 1) } returns Result.success(
             SeerrSeasonDetail(seasonNumber = 1, episodes = listOf(SeerrEpisode(id = 1))),
@@ -346,7 +334,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `toggleSeason does not refetch already-cached episodes`() = runTest(mainDispatcher) {
+    fun `toggleSeason does not refetch already-cached episodes`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getTvSeasonDetails(456, 1) } returns Result.success(
             SeerrSeasonDetail(seasonNumber = 1, episodes = listOf(SeerrEpisode(id = 1))),
@@ -364,7 +352,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `toggleSeason episode fetch failure leaves isLoadingEpisodes false`() = runTest(mainDispatcher) {
+    fun `toggleSeason episode fetch failure leaves isLoadingEpisodes false`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getTvSeasonDetails(456, 1) } returns Result.failure(RuntimeException("boom"))
 
@@ -395,7 +383,7 @@ class SeerrDetailViewModelTest {
     // ── requestMedia ───────────────────────────────────────────────────
 
     @Test
-    fun `requestMedia failure sets requestResult with error`() = runTest(mainDispatcher) {
+    fun `requestMedia failure sets requestResult with error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
@@ -422,7 +410,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `requestMedia for loaded tv flips status to pending`() = runTest(mainDispatcher) {
+    fun `requestMedia for loaded tv flips status to pending`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRepository.getTvDetails(123) } returns Result.success(
@@ -449,7 +437,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `requestMedia does not mutate unrelated detail`() = runTest(mainDispatcher) {
+    fun `requestMedia does not mutate unrelated detail`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         // Loaded detail id 123; requesting a different id 999 must not touch it.
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
@@ -475,7 +463,7 @@ class SeerrDetailViewModelTest {
     // ── dismissRequestDialog ─────────────────────────────────────────────
 
     @Test
-    fun `dismissRequestDialog nulls the result and closes the dialog`() = runTest(mainDispatcher) {
+    fun `dismissRequestDialog nulls the result and closes the dialog`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
@@ -504,7 +492,7 @@ class SeerrDetailViewModelTest {
     // ── openRequestDialog (delegates to holder, cascade included) ───────────────────────
 
     @Test
-    fun `openRequestDialog for tv folds sonarr servers and opens the dialog`() = runTest(mainDispatcher) {
+    fun `openRequestDialog for tv folds sonarr servers and opens the dialog`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         val sonarr = com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail(id = 1, name = "Sonarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("tv") } returns com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult(
@@ -521,7 +509,7 @@ class SeerrDetailViewModelTest {
     }
 
     @Test
-    fun `openRequestDialog for movie folds radarr servers and opens the dialog`() = runTest(mainDispatcher) {
+    fun `openRequestDialog for movie folds radarr servers and opens the dialog`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         val radarr = com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail(id = 2, name = "Radarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("movie") } returns com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult(
@@ -538,7 +526,7 @@ class SeerrDetailViewModelTest {
     // ── openRequestDialog tv seasons (cascade) ────────────────────────────
 
     @Test
-    fun `openRequestDialog for tv populates tvSeasons filtering specials`() = runTest(mainDispatcher) {
+    fun `openRequestDialog for tv populates tvSeasons filtering specials`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails(
             seasons = listOf(
@@ -556,7 +544,7 @@ class SeerrDetailViewModelTest {
     // ── prefetchRelatedDetails (delegates to holder) ───────────────────
 
     @Test
-    fun `prefetchRelatedDetails invokes onDone callback after prefetch`() = runTest(mainDispatcher) {
+    fun `prefetchRelatedDetails invokes onDone callback after prefetch`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { seerrRequestDelegate.prefetchDetails(123, "movie") } returns Unit
         var called = false
 

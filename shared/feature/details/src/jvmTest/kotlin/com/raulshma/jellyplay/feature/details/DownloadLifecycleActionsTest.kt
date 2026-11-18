@@ -15,29 +15,28 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_details_not_loaded
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_no_source
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_not_a_series
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_queue_failed
+import org.junit.Rule
 
 /**
  * Unit tests for [DownloadLifecycleActions]. The helper owns no schedulers of
@@ -60,10 +59,8 @@ class DownloadLifecycleActionsTest {
     private val strings = fakeDetailStrings()
     private val messages = RecordingMessages()
 
-    @BeforeTest
-    fun setUpDispatcher() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-    }
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     /**
      * The helper's launch scope. [UnconfinedTestDispatcher] is the faithful

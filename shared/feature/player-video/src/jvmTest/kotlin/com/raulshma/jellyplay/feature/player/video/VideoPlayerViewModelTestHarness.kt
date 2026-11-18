@@ -279,6 +279,7 @@ open class VideoPlayerViewModelHarness {
                 nowPlayingReporter = mockk(relaxed = true),
                 sleepCountdown = SleepCountdown(SleepCountdownClock.perTick(1_000L)),
                 videoMiniPlayerState = videoMiniPlayerState,
+                syncPlayManager = syncPlayManager,
             ),
             imageUrlProvider = imageUrlProviderMock,
             // The real resolver over the same relaxed provider mock — its
@@ -286,7 +287,6 @@ open class VideoPlayerViewModelHarness {
             // exact URL shape the pre-tag seams produced.
             artworkUrls = DefaultArtworkUrls(imageUrlProviderMock),
             castManager = castManager,
-            syncPlayManager = syncPlayManager,
             activePlayerController = activePlayerController,
             pipController = pipController,
             fontProvider = NoOpFontProvider,

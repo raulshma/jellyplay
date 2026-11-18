@@ -208,10 +208,12 @@ kotlin {
 }
 
 // ── cutover: the legacy :core:data Robolectric suites moved here
-// wholesale (70 files + the MediaSessionPlayerStubs helper + the
-// MainDispatcherRule from the dissolved :core:testing module). AGP 9.4's
-// withHostTest names the lane's source set androidHostTest and materializes
-// it only in afterEvaluate, so the dependency wiring rides a configureEach.
+// wholesale (70 files + the MediaSessionPlayerStubs helper; the
+// MainDispatcherRule the dissolved :core:testing module left behind now
+// lives in :shared:core:test-fixtures and this lane consumes it from there).
+// AGP 9.4's withHostTest names the lane's source set androidHostTest and
+// materializes it only in afterEvaluate, so the dependency wiring rides a
+// configureEach.
 kotlin.sourceSets.configureEach {
     if (name == "androidHostTest") {
         dependencies {
@@ -227,6 +229,12 @@ kotlin.sourceSets.configureEach {
             // MediaSessionPlayerStubs builds a mockk<Player> against media3.
             implementation(libs.media3.session)
             implementation(libs.media3.exoplayer)
+            // The shared MainDispatcherRule fixture — the single copy behind
+            // the androidHostTest local (its TestWatcher supertype lives in
+            // this module's jvmShared layer, which the android variant
+            // compiles too). Test-scoped only — see the fixtures module's
+            // house rules.
+            implementation(project(":shared:core:test-fixtures"))
         }
     }
 }

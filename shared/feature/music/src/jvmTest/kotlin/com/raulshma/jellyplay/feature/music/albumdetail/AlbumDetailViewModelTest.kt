@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
@@ -23,18 +24,13 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,6 +38,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 /**
  * Verifies delegation to
@@ -51,9 +48,8 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlbumDetailViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val detailFeed: DetailFeed = mockk()
     private val userDataChanges: UserDataChanges = mockk()
@@ -76,7 +72,6 @@ class AlbumDetailViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
         // The deferred refresher collects this for the whole VM lifetime.
         every { userDataChanges.userDataChanges } returns userDataEvents
@@ -92,11 +87,6 @@ class AlbumDetailViewModelTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     /** Loads an album detail + tracks so `detail?.item?.name` fallbacks resolve. */
     private fun loadAlbum(albumName: String = "Album") {
         coEvery { detailFeed.getMediaDetail("album1", force = false) } returns Result.success(
@@ -107,7 +97,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun startInstantMix_started_setsMixFirstTrackIdFromOutcomeQueue() = runTest(mainDispatcher) {
+    fun startInstantMix_started_setsMixFirstTrackIdFromOutcomeQueue() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Started(
@@ -128,7 +118,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun startInstantMix_empty_setsSharedMixUnavailableError() = runTest(mainDispatcher) {
+    fun startInstantMix_empty_setsSharedMixUnavailableError() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Empty
@@ -142,7 +132,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun startInstantMix_failed_mapsCauseMessage() = runTest(mainDispatcher) {
+    fun startInstantMix_failed_mapsCauseMessage() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
@@ -157,7 +147,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun startInstantMix_suppressed_isSilent() = runTest(mainDispatcher) {
+    fun startInstantMix_suppressed_isSilent() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Suppressed
@@ -171,7 +161,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun playAlbum_delegatesWithDetailNameFallback() = runTest(mainDispatcher) {
+    fun playAlbum_delegatesWithDetailNameFallback() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         coEvery {
@@ -188,7 +178,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun addToQueue_delegatesSingleTrackWithDetailNameFallback() = runTest(mainDispatcher) {
+    fun addToQueue_delegatesSingleTrackWithDetailNameFallback() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         coEvery { audioQueueFacade.enqueueTrack(any(), any(), any()) } returns
@@ -205,7 +195,7 @@ class AlbumDetailViewModelTest {
     // ── Load states ──────────────────────────────────────────────────────────
 
     @Test
-    fun loadAlbum_success_populatesDetailTracksAndClearsLoading() = runTest(mainDispatcher) {
+    fun loadAlbum_success_populatesDetailTracksAndClearsLoading() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
 
@@ -216,7 +206,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun loadAlbum_detailFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
+    fun loadAlbum_detailFailure_setsRawErrorOverNoContent() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { detailFeed.getMediaDetail("album1", any()) } returns
             Result.failure(RuntimeException("no album"))
         coEvery { musicCatalogue.getAlbumTracks("album1", force = false) } returns Result.success(albumTracks)
@@ -235,7 +225,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun loadAlbum_tracksFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
+    fun loadAlbum_tracksFailure_setsRawErrorOverNoContent() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { detailFeed.getMediaDetail("album1", force = false) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
@@ -252,7 +242,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun loadAlbum_thrownRepoFailure_clearsSpinnerSetsErrorAndReloadsOnReEntry() = runTest(mainDispatcher) {
+    fun loadAlbum_thrownRepoFailure_clearsSpinnerSetsErrorAndReloadsOnReEntry() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { detailFeed.getMediaDetail("album1", any()) } throws IllegalStateException("engine blew up")
         coEvery { musicCatalogue.getAlbumTracks("album1", force = false) } returns Result.success(albumTracks)
 
@@ -278,7 +268,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun refreshAlbum_bypassesTheDetailCache() = runTest(mainDispatcher) {
+    fun refreshAlbum_bypassesTheDetailCache() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         coEvery { detailFeed.getMediaDetail("album1", true) } returns Result.success(
@@ -293,7 +283,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun loadAlbum_onAnAlreadyLoadedAlbumIsANoOp() = runTest(mainDispatcher) {
+    fun loadAlbum_onAnAlreadyLoadedAlbumIsANoOp() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
 
@@ -309,7 +299,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun loadAlbum_afterAFailedInstantMixIsStillANoOp() = runTest(mainDispatcher) {
+    fun loadAlbum_afterAFailedInstantMixIsStillANoOp() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         // A failed mix shares the screen's `error` field; the re-entry guard
@@ -332,7 +322,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun loadAlbum_afterAFailedLoudLoadReloads() = runTest(mainDispatcher) {
+    fun loadAlbum_afterAFailedLoudLoadReloads() = runTest(mainDispatcherRule.testDispatcher) {
         // Detail half succeeds, tracks half fails: the loud load FAILED (the
         // all-or-nothing publish leaves nothing on screen behind the error),
         // so the re-entry guard must not skip — this is the flag's positive
@@ -357,7 +347,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_successHealsAFailedLoudLoadForReEntry() = runTest(mainDispatcher) {
+    fun deferredRefresh_successHealsAFailedLoudLoadForReEntry() = runTest(mainDispatcherRule.testDispatcher) {
         // Loud partial failure: detail on screen, tracks failed, load error
         // set — the re-entry guard is armed by the failed loud load.
         coEvery { detailFeed.getMediaDetail("album1", force = false) } returns Result.success(
@@ -394,7 +384,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcher) {
+    fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         assertFalse(viewModel.isLoading)
@@ -421,7 +411,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_failureKeepsLastContentInsteadOfFlashingError() = runTest(mainDispatcher) {
+    fun deferredRefresh_failureKeepsLastContentInsteadOfFlashingError() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
 
@@ -454,7 +444,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_failedHalfKeepsTheWholeStalePairInsteadOfMixing() = runTest(mainDispatcher) {
+    fun deferredRefresh_failedHalfKeepsTheWholeStalePairInsteadOfMixing() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
 
@@ -482,7 +472,7 @@ class AlbumDetailViewModelTest {
     // ── Instant mix event consumption ────────────────────────────────────────
 
     @Test
-    fun consumeMixEvent_clearsMixFirstTrackId() = runTest(mainDispatcher) {
+    fun consumeMixEvent_clearsMixFirstTrackId() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Started(
@@ -523,7 +513,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun trackDownloads_mapsByMediaItemIdAndSkipsTheQueryWithoutTracks() = runTest(mainDispatcher) {
+    fun trackDownloads_mapsByMediaItemIdAndSkipsTheQueryWithoutTracks() = runTest(mainDispatcherRule.testDispatcher) {
         // No album loaded → no downloads query at all (the IN-scoped lookup
         // must not read the whole table for an empty screen).
         subscribeTrackDownloads()
@@ -543,7 +533,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun downloadTrack_completedDownload_deletesItInsteadOfRestarting() = runTest(mainDispatcher) {
+    fun downloadTrack_completedDownload_deletesItInsteadOfRestarting() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns
@@ -560,7 +550,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun downloadTrack_notYetDownloaded_flipsThroughTheIntakeSeam() = runTest(mainDispatcher) {
+    fun downloadTrack_notYetDownloaded_flipsThroughTheIntakeSeam() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
@@ -577,7 +567,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun downloadTrack_skippedByTheIntake_startsNothing() = runTest(mainDispatcher) {
+    fun downloadTrack_skippedByTheIntake_startsNothing() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
@@ -593,7 +583,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun downloadAlbum_skipsCompletedTracksAndDownloadsTheRest() = runTest(mainDispatcher) {
+    fun downloadAlbum_skipsCompletedTracksAndDownloadsTheRest() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns
@@ -612,7 +602,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun downloadAlbum_withoutTracks_isANoOp() = runTest(mainDispatcher) {
+    fun downloadAlbum_withoutTracks_isANoOp() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.downloadAlbum()
         advanceUntilIdle()
 
@@ -621,7 +611,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun deleteAlbumDownloads_deletesOnlyExistingDownloadRows() = runTest(mainDispatcher) {
+    fun deleteAlbumDownloads_deletesOnlyExistingDownloadRows() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns

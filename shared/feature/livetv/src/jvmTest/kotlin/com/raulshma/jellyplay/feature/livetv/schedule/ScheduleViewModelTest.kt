@@ -3,33 +3,29 @@ package com.raulshma.jellyplay.feature.livetv.schedule
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DvrTimer
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ScheduleViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: LiveTvApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -37,7 +33,6 @@ class ScheduleViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         coEvery { mediaRepository.getRecordings(any(), any()) } returns Result.success(emptyList())
@@ -45,13 +40,8 @@ class ScheduleViewModelTest {
         viewModel = ScheduleViewModel(mediaRepository, imageUrlProvider)
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun load_fetches_active_recordings_and_upcoming_timers() = runTest(mainDispatcher) {
+    fun load_fetches_active_recordings_and_upcoming_timers() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         // Active: isInProgress = true, no limit
         coVerify { mediaRepository.getRecordings(limit = null, isInProgress = true) }
@@ -60,7 +50,7 @@ class ScheduleViewModelTest {
     }
 
     @Test
-    fun timers_grouped_by_their_start_date() = runTest(mainDispatcher) {
+    fun timers_grouped_by_their_start_date() = runTest(mainDispatcherRule.testDispatcher) {
         val timers = listOf(
             DvrTimer(id = "t1", programId = "p1", programName = "A", channelId = "c1", channelName = "Ch1",
                 startDate = "2026-07-14T10:00:00Z", endDate = "2026-07-14T11:00:00Z"),
@@ -77,7 +67,7 @@ class ScheduleViewModelTest {
     }
 
     @Test
-    fun cancelTimer_calls_repo_cancelTimer_then_reloads() = runTest(mainDispatcher) {
+    fun cancelTimer_calls_repo_cancelTimer_then_reloads() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.cancelTimer("t1") } returns Result.success(Unit)
         viewModel.cancelTimer("t1")
         advanceUntilIdle()
@@ -87,7 +77,7 @@ class ScheduleViewModelTest {
     }
 
     @Test
-    fun load_surfaces_error_when_getTimers_fails() = runTest(mainDispatcher) {
+    fun load_surfaces_error_when_getTimers_fails() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getTimers(any(), any()) } returns Result.failure(RuntimeException("nope"))
         viewModel.load()
         advanceUntilIdle()
@@ -108,7 +98,7 @@ class ScheduleViewModelTest {
     )
 
     @Test
-    fun timers_on_the_same_day_share_one_group_sorted_by_start_time() = runTest(mainDispatcher) {
+    fun timers_on_the_same_day_share_one_group_sorted_by_start_time() = runTest(mainDispatcherRule.testDispatcher) {
         val late = timer("late", "2026-07-14T22:00:00Z")
         val early = timer("early", "2026-07-14T08:00:00Z")
         val nextDay = timer("next", "2026-07-15T09:00:00Z")
@@ -128,7 +118,7 @@ class ScheduleViewModelTest {
     }
 
     @Test
-    fun timers_without_a_parseable_start_date_are_dropped_from_the_groups() = runTest(mainDispatcher) {
+    fun timers_without_a_parseable_start_date_are_dropped_from_the_groups() = runTest(mainDispatcherRule.testDispatcher) {
         val broken = timer("broken", "not-a-date")
         val good = timer("good", "2026-07-14T08:00:00Z")
         coEvery { mediaRepository.getTimers(any(), any()) } returns
@@ -143,7 +133,7 @@ class ScheduleViewModelTest {
     }
 
     @Test
-    fun load_populates_active_recordings() = runTest(mainDispatcher) {
+    fun load_populates_active_recordings() = runTest(mainDispatcherRule.testDispatcher) {
         val active = listOf(
             com.raulshma.jellyplay.core.model.LiveTvRecording(id = "rec-1", name = "Live Rec"),
         )
@@ -159,7 +149,7 @@ class ScheduleViewModelTest {
     // ── Timer detail sheet ───────────────────────────────────────────────────
 
     @Test
-    fun showTimerDetail_and_dismissDetail_round_trip() = runTest(mainDispatcher) {
+    fun showTimerDetail_and_dismissDetail_round_trip() = runTest(mainDispatcherRule.testDispatcher) {
         val timer = timer("t1", "2026-07-14T10:00:00Z")
         viewModel.showTimerDetail(timer)
         assertEquals(timer, viewModel.uiState.value.selectedTimer)
@@ -172,7 +162,7 @@ class ScheduleViewModelTest {
     // ── Cancel failure path ──────────────────────────────────────────────────
 
     @Test
-    fun cancelTimer_failure_surfaces_the_error_and_keeps_the_sheet_open() = runTest(mainDispatcher) {
+    fun cancelTimer_failure_surfaces_the_error_and_keeps_the_sheet_open() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.cancelTimer("t1") } returns Result.failure(RuntimeException("denied"))
         val timer = timer("t1", "2026-07-14T10:00:00Z")
         viewModel.showTimerDetail(timer)

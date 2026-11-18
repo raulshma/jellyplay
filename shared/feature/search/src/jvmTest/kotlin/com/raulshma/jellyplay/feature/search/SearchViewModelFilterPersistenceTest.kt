@@ -19,24 +19,21 @@ import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.Rule
 
 /**
  * Pins [SearchViewModel]'s filter-persistence and quick-action wiring — the
@@ -78,10 +75,8 @@ class SearchViewModelFilterPersistenceTest {
             Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
     }
 
-
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (SearchViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var libraryFeed: LibraryFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -102,7 +97,6 @@ class SearchViewModelFilterPersistenceTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         libraryFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
 
@@ -130,11 +124,6 @@ class SearchViewModelFilterPersistenceTest {
         viewModel = createViewModel()
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun createViewModel() = SearchViewModel(
         libraryFeed,
         userDataChanges,
@@ -153,7 +142,7 @@ class SearchViewModelFilterPersistenceTest {
     // ── Persisted-filter restoration ─────────────────────────────────────
 
     @Test
-    fun `init restores a persisted filter blob into the filters state`() = runTest(mainDispatcher) {
+    fun `init restores a persisted filter blob into the filters state`() = runTest(mainDispatcherRule.testDispatcher) {
         val persisted = LibraryFilters(
             mediaTypes = listOf(MediaType.SERIES),
             genres = listOf("Comedy"),
@@ -171,7 +160,7 @@ class SearchViewModelFilterPersistenceTest {
     }
 
     @Test
-    fun `a corrupt persisted blob falls back to the default filter set`() = runTest(mainDispatcher) {
+    fun `a corrupt persisted blob falls back to the default filter set`() = runTest(mainDispatcherRule.testDispatcher) {
         persistedJson.value = "{ this is not json"
 
         viewModel = createViewModel()
@@ -181,7 +170,7 @@ class SearchViewModelFilterPersistenceTest {
     }
 
     @Test
-    fun `a null blob keeps the default filter set`() = runTest(mainDispatcher) {
+    fun `a null blob keeps the default filter set`() = runTest(mainDispatcherRule.testDispatcher) {
         persistedJson.value = null
 
         viewModel = createViewModel()
@@ -193,7 +182,7 @@ class SearchViewModelFilterPersistenceTest {
     // ── Mutation → persistence round-trips ───────────────────────────────
 
     @Test
-    fun `setSortBy updates the filter and persists the snapshot`() = runTest(mainDispatcher) {
+    fun `setSortBy updates the filter and persists the snapshot`() = runTest(mainDispatcherRule.testDispatcher) {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
@@ -206,7 +195,7 @@ class SearchViewModelFilterPersistenceTest {
     }
 
     @Test
-    fun `setPlayedStatus updates the filter and persists the snapshot`() = runTest(mainDispatcher) {
+    fun `setPlayedStatus updates the filter and persists the snapshot`() = runTest(mainDispatcherRule.testDispatcher) {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
@@ -221,7 +210,7 @@ class SearchViewModelFilterPersistenceTest {
     }
 
     @Test
-    fun `toggleMediaType persists the new filter snapshot`() = runTest(mainDispatcher) {
+    fun `toggleMediaType persists the new filter snapshot`() = runTest(mainDispatcherRule.testDispatcher) {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
@@ -235,7 +224,7 @@ class SearchViewModelFilterPersistenceTest {
     }
 
     @Test
-    fun `updateFilters persists the replaced filter set`() = runTest(mainDispatcher) {
+    fun `updateFilters persists the replaced filter set`() = runTest(mainDispatcherRule.testDispatcher) {
         val filters = LibraryFilters(genres = listOf("Action"), years = listOf(1999))
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
@@ -247,7 +236,7 @@ class SearchViewModelFilterPersistenceTest {
     }
 
     @Test
-    fun `clearFilters resets state and clears the stored blob`() = runTest(mainDispatcher) {
+    fun `clearFilters resets state and clears the stored blob`() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onEvent(SearchUiEvent.UpdateFilters(LibraryFilters(genres = listOf("Action"))))
         advanceUntilIdle()
 
@@ -259,7 +248,7 @@ class SearchViewModelFilterPersistenceTest {
     }
 
     @Test
-    fun `a persist write failure is swallowed and the in-memory filter wins`() = runTest(mainDispatcher) {
+    fun `a persist write failure is swallowed and the in-memory filter wins`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { searchFiltersStore.setSearchFilters(any()) } throws RuntimeException("disk full")
 
         viewModel.onEvent(SearchUiEvent.ToggleMediaType(MediaType.SERIES))
@@ -272,7 +261,7 @@ class SearchViewModelFilterPersistenceTest {
     // ── Quick actions ────────────────────────────────────────────────────
 
     @Test
-    fun `markItemPlayed delegates to the silent mutator`() = runTest(mainDispatcher) {
+    fun `markItemPlayed delegates to the silent mutator`() = runTest(mainDispatcherRule.testDispatcher) {
         val item = com.raulshma.jellyplay.core.model.MediaItem(
             id = "m1", name = "Movie", mediaType = MediaType.MOVIE,
         )
@@ -284,7 +273,7 @@ class SearchViewModelFilterPersistenceTest {
     }
 
     @Test
-    fun `downloadItem routes through downloadAndReport with the open-detail callback`() = runTest(mainDispatcher) {
+    fun `downloadItem routes through downloadAndReport with the open-detail callback`() = runTest(mainDispatcherRule.testDispatcher) {
         val item = com.raulshma.jellyplay.core.model.MediaItem(
             id = "series-9", name = "Show", mediaType = MediaType.SERIES,
         )

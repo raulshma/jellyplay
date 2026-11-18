@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
@@ -16,22 +17,18 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the playlist detail contract on the [com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator]
@@ -45,9 +42,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaylistDetailViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val detailFeed: DetailFeed = mockk()
     private val userDataChanges: UserDataChanges = mockk()
@@ -67,7 +63,6 @@ class PlaylistDetailViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         coEvery { audioQueueFacade.playPlaylist(any(), any()) } returns AudioQueueOutcome.Started(emptyList(), 0)
         coEvery { audioQueueFacade.enqueuePlaylistItem(any()) } just Runs
         // The deferred refresher collects this for the whole VM lifetime.
@@ -80,11 +75,6 @@ class PlaylistDetailViewModelTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     /** Loads the playlist items so `items` state is populated. */
     private fun loadPlaylist() {
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
@@ -92,7 +82,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun playAll_delegatesToPlaylistOverloadWithLoadedItemsAndStartIndex() = runTest(mainDispatcher) {
+    fun playAll_delegatesToPlaylistOverloadWithLoadedItemsAndStartIndex() = runTest(mainDispatcherRule.testDispatcher) {
         loadPlaylist()
         advanceUntilIdle()
 
@@ -103,7 +93,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun playAll_defaultStartIndexIsZero() = runTest(mainDispatcher) {
+    fun playAll_defaultStartIndexIsZero() = runTest(mainDispatcherRule.testDispatcher) {
         loadPlaylist()
         advanceUntilIdle()
 
@@ -114,7 +104,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun addToQueue_delegatesSinglePlaylistItem() = runTest(mainDispatcher) {
+    fun addToQueue_delegatesSinglePlaylistItem() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.addToQueue(items.first())
         advanceUntilIdle()
 
@@ -122,7 +112,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun load_populatesItemsAndName() = runTest(mainDispatcher) {
+    fun load_populatesItemsAndName() = runTest(mainDispatcherRule.testDispatcher) {
         loadPlaylist()
         advanceUntilIdle()
 
@@ -134,7 +124,7 @@ class PlaylistDetailViewModelTest {
     // ── Load failure and name resolution ─────────────────────────────────────
 
     @Test
-    fun load_failure_setsErrorAndClearsLoading() = runTest(mainDispatcher) {
+    fun load_failure_setsErrorAndClearsLoading() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
             Result.failure(RuntimeException("gone"))
         coEvery { detailFeed.getMediaDetail("pl1", any()) } returns
@@ -148,7 +138,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun load_withoutAName_resolvesItFromTheDetailEndpoint() = runTest(mainDispatcher) {
+    fun load_withoutAName_resolvesItFromTheDetailEndpoint() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
         coEvery { detailFeed.getMediaDetail("pl1", any()) } returns
             Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "Deep Link", mediaType = MediaType.MUSIC)))
@@ -161,7 +151,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun refreshPlaylist_forcesTheUncachedDetailRead() = runTest(mainDispatcher) {
+    fun refreshPlaylist_forcesTheUncachedDetailRead() = runTest(mainDispatcherRule.testDispatcher) {
         loadPlaylist()
         advanceUntilIdle()
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
@@ -180,7 +170,7 @@ class PlaylistDetailViewModelTest {
     // ── Re-entry guard + deferred refresh (the album host's fixture shape) ───
 
     @Test
-    fun load_onAnAlreadyLoadedPlaylistIsANoOp() = runTest(mainDispatcher) {
+    fun load_onAnAlreadyLoadedPlaylistIsANoOp() = runTest(mainDispatcherRule.testDispatcher) {
         loadPlaylist()
         advanceUntilIdle()
 
@@ -195,7 +185,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun load_afterAFailedLoudLoadReloads() = runTest(mainDispatcher) {
+    fun load_afterAFailedLoudLoadReloads() = runTest(mainDispatcherRule.testDispatcher) {
         // First loud load fails (items half): nothing on screen behind the
         // error, so the re-entry guard must not skip.
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
@@ -217,7 +207,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun load_nameFailure_failsTheWholeLoadWithoutPublishingItems() = runTest(mainDispatcher) {
+    fun load_nameFailure_failsTheWholeLoadWithoutPublishingItems() = runTest(mainDispatcherRule.testDispatcher) {
         // All-or-nothing: the failed name half fails the whole fetch, so the
         // error owns the screen (the screen renders ErrorScreen whenever
         // error != null && items.isEmpty()) and no half-pair is published.
@@ -234,7 +224,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcher) {
+    fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcherRule.testDispatcher) {
         loadPlaylist()
         advanceUntilIdle()
         assertFalse(viewModel.isLoading)
@@ -262,7 +252,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_failureKeepsLastContentInsteadOfFlashingError() = runTest(mainDispatcher) {
+    fun deferredRefresh_failureKeepsLastContentInsteadOfFlashingError() = runTest(mainDispatcherRule.testDispatcher) {
         loadPlaylist()
         advanceUntilIdle()
 
@@ -297,7 +287,7 @@ class PlaylistDetailViewModelTest {
     // ── Remove-from-playlist + undo ──────────────────────────────────────────
 
     @Test
-    fun removeFromPlaylist_noOpsWithoutAnEntryIdOrALoadedPlaylist() = runTest(mainDispatcher) {
+    fun removeFromPlaylist_noOpsWithoutAnEntryIdOrALoadedPlaylist() = runTest(mainDispatcherRule.testDispatcher) {
         // No entry id (row not yet synced) → nothing to remove server-side.
         viewModel.removeFromPlaylist(PlaylistItem(id = "p1", playlistItemId = null, name = "Song"))
         // Entry id but no playlist loaded → no target playlist.
@@ -308,7 +298,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun removeFromPlaylist_dropsTheRowImmediatelyAndEmitsAnUndoAction() = runTest(mainDispatcher) {
+    fun removeFromPlaylist_dropsTheRowImmediatelyAndEmitsAnUndoAction() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns Result.success(Unit)
         loadPlaylist()
         advanceUntilIdle()
@@ -326,7 +316,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun removeFromPlaylist_failureSurfacesAnErrorAndKeepsTheRowDropped() = runTest(mainDispatcher) {
+    fun removeFromPlaylist_failureSurfacesAnErrorAndKeepsTheRowDropped() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns
             Result.failure(RuntimeException())
         loadPlaylist()
@@ -342,7 +332,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun undo_reAddsTheItemByMediaIdAndReloadsForAFreshEntryId() = runTest(mainDispatcher) {
+    fun undo_reAddsTheItemByMediaIdAndReloadsForAFreshEntryId() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns Result.success(Unit)
         coEvery { playlistRepository.addItemsToPlaylist("pl1", listOf("p2")) } returns Result.success(Unit)
         loadPlaylist()
@@ -365,7 +355,7 @@ class PlaylistDetailViewModelTest {
     // ── Reordering ───────────────────────────────────────────────────────────
 
     @Test
-    fun moveItem_noOpsForMissingEntryIdUnknownItemOrSamePosition() = runTest(mainDispatcher) {
+    fun moveItem_noOpsForMissingEntryIdUnknownItemOrSamePosition() = runTest(mainDispatcherRule.testDispatcher) {
         loadPlaylist()
         advanceUntilIdle()
 
@@ -378,7 +368,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun moveItem_reordersOptimisticallyAndPersistsTheNewIndex() = runTest(mainDispatcher) {
+    fun moveItem_reordersOptimisticallyAndPersistsTheNewIndex() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.movePlaylistItem("pl1", "e3", 0) } returns Result.success(Unit)
         loadPlaylist()
         advanceUntilIdle()
@@ -392,7 +382,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun moveItem_failure_setsErrorAndRollsBackToTheServerOrder() = runTest(mainDispatcher) {
+    fun moveItem_failure_setsErrorAndRollsBackToTheServerOrder() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.movePlaylistItem("pl1", "e3", 0) } returns
             Result.failure(RuntimeException("reorder denied"))
         loadPlaylist()
@@ -418,7 +408,7 @@ class PlaylistDetailViewModelTest {
     // ── Error lifecycle ──────────────────────────────────────────────────────
 
     @Test
-    fun mutationError_survivesANoOpReEntry() = runTest(mainDispatcher) {
+    fun mutationError_survivesANoOpReEntry() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns
             Result.failure(RuntimeException())
         loadPlaylist()
@@ -438,7 +428,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun mutationError_isWipedWhenAnAcceptedLoudLoadStarts() = runTest(mainDispatcher) {
+    fun mutationError_isWipedWhenAnAcceptedLoudLoadStarts() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns
             Result.failure(RuntimeException())
         loadPlaylist()
@@ -458,7 +448,7 @@ class PlaylistDetailViewModelTest {
     }
 
     @Test
-    fun clearError_resetsTheErrorState() = runTest(mainDispatcher) {
+    fun clearError_resetsTheErrorState() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
             Result.failure(RuntimeException("gone"))
         // The nameless load path also resolves the playlist name; stub it so

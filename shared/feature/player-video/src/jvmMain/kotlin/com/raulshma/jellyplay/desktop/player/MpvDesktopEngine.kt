@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigApplier
 import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigMapping
 import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
+import com.raulshma.jellyplay.feature.player.video.engine.NativeVolumeSeam
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvBinding
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvCore
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvEndFileError
@@ -54,7 +55,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlaybackVolumePolicy
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.engine.TrackRefreshCoalescer
 import com.raulshma.jellyplay.feature.player.video.engine.TimedCue
-import com.raulshma.jellyplay.feature.player.video.engine.VolumeCommandTemplates
+import com.raulshma.jellyplay.feature.player.video.engine.VolumeCommandChassis
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.engine.mergeAccumulatedCues
 import com.raulshma.jellyplay.feature.player.video.engine.resolveDurationMs
@@ -923,21 +924,18 @@ open class MpvDesktopEngine(
 
     // ── MediaEngine: volume/mute (RemotePlayableEngine, 0f..1f → mpv %) ────
     //
-    // The four commands are the commonMain [VolumeCommandTemplates] finals
-    // over [PlaybackVolumePolicy] — the same plan → remember → capture →
-    // native write choreography ReloadablePlayerEngine runs on Android (clamp
-    // to the boost ceiling, remember the last audible level, snapshot it on
-    // mute, restore it on unmute; remember-before-write). Desktop owns the
-    // APPLY boundary only: the policy works in normalized units (1.0 ==
-    // nominal) and [applyVolumeLevel] is the single 0..1 → 0..100 conversion
-    // at the mpv `volume` property write. There is no Android system music
-    // stream to sync on desktop — the mpv volume property is the only volume
-    // surface — so the restore vocabulary writes the REMEMBERED_LEVEL straight
-    // into the property on unmute, and mute is LEAVE_UNCHANGED for the
-    // property (mpv's mute FLAG is the silencing mechanism).
-
-    /** Last audible normalized level; the restore target for unmute. */
-    @Volatile private var lastUnmuteVolume: Float = 1f
+    // The four commands ride the commonMain [VolumeCommandChassis] — the same
+    // composition ReloadablePlayerEngine runs on Android (clamp to the boost
+    // ceiling, remember the last audible level, snapshot it on mute, restore
+    // it on unmute; remember-before-write). Desktop owns the APPLY boundary
+    // only: the policy works in normalized units (1.0 == nominal) and
+    // [applyVolumeLevel] is the single 0..1 → 0..100 conversion at the mpv
+    // `volume` property write. There is no Android system music stream to
+    // sync on desktop — the mpv volume property is the only volume surface —
+    // so the restore vocabulary writes the REMEMBERED_LEVEL straight into the
+    // property on unmute, and mute is LEAVE_UNCHANGED for the property (mpv's
+    // mute FLAG is the silencing mechanism). Containment is the alive-guard,
+    // wired as the chassis's dispatch shell: a released engine runs nothing.
 
     /**
      * Per-content-type volume-memory capture (the
@@ -951,14 +949,8 @@ open class MpvDesktopEngine(
      */
     @Volatile override var onUserVolumeChange: ((level: Float) -> Unit)? = null
 
-    /** Same rule as ReloadablePlayerEngine's — remember only audible levels. */
-    private fun rememberUnmuteVolumeIfAudible(volume01: Float) {
-        if (volume01 > 0f) lastUnmuteVolume = volume01
-    }
-
-    private val volumeCommands = object : VolumeCommandTemplates.NativeVolumeSurface {
-        override val rememberedUnmuteLevel: Float get() = lastUnmuteVolume
-
+    /** This engine's native seam over the JNA transport; the chassis owns the memory. */
+    private val volumeCommands = object : NativeVolumeSeam {
         override fun readNativeVolume(): Float? = aliveCtx()?.let {
             // The cached percent IS the native level — this engine is the only
             // writer of mpv's `volume`, so the mirror cannot drift (Android
@@ -978,13 +970,11 @@ open class MpvDesktopEngine(
             aliveCtx()?.let { MpvLib.setPropertyFlag(it, MpvProperties.MUTE, muted) }
         }
 
-        override fun snapshotVolumeForMute() {
+        override fun preMuteSnapshotLevel(): Float? {
             // No system stream: the pre-mute native level itself is what an
             // unmute must restore.
-            readNativeVolume()?.let(::rememberUnmuteVolumeIfAudible)
+            return readNativeVolume()
         }
-
-        override fun rememberUnmuteVolume(level: Float) = rememberUnmuteVolumeIfAudible(level)
 
         override fun onUserVolumeChanged(level: Float) {
             onUserVolumeChange?.invoke(level)
@@ -995,26 +985,28 @@ open class MpvDesktopEngine(
             else PlaybackVolumePolicy.NativeVolumeRestore.REMEMBERED_LEVEL
     }
 
+    /** The shared volume chassis over [volumeCommands]; the memory is chassis-owned. */
+    private val volumeChassis = VolumeCommandChassis(
+        native = volumeCommands,
+        dispatch = { command -> if (aliveCtx() != null) command() },
+    )
+
     override fun setVolume(value: Float, isUserChange: Boolean) {
-        aliveCtx() ?: return
-        VolumeCommandTemplates.setVolume(volumeCommands, value, isUserChange)
+        volumeChassis.setVolume(value, isUserChange)
     }
 
     override fun increaseVolume(delta: Float) {
-        aliveCtx() ?: return
         // Key/remote nudges are user-shaped for memory capture — the template
         // plans the delta with isUserChange = true.
-        VolumeCommandTemplates.increaseVolume(volumeCommands, delta)
+        volumeChassis.increaseVolume(delta)
     }
 
     override fun decreaseVolume(delta: Float) {
-        aliveCtx() ?: return
-        VolumeCommandTemplates.decreaseVolume(volumeCommands, delta)
+        volumeChassis.decreaseVolume(delta)
     }
 
     override fun setMuted(muted: Boolean) {
-        aliveCtx() ?: return
-        VolumeCommandTemplates.setMuted(volumeCommands, muted)
+        volumeChassis.setMuted(muted)
     }
 
     /** The one normalized→percent boundary conversion for the mpv `volume` write. */

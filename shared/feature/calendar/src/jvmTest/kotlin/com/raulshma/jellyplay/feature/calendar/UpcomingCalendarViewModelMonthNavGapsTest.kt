@@ -8,29 +8,26 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import kotlinx.datetime.onDay
 import kotlinx.datetime.yearMonth
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Month-navigation and transient-state gaps in [UpcomingCalendarViewModel] NOT
@@ -51,9 +48,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class UpcomingCalendarViewModelMonthNavGapsTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module (UpcomingCalendarViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var arr: ArrRepository
     private lateinit var seerr: SeerrRepository
@@ -67,7 +63,6 @@ class UpcomingCalendarViewModelMonthNavGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         arr = mockk()
         seerr = mockk(relaxed = true)
         experimentalStore = mockk()
@@ -86,11 +81,6 @@ class UpcomingCalendarViewModelMonthNavGapsTest {
         // carry a tmdbId, and even if they did the seerr mock is relaxed.
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun enableDirectArr() {
         experimentalSlice.value = ExperimentalSlice(
             enabledExperimentalFeatures = setOf(ExperimentalFeature.DIRECT_ARR_INTEGRATION),
@@ -103,7 +93,7 @@ class UpcomingCalendarViewModelMonthNavGapsTest {
         // Gate on the test Main dispatcher: cold `false` seed during VM init's
         // synchronous refresh(), warmed by advanceUntilIdle (init timing —
         // see ExperimentalFeatureGate's KDoc).
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     private fun item(title: String) = ArrCalendarItem(

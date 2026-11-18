@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_auth
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_initiate
@@ -16,22 +17,18 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 /**
  * Behavior in [AuthViewModel] not pinned by [AuthViewModelTest] (which
@@ -62,23 +59,18 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelHealthAndSessionTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var authRepository: AuthRepository
     private lateinit var viewModel: AuthViewModel
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
         every { authRepository.servers } returns MutableStateFlow(emptyList())
         every { authRepository.currentServerUsers } returns MutableStateFlow(emptyList())
         viewModel = AuthViewModel(authRepository)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun server(id: String, address: String, vararg alternates: String) = ServerInfo(
@@ -91,7 +83,7 @@ class AuthViewModelHealthAndSessionTest {
     // ── checkServersHealth ────────────────────────────────────────────────
 
     @Test
-    fun checkServersHealth_publishesCheckingSynchronously_beforeAnyProbe() = runTest(testDispatcher) {
+    fun checkServersHealth_publishesCheckingSynchronously_beforeAnyProbe() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         coEvery { authRepository.probeServer(any()) } coAnswers { gate.await(); Result.success(mockk()) }
 
@@ -108,7 +100,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun checkServersHealth_reachablePrimary_landsHealthyWithLatency() = runTest(testDispatcher) {
+    fun checkServersHealth_reachablePrimary_landsHealthyWithLatency() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.probeServer("http://a") } returns Result.success(mockk())
 
         viewModel.checkServersHealth(listOf(server("a", "http://a")))
@@ -120,7 +112,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun checkServersHealth_allAddressesFail_landsUnreachable() = runTest(testDispatcher) {
+    fun checkServersHealth_allAddressesFail_landsUnreachable() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.probeServer("http://a") } returns Result.failure(RuntimeException("down"))
         coEvery { authRepository.probeServer("http://a-alt") } returns Result.failure(RuntimeException("down"))
 
@@ -134,7 +126,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun checkServersHealth_primaryFailsAlternateSucceeds_serverIsHealthy() = runTest(testDispatcher) {
+    fun checkServersHealth_primaryFailsAlternateSucceeds_serverIsHealthy() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.probeServer("http://a") } returns Result.failure(RuntimeException("down"))
         coEvery { authRepository.probeServer("http://a-alt") } returns Result.success(mockk())
 
@@ -149,7 +141,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun checkServersHealth_emptyList_resetsTheHealthMap() = runTest(testDispatcher) {
+    fun checkServersHealth_emptyList_resetsTheHealthMap() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.probeServer("http://a") } returns Result.success(mockk())
         viewModel.checkServersHealth(listOf(server("a", "http://a")))
         advanceUntilIdle()
@@ -162,7 +154,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun checkServersHealth_reentrantCall_cancelsTheInFlightBatch() = runTest(testDispatcher) {
+    fun checkServersHealth_reentrantCall_cancelsTheInFlightBatch() = runTest(mainDispatcherRule.testDispatcher) {
         // First batch's probe never completes until the gate opens — its batch
         // coroutine gets cancelled by the re-entrant call, so its result must
         // never land.
@@ -194,7 +186,7 @@ class AuthViewModelHealthAndSessionTest {
     // ── session delegation ────────────────────────────────────────────────
 
     @Test
-    fun login_forwardsAddressUsernamePassword_andReportsTheResult() = runTest(testDispatcher) {
+    fun login_forwardsAddressUsernamePassword_andReportsTheResult() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.login("http://a", "user", "pass") } returns
             Result.success(mockk<UserInfo>())
 
@@ -207,7 +199,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun switchUser_and_removeUser_forwardToTheRepository() = runTest(testDispatcher) {
+    fun switchUser_and_removeUser_forwardToTheRepository() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.switchUser("u1") } returns Result.success(Unit)
         coEvery { authRepository.removeUser(any()) } just Runs
 
@@ -223,7 +215,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun removeServer_and_getUsersForServer_forwardToTheRepository() = runTest(testDispatcher) {
+    fun removeServer_and_getUsersForServer_forwardToTheRepository() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.removeServer("srv-1") } just Runs
         coEvery { authRepository.getUsersForServer("srv-1") } returns listOf(mockk(), mockk())
 
@@ -241,7 +233,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun getUsersForServer_aThrownReadFoldsIntoAFailedResult() = runTest(testDispatcher) {
+    fun getUsersForServer_aThrownReadFoldsIntoAFailedResult() = runTest(mainDispatcherRule.testDispatcher) {
         // THE eternal-spinner pin: the repository read is a one-shot Room
         // query that can throw. The former bare-List callback never invoked
         // its callback on a throw, so UserSelectionScreen's isLoading flag
@@ -263,7 +255,7 @@ class AuthViewModelHealthAndSessionTest {
     // ── additional QuickConnect branches ──────────────────────────────────
 
     @Test
-    fun quickConnect_initiate_landsWaitingForApprovalWithCodeAndSecret() = runTest(testDispatcher) {
+    fun quickConnect_initiate_landsWaitingForApprovalWithCodeAndSecret() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.success(
             QuickConnectInfo(secret = "sec-1", code = "ABCD")
@@ -286,7 +278,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun quickConnect_initiateFails_withoutMessage_fallsBackToResource() = runTest(testDispatcher) {
+    fun quickConnect_initiateFails_withoutMessage_fallsBackToResource() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.failure(RuntimeException())
 
@@ -301,7 +293,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun quickConnect_pollFails_withoutMessage_fallsBackToPollingResource() = runTest(testDispatcher) {
+    fun quickConnect_pollFails_withoutMessage_fallsBackToPollingResource() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.success(
             QuickConnectInfo(secret = "sec-1", code = "ABCD")
@@ -319,7 +311,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun quickConnect_loginWithQuickConnectFails_surfacesAuthErrorResource() = runTest(testDispatcher) {
+    fun quickConnect_loginWithQuickConnectFails_surfacesAuthErrorResource() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.success(
             QuickConnectInfo(secret = "sec-1", code = "ABCD")
@@ -342,7 +334,7 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     @Test
-    fun quickConnect_restart_cancelsThePreviousPoller() = runTest(testDispatcher) {
+    fun quickConnect_restart_cancelsThePreviousPoller() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         // Session 1 initiates with sec-1, the restarted session with sec-2.
         coEvery { authRepository.initiateQuickConnect() } returnsMany listOf(

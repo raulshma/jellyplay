@@ -28,12 +28,12 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadPreferences
 import com.raulshma.jellyplay.core.model.StoragePreferences
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,12 +42,12 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the storage screen's filesystem-derived state through the [StorageAreas]
@@ -66,7 +66,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class StorageSettingsViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var projections: PreferenceProjections
     private lateinit var appearanceStore: AppearanceStore
@@ -103,7 +104,6 @@ class StorageSettingsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         projections = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
@@ -141,14 +141,9 @@ class StorageSettingsViewModelTest {
         autoDownloadSyncs.clear()
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     /** Real editor over the mocked scope so `edit { … }` blocks actually run. */
     private fun realEditor(): PreferencesEditor = PreferencesEditor(
-        scope = CoroutineScope(testDispatcher + Job()),
+        scope = CoroutineScope(mainDispatcherRule.testDispatcher + Job()),
         editScope = PreferencesEditScope(
             stores = PreferenceStores(
                 playback = playbackStore,
@@ -204,7 +199,7 @@ class StorageSettingsViewModelTest {
     // ---------------------------------------------------------------- init / mounts
 
     @Test
-    fun `init enumerates the download mounts from the provider`() = runTest(testDispatcher) {
+    fun `init enumerates the download mounts from the provider`() = runTest(mainDispatcherRule.testDispatcher) {
         val mounts = listOf(
             StorageMount("INTERNAL", StorageMountKind.INTERNAL, 1_000L, "/data"),
             StorageMount("EXTERNAL", StorageMountKind.REMOVABLE, 2_000L, "/sdcard"),
@@ -218,7 +213,7 @@ class StorageSettingsViewModelTest {
     }
 
     @Test
-    fun `init swallows a failing mount provider and keeps the empty list`() = runTest(testDispatcher) {
+    fun `init swallows a failing mount provider and keeps the empty list`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { storageMountsProvider.availableMounts() } throws RuntimeException("no storage service")
 
         val vm = viewModel()
@@ -230,7 +225,7 @@ class StorageSettingsViewModelTest {
     // ---------------------------------------------------------------- breakdown
 
     @Test
-    fun `refreshCacheSize builds the four-bucket breakdown in mebibytes`() = runTest(testDispatcher) {
+    fun `refreshCacheSize builds the four-bucket breakdown in mebibytes`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { storageAreas.sizeEstimateBytes(any()) } returns StorageSizeEstimate(
             cacheBytes = 2L * 1024 * 1024,
             externalCacheBytes = 1L * 1024 * 1024,
@@ -252,7 +247,7 @@ class StorageSettingsViewModelTest {
     }
 
     @Test
-    fun `refreshCacheSize honors the download-storage-location preference`() = runTest(testDispatcher) {
+    fun `refreshCacheSize honors the download-storage-location preference`() = runTest(mainDispatcherRule.testDispatcher) {
         downloadPrefs.value = DownloadPreferences(downloadStorageLocation = "EXTERNAL")
         coEvery { storageAreas.sizeEstimateBytes(any()) } returns StorageSizeEstimate(0, 0, 0, 0)
         val vm = viewModel()
@@ -267,7 +262,7 @@ class StorageSettingsViewModelTest {
     // ---------------------------------------------------------------- clears
 
     @Test
-    fun `clearCache wipes via the seam and re-measures`() = runTest(testDispatcher) {
+    fun `clearCache wipes via the seam and re-measures`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { storageAreas.sizeEstimateBytes(any()) } returns StorageSizeEstimate(0, 0, 0, 0)
         val vm = viewModel()
         advanceUntilIdle()
@@ -283,7 +278,7 @@ class StorageSettingsViewModelTest {
     }
 
     @Test
-    fun `clearCache failure surfaces the message but still re-measures`() = runTest(testDispatcher) {
+    fun `clearCache failure surfaces the message but still re-measures`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { storageAreas.sizeEstimateBytes(any()) } returns StorageSizeEstimate(0, 0, 0, 0)
         coEvery { storageAreas.clearCache() } throws RuntimeException("walk denied")
         val vm = viewModel()
@@ -297,7 +292,7 @@ class StorageSettingsViewModelTest {
     }
 
     @Test
-    fun `clearImageCache failure surfaces the message`() = runTest(testDispatcher) {
+    fun `clearImageCache failure surfaces the message`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { storageAreas.sizeEstimateBytes(any()) } returns StorageSizeEstimate(0, 0, 0, 0)
         coEvery { storageAreas.clearImageCache() } throws IllegalStateException("image dir busy")
         val vm = viewModel()
@@ -313,7 +308,7 @@ class StorageSettingsViewModelTest {
     // ---------------------------------------------------------------- editor wiring
 
     @Test
-    fun `setShowAdvancedSettings reaches the appearance store through the editor`() = runTest(testDispatcher) {
+    fun `setShowAdvancedSettings reaches the appearance store through the editor`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -324,7 +319,7 @@ class StorageSettingsViewModelTest {
     }
 
     @Test
-    fun `auto-download toggle also pokes the scheduler`() = runTest(testDispatcher) {
+    fun `auto-download toggle also pokes the scheduler`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -336,7 +331,7 @@ class StorageSettingsViewModelTest {
     }
 
     @Test
-    fun `download-location setter routes to the downloads store`() = runTest(testDispatcher) {
+    fun `download-location setter routes to the downloads store`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -347,7 +342,7 @@ class StorageSettingsViewModelTest {
     }
 
     @Test
-    fun `cache-cap setter routes to the network-offline store`() = runTest(testDispatcher) {
+    fun `cache-cap setter routes to the network-offline store`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 

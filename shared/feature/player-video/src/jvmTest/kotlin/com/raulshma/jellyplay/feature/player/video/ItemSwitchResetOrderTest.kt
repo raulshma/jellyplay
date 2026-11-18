@@ -61,8 +61,8 @@ class ItemSwitchResetOrderTest {
         // moved with it.
         val session = moduleSource("PlaybackSession.kt")
         val body = session
-            .substringAfter("override fun releaseInternalsVmPart()")
-            .substringBefore("override fun clearTrickplay()")
+            .substringAfter("private fun releaseInternalsVmPart()")
+            .substringBefore("private fun clearTrickplay()")
 
         val rebuild = body.indexOf("uiState.update { it.keepAcrossItems() }")
         val navigatorReset = body.indexOf("upNext.resetForItemSwitch()")

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.tracks
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
@@ -10,16 +11,12 @@ import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 /**
  * Pins the dense-music-list width contract (MUSIC_MAX_WIDTH = 300) through
@@ -29,9 +26,8 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class TracksViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
@@ -47,7 +43,6 @@ class TracksViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         viewModel = TracksViewModel(
             libraryFeed = libraryFeed,
             imageUrlProvider = imageUrlProvider,
@@ -56,13 +51,8 @@ class TracksViewModelTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun playAll_delegatesWithMusicMaxWidthAndStartIndex() = runTest(mainDispatcher) {
+    fun playAll_delegatesWithMusicMaxWidthAndStartIndex() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery {
             audioQueueFacade.playTracks(any(), any(), any(), any(), any())
         } returns AudioQueueOutcome.Started(emptyList(), 0)
@@ -76,7 +66,7 @@ class TracksViewModelTest {
     }
 
     @Test
-    fun addToQueue_delegatesSingleTrackWithMusicMaxWidth() = runTest(mainDispatcher) {
+    fun addToQueue_delegatesSingleTrackWithMusicMaxWidth() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { audioQueueFacade.enqueueTrack(any(), any(), any()) } returns
             AudioQueueOutcome.Started(emptyList(), -1)
 

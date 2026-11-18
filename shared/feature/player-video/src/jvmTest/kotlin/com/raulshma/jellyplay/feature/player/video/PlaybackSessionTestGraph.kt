@@ -141,7 +141,13 @@ internal class PlaybackSessionTestGraph private constructor(
 
     // ── The session's constructor dependencies (relaxed, arm-free) ──────────
 
-    private val aggregateFlow = MutableStateFlow(VideoPlayerAggregate())
+    /**
+     * Exposed like the VM harness's [VideoPlayerViewModelHarness.aggregateFlow]:
+     * suites seed the aggregate (the autoplay episode limit, the still-watching
+     * threshold…) through it and the session's collectors + controllers see the
+     * same flow.
+     */
+    val aggregateFlow = MutableStateFlow(VideoPlayerAggregate())
     private val aggregateStore = mockk<com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore>(relaxed = true).apply {
         every { aggregate } returns aggregateFlow
         every { aggregateRaw } returns aggregateFlow
@@ -238,6 +244,19 @@ internal class PlaybackSessionTestGraph private constructor(
             coEvery { get(any(), any()) } returns null
         }
 
+    /**
+     * The watched-flip mutator, hoisted out of the construction call (the VM
+     * harness's hoisted-mock pattern) so the advance suites can verify the
+     * mark-played arms against it.
+     */
+    val userDataMutator = mockk<com.raulshma.jellyplay.core.data.repository.UserDataMutator>(relaxed = true)
+
+    /**
+     * The episode catalogue, hoisted out of the construction call for the same
+     * reason — the previous/next suites stub the season resolution through it.
+     */
+    val episodeCatalogue = mockk<com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue>(relaxed = true)
+
     val handles = PlayerStateHandles(
         uiState = StateFlowHandle(MutableStateFlow(VideoPlayerUiState())),
         positionMs = MutableStateFlow(0L),
@@ -277,7 +296,7 @@ internal class PlaybackSessionTestGraph private constructor(
         sleepCountdown = SleepCountdown(SleepCountdownClock.perTick(1_000L)),
         userMessageBus = NoOpPlayerVideoMessageBus,
         savedStateHandle = SavedStateHandle(),
-        userDataMutator = mockk(relaxed = true),
+        userDataMutator = userDataMutator,
         playbackSourceResolver = mockk<PlaybackSourceResolver>(relaxed = true).apply {
             coEvery { resolveUsableDownload(any()) } returns null
         },
@@ -304,7 +323,7 @@ internal class PlaybackSessionTestGraph private constructor(
         ),
         itemContent = PlayerItemContentSources(
             libraryApiClient = mockk(relaxed = true),
-            episodeCatalogue = mockk(relaxed = true),
+            episodeCatalogue = episodeCatalogue,
             lyricsRepository = mockk(relaxed = true),
         ),
         handles = handles,

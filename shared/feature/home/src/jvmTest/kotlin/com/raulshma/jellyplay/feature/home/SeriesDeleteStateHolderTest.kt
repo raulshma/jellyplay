@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -25,9 +26,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.Dispatchers
+import org.junit.Rule
 
 /**
  * Direct [SeriesDeleteStateHolder] tests. This concern had ZERO coverage
@@ -40,16 +39,14 @@ import kotlinx.coroutines.Dispatchers
 @OptIn(ExperimentalCoroutinesApi::class)
 class SeriesDeleteStateHolderTest {
 
-    // MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var offlineRepository: OfflineRepository
     private var holderScope: CoroutineScope? = null
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         offlineRepository = mockk(relaxed = true)
     }
 
@@ -57,7 +54,6 @@ class SeriesDeleteStateHolderTest {
     fun stopHolder() {
         holderScope?.cancel()
 
-        Dispatchers.resetMain()
     }
 
     private fun TestScope.buildHolder(): SeriesDeleteStateHolder {

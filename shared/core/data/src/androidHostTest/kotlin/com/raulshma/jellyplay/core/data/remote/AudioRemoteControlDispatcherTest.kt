@@ -13,7 +13,7 @@ import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.PlayRequest
 import com.raulshma.jellyplay.core.model.remote.PlaybackDomain
 import com.raulshma.jellyplay.core.model.remote.PlaystateCommand
-import com.raulshma.jellyplay.core.testing.MainDispatcherRule
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.Called
 import io.mockk.coEvery
 import io.mockk.coVerifySequence

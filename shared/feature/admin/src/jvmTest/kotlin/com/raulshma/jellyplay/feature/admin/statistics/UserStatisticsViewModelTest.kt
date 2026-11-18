@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.UserPlayCounts
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserStatistics
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -11,26 +12,22 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the user statistics overview (`UserStatisticsViewModel`):
@@ -52,9 +49,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserStatisticsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var repository: AdminStatisticsRepository
 
@@ -73,7 +69,6 @@ class UserStatisticsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         repository = mockk(relaxed = true)
         every { repository.getPlaybackReportingStatus() } returns pluginStatusFlow
         coEvery { repository.refreshPlaybackReportingStatus() } just runs
@@ -81,15 +76,10 @@ class UserStatisticsViewModelTest {
             Result.success(listOf(carol, alice, bob))
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     // ── load ──
 
     @Test
-    fun `load applies the default plays sort and derives the totals`() = runTest(mainDispatcher) {
+    fun `load applies the default plays sort and derives the totals`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = UserStatisticsViewModel(repository)
         advanceUntilIdle()
 
@@ -106,7 +96,7 @@ class UserStatisticsViewModelTest {
     }
 
     @Test
-    fun `load failure surfaces the error`() = runTest(mainDispatcher) {
+    fun `load failure surfaces the error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getAllUsersWithStatistics() } returns
             Result.failure(RuntimeException("plugin missing"))
 
@@ -122,7 +112,7 @@ class UserStatisticsViewModelTest {
     // ── sorting ──
 
     @Test
-    fun `setSort re-sorts the loaded users without refetching`() = runTest(mainDispatcher) {
+    fun `setSort re-sorts the loaded users without refetching`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = UserStatisticsViewModel(repository)
         advanceUntilIdle()
 
@@ -139,7 +129,7 @@ class UserStatisticsViewModelTest {
     }
 
     @Test
-    fun `name sort is case-insensitive and breaks ties by play count`() = runTest(mainDispatcher) {
+    fun `name sort is case-insensitive and breaks ties by play count`() = runTest(mainDispatcherRule.testDispatcher) {
         val daveUpper = UserStatistics(userId = "u-1", userName = "Dave", totalPlayCount = 2)
         val daveLower = UserStatistics(userId = "u-2", userName = "dave", totalPlayCount = 9)
         coEvery { repository.getAllUsersWithStatistics() } returns
@@ -156,7 +146,7 @@ class UserStatisticsViewModelTest {
     // ── refresh ──
 
     @Test
-    fun `refresh failure keeps the loaded users silently`() = runTest(mainDispatcher) {
+    fun `refresh failure keeps the loaded users silently`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = UserStatisticsViewModel(repository)
         advanceUntilIdle()
         coEvery { repository.getAllUsersWithStatistics() } returns
@@ -173,7 +163,7 @@ class UserStatisticsViewModelTest {
     // ── plugin status ──
 
     @Test
-    fun `plugin status follows the repository flow`() = runTest(mainDispatcher) {
+    fun `plugin status follows the repository flow`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = UserStatisticsViewModel(repository)
         advanceUntilIdle()
 
@@ -186,7 +176,7 @@ class UserStatisticsViewModelTest {
     // ── lazy per-user counts ──
 
     @Test
-    fun `ensureCountsLoaded fetches once caches and merges into the row and summary`() = runTest(mainDispatcher) {
+    fun `ensureCountsLoaded fetches once caches and merges into the row and summary`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserPlayCounts("u-1") } returns Result.success(
             UserPlayCounts(moviePlayed = 5, episodePlayed = 6, songPlayed = 1, movieUnplayed = 3)
         )
@@ -214,7 +204,7 @@ class UserStatisticsViewModelTest {
     }
 
     @Test
-    fun `refresh reuses the cached counts without re-fanning`() = runTest(mainDispatcher) {
+    fun `refresh reuses the cached counts without re-fanning`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserPlayCounts("u-1") } returns Result.success(
             UserPlayCounts(moviePlayed = 5, episodePlayed = 6, songPlayed = 1, movieUnplayed = 3)
         )
@@ -236,7 +226,7 @@ class UserStatisticsViewModelTest {
     }
 
     @Test
-    fun `a failed count fetch stays pending and retries on the next visibility`() = runTest(mainDispatcher) {
+    fun `a failed count fetch stays pending and retries on the next visibility`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserPlayCounts("u-1") } returns
             Result.failure(RuntimeException("down")) andThen Result.success(
             UserPlayCounts(moviePlayed = 5, episodePlayed = 0, songPlayed = 0, movieUnplayed = 0)
@@ -262,7 +252,7 @@ class UserStatisticsViewModelTest {
     }
 
     @Test
-    fun `requestExport fetches the exported set's missing counts before sharing`() = runTest(mainDispatcher) {
+    fun `requestExport fetches the exported set's missing counts before sharing`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserPlayCounts("u-1") } returns Result.success(
             UserPlayCounts(moviePlayed = 5, episodePlayed = 6, songPlayed = 1, movieUnplayed = 3)
         )
@@ -299,7 +289,7 @@ class UserStatisticsViewModelTest {
     // ── export share request ──
 
     @Test
-    fun `export requests are one-shot emissions — two requests deliver twice and never replay`() = runTest(mainDispatcher) {
+    fun `export requests are one-shot emissions — two requests deliver twice and never replay`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserPlayCounts(any()) } returns Result.success(UserPlayCounts())
         val viewModel = UserStatisticsViewModel(repository)
         advanceUntilIdle()

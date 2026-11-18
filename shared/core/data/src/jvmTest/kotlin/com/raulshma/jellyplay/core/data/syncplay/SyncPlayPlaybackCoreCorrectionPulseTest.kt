@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.syncplay
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayPlaybackCommand
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -10,16 +11,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 /**
  * Drives [SyncPlayPlaybackCore]'s periodic sync-correction loop against a fake
@@ -40,7 +39,8 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncPlayPlaybackCoreCorrectionPulseTest {
 
-    private val scheduler = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private val timeSyncManager: TimeSyncManager = mockk()
     private val controller: SyncPlayController = mockk(relaxed = true)
     private val castStore: SyncPlayCastStore = mockk()
@@ -73,7 +73,6 @@ class SyncPlayPlaybackCoreCorrectionPulseTest {
 
     @BeforeTest
     fun setup() {
-        Dispatchers.setMain(scheduler)
         every { timeSyncManager.remoteNow() } answers { System.currentTimeMillis() }
         every { timeSyncManager.toLocal(any()) } answers { firstArg<Long>() }
         every { castStore.syncPlayCast } returns MutableStateFlow(SyncPlayCastSlice())
@@ -90,7 +89,6 @@ class SyncPlayPlaybackCoreCorrectionPulseTest {
     @AfterTest
     fun tearDown() {
         core.reset()
-        Dispatchers.resetMain()
     }
 
     private fun unpauseCommand() = SyncPlayPlaybackCommand(
@@ -103,7 +101,7 @@ class SyncPlayPlaybackCoreCorrectionPulseTest {
 
     /** ms-precise engine (ExoPlayer/VLC): no drift ⇒ no correction seeks, no chip pulses. */
     @Test
-    fun `precise position never pulses the sync chip`() = runTest(scheduler) {
+    fun `precise position never pulses the sync chip`() = runTest(mainDispatcherRule.testDispatcher) {
         val cb = RecordingCallbacks(position = { truePosMs(System.currentTimeMillis()) })
         core.attachCallbacks(cb)
         core.applyCommand(unpauseCommand())
@@ -124,7 +122,7 @@ class SyncPlayPlaybackCoreCorrectionPulseTest {
      * and SkipToSync-seeks on most ticks, pulsing the chip each time.
      */
     @Test
-    fun `quantized position drives endless skip-to-sync pulses`() = runTest(scheduler) {
+    fun `quantized position drives endless skip-to-sync pulses`() = runTest(mainDispatcherRule.testDispatcher) {
         val cb = RecordingCallbacks(position = {
             (truePosMs(System.currentTimeMillis()) / 1000L) * 1000L
         })

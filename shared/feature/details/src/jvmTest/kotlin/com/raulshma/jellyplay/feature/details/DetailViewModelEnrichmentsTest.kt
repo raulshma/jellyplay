@@ -60,29 +60,26 @@ import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
+import org.junit.Rule
 
 /**
  * The declared enrichment fan-out ([DetailViewModel.enrichments] evaluated by
@@ -100,17 +97,9 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModelEnrichmentsTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
-    @BeforeTest
-    fun setUpMainDispatcher() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDownMainDispatcher() {
-        Dispatchers.resetMain()
-    }
 
     private val strings = fakeDetailStrings()
 
@@ -286,7 +275,7 @@ class DetailViewModelEnrichmentsTest {
                 ),
         ),
         mediaDownloadActions = mockk<MediaDownloadActions>(relaxed = true),
-        smartPlayDispatcher = mainDispatcher,
+        smartPlayDispatcher = mainDispatcherRule.testDispatcher,
         tmdbApiClient = tmdbApiClient,
         pluginArms = pluginArms,
         appearanceStore = appearanceStore,
@@ -346,7 +335,7 @@ class DetailViewModelEnrichmentsTest {
         ),
     )
 
-    private fun loadAndSettle(itemId: String, loaded: DetailLoadState.Loaded) = runTest(mainDispatcher) {
+    private fun loadAndSettle(itemId: String, loaded: DetailLoadState.Loaded) = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubProvider(itemId, loaded)
         viewModel.onEvent(DetailUiEvent.LoadItem(itemId))
@@ -356,7 +345,7 @@ class DetailViewModelEnrichmentsTest {
     // ── The gate table ───────────────────────────────────────────────────
 
     @Test
-    fun remoteMovieWithDiscovery_firesAllRemoteEnrichments_andNoneOfTheLocalOnes() = runTest(mainDispatcher) {
+    fun remoteMovieWithDiscovery_firesAllRemoteEnrichments_andNoneOfTheLocalOnes() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getSimilarItems("m1", limit = 12) } returns
             Result.success(listOf(MediaItem(id = "other", name = "Other", mediaType = MediaType.MOVIE)))
@@ -396,7 +385,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun remoteSeriesWithTvdb_resolvesArrServers_forCanManageSeries() = runTest(mainDispatcher) {
+    fun remoteSeriesWithTvdb_resolvesArrServers_forCanManageSeries() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { arrRepository.resolveServers() } returns Result.success(
             ArrServiceSummary(sonarrServers = listOf(mockk(relaxed = true))),
@@ -420,7 +409,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun remoteEpisodeWithoutTvdb_skipsArrResolve() = runTest(mainDispatcher) {
+    fun remoteEpisodeWithoutTvdb_skipsArrResolve() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubProvider(
             "e1",
@@ -447,7 +436,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun localSnapshot_firesOnlyLocalRelated_andNoRemoteEnrichment() = runTest(mainDispatcher) {
+    fun localSnapshot_firesOnlyLocalRelated_andNoRemoteEnrichment() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { offlineRepository.getLocalRelated(any(), any(), any(), any()) } returns
             listOf(MediaItem(id = "local1", name = "Local", mediaType = MediaType.MOVIE))
@@ -486,7 +475,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun localSnapshotWithoutGenresOrStudios_skipsEvenLocalRelated() = runTest(mainDispatcher) {
+    fun localSnapshotWithoutGenresOrStudios_skipsEvenLocalRelated() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubProvider(
             "dl2",
@@ -507,7 +496,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun remoteCollection_firesCollectionItems_onTopOfTheRemoteSet() = runTest(mainDispatcher) {
+    fun remoteCollection_firesCollectionItems_onTopOfTheRemoteSet() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { collectionOperations.getCollectionItems("c1", any(), any(), any()) } returns
             Result.success(
@@ -533,7 +522,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun remoteSnapshotWithoutDiscoveryCapability_startsNoRemoteEnrichment() = runTest(mainDispatcher) {
+    fun remoteSnapshotWithoutDiscoveryCapability_startsNoRemoteEnrichment() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         // Remote ORIGIN but the capability flip off: the single authority for
         // whether discovery may run.
@@ -560,7 +549,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun attachmentTick_doesNotRefireAnyEnrichment() = runTest(mainDispatcher) {
+    fun attachmentTick_doesNotRefireAnyEnrichment() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val flow = stubProvider(
             "m3",
@@ -593,7 +582,7 @@ class DetailViewModelEnrichmentsTest {
     // ── the themeMusic enrichment gate — the pref/mute matrix ────────
 
     @Test
-    fun themeMusic_gate_respectsGlobalPrefAndPerSeriesMute() = runTest(mainDispatcher) {
+    fun themeMusic_gate_respectsGlobalPrefAndPerSeriesMute() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val prefs = MutableStateFlow(DetailPreferences())
         every { projections.detailPreferences } returns prefs
@@ -646,7 +635,7 @@ class DetailViewModelEnrichmentsTest {
         )
 
     @Test
-    fun externalRatings_seerrConnected_mapsTheSeerrPayload_andSkipsTmdb() = runTest(mainDispatcher) {
+    fun externalRatings_seerrConnected_mapsTheSeerrPayload_andSkipsTmdb() = runTest(mainDispatcherRule.testDispatcher) {
         // Flip the connection-flag stub BEFORE constructing the ViewModel:
         // the uiState combine captures the preferences flow at construction
         // time (the loadSeerrData regression test's convention).
@@ -685,7 +674,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun externalRatings_seerrDisconnected_fallsBackToTheTmdbVoteAggregate() = runTest(mainDispatcher) {
+    fun externalRatings_seerrDisconnected_fallsBackToTheTmdbVoteAggregate() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
         viewModel = buildViewModel(tmdbApiClient = tmdbApiClient)
@@ -705,7 +694,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun externalRatings_seerrFetchFailure_fallsBackToTmdb() = runTest(mainDispatcher) {
+    fun externalRatings_seerrFetchFailure_fallsBackToTmdb() = runTest(mainDispatcherRule.testDispatcher) {
         every { seerrRepository.preferences } returns MutableStateFlow(
             SeerrPreferences(serverUrl = "https://seerr.example.com"),
         )
@@ -730,7 +719,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun externalRatings_preferenceOff_startsNoFetch() = runTest(mainDispatcher) {
+    fun externalRatings_preferenceOff_startsNoFetch() = runTest(mainDispatcherRule.testDispatcher) {
         every { projections.detailPreferences } returns
             MutableStateFlow(DetailPreferences(showExternalRatings = false))
         val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
@@ -747,7 +736,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun externalRatings_pluginRatingsLive_setsTheDedupeSuppressionFlag() = runTest(mainDispatcher) {
+    fun externalRatings_pluginRatingsLive_setsTheDedupeSuppressionFlag() = runTest(mainDispatcherRule.testDispatcher) {
         val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
         val pluginStatusStore =
             mockk<com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore>(relaxed = true)
@@ -864,7 +853,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun seasonRatings_multipleSeasons_mapsEveryScoredSeasonById() = runTest(mainDispatcher) {
+    fun seasonRatings_multipleSeasons_mapsEveryScoredSeasonById() = runTest(mainDispatcherRule.testDispatcher) {
         val ratingsApi = CountingSeasonRatingsApi(
             mapOf(
                 1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.5, tmdbVotes = 120))),
@@ -909,7 +898,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun seasonRatings_perSeasonFailure_dropsOnlyTheFailedSeason() = runTest(mainDispatcher) {
+    fun seasonRatings_perSeasonFailure_dropsOnlyTheFailedSeason() = runTest(mainDispatcherRule.testDispatcher) {
         val ratingsApi = CountingSeasonRatingsApi(
             mapOf(
                 1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.0))),
@@ -939,7 +928,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun seasonRatings_lazySeasonExpansion_rerunFetchesOnlyTheNewSeason() = runTest(mainDispatcher) {
+    fun seasonRatings_lazySeasonExpansion_rerunFetchesOnlyTheNewSeason() = runTest(mainDispatcherRule.testDispatcher) {
         val ratingsApi = CountingSeasonRatingsApi(
             mapOf(
                 1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.5))),
@@ -986,7 +975,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun seasonRatings_gateOffOrWhollyFailingFetch_leavesTheFieldEmpty() = runTest(mainDispatcher) {
+    fun seasonRatings_gateOffOrWhollyFailingFetch_leavesTheFieldEmpty() = runTest(mainDispatcherRule.testDispatcher) {
         // (a) The Ratings feature toggled off: the enrichment never reaches
         // the fetch (the franchise preferenceOff convention).
         val gatedApi = CountingSeasonRatingsApi(
@@ -1115,7 +1104,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun externalRatings_omdbAwardsLive_enrichesTheStripWithTheAwardsLine() = runTest(mainDispatcher) {
+    fun externalRatings_omdbAwardsLive_enrichesTheStripWithTheAwardsLine() = runTest(mainDispatcherRule.testDispatcher) {
         val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
         stubTmdbFallback(tmdbApiClient, "oa1")
         val ratingsApi = AwardsRatingsApi(
@@ -1136,7 +1125,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun externalRatings_omdbAwardsPluginUnavailable_neverFetchesNorRenders() = runTest(mainDispatcher) {
+    fun externalRatings_omdbAwardsPluginUnavailable_neverFetchesNorRenders() = runTest(mainDispatcherRule.testDispatcher) {
         val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
         stubTmdbFallback(tmdbApiClient, "oa2")
         val ratingsApi = AwardsRatingsApi(JellyPlayPluginOmdbAwards(awards = "Won 4 Oscars."))
@@ -1159,7 +1148,7 @@ class DetailViewModelEnrichmentsTest {
     }
 
     @Test
-    fun externalRatings_awardsPrefOff_suppressesTheBadgeAndTheFetch() = runTest(mainDispatcher) {
+    fun externalRatings_awardsPrefOff_suppressesTheBadgeAndTheFetch() = runTest(mainDispatcherRule.testDispatcher) {
         val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
         stubTmdbFallback(tmdbApiClient, "oa3")
         val ratingsApi = AwardsRatingsApi(JellyPlayPluginOmdbAwards(awards = "Won 4 Oscars."))

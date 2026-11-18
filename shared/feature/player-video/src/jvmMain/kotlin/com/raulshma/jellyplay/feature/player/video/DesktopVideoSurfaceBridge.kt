@@ -27,7 +27,9 @@ object DesktopVideoSurfaceBridge {
      * Whether this JVM can drive the mpv render-API SOFTWARE surface
      * libmpv loads AND an offscreen "sw" render context smoke-pass.
      * The app layer registers the prober (apps/desktop's
-     * MpvSoftwareSurfaceSupport — this module cannot see MpvLib); reads before
+     * MpvSoftwareSurfaceSupport — the probe stays app-side because the shell's
+     * startup/route gating consume it directly, even though this module now
+     * hosts MpvLib itself); reads before
      * registration (and probe failures) degrade to false, restoring the
      * pre-12B dead-end behavior. Never throws: a throwing/crashing prober is
      * treated as unsupported, so boot cannot be crashed through this path.

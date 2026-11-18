@@ -9,12 +9,11 @@ import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.sun.jna.Pointer
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import org.junit.jupiter.api.Assumptions.assumeTrue
-import org.junit.jupiter.api.io.TempDir
 
 /**
  * Android-mpv parity coverage for the desktop engine, in the
@@ -34,8 +33,26 @@ import org.junit.jupiter.api.io.TempDir
  * commonMain TrackRefreshCoalescerTest; here the real engine pins that
  * the coalesced body fires and converges on the settled catalog).
  * Skips on machines without libmpv, like the other engine suites.
+ *
+ * Re-homed from apps/desktop beside the engine it drives (this module's
+ * jvmMain — the mpv family geography). Two lane adaptations came with the
+ * move, semantics unchanged: this module's jvmTest runs JUnit4 via
+ * kotlin("test") (apps/desktop's lane is JUnit-platform), so assumptions use
+ * JUnit4 `Assume` through the [assumeTrue] shim below (still skips, never
+ * fails — the [DesktopSheetWheelRobotTest] idiom) and the JUnit5 `@TempDir`
+ * fixture became a per-test [fixtureDir] with [AfterTest] cleanup (JUnit4
+ * instantiates the class per method, so the per-instance dir is still fresh
+ * per test).
  */
 class MpvDesktopEngineAndroidParityTest {
+
+    /**
+     * The lane's assumption shim: JUnit4 `Assume` (skips, not fails) behind
+     * the lazy-message call shape the JUnit5 port kept unchanged.
+     */
+    private fun assumeTrue(condition: Boolean, lazyMessage: () -> String) {
+        org.junit.Assume.assumeTrue(lazyMessage(), condition)
+    }
 
     private fun libmpvAvailable(): Boolean = try {
         MpvLib.mpv
@@ -230,7 +247,7 @@ class MpvDesktopEngineAndroidParityTest {
             // from [PlaybackRequest.serverDurationMs].
             engine.load(
                 PlaybackRequest(
-                    uri = File(tempDir, "does-not-exist.mkv").absolutePath,
+                    uri = File(fixtureDir(), "does-not-exist.mkv").absolutePath,
                     title = "ladder-server",
                     serverDurationMs = 654_321,
                 ),
@@ -278,7 +295,7 @@ class MpvDesktopEngineAndroidParityTest {
             // the server runtime — proving the rung is live before the stop.
             engine.load(
                 PlaybackRequest(
-                    uri = File(tempDir, "does-not-exist-stop.mkv").absolutePath,
+                    uri = File(fixtureDir(), "does-not-exist-stop.mkv").absolutePath,
                     title = "stop-server-duration",
                     serverDurationMs = 654_321,
                 ),
@@ -393,13 +410,34 @@ class MpvDesktopEngineAndroidParityTest {
     }
 
     // ── fixtures (the MpvDesktopEngineVideoTest shapes) ─────────────────────
+    //
+    // JUnit5's @TempDir replaced by a per-test-instance fixture dir: JUnit4
+    // (this lane's runner) instantiates the class per method, so the
+    // per-instance lazy dir is fresh per test exactly like @TempDir, and
+    // [AfterTest] removes it the way the JUnit5 extension did.
 
-    @field:TempDir
-    lateinit var tempDir: File
+    private var tempDir: File? = null
+
+    private fun fixtureDir(): File {
+        val existing = tempDir
+        if (existing != null) return existing
+        val dir = File.createTempFile("jellyplay-parity", "").apply {
+            delete()
+            check(mkdirs()) { "temp fixture dir creation failed: $this" }
+        }
+        tempDir = dir
+        return dir
+    }
+
+    @AfterTest
+    fun deleteFixtureDir() {
+        tempDir?.deleteRecursively()
+        tempDir = null
+    }
 
     /** Dual-audio fixture: the audio deselect must have a non-default track to leave. */
     private fun twoAudioTracks(): File {
-        val out = File(tempDir, "track-deselect.mka")
+        val out = File(fixtureDir(), "track-deselect.mka")
         if (out.isFile && out.length() > 0) return out
         val process = ProcessBuilder(
             "ffmpeg",
@@ -433,7 +471,7 @@ class MpvDesktopEngineAndroidParityTest {
     }
 
     private fun clip(): File {
-        val out = File(tempDir, "track-select-test.mp4")
+        val out = File(fixtureDir(), "track-select-test.mp4")
         if (out.isFile && out.length() > 0) return out
         val process = ProcessBuilder(
             "ffmpeg",
@@ -463,7 +501,7 @@ class MpvDesktopEngineAndroidParityTest {
     }
 
     private fun srtSidecar(): SubtitleSource {
-        val srt = File(tempDir, "track-select.srt")
+        val srt = File(fixtureDir(), "track-select.srt")
         srt.writeText(
             """
             1

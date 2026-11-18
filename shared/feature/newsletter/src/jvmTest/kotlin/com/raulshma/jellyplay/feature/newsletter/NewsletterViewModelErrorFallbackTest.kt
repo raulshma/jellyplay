@@ -7,23 +7,20 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.NewsletterData
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Error-copy and in-flight-flag gaps in [NewsletterViewModel] NOT pinned by
@@ -40,9 +37,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewsletterViewModelErrorFallbackTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module (NewsletterViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: NewsletterApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -52,7 +48,6 @@ class NewsletterViewModelErrorFallbackTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
         imageUrlProvider = mockk()
         notificationStore = mockk()
@@ -67,11 +62,6 @@ class NewsletterViewModelErrorFallbackTest {
             Result.success(NewsletterData(serverName = "TestServer"))
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun createViewModel(): NewsletterViewModel = NewsletterViewModel(
         newsletterApiClient = mediaRepository,
         imageUrlProvider = imageUrlProvider,
@@ -81,7 +71,7 @@ class NewsletterViewModelErrorFallbackTest {
     )
 
     @Test
-    fun `load failure without a message falls back to the literal`() = runTest(mainDispatcher) {
+    fun `load failure without a message falls back to the literal`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getNewsletterData(any()) } returns
             Result.failure(RuntimeException(null as String?))
 
@@ -94,7 +84,7 @@ class NewsletterViewModelErrorFallbackTest {
     }
 
     @Test
-    fun `pull-to-refresh raises isRefreshing while the load is in flight`() = runTest(mainDispatcher) {
+    fun `pull-to-refresh raises isRefreshing while the load is in flight`() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = kotlinx.coroutines.CompletableDeferred<Result<NewsletterData>>()
         coEvery { mediaRepository.getNewsletterData(any()) } coAnswers { gate.await() }
 
@@ -115,7 +105,7 @@ class NewsletterViewModelErrorFallbackTest {
     }
 
     @Test
-    fun `a successful reload clears a previously surfaced load error`() = runTest(mainDispatcher) {
+    fun `a successful reload clears a previously surfaced load error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getNewsletterData(any()) } returns
             Result.failure(IllegalStateException("offline"))
         val vm = createViewModel()

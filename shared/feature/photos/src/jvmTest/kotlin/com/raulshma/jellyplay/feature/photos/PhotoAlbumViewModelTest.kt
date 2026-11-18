@@ -14,32 +14,30 @@ import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.Rule
 
 class PhotoAlbumViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — same
-    // harness as LibraryViewModelTest (runTest reuses the Main TestDispatcher's
-    // scheduler, so the VM's viewModelScope coroutines run on this scheduler).
-    private val mainDispatcher = StandardTestDispatcher()
+    // Same harness as LibraryViewModelTest (runTest reuses the Main
+    // TestDispatcher's scheduler, so the VM's viewModelScope coroutines run on
+    // this scheduler).
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var libraryFeed: LibraryFeed
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -49,7 +47,6 @@ class PhotoAlbumViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         libraryFeed = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
 
@@ -67,11 +64,6 @@ class PhotoAlbumViewModelTest {
         every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } answers {
             flowOf(PagingData.from(listOf(photo1, photo2), idleStates))
         }
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun createViewModel(): PhotoAlbumViewModel = PhotoAlbumViewModel(

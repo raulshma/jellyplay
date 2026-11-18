@@ -595,6 +595,26 @@ class DownloadRepositoryImpl(
         downloadDao.updatePriority(id, priority)
     }
 
+    // The placement composites (the downloads screen's move-to-front /
+    // lower-priority row actions — see the DownloadQueue KDoc): the placement
+    // number is computed HERE, over the authoritative DAO snapshot, so a
+    // concurrent queue change (the DownloadsViewModel's uiState list copy can
+    // be stale) is seen before the write — the same arithmetic the ViewModel
+    // computed over its possibly-stale list before this moved into the queue.
+    // The persistence/notify path is the same updatePriority write
+    // [setDownloadPriority] runs: Room re-emits getAllDownloads on the UPDATE,
+    // so the write is the notify (no count re-issue — see the mutation-sites
+    // note above resumeInterruptedDownloads).
+    override suspend fun moveToFront(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val front = downloadDao.getAllDownloadsSnapshot().maxOfOrNull { it.priority } ?: 0
+        downloadDao.updatePriority(id, front + 1)
+    }
+
+    override suspend fun moveToBack(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val back = downloadDao.getAllDownloadsSnapshot().minOfOrNull { it.priority } ?: 0
+        downloadDao.updatePriority(id, back - 1)
+    }
+
     /**
      * The keep-days retention sweep (see the interface KDoc). `playback_state`
      * is the played-state surface [PlayedStateSyncImpl] mirrors on every

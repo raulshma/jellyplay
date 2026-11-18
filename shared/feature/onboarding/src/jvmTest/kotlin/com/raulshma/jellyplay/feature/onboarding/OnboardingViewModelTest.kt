@@ -29,34 +29,37 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * OnboardingViewModel coverage (requests/downloads conveyor test style — no
- * legacy suite existed): step-state coercion and skip semantics, the
- * completion write through the real PreferencesEditor (fire-and-forget edit
- * over the owning AppRuntimeStateStore), every store write the wizard's
- * `edit { }` command surfaces (appearance / home / navigation / playback /
- * video / audio / subtitle / security), and the Seerr credential fan-out
- * (prefs store vs secure-credentials store routing).
+ * legacy suite existed): the wizard flow verbs — page-turn coercion into the
+ * wizard bounds, flush-before-turn/exit through the real SeerrEditActions
+ * debounce, exit semantics (skip / Start Watching complete + Complete, back
+ * at page 0 abandons with no completion write, drag-settled turns ride the
+ * same flush-and-set path) — the completion write through the real
+ * PreferencesEditor (fire-and-forget edit over the owning
+ * AppRuntimeStateStore), every store write the wizard's `edit { }` command
+ * surfaces (appearance / home / navigation / playback / video / audio /
+ * subtitle / security), and the Seerr credential fan-out (prefs store vs
+ * secure-credentials store routing).
  *
  * The editor under test is REAL, built over a PreferencesEditScope of relaxed
  * store mocks on the test scheduler — that way `edit { appearance
@@ -66,11 +69,10 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class OnboardingViewModelTest {
 
-    // MainDispatcherRule (:core:testing), inlined — jvmTest has no access to
-    // that module (requests/downloads conveyor port pattern). The ViewModel
-    // has no init-time coroutine work (both flows are plain property
-    // assignments), but viewModelScope itself needs Main installed.
-    private val mainDispatcher = StandardTestDispatcher()
+    // The ViewModel has no init-time coroutine work (both flows are plain
+    // property assignments), but viewModelScope itself needs Main installed.
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var projections: PreferenceProjections
     private lateinit var seerrPreferencesStore: SeerrPreferencesStore
@@ -93,7 +95,6 @@ class OnboardingViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         projections = mockk()
         seerrPreferencesStore = mockk(relaxed = true)
         seerrSecureCredentialsStore = mockk(relaxed = true)
@@ -109,11 +110,6 @@ class OnboardingViewModelTest {
 
         every { projections.onboardingPreferences } returns onboardingPreferences
         every { seerrPreferencesStore.preferences } returns seerrPreferences
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /**
@@ -159,54 +155,150 @@ class OnboardingViewModelTest {
         seerrPreferencesStore = seerrPreferencesStore,
         seerrSecureCredentialsStore = seerrSecureCredentialsStore,
         editor = buildEditor(),
-        seerrSecureWriteDispatcher = mainDispatcher,
+        seerrSecureWriteDispatcher = mainDispatcherRule.testDispatcher,
     )
 
     @Test
-    fun `init exposes projected preferences and seerr flow`() = runTest(mainDispatcher) {
+    fun `init exposes projected preferences and seerr flow`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
 
         assertSame(onboardingPreferences, vm.preferences)
         assertSame(seerrPreferences, vm.seerrPreferences)
-        assertEquals(0, vm.currentStep.value)
+        assertEquals(0, vm.currentPage.value)
     }
 
     @Test
-    fun `setStep coerces out-of-range values into the wizard bounds`() = runTest(mainDispatcher) {
+    fun `navigateToPage clamps targets into the wizard bounds`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
 
-        vm.setStep(-3)
-        assertEquals(0, vm.currentStep.value)
+        vm.navigateToPage(-3)
+        advanceUntilIdle()
+        assertEquals(0, vm.currentPage.value)
 
-        vm.setStep(OnboardingStep.count + 5)
-        assertEquals(OnboardingStep.count - 1, vm.currentStep.value)
+        vm.navigateToPage(OnboardingStep.count + 5)
+        advanceUntilIdle()
+        assertEquals(OnboardingStep.count - 1, vm.currentPage.value)
 
-        vm.setStep(4)
-        assertEquals(4, vm.currentStep.value)
+        vm.navigateToPage(4)
+        advanceUntilIdle()
+        assertEquals(4, vm.currentPage.value)
     }
 
     @Test
-    fun `nextStep advances by exactly one page`() = runTest(mainDispatcher) {
+    fun `skip flushes a pending field write, completes, and signals Complete`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
+        // Typing on the Seerr step leaves a debounced write pending.
+        vm.seerrEditActions.setApiKey("api-key")
 
-        vm.nextStep()
-        vm.nextStep()
+        vm.exitWizard(markComplete = true)
+        advanceUntilIdle()
 
-        assertEquals(2, vm.currentStep.value)
+        // The flush landed the pending write before the exit, and the
+        // completion flag rode along.
+        verify(exactly = 1) { seerrSecureCredentialsStore.setApiKey("api-key") }
+        coVerify(exactly = 1) { appRuntimeStateStore.setOnboardingCompleted(true) }
+        assertEquals(WizardExit.Complete, vm.exits.first())
     }
 
     @Test
-    fun `nextStep at the final step stays put instead of overflowing`() = runTest(mainDispatcher) {
+    fun `exitWizard lands the pending field write BEFORE the completion write`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
+        val eventLog = mutableListOf<String>()
+        coEvery { seerrSecureCredentialsStore.setApiKey(any()) } coAnswers {
+            eventLog += "seerr"
+            Unit
+        }
+        coEvery { appRuntimeStateStore.setOnboardingCompleted(any()) } coAnswers {
+            eventLog += "completion"
+            Unit
+        }
 
-        vm.setStep(OnboardingStep.count - 1)
-        vm.nextStep()
+        // Typing leaves a debounced write pending (300 ms out); the exit must
+        // JOIN it before the completion write rides the same scheduler — a
+        // regression that dropped the flush would land "completion" first
+        // (the editor's write has no debounce delay to wait out).
+        vm.seerrEditActions.setApiKey("api-key")
+        vm.exitWizard(markComplete = true)
+        advanceUntilIdle()
 
-        assertEquals(OnboardingStep.count - 1, vm.currentStep.value)
+        assertEquals(listOf("seerr", "completion"), eventLog)
     }
 
     @Test
-    fun `completeOnboarding persists the completion flag through the editor`() = runTest(mainDispatcher) {
+    fun `start watching from the completion page runs the same complete-and-exit choreography`() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.navigateToPage(OnboardingStep.COMPLETION.index)
+        advanceUntilIdle()
+        assertEquals(OnboardingStep.count - 1, vm.currentPage.value)
+        vm.seerrEditActions.setPassword("pw")
+
+        vm.exitWizard(markComplete = true)
+        advanceUntilIdle()
+
+        verify(exactly = 1) { seerrSecureCredentialsStore.setPassword("pw") }
+        coVerify(exactly = 1) { appRuntimeStateStore.setOnboardingCompleted(true) }
+        assertEquals(WizardExit.Complete, vm.exits.first())
+    }
+
+    @Test
+    fun `back on a later page steps one page up without exiting`() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.navigateToPage(3)
+        advanceUntilIdle()
+
+        vm.onBack()
+        advanceUntilIdle()
+
+        assertEquals(2, vm.currentPage.value)
+        coVerify(exactly = 0) { appRuntimeStateStore.setOnboardingCompleted(any()) }
+    }
+
+    @Test
+    fun `back on the first page abandons — flush runs, completion never fires, Abandon exit`() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.seerrEditActions.setServerUrl("http://seerr.local")
+
+        vm.onBack()
+        advanceUntilIdle()
+
+        // The flush landed the pending write; the completion flag was NOT
+        // written — the wizard re-runs on the next gate pass.
+        coVerify(exactly = 1) { seerrPreferencesStore.setServerUrl("http://seerr.local") }
+        coVerify(exactly = 0) { appRuntimeStateStore.setOnboardingCompleted(any()) }
+        assertEquals(WizardExit.Abandon, vm.exits.first())
+    }
+
+    @Test
+    fun `drag-settled page turns ride the same flush-and-set path`() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.seerrEditActions.setEmail("user@example.com")
+
+        vm.onPageSettled(OnboardingStep.SECURITY.index)
+        advanceUntilIdle()
+
+        assertEquals(OnboardingStep.SECURITY.index, vm.currentPage.value)
+        coVerify(exactly = 1) { seerrPreferencesStore.setEmail("user@example.com") }
+        coVerify(exactly = 0) { appRuntimeStateStore.setOnboardingCompleted(any()) }
+    }
+
+    @Test
+    fun `a settled page the ViewModel already knows about is a no-op ack`() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.navigateToPage(2)
+        advanceUntilIdle()
+
+        vm.onPageSettled(2)
+        advanceUntilIdle()
+
+        // Same-page acks must not move state — this is the guard that keeps
+        // the screen's settle collector and the turn collector from feeding
+        // each other a loop.
+        assertEquals(2, vm.currentPage.value)
+        coVerify(exactly = 0) { appRuntimeStateStore.setOnboardingCompleted(any()) }
+    }
+
+    @Test
+    fun `completeOnboarding persists the completion flag through the editor`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
 
         vm.completeOnboarding()
@@ -216,7 +308,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `appearance delegations reach the appearance store`() = runTest(mainDispatcher) {
+    fun `appearance delegations reach the appearance store`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
 
         vm.edit { it.appearance.setThemeMode(ThemeMode.DARK) }
@@ -238,7 +330,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `home and navigation delegations reach their owning stores`() = runTest(mainDispatcher) {
+    fun `home and navigation delegations reach their owning stores`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
         val sections = setOf(HomeSectionType.CONFIGURABLE.first())
 
@@ -255,7 +347,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `playback and video player delegations reach their owning stores`() = runTest(mainDispatcher) {
+    fun `playback and video player delegations reach their owning stores`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
 
         vm.edit { it.playback.setPreferredPlayer(PlayerType.MPV) }
@@ -275,7 +367,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `audio delegations reach the audio store`() = runTest(mainDispatcher) {
+    fun `audio delegations reach the audio store`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
 
         vm.edit { it.audio.setAudioDefaultSpeed(1.5f) }
@@ -293,7 +385,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `subtitle delegations reach the subtitle store`() = runTest(mainDispatcher) {
+    fun `subtitle delegations reach the subtitle store`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
         val style = SubtitleStyle(fontSize = 32)
 
@@ -306,7 +398,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `security delegations reach the security store and hashPin passes through`() = runTest(mainDispatcher) {
+    fun `security delegations reach the security store and hashPin passes through`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
         every { securityStore.hashPin("1234") } returns "hashed-1234"
 
@@ -324,7 +416,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `seerr preference setters fan out to the prefs store`() = runTest(mainDispatcher) {
+    fun `seerr preference setters fan out to the prefs store`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
 
         vm.seerrEditActions.setServerUrl("http://seerr.local")
@@ -358,7 +450,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `seerr credentials route to the secure credentials store`() = runTest(mainDispatcher) {
+    fun `seerr credentials route to the secure credentials store`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
 
         vm.seerrEditActions.setApiKey("api-key")

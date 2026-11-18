@@ -28,11 +28,11 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrKeyword
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,12 +40,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.runTest
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -53,6 +49,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Coverage for [SearchViewModel]'s public surface NOT exercised by
@@ -79,10 +76,8 @@ class SearchViewModelTest {
             Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
     }
 
-
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (SyncStatusStateHolderTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var libraryFeed: LibraryFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -103,7 +98,6 @@ class SearchViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         libraryFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
         libraryApiClient = mockk(relaxed = true)
@@ -136,11 +130,6 @@ class SearchViewModelTest {
             mediaSearchEngine,
             searchFiltersStore, quickDownloadActions,
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     // ── Filters ────────────────────────────────────────────────────────
@@ -192,7 +181,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `onEvent funnel routes the pure-forwarding intents`() = runTest(mainDispatcher) {
+    fun `onEvent funnel routes the pure-forwarding intents`() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onEvent(SearchUiEvent.ToggleFilters)
         assertTrue(viewModel.showFilters.value)
 
@@ -207,7 +196,7 @@ class SearchViewModelTest {
     // ── Discovery suggestions ───────────────────────────────────────────
 
     @Test
-    fun `empty query loads discovery suggestions`() = runTest(mainDispatcher) {
+    fun `empty query loads discovery suggestions`() = runTest(mainDispatcherRule.testDispatcher) {
         val suggestion = com.raulshma.jellyplay.core.model.MediaItem(
             id = "s1", name = "Fav Movie", mediaType = MediaType.MOVIE,
         )
@@ -229,7 +218,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `typing a query clears suggestions`() = runTest(mainDispatcher) {
+    fun `typing a query clears suggestions`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.suggestions.collect { } }
         advanceUntilIdle()
 
@@ -240,7 +229,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `search empty query clears seerr results error and offline results`() = runTest(mainDispatcher) {
+    fun `search empty query clears seerr results error and offline results`() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onEvent(SearchUiEvent.Search("matrix"))
         advanceUntilIdle()
 
@@ -255,7 +244,7 @@ class SearchViewModelTest {
     // ── Genres / tags loading + retry ───────────────────────────────────
 
     @Test
-    fun `loadGenres publishes genres on success`() = runTest(mainDispatcher) {
+    fun `loadGenres publishes genres on success`() = runTest(mainDispatcherRule.testDispatcher) {
         val genres = listOf(Genre(id = "1", name = "Action"), Genre(id = "2", name = "Comedy"))
         coEvery { libraryFeed.getGenres(any(), any()) } returns Result.success(genres)
 
@@ -271,7 +260,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `loadGenres retries once after a transient failure`() = runTest(mainDispatcher) {
+    fun `loadGenres retries once after a transient failure`() = runTest(mainDispatcherRule.testDispatcher) {
         val genres = listOf(Genre(id = "1", name = "Action"))
         coEvery { libraryFeed.getGenres(any(), any()) } returnsMany listOf(
             Result.failure(RuntimeException("blip")),
@@ -291,7 +280,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `loadTags publishes tags on success`() = runTest(mainDispatcher) {
+    fun `loadTags publishes tags on success`() = runTest(mainDispatcherRule.testDispatcher) {
         val tags = listOf("fav", "4k")
         catalogueEnrichments.tagsResult = Result.success(tags)
 
@@ -309,7 +298,7 @@ class SearchViewModelTest {
     // ── Seerr connectivity / search-enable flags ───────────────────────
 
     @Test
-    fun `isSeerrConnected reflects serverUrl presence`() = runTest(mainDispatcher) {
+    fun `isSeerrConnected reflects serverUrl presence`() = runTest(mainDispatcherRule.testDispatcher) {
         every { seerrRepository.preferences } returns MutableStateFlow(
             SeerrPreferences(serverUrl = "https://seerr.example")
         )
@@ -325,7 +314,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `isSeerrSearchEnabled reflects searchEnabled preference`() = runTest(mainDispatcher) {
+    fun `isSeerrSearchEnabled reflects searchEnabled preference`() = runTest(mainDispatcherRule.testDispatcher) {
         every { seerrRepository.preferences } returns MutableStateFlow(
             SeerrPreferences(serverUrl = "https://seerr.example", searchEnabled = true)
         )
@@ -343,7 +332,7 @@ class SearchViewModelTest {
     // ── Side-search mirroring (the engine's sideSearch seam) ───────────
 
     @Test
-    fun `side search mirrors engine seerr and offline rows into the row states`() = runTest(mainDispatcher) {
+    fun `side search mirrors engine seerr and offline rows into the row states`() = runTest(mainDispatcherRule.testDispatcher) {
         val seerrItems = (1..10).map { SeerrSearchItem(id = it, title = "Item $it") }
         val offline = listOf(
             OfflineMediaItem(id = "o1", name = "Offline Movie", mediaType = MediaType.MOVIE),
@@ -364,7 +353,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `side search mirrors the engine error flag into seerrSearchError`() = runTest(mainDispatcher) {
+    fun `side search mirrors the engine error flag into seerrSearchError`() = runTest(mainDispatcherRule.testDispatcher) {
         every { mediaSearchEngine.sideSearch(any()) } returns flowOf(
             MediaSideSearchState(query = "matrix", seerr = emptyList(), seerrError = true, offline = emptyList())
         )
@@ -380,7 +369,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `retrySeerrSearch re-kicks the engine round for the current query`() = runTest(mainDispatcher) {
+    fun `retrySeerrSearch re-kicks the engine round for the current query`() = runTest(mainDispatcherRule.testDispatcher) {
         // A stateful stub that consumes the queries argument — the retry is a
         // re-emission of the unchanged query into the engine, so the stub must
         // observe the query flow to react to it.
@@ -415,7 +404,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `retrySeerrSearch is a no-op for a blank query`() = runTest(mainDispatcher) {
+    fun `retrySeerrSearch is a no-op for a blank query`() = runTest(mainDispatcherRule.testDispatcher) {
         // Drain the setUp VM's queued init work against the setUp stub first —
         // otherwise its collector would also consume the answers stub below
         // and pollute the emission count.
@@ -447,7 +436,7 @@ class SearchViewModelTest {
     private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
 
     @Test
-    fun `userData change while inactive defers the paged refresh to the next entry`() = runTest(mainDispatcher) {
+    fun `userData change while inactive defers the paged refresh to the next entry`() = runTest(mainDispatcherRule.testDispatcher) {
         every { userDataChanges.userDataChanges } returns userDataEvents
         coEvery { libraryFeed.searchPaged(any(), any()) } returns
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
@@ -478,7 +467,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `userData change while active does not regenerate the pager`() = runTest(mainDispatcher) {
+    fun `userData change while active does not regenerate the pager`() = runTest(mainDispatcherRule.testDispatcher) {
         every { userDataChanges.userDataChanges } returns userDataEvents
         coEvery { libraryFeed.searchPaged(any(), any()) } returns
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
@@ -505,7 +494,7 @@ class SearchViewModelTest {
     // ── Search history mutations ───────────────────────────────────────
 
     @Test
-    fun `deleteHistoryItem delegates to the search engine`() = runTest(mainDispatcher) {
+    fun `deleteHistoryItem delegates to the search engine`() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onEvent(SearchUiEvent.DeleteSearchHistoryItem(42L))
         advanceUntilIdle()
 
@@ -513,7 +502,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `clearHistory delegates to the search engine`() = runTest(mainDispatcher) {
+    fun `clearHistory delegates to the search engine`() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onEvent(SearchUiEvent.ClearSearchHistory)
         advanceUntilIdle()
 
@@ -521,7 +510,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `search history exposes whatever the engine's recentHistory produces`() = runTest(mainDispatcher) {
+    fun `search history exposes whatever the engine's recentHistory produces`() = runTest(mainDispatcherRule.testDispatcher) {
         // The user-keying and hide-preference gating live in the engine (see
         // MediaSearchEngineTest); the VM only mirrors the flow into state.
         val history = listOf(SearchHistoryItem(id = 1L, query = "matrix", searchedAt = 0L))
@@ -561,7 +550,7 @@ class SearchViewModelTest {
     // ── Seerr request delegation (SeerrRequestStateHolder) ─────────────
 
     @Test
-    fun `requestSeerrMedia success sets requestResult success`() = runTest(mainDispatcher) {
+    fun `requestSeerrMedia success sets requestResult success`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
         coEvery {
             seerrRequestDelegate.requestMedia(
@@ -577,7 +566,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `requestSeerrMedia failure surfaces the error message`() = runTest(mainDispatcher) {
+    fun `requestSeerrMedia failure surfaces the error message`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery {
             seerrRequestDelegate.requestMedia(
                 mediaType = any(), tmdbId = any(), seasons = any(),
@@ -595,7 +584,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `dismissSeerrRequestDialog nulls the exposed result and closes the dialog`() = runTest(mainDispatcher) {
+    fun `dismissSeerrRequestDialog nulls the exposed result and closes the dialog`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery {
             seerrRequestDelegate.requestMedia(
                 mediaType = any(), tmdbId = any(), seasons = any(),
@@ -615,7 +604,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `openSeerrRequestDialog for tv folds sonarr servers and opens the dialog`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for tv folds sonarr servers and opens the dialog`() = runTest(mainDispatcherRule.testDispatcher) {
         val sonarr = SeerrSonarrServiceDetail(id = 1, name = "Sonarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("tv") } returns SeerrServiceDetailsResult(
             sonarrServers = listOf(sonarr),
@@ -632,7 +621,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `openSeerrRequestDialog for movie folds radarr servers and opens the dialog`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for movie folds radarr servers and opens the dialog`() = runTest(mainDispatcherRule.testDispatcher) {
         val radarr = SeerrRadarrServiceDetail(id = 2, name = "Radarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("movie") } returns SeerrServiceDetailsResult(
             radarrServers = listOf(radarr),
@@ -647,7 +636,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `openSeerrRequestDialog for tv populates tvSeasons from delegate`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for tv populates tvSeasons from delegate`() = runTest(mainDispatcherRule.testDispatcher) {
         val tvDetails = SeerrTvDetails(
             id = 123,
             seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")),
@@ -664,7 +653,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `openSeerrRequestDialog for tv flags anime shows via tmdb keyword`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for tv flags anime shows via tmdb keyword`() = runTest(mainDispatcherRule.testDispatcher) {
         val tvDetails = SeerrTvDetails(
             id = 123,
             seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")),
@@ -680,7 +669,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `prefetchSeerrDetails invokes onDone after prefetch`() = runTest(mainDispatcher) {
+    fun `prefetchSeerrDetails invokes onDone after prefetch`() = runTest(mainDispatcherRule.testDispatcher) {
         var called = false
         viewModel.onEvent(SearchUiEvent.PrefetchSeerrDetails(123, "movie") { called = true })
         advanceUntilIdle()

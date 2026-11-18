@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -30,16 +31,12 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,6 +44,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * The secrets EXPORT half: `exportSettings(uri, includeSecrets, passphrase)`
@@ -59,7 +57,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelSecretsExportTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var settingsBackupIo: SettingsBackupIo
     private lateinit var preferencesStore: UserPreferencesStore
@@ -76,7 +75,6 @@ class SettingsViewModelSecretsExportTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         settingsBackupIo = mockk()
         preferencesStore = mockk(relaxed = true)
         projections = mockk(relaxed = true)
@@ -101,15 +99,10 @@ class SettingsViewModelSecretsExportTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     /** Every VM created here; all cancelled in [vmTest]'s finally. */
     private val createdViewModels = mutableListOf<SettingsViewModel>()
 
-    private fun vmTest(block: suspend TestScope.() -> Unit): Unit = runTest(testDispatcher) {
+    private fun vmTest(block: suspend TestScope.() -> Unit): Unit = runTest(mainDispatcherRule.testDispatcher) {
         try {
             block()
         } finally {

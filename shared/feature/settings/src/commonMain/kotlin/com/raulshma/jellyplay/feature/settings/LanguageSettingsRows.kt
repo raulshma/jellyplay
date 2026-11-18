@@ -301,6 +301,26 @@ internal val LanguageSubtitlesRows: List<SettingsRow> = listOf(
     LanguageRows.HdrSubtitleFontSize,
 )
 
+// ── The language groups' exception rows ──────────────────────────────────
+// The rows the strict count treats specially, named where the rows are
+// declared so the contract tests' count arithmetic derives from these lists
+// instead of restating hand-counted literals.
+
+/** The app-language row behind its [RowAdmissionCapability.AppLocaleOverride] capability ([RowAdmission.Platform]). */
+internal val LanguageGeneralLocaleGatedRows: List<SettingsRow> = listOf(
+    LanguageRows.AppLanguage,
+)
+
+/** The always-shown high-contrast row — declared advanced yet [RowAdmission.Always] (the shipped quirk). */
+internal val LanguageSubtitlesAlwaysShownRows: List<SettingsRow> = listOf(
+    LanguageRows.HighContrastSubtitles,
+)
+
+/** The HDR font-size row behind its WhenOn(HDR style) parent (All(Advanced, WhenOn)). */
+internal val LanguageSubtitlesParentGatedRows: List<SettingsRow> = listOf(
+    LanguageRows.HdrSubtitleFontSize,
+)
+
 /**
  * The screen groups — items AND per-row admissions derive from the row
  * lists above in one act ([List.asRowGroup]), so the declaration is the

@@ -7,26 +7,25 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_added_to_collection
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_collection_created
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_couldnt_add_to_collection
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_no_episodes_queued
+import org.junit.Rule
 
 /**
  * Drives the collection adapter over [AddToTargetActions] through its
@@ -51,10 +50,8 @@ class CollectionTargetsTest {
         item = MediaItem(id = "s1", name = "A Series", mediaType = MediaType.SERIES),
     )
 
-    @BeforeTest
-    fun setUpDispatcher() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-    }
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     private fun actions(
         scope: CoroutineScope,

@@ -12,36 +12,34 @@ import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerInputKey
 import com.raulshma.jellyplay.core.model.PlayerInputMap
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Covers the binding editor's write commands against a mocked
  * [VideoPlayerStore] — mirroring [AppearanceSettingsViewModelHomeBackdropTest]'s
- * mockk style (the :core:testing MainDispatcherRule inlined). The store's
+ * mockk style (the shared MainDispatcherRule fixture). The store's
  * read-modify-write transforms are captured and applied to a test-side
  * stored map, so the duplicate-pattern write guard semantics stay visible.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InputBindingsViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var projections: PreferenceProjections
     private lateinit var videoPlayerStore: VideoPlayerStore
@@ -57,7 +55,6 @@ class InputBindingsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         storedMap = PlayerInputDefaults.defaultMap()
         playbackFlow = MutableStateFlow(PlaybackPreferences())
         projections = mockk(relaxed = true)
@@ -85,11 +82,6 @@ class InputBindingsViewModelTest {
             Unit
         }
         editBlocks.clear()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private suspend fun runEdits() {

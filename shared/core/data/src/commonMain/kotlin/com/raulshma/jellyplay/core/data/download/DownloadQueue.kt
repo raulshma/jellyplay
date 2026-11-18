@@ -6,7 +6,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * The queue reads and transfer controls the downloads screen offers (list,
- * live per-row progress, pause/resume/enqueue/cancel/retry/delete, priority).
+ * live per-row progress, pause/resume/enqueue/cancel/retry/delete, priority,
+ * queue placement).
  * Moved from feature:downloads (which declared it over an unnameable
  * jvmShared `DownloadRepository`) with the promoted-interface pass that
  * retired the per-read QuickDownloadActions template adapters: the surface is
@@ -65,4 +66,21 @@ interface DownloadQueue {
 
     /** Moves a row's queue priority (bulk move-up/move-down ordering). */
     suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit>
+
+    /**
+     * The queue-placement composite verbs (the downloads screen's move-to-front /
+     * lower-priority row actions): the caller hands only the row id — the
+     * placement number is computed inside the implementation over the
+     * authoritative queue state (the same DAO snapshot
+     * [getAllDownloadsSnapshot] reads; a caller's rendered list can be
+     * stale), then persisted through the same write [setDownloadPriority]
+     * runs. Higher priority = closer to the front of the pending queue (the
+     * DAO orders it `priority DESC`); an empty queue bases placement at 0
+     * (front → 1, back → −1), the baselines the ViewModel arithmetic used
+     * before this verb existed.
+     */
+    suspend fun moveToFront(id: String): Result<Unit>
+
+    /** The toward-the-back twin of [moveToFront]. */
+    suspend fun moveToBack(id: String): Result<Unit>
 }

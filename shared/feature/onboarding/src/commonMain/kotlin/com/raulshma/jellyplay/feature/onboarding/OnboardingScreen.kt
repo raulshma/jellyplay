@@ -35,8 +35,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
+import com.raulshma.jellyplay.core.ui.components.biometricPromptAvailable
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.Res
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_next
 import com.composables.icons.tabler.Tabler
@@ -66,7 +67,6 @@ import com.raulshma.jellyplay.feature.onboarding.components.SecurityStep
 import com.raulshma.jellyplay.feature.onboarding.components.SubtitlesStep
 import com.raulshma.jellyplay.feature.onboarding.components.VideoPlayerStep
 import com.raulshma.jellyplay.feature.onboarding.components.WelcomeStep
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -77,29 +77,52 @@ fun OnboardingScreen(
     viewModel: OnboardingViewModel = koinViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    // The ViewModel owns page truth — the pager below only mirrors it and
+    // reports drag-settled turns back. The wizard chrome (header position,
+    // bottom bar, D-pad bounds) reads this one page so every control agrees.
+    val currentPage by viewModel.currentPage.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { OnboardingStep.count })
-    val scope = rememberCoroutineScope()
     val lastPage = OnboardingStep.count - 1
     var bottomBarVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { bottomBarVisible = true }
 
-    // Every page turn lands a pending debounced Seerr field write first, so the
-    // last keystroke isn't lost when a step is left by button, D-pad or system
-    // back. Targets are clamped so a fast double-tap can never leave the wizard.
-    fun navigateToPage(target: Int) {
-        scope.launch {
-            viewModel.seerrEditActions.flushPendingFieldWrites()
-            pagerState.animateScrollToPage(target.coerceIn(0, lastPage))
+    // Pager <-> ViewModel two-way sync. Each direction acts only on a
+    // difference, so the pair cannot feed each other a loop: a ViewModel
+    // turn animates the pager, whose settle is then a same-page ack (no-op);
+    // a user drag settles the pager somewhere the ViewModel doesn't know
+    // yet — the only case the ack acts on.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }
+            .collect { page -> viewModel.onPageSettled(page) }
+    }
+    LaunchedEffect(pagerState) {
+        viewModel.currentPage.collect { page ->
+            if (pagerState.currentPage != page) pagerState.animateScrollToPage(page)
         }
     }
 
-    // Wizard Back: step to the previous page, or fall through to the system (exit)
-    // when on the first page. Without this, remote/system BACK relies solely on the
-    // nav-host pop and skips the in-wizard step-back the D-pad left arrow already
-    // provides — inconsistent on TV.
-    JellyPlayBackHandler(enabled = pagerState.currentPage > 0) {
-        navigateToPage(pagerState.currentPage - 1)
+    // One-shot wizard exits pop the nav route. Both variants leave the
+    // screen; Complete additionally persisted the completion flag on the
+    // ViewModel side before this fires (the gate never re-fires for a
+    // completer), Abandon closed without it.
+    LaunchedEffect(viewModel) {
+        viewModel.exits.collect { exit ->
+            when (exit) {
+                WizardExit.Complete -> onComplete()
+                WizardExit.Abandon -> onComplete()
+            }
+        }
+    }
+
+    // Wizard Back: one page up, or — on the first page — leave the wizard
+    // without completing. Always enabled so remote/system BACK is never a
+    // bare nav pop: the ViewModel flushes a pending debounced Seerr write
+    // before either arm (WELCOME has no fields today, so the flush is a
+    // no-op there — the invariant is load-bearing the day fields land on
+    // the first page).
+    JellyPlayBackHandler(enabled = true) {
+        viewModel.onBack()
     }
 
     Surface(
@@ -111,18 +134,15 @@ fun OnboardingScreen(
                 .windowInsetsPadding(WindowInsets.statusBars),
         ) {
             OnboardingProgressHeader(
-                currentPage = pagerState.currentPage,
+                currentPage = currentPage,
                 pageCount = OnboardingStep.count,
-                onBack = { navigateToPage(pagerState.currentPage - 1) },
+                onBack = { viewModel.onBack() },
                 onSkip = {
-                    // Skip exits onboarding from any page. Land the pending
-                    // debounced Seerr write first so the last keystroke isn't
-                    // lost; the wizard can be re-run from Settings → Setup wizard.
-                    scope.launch {
-                        viewModel.seerrEditActions.flushPendingFieldWrites()
-                        viewModel.completeOnboarding()
-                        onComplete()
-                    }
+                    // Skip exits onboarding from any page — flush, the
+                    // completion write, and the exit signal all live in
+                    // exitWizard; the wizard can be re-run from Settings →
+                    // Setup wizard.
+                    viewModel.exitWizard(markComplete = true)
                 },
             )
 
@@ -137,14 +157,14 @@ fun OnboardingScreen(
                         .fillMaxSize()
                         .onDpadKey(
                             onRight = {
-                                if (pagerState.currentPage < lastPage) {
-                                    navigateToPage(pagerState.currentPage + 1)
+                                if (currentPage < lastPage) {
+                                    viewModel.navigateToPage(currentPage + 1)
                                     true
                                 } else false
                             },
                             onLeft = {
-                                if (pagerState.currentPage > 0) {
-                                    navigateToPage(pagerState.currentPage - 1)
+                                if (currentPage > 0) {
+                                    viewModel.onBack()
                                     true
                                 } else false
                             },
@@ -256,7 +276,7 @@ fun OnboardingScreen(
                         }
 
                         OnboardingStep.SECURITY -> {
-                            val biometricAvailable = rememberBiometricAvailable()
+                            val biometricAvailable = biometricPromptAvailable()
                             SecurityStep(
                                 pinLockEnabled = preferences.pinLockEnabled,
                                 biometricLockEnabled = preferences.biometricLockEnabled,
@@ -282,16 +302,7 @@ fun OnboardingScreen(
 
                         OnboardingStep.COMPLETION -> {
                             CompletionStep(
-                                onStartWatching = {
-                                    scope.launch {
-                                        // Land a pending debounced Seerr field
-                                        // write before the wizard completes, so
-                                        // the last keystroke isn't lost.
-                                        viewModel.seerrEditActions.flushPendingFieldWrites()
-                                        viewModel.completeOnboarding()
-                                        onComplete()
-                                    }
-                                },
+                                onStartWatching = { viewModel.exitWizard(markComplete = true) },
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
@@ -300,7 +311,7 @@ fun OnboardingScreen(
             }
 
             AnimatedVisibility(
-                visible = bottomBarVisible && pagerState.currentPage < lastPage,
+                visible = bottomBarVisible && currentPage < lastPage,
                 enter = slideInVertically(
                     animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     initialOffsetY = { it },
@@ -311,7 +322,7 @@ fun OnboardingScreen(
                 ) + fadeOut(),
             ) {
                 OnboardingBottomBar(
-                    onNext = { navigateToPage(pagerState.currentPage + 1) },
+                    onNext = { viewModel.navigateToPage(currentPage + 1) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

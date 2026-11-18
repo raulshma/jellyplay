@@ -11,24 +11,22 @@ import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.formatEta
 import com.raulshma.jellyplay.core.model.formatSpeed
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.Rule
 
 /**
  * Pins the [DownloadsResyncActions] surface (the VM's resync/freshness seam)
@@ -53,11 +51,12 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadsViewModelResyncAndFormatTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module (DownloadsViewModelTest pattern). The mirror test's holder
-    // scope rides this dispatcher, shared with runTest(mainDispatcher)'s
-    // scheduler — the same mechanics the pre-extraction VM suites used.
-    private val mainDispatcher = StandardTestDispatcher()
+    // The mirror test's holder scope rides the rule's dispatcher, shared with
+    // runTest(mainDispatcherRule.testDispatcher)'s scheduler — the same
+    // mechanics the pre-extraction VM suites used.
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
     private var holderScope: kotlinx.coroutines.CoroutineScope? = null
 
     private lateinit var downloadRepository: DownloadQueue
@@ -70,7 +69,6 @@ class DownloadsViewModelResyncAndFormatTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         downloadRepository = mockk<DownloadQueue>(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
@@ -84,7 +82,6 @@ class DownloadsViewModelResyncAndFormatTest {
     @AfterTest
     fun tearDown() {
         holderScope?.cancel()
-        Dispatchers.resetMain()
     }
 
     /**
@@ -157,8 +154,8 @@ class DownloadsViewModelResyncAndFormatTest {
     // ── Reactive update state holders ────────────────────────────────────
 
     @Test
-    fun updatesAvailable_and_updateRows_mirror_the_repository_flows() = runTest(mainDispatcher) {
-        holderScope = CoroutineScope(mainDispatcher)
+    fun updatesAvailable_and_updateRows_mirror_the_repository_flows() = runTest(mainDispatcherRule.testDispatcher) {
+        holderScope = CoroutineScope(mainDispatcherRule.testDispatcher)
         val actions = holderScope!!.resyncActions()
         val countJob = launch { actions.updatesAvailable.collect {} }
         val rowsJob = launch { actions.updateRows.collect {} }

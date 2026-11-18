@@ -3,28 +3,25 @@ package com.raulshma.jellyplay.feature.admin.logs
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.LogFile
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the logs screen's live-tail invariants (`LogsViewModel`):
@@ -55,9 +52,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class LogsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var adminRepository: AdminRepository
 
@@ -66,14 +62,8 @@ class LogsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         adminRepository = mockk(relaxed = true)
         every { adminRepository.liveActivityEntries(any()) } returns liveFlow
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun entry(id: Long) = ActivityLogEntry(id = id, name = "entry-$id")
@@ -83,13 +73,13 @@ class LogsViewModelTest {
             Result.success(listOf(LogFile(name = "server.log", size = 10L, dateModified = "t1")))
         coEvery { adminRepository.getActivityLogEntries(any(), any()) } returns Result.success(initial)
         coEvery { adminRepository.getLogFileContent(any()) } returns Result.success("")
-        return LogsViewModel(adminRepository, parseDispatcher = mainDispatcher).also { advanceUntilIdle() }
+        return LogsViewModel(adminRepository, parseDispatcher = mainDispatcherRule.testDispatcher).also { advanceUntilIdle() }
     }
 
     // ── initial load ──
 
     @Test
-    fun `initial load populates log files and activity entries`() = runTest(mainDispatcher) {
+    fun `initial load populates log files and activity entries`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel(initial = listOf(entry(1), entry(2)))
 
         assertFalse(vm.state.isLoading)
@@ -101,7 +91,7 @@ class LogsViewModelTest {
     // ── live tail ──
 
     @Test
-    fun `live tail caps at 200 entries newest first`() = runTest(mainDispatcher) {
+    fun `live tail caps at 200 entries newest first`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         vm.startLiveStream()
         advanceUntilIdle()
@@ -119,7 +109,7 @@ class LogsViewModelTest {
     }
 
     @Test
-    fun `duplicate live ids are deduped`() = runTest(mainDispatcher) {
+    fun `duplicate live ids are deduped`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         vm.startLiveStream()
         advanceUntilIdle()
@@ -132,7 +122,7 @@ class LogsViewModelTest {
     }
 
     @Test
-    fun `dedup id set caps at 400 and evicts the oldest ids`() = runTest(mainDispatcher) {
+    fun `dedup id set caps at 400 and evicts the oldest ids`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         vm.startLiveStream()
         advanceUntilIdle()
@@ -160,7 +150,7 @@ class LogsViewModelTest {
     }
 
     @Test
-    fun `start resets the tail and stop freezes it`() = runTest(mainDispatcher) {
+    fun `start resets the tail and stop freezes it`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         vm.startLiveStream()
         advanceUntilIdle()
@@ -186,7 +176,7 @@ class LogsViewModelTest {
     }
 
     @Test
-    fun `activity ids seed the live dedup request`() = runTest(mainDispatcher) {
+    fun `activity ids seed the live dedup request`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel(initial = listOf(entry(1), entry(2)))
         vm.startLiveStream()
         advanceUntilIdle()
@@ -198,7 +188,7 @@ class LogsViewModelTest {
     // ── selected file: load + metadata-driven poll ──
 
     @Test
-    fun `loadLogFile maps content to indexed lines`() = runTest(mainDispatcher) {
+    fun `loadLogFile maps content to indexed lines`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         coEvery { adminRepository.getLogFileContent("server.log") } returns
             Result.success("line1\nline2")
@@ -222,7 +212,7 @@ class LogsViewModelTest {
     }
 
     @Test
-    fun `unchanged file metadata skips the content re-download`() = runTest(mainDispatcher) {
+    fun `unchanged file metadata skips the content re-download`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         coEvery { adminRepository.getLogFileContent("server.log") } returns Result.success("line1")
 
@@ -244,7 +234,7 @@ class LogsViewModelTest {
     }
 
     @Test
-    fun `appended lines are marked new and previous lines are reused`() = runTest(mainDispatcher) {
+    fun `appended lines are marked new and previous lines are reused`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         coEvery { adminRepository.getLogFileContent("server.log") } returns
             Result.success("line1\nline2")
@@ -276,7 +266,7 @@ class LogsViewModelTest {
     // ── polling flag + clear ──
 
     @Test
-    fun `toggleLogPolling pauses and resumes the poll`() = runTest(mainDispatcher) {
+    fun `toggleLogPolling pauses and resumes the poll`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         assertTrue(vm.state.isLogPollingActive)
         vm.toggleLogPolling()
@@ -286,7 +276,7 @@ class LogsViewModelTest {
     }
 
     @Test
-    fun `clear resets selection and the poll gate stays closed`() = runTest(mainDispatcher) {
+    fun `clear resets selection and the poll gate stays closed`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         coEvery { adminRepository.getLogFileContent("server.log") } returns Result.success("line1")
         vm.loadLogFile("server.log")
@@ -313,7 +303,7 @@ class LogsViewModelTest {
 
     @Test
     fun `loadMoreActivity while a page is in flight fetches and appends exactly one page`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val initial = (0L until 50L).map { entry(it) }
             val vm = loadedViewModel(initial = initial)
 
@@ -348,7 +338,7 @@ class LogsViewModelTest {
 
     @Test
     fun `loadMoreActivity releases the in-flight flag so the next page can load`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val vm = loadedViewModel(initial = (0L until 50L).map { entry(it) })
             coEvery { adminRepository.getActivityLogEntries(startIndex = 50, limit = 50) } returns
                 Result.success((50L until 100L).map { entry(it) })
@@ -367,7 +357,7 @@ class LogsViewModelTest {
 
     @Test
     fun `loadMoreActivity has no terminal gate so an exhausted server is re-polled`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val vm = loadedViewModel(initial = (0L until 50L).map { entry(it) })
             // The skip pager tracks no hasMore: every more-fetch of an
             // exhausted server answers empty, and the gate stays open so the
@@ -389,7 +379,7 @@ class LogsViewModelTest {
     // ── selected-log panel phase (the atomic SelectedLogFile) ──
 
     @Test
-    fun `the panel phases run idle - loading - loaded and clear returns to idle`() = runTest(mainDispatcher) {
+    fun `the panel phases run idle - loading - loaded and clear returns to idle`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         coEvery { adminRepository.getLogFileContent("server.log") } returns Result.success("line1")
 
@@ -408,7 +398,7 @@ class LogsViewModelTest {
     }
 
     @Test
-    fun `a failed file load lands the panel phase in Failed with the message`() = runTest(mainDispatcher) {
+    fun `a failed file load lands the panel phase in Failed with the message`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         coEvery { adminRepository.getLogFileContent("server.log") } returns
             Result.failure(RuntimeException("boom"))
@@ -423,7 +413,7 @@ class LogsViewModelTest {
 
     @Test
     fun `a stale fetch landing after a file switch never attaches its content to the newer selection`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val vm = loadedViewModel()
 
             // Park server.log's content fetch mid-flight.
@@ -456,7 +446,7 @@ class LogsViewModelTest {
         }
 
     @Test
-    fun `selecting a file un-pauses a paused poll - the declared legacy behavior`() = runTest(mainDispatcher) {
+    fun `selecting a file un-pauses a paused poll - the declared legacy behavior`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = loadedViewModel()
         vm.toggleLogPolling()
         assertFalse(vm.state.isLogPollingActive)

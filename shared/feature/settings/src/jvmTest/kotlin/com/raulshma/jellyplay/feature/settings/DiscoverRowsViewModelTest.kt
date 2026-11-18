@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SeerrRowMedia
 import com.raulshma.jellyplay.core.model.SeerrRowSort
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -43,18 +44,14 @@ import io.mockk.mockk
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -62,6 +59,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the discover-row editor ViewModel: the draft lifecycle (startNew /
@@ -74,9 +72,9 @@ import kotlin.test.assertTrue
  * The editor is a REAL [PreferencesEditor] over a mocked
  * [PreferencesEditScope] (StorageSettingsViewModelTest pattern — the only way
  * `edit { … }` blocks actually run, so store upserts are observable).
- * Main-dispatcher rule inlined (StandardTestDispatcher + setMain/resetMain)
- * and shared with runTest via `runTest(testDispatcher)` so one virtual clock
- * advances both the ViewModel jobs and the test body.
+ * The MainDispatcherRule fixture (StandardTestDispatcher on Main) is shared
+ * with runTest via `runTest(mainDispatcherRule.testDispatcher)` so one virtual
+ * clock advances both the ViewModel jobs and the test body.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DiscoverRowsViewModelTest {
@@ -95,8 +93,8 @@ class DiscoverRowsViewModelTest {
             Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
     }
 
-
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeDiscovery: HomeDiscoveryStore
     private lateinit var libraryFeed: LibraryFeed
@@ -107,7 +105,6 @@ class DiscoverRowsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         homeDiscovery = mockk(relaxed = true)
         libraryFeed = mockk(relaxed = true)
         libraryApiClient = mockk(relaxed = true)
@@ -118,7 +115,7 @@ class DiscoverRowsViewModelTest {
         catalogueEnrichments.tagsResult = Result.success(emptyList())
         coEvery { libraryApiClient.getDiscoverRowItems(any()) } returns Result.success(emptyList())
         editor = PreferencesEditor(
-            scope = CoroutineScope(testDispatcher + Job()),
+            scope = CoroutineScope(mainDispatcherRule.testDispatcher + Job()),
             editScope = PreferencesEditScope(
                 stores = PreferenceStores(
                     playback = mockk<PlaybackStore>(relaxed = true),
@@ -148,11 +145,6 @@ class DiscoverRowsViewModelTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun viewModel(): DiscoverRowsViewModel =
         DiscoverRowsViewModel(homeDiscovery, editor, libraryFeed, catalogueEnrichments, libraryApiClient)
 
@@ -162,7 +154,7 @@ class DiscoverRowsViewModelTest {
     // ---------------------------------------------------------------- draft lifecycle
 
     @Test
-    fun `startNew opens a blank draft with the editor defaults`() = runTest(testDispatcher) {
+    fun `startNew opens a blank draft with the editor defaults`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -178,7 +170,7 @@ class DiscoverRowsViewModelTest {
     }
 
     @Test
-    fun `startNew with a template seeds the draft from it`() = runTest(testDispatcher) {
+    fun `startNew with a template seeds the draft from it`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -189,7 +181,7 @@ class DiscoverRowsViewModelTest {
     }
 
     @Test
-    fun `startEdit copies the persisted row into the draft`() = runTest(testDispatcher) {
+    fun `startEdit copies the persisted row into the draft`() = runTest(mainDispatcherRule.testDispatcher) {
         val row = DiscoverRowConfig(id = "row-1", title = "Weekend")
         homeDiscoverySlice.value = HomeDiscoverySlice(discoverRows = listOf(row))
         val vm = viewModel()
@@ -201,7 +193,7 @@ class DiscoverRowsViewModelTest {
     }
 
     @Test
-    fun `startEdit with an unknown row id keeps the editor closed`() = runTest(testDispatcher) {
+    fun `startEdit with an unknown row id keeps the editor closed`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -211,7 +203,7 @@ class DiscoverRowsViewModelTest {
     }
 
     @Test
-    fun `closeEditor drops the draft`() = runTest(testDispatcher) {
+    fun `closeEditor drops the draft`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
         vm.startNew()
@@ -224,7 +216,7 @@ class DiscoverRowsViewModelTest {
     // ---------------------------------------------------------------- save / duplicate
 
     @Test
-    fun `saveDraft upserts the row through the store and closes the editor`() = runTest(testDispatcher) {
+    fun `saveDraft upserts the row through the store and closes the editor`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
         vm.startNew()
@@ -238,7 +230,7 @@ class DiscoverRowsViewModelTest {
     }
 
     @Test
-    fun `saveDraft refuses a blank title and keeps the editor open`() = runTest(testDispatcher) {
+    fun `saveDraft refuses a blank title and keeps the editor open`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
         vm.startNew()
@@ -252,7 +244,7 @@ class DiscoverRowsViewModelTest {
     }
 
     @Test
-    fun `duplicateDraft saves a copy with a fresh id and the (2) suffix`() = runTest(testDispatcher) {
+    fun `duplicateDraft saves a copy with a fresh id and the (2) suffix`() = runTest(mainDispatcherRule.testDispatcher) {
         homeDiscoverySlice.value = HomeDiscoverySlice(
             discoverRows = listOf(DiscoverRowConfig(id = "row-1", title = "Weekend Picks")),
         )
@@ -270,7 +262,7 @@ class DiscoverRowsViewModelTest {
     }
 
     @Test
-    fun `duplicateDraft refuses a blank title`() = runTest(testDispatcher) {
+    fun `duplicateDraft refuses a blank title`() = runTest(mainDispatcherRule.testDispatcher) {
         homeDiscoverySlice.value = HomeDiscoverySlice(
             discoverRows = listOf(DiscoverRowConfig(id = "row-1", title = " ")),
         )
@@ -287,7 +279,7 @@ class DiscoverRowsViewModelTest {
     // ---------------------------------------------------------------- preview: debounce + stale guard
 
     @Test
-    fun `a burst of draft updates costs one debounced preview fetch for the last state`() = runTest(testDispatcher) {
+    fun `a burst of draft updates costs one debounced preview fetch for the last state`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { libraryApiClient.getDiscoverRowItems(any()) } returns Result.success(listOf(item("Only Fetch")))
         val vm = viewModel()
         advanceUntilIdle()
@@ -303,7 +295,7 @@ class DiscoverRowsViewModelTest {
     }
 
     @Test
-    fun `updateRow drops the previous query's preview items while the debounced refetch is pending`() = runTest(testDispatcher) {
+    fun `updateRow drops the previous query's preview items while the debounced refetch is pending`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { libraryApiClient.getDiscoverRowItems(any()) } returns Result.success(listOf(item("Old")))
         val vm = viewModel()
         advanceUntilIdle()
@@ -320,7 +312,7 @@ class DiscoverRowsViewModelTest {
     }
 
     @Test
-    fun `a stale fetch landing after the replacement fetch does not apply to the mutated draft`() = runTest(testDispatcher) {
+    fun `a stale fetch landing after the replacement fetch does not apply to the mutated draft`() = runTest(mainDispatcherRule.testDispatcher) {
         // The older query parks inside the "repository"; a non-cooperative
         // implementation (runCatching-wrapped IO) lets its answer return
         // NORMALLY into the already-cancelled coroutine — the exact leak the

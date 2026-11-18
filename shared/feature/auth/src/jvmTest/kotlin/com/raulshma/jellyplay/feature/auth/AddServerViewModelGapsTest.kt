@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_server_address_required
 import io.mockk.coEvery
@@ -12,17 +13,12 @@ import io.mockk.coVerify
 import io.mockk.verify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,6 +26,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 /**
  * Boundary gaps in [AddServerViewModel] NOT pinned by [AddServerViewModelTest]:
@@ -56,7 +53,8 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddServerViewModelGapsTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var authRepository: AuthRepository
     private lateinit var serverDiscoveryRepository: ServerDiscoveryRepository
@@ -65,7 +63,6 @@ class AddServerViewModelGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
         serverDiscoveryRepository = mockk()
         networkOfflineStore = mockk(relaxed = true)
@@ -78,11 +75,6 @@ class AddServerViewModelGapsTest {
             localNetworkStatus = LocalNetworkStatus { false },
             networkOfflineStore = networkOfflineStore,
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     // Phase-read helpers, same shape as AddServerViewModelTest's.
@@ -101,7 +93,7 @@ class AddServerViewModelGapsTest {
         state.connectPhase is AddServerConnectPhase.Connecting
 
     @Test
-    fun clearError_clearsTheConnectBanner() = runTest(testDispatcher) {
+    fun clearError_clearsTheConnectBanner() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("http://server") } returns
             Result.failure(RuntimeException("boom"))
         viewModel.connectToServer("http://server") {}
@@ -114,7 +106,7 @@ class AddServerViewModelGapsTest {
     }
 
     @Test
-    fun connectToServer_whitespaceOnlyAddress_setsTheRequiredError() = runTest(testDispatcher) {
+    fun connectToServer_whitespaceOnlyAddress_setsTheRequiredError() = runTest(mainDispatcherRule.testDispatcher) {
         var resultInvoked = false
         viewModel.connectToServer(" \t ") { resultInvoked = true }
         advanceUntilIdle()
@@ -128,7 +120,7 @@ class AddServerViewModelGapsTest {
     }
 
     @Test
-    fun connectToServer_trimsTheAddressBeforeTheRepositoryCall() = runTest(testDispatcher) {
+    fun connectToServer_trimsTheAddressBeforeTheRepositoryCall() = runTest(mainDispatcherRule.testDispatcher) {
         val info = mockk<ServerInfo>()
         coEvery { authRepository.addServer("http://server") } returns Result.success(info)
         var received: Result<ServerInfo>? = null
@@ -143,7 +135,7 @@ class AddServerViewModelGapsTest {
     }
 
     @Test
-    fun startDiscovery_whileAlreadyDiscovering_isANoop() = runTest(testDispatcher) {
+    fun startDiscovery_whileAlreadyDiscovering_isANoop() = runTest(mainDispatcherRule.testDispatcher) {
         val first = DiscoveredServer(id = "1", name = "one", address = "http://192.168.1.10:8096")
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         every { serverDiscoveryRepository.discoverLocalServers() } returns flow {
@@ -172,7 +164,7 @@ class AddServerViewModelGapsTest {
     }
 
     @Test
-    fun updateManualAddress_afterTlsFailure_forgetsThePendingRetry() = runTest(testDispatcher) {
+    fun updateManualAddress_afterTlsFailure_forgetsThePendingRetry() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
 

@@ -6,20 +6,16 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.BackupComponentOptions
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.ServerBackup
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,6 +23,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the backups screen flow (`AdminBackupsViewModel`) — the list ladder
@@ -47,9 +44,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class AdminBackupsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var backupRepository: AdminBackupRepository
     private lateinit var authRepository: AuthRepository
@@ -66,7 +62,6 @@ class AdminBackupsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         backupRepository = mockk()
         authRepository = mockk()
         every { authRepository.currentServer } returns
@@ -76,15 +71,10 @@ class AdminBackupsViewModelTest {
             Result.success(AdminBackupsSnapshot(backups = listOf(backup)))
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     // ── List ladder ──
 
     @Test
-    fun `load populates the backups list`() = runTest(mainDispatcher) {
+    fun `load populates the backups list`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
 
@@ -95,7 +85,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `a feature-hidden snapshot leaves the error clear and hides the feature`() = runTest(mainDispatcher) {
+    fun `a feature-hidden snapshot leaves the error clear and hides the feature`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { backupRepository.getBackupsSnapshot() } returns
             Result.success(AdminBackupsSnapshot(backups = emptyList(), supportsBackups = false))
 
@@ -108,7 +98,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `load failure surfaces the error`() = runTest(mainDispatcher) {
+    fun `load failure surfaces the error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { backupRepository.getBackupsSnapshot() } returns
             Result.failure(RuntimeException("offline"))
 
@@ -119,7 +109,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `createBackup refreshes the list after the manifest lands`() = runTest(mainDispatcher) {
+    fun `createBackup refreshes the list after the manifest lands`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
         coEvery { backupRepository.createBackup(any()) } returns
@@ -144,7 +134,7 @@ class AdminBackupsViewModelTest {
     // ── Restore state machine (fire → poll → recover) ──
 
     @Test
-    fun `restore stays in Restoring while the probe fails and recovers through restoreSession`() = runTest(mainDispatcher) {
+    fun `restore stays in Restoring while the probe fails and recovers through restoreSession`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
         coEvery { backupRepository.restoreBackup("jf.zip") } returns Result.success(Unit)
@@ -177,7 +167,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `a failed restore fire returns to Idle with the error and never probes`() = runTest(mainDispatcher) {
+    fun `a failed restore fire returns to Idle with the error and never probes`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
         coEvery { backupRepository.restoreBackup("jf.zip") } returns
@@ -193,7 +183,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `a poll timeout gives up with the error and skips the reconnection`() = runTest(mainDispatcher) {
+    fun `a poll timeout gives up with the error and skips the reconnection`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
         coEvery { backupRepository.restoreBackup("jf.zip") } returns Result.success(Unit)
@@ -212,7 +202,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `a restore in flight refuses a second fire`() = runTest(mainDispatcher) {
+    fun `a restore in flight refuses a second fire`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
         coEvery { backupRepository.restoreBackup(any()) } returns Result.success(Unit)
@@ -230,7 +220,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `a list reload after the poll timeout clears the unreachable outcome`() = runTest(mainDispatcher) {
+    fun `a list reload after the poll timeout clears the unreachable outcome`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
         coEvery { backupRepository.restoreBackup(any()) } returns Result.success(Unit)
@@ -252,7 +242,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `a restore restart from the unreachable outcome is admitted and clears it`() = runTest(mainDispatcher) {
+    fun `a restore restart from the unreachable outcome is admitted and clears it`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
         coEvery { backupRepository.restoreBackup(any()) } returns Result.success(Unit)
@@ -278,7 +268,7 @@ class AdminBackupsViewModelTest {
     }
 
     @Test
-    fun `the Complete outcome survives a list reload until the next restore`() = runTest(mainDispatcher) {
+    fun `the Complete outcome survives a list reload until the next restore`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AdminBackupsViewModel(backupRepository, authRepository)
         advanceUntilIdle()
         coEvery { backupRepository.restoreBackup(any()) } returns Result.success(Unit)

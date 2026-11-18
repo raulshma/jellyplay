@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
@@ -81,7 +82,6 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -94,16 +94,14 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
 import androidx.lifecycle.viewModelScope
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Invariants pinned (the onEvent branches [HomeViewModelTest] does not route):
@@ -121,14 +119,15 @@ import kotlin.test.assertTrue
  *  - [HomeUiEvent.PlaySeries] with a resolved-but-empty catalogue falls back to
  *    Details; the single-flight latch re-arms after a resolve settles.
  *
- * Harness mirrors [HomeViewModelTest] (MockK + inlined StandardTestDispatcher +
+ * Harness mirrors [HomeViewModelTest] (MockK + MainDispatcherRule +
  * runCurrent, never advanceUntilIdle; the periodic loop dies via
  * viewModelScope.cancel in a finally INSIDE the coroutine).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelEventsTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeFeed: HomeFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -198,7 +197,7 @@ class HomeViewModelEventsTest {
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val sessionApiClient: AuthApiClient = mockk(relaxed = true)
     private val homeSession: HomeSession by lazy {
-        HomeSession(sessionApiClient, CoroutineScope(SupervisorJob() + mainDispatcher))
+        HomeSession(sessionApiClient, CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher))
     }
 
     private val userDataEvents = MutableSharedFlow<com.raulshma.jellyplay.core.model.UserDataChange>(extraBufferCapacity = 64)
@@ -222,7 +221,6 @@ class HomeViewModelEventsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         homeFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
         episodeCatalogue = mockk(relaxed = true)
@@ -297,11 +295,6 @@ class HomeViewModelEventsTest {
         coEvery { statsCardLoader.load(any(), any()) } returns null
         coEvery { genreRailCache.genres(any(), any()) } returns emptyList()
         coEvery { presenceChips.refresh(any()) } returns emptyList()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun buildViewModel(): HomeViewModel = HomeViewModel(

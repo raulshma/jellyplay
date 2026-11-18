@@ -15,36 +15,32 @@ import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.ResyncOptions
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadsViewModelTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var downloadRepository: DownloadQueue
     /** The gh-181 suggestion/policy seam (a separate mock from the queue view of the repository). */
@@ -70,7 +66,6 @@ class DownloadsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         downloadRepository = mockk<DownloadQueue>(relaxed = true)
         policyRepository = mockk(relaxed = true)
         intake = mockk(relaxed = true)
@@ -100,11 +95,6 @@ class DownloadsViewModelTest {
         viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     /** Pushes [items] into the repository flow and settles the init collector. */
     private fun pushItems(items: List<DownloadItem>) {
         downloadsFlow.value = items
@@ -113,7 +103,7 @@ class DownloadsViewModelTest {
     // ── init collection (queue list projection) ───────────────────────────
 
     @Test
-    fun init_collects_downloads_and_sums_storage_bytes() = runTest(mainDispatcher) {
+    fun init_collects_downloads_and_sums_storage_bytes() = runTest(mainDispatcherRule.testDispatcher) {
         // totalStorageBytes is a WhileSubscribed stateIn flow (collected only
         // by the screen's storage-header leaf) — warm it so the settled .value
         // is observable here.
@@ -136,7 +126,7 @@ class DownloadsViewModelTest {
     // ── progress/structure split (per-tick bytes are not structural) ──────
 
     @Test
-    fun progress_tick_updates_live_progress_but_not_the_structural_list() = runTest(mainDispatcher) {
+    fun progress_tick_updates_live_progress_but_not_the_structural_list() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.progressById.collect { /* warm */ } }
         backgroundScope.launch { viewModel.totalStorageBytes.collect { /* warm */ } }
         val downloading = item("d1", downloadedBytes = 100, totalBytes = 200, status = DownloadStatus.DOWNLOADING)
@@ -159,7 +149,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun status_change_re_emits_the_structural_list_and_clears_the_progress_entry() = runTest(mainDispatcher) {
+    fun status_change_re_emits_the_structural_list_and_clears_the_progress_entry() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.progressById.collect { /* warm */ } }
         backgroundScope.launch { viewModel.totalStorageBytes.collect { /* warm */ } }
         pushItems(listOf(item("d1", downloadedBytes = 200, totalBytes = 200, status = DownloadStatus.DOWNLOADING)))
@@ -180,7 +170,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun init_load_failure_sets_error_with_fallback_literal() = runTest(mainDispatcher) {
+    fun init_load_failure_sets_error_with_fallback_literal() = runTest(mainDispatcherRule.testDispatcher) {
         every { downloadRepository.getAllDownloads() } returns kotlinx.coroutines.flow.flow {
             throw RuntimeException(null as String?)
         }
@@ -195,7 +185,7 @@ class DownloadsViewModelTest {
     // ── per-item orchestration (applyBulkAction at Item scope) ────────────
 
     @Test
-    fun applyBulkAction_cancel_item_calls_repository_with_item_id() = runTest(mainDispatcher) {
+    fun applyBulkAction_cancel_item_calls_repository_with_item_id() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(listOf(item("d9", status = DownloadStatus.DOWNLOADING)))
         advanceUntilIdle()
 
@@ -206,7 +196,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_pause_item_calls_pause_only() = runTest(mainDispatcher) {
+    fun applyBulkAction_pause_item_calls_pause_only() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(listOf(item("d9", status = DownloadStatus.DOWNLOADING)))
         advanceUntilIdle()
 
@@ -218,7 +208,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_resume_item_dispatches_the_composite_resume_verb() = runTest(mainDispatcher) {
+    fun applyBulkAction_resume_item_dispatches_the_composite_resume_verb() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(listOf(item("d9", status = DownloadStatus.PAUSED)))
         advanceUntilIdle()
 
@@ -233,7 +223,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_retry_item_dispatches_the_composite_retry_verb() = runTest(mainDispatcher) {
+    fun applyBulkAction_retry_item_dispatches_the_composite_retry_verb() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(listOf(item("d9", status = DownloadStatus.FAILED)))
         advanceUntilIdle()
 
@@ -249,7 +239,7 @@ class DownloadsViewModelTest {
     // screen resolves it for the shared message bus.
 
     @Test
-    fun deleteDownload_calls_repository_and_emits_Deleted_message() = runTest(mainDispatcher) {
+    fun deleteDownload_calls_repository_and_emits_Deleted_message() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.deleteDownload(item("d9", status = DownloadStatus.COMPLETED))
         advanceUntilIdle()
 
@@ -262,7 +252,7 @@ class DownloadsViewModelTest {
     // synchronous settle arm is pinned by the tests below.
 
     @Test
-    fun pendingDelete_host_show_holds_the_item_for_the_dialog() = runTest(mainDispatcher) {
+    fun pendingDelete_host_show_holds_the_item_for_the_dialog() = runTest(mainDispatcherRule.testDispatcher) {
         val target = item("d1", status = DownloadStatus.COMPLETED)
 
         viewModel.pendingDelete.show(target)
@@ -276,7 +266,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun pendingDelete_host_confirm_returns_the_target_and_clears_synchronously() = runTest(mainDispatcher) {
+    fun pendingDelete_host_confirm_returns_the_target_and_clears_synchronously() = runTest(mainDispatcherRule.testDispatcher) {
         val target = item("d1", status = DownloadStatus.COMPLETED)
         viewModel.pendingDelete.show(target)
 
@@ -291,7 +281,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun pendingDelete_host_dismiss_clears_without_returning_a_target() = runTest(mainDispatcher) {
+    fun pendingDelete_host_dismiss_clears_without_returning_a_target() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.pendingDelete.show(item("d1", status = DownloadStatus.COMPLETED))
 
         viewModel.pendingDelete.dismiss(inFlight = false)
@@ -301,7 +291,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun pendingBulkDelete_host_round_trips_the_unit_payload_with_the_same_settle() = runTest(mainDispatcher) {
+    fun pendingBulkDelete_host_round_trips_the_unit_payload_with_the_same_settle() = runTest(mainDispatcherRule.testDispatcher) {
         assertFalse(viewModel.pendingBulkDelete.isPending)
 
         viewModel.pendingBulkDelete.show(Unit)
@@ -314,7 +304,7 @@ class DownloadsViewModelTest {
     // ── Selection ─────────────────────────────────────────────────────────
 
     @Test
-    fun toggleSelection_adds_then_removes_and_tracks_selection_mode() = runTest(mainDispatcher) {
+    fun toggleSelection_adds_then_removes_and_tracks_selection_mode() = runTest(mainDispatcherRule.testDispatcher) {
         val a = item("a")
         val b = item("b")
         pushItems(listOf(a, b))
@@ -334,7 +324,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun selectAll_selects_every_listed_id_then_clearSelection_resets() = runTest(mainDispatcher) {
+    fun selectAll_selects_every_listed_id_then_clearSelection_resets() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(listOf(item("a"), item("b"), item("c")))
         advanceUntilIdle()
 
@@ -354,7 +344,7 @@ class DownloadsViewModelTest {
     // the live list, so stale ids no-op'd, but the bar lied).
 
     @Test
-    fun setFilter_clears_the_selection_when_the_value_changes() = runTest(mainDispatcher) {
+    fun setFilter_clears_the_selection_when_the_value_changes() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(listOf(item("a"), item("b")))
         advanceUntilIdle()
         viewModel.selectAll()
@@ -371,7 +361,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun setStatusFilter_clears_the_selection_when_the_value_changes() = runTest(mainDispatcher) {
+    fun setStatusFilter_clears_the_selection_when_the_value_changes() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(listOf(item("a", status = DownloadStatus.FAILED)))
         advanceUntilIdle()
         viewModel.toggleSelection(item("a", status = DownloadStatus.FAILED))
@@ -386,7 +376,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun same_value_filter_writes_keep_the_selection() = runTest(mainDispatcher) {
+    fun same_value_filter_writes_keep_the_selection() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(listOf(item("a")))
         advanceUntilIdle()
         viewModel.toggleSelection(item("a"))
@@ -421,7 +411,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun rows_group_episodes_collapsed_with_flat_rows_interleaved_by_recency() = runTest(mainDispatcher) {
+    fun rows_group_episodes_collapsed_with_flat_rows_interleaved_by_recency() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.rows.collect {} }
         pushItems(
             listOf(
@@ -437,7 +427,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun expanding_a_series_discloses_episodes_in_playback_order() = runTest(mainDispatcher) {
+    fun expanding_a_series_discloses_episodes_in_playback_order() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.rows.collect {} }
         pushItems(
             listOf(
@@ -456,7 +446,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun filter_and_sort_drive_the_rows_view() = runTest(mainDispatcher) {
+    fun filter_and_sort_drive_the_rows_view() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.rows.collect {} }
         pushItems(
             listOf(
@@ -478,7 +468,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun selectAll_respects_the_active_filter() = runTest(mainDispatcher) {
+    fun selectAll_respects_the_active_filter() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(
             listOf(
                 item("ep", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1),
@@ -501,7 +491,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun toggleGroupSelection_selects_then_clears_the_whole_group() = runTest(mainDispatcher) {
+    fun toggleGroupSelection_selects_then_clears_the_whole_group() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(
             listOf(
                 item("ep1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1),
@@ -521,7 +511,7 @@ class DownloadsViewModelTest {
     // ── Persisted list state + expand-all (gh-175 follow-up) ──────────────
 
     @Test
-    fun setFilter_and_setSort_write_through_to_the_store() = runTest(mainDispatcher) {
+    fun setFilter_and_setSort_write_through_to_the_store() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.setFilter(DownloadListFilter.SERIES)
         viewModel.setSort(DownloadListSort.NAME)
         advanceUntilIdle()
@@ -533,7 +523,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun persisted_slice_seeds_the_initial_filter_and_sort() = runTest(mainDispatcher) {
+    fun persisted_slice_seeds_the_initial_filter_and_sort() = runTest(mainDispatcherRule.testDispatcher) {
         storeSliceFlow.value = DownloadsSlice(downloadsListFilter = "SERIES", downloadsListSort = "SIZE")
         val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
@@ -543,7 +533,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun rows_carry_series_poster_with_episode_still_fallback() = runTest(mainDispatcher) {
+    fun rows_carry_series_poster_with_episode_still_fallback() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.rows.collect {} }
         // The batched series-art seam: s1 carries a saved (resolved) poster;
         // s2's entry has a blank poster — the VM's filter drops it, so the
@@ -573,7 +563,7 @@ class DownloadsViewModelTest {
     // ── Selection hint persistence ─────────────────────────────────────────
 
     @Test
-    fun entering_selection_marks_the_hint_seen_and_persists_it() = runTest(mainDispatcher) {
+    fun entering_selection_marks_the_hint_seen_and_persists_it() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(listOf(item("d1", status = DownloadStatus.DOWNLOADING)))
         advanceUntilIdle()
         assertFalse(viewModel.selectionHintSeen.value)
@@ -586,7 +576,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun persisted_hint_seen_seeds_the_vm_and_is_not_rewritten() = runTest(mainDispatcher) {
+    fun persisted_hint_seen_seeds_the_vm_and_is_not_rewritten() = runTest(mainDispatcherRule.testDispatcher) {
         storeSliceFlow.value = DownloadsSlice(selectionHintSeen = true)
         val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
@@ -599,7 +589,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun expandAll_expands_every_group_and_collapseAll_clears() = runTest(mainDispatcher) {
+    fun expandAll_expands_every_group_and_collapseAll_clears() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.rows.collect {} }
         pushItems(
             listOf(
@@ -642,7 +632,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun resolveGroupPlayTarget_skips_watched_episodes_and_falls_back_to_first() = runTest(mainDispatcher) {
+    fun resolveGroupPlayTarget_skips_watched_episodes_and_falls_back_to_first() = runTest(mainDispatcherRule.testDispatcher) {
         // Only COMPLETED rows are playable (the row-level Play gate), so the
         // fixture uses completed episodes throughout.
         pushItems(
@@ -673,7 +663,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun resolveGroupPlayTarget_is_null_when_no_episode_is_completed() = runTest(mainDispatcher) {
+    fun resolveGroupPlayTarget_is_null_when_no_episode_is_completed() = runTest(mainDispatcherRule.testDispatcher) {
         // A group with nothing finished has no playable target — the header
         // Play click is a no-op rather than attempting an offline play of a
         // file that isn't on disk.
@@ -689,7 +679,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun maxStorageBytes_maps_gb_cap_to_bytes_and_null_means_unlimited() = runTest(mainDispatcher) {
+    fun maxStorageBytes_maps_gb_cap_to_bytes_and_null_means_unlimited() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.maxStorageBytes.collect {} }
 
         storeSliceFlow.value = DownloadsSlice(maxDownloadStorageGb = 0)
@@ -704,7 +694,7 @@ class DownloadsViewModelTest {
     // ── Bulk actions (status-filtered targets) ────────────────────────────
 
     @Test
-    fun applyBulkAction_delete_selected_deletes_each_target_clears_selection_and_emits_Deleted() = runTest(mainDispatcher) {
+    fun applyBulkAction_delete_selected_deletes_each_target_clears_selection_and_emits_Deleted() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(
             listOf(
                 item("a", status = DownloadStatus.COMPLETED),
@@ -724,7 +714,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_delete_selected_with_no_targets_skips_repository_and_message() = runTest(mainDispatcher) {
+    fun applyBulkAction_delete_selected_with_no_targets_skips_repository_and_message() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
@@ -734,7 +724,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_pause_selected_pauses_only_selected_downloading_items() = runTest(mainDispatcher) {
+    fun applyBulkAction_pause_selected_pauses_only_selected_downloading_items() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(
             listOf(
                 item("dl", status = DownloadStatus.DOWNLOADING),
@@ -754,7 +744,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_resume_selected_resumes_only_selected_paused_items() = runTest(mainDispatcher) {
+    fun applyBulkAction_resume_selected_resumes_only_selected_paused_items() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(
             listOf(
                 item("pa", status = DownloadStatus.PAUSED),
@@ -774,7 +764,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_cancel_selected_cancels_active_but_not_completed_or_cancelled_items() = runTest(mainDispatcher) {
+    fun applyBulkAction_cancel_selected_cancels_active_but_not_completed_or_cancelled_items() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(
             listOf(
                 item("pen", status = DownloadStatus.PENDING),
@@ -802,7 +792,7 @@ class DownloadsViewModelTest {
     // ── Global actions (applyBulkAction at All scope) ─────────────────────
 
     @Test
-    fun applyBulkAction_pause_all_pauses_every_downloading_item_without_selection() = runTest(mainDispatcher) {
+    fun applyBulkAction_pause_all_pauses_every_downloading_item_without_selection() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(
             listOf(
                 item("dl1", status = DownloadStatus.DOWNLOADING),
@@ -821,7 +811,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_retry_failed_retries_every_failed_item() = runTest(mainDispatcher) {
+    fun applyBulkAction_retry_failed_retries_every_failed_item() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(
             listOf(
                 item("f1", status = DownloadStatus.FAILED),
@@ -842,7 +832,10 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun moveToFront_and_lowerPriority_use_relative_priorities_from_list() = runTest(mainDispatcher) {
+    fun moveToFront_and_lowerPriority_forward_to_the_queue_placement_verbs() = runTest(mainDispatcherRule.testDispatcher) {
+        // The placement arithmetic moved into the queue implementation (it
+        // reads the authoritative DAO state, not the VM's list snapshot) — the
+        // VM forwards the row id and never touches the raw priority verb.
         pushItems(
             listOf(
                 item("a", priority = 3),
@@ -854,11 +847,12 @@ class DownloadsViewModelTest {
 
         viewModel.moveToFront(item("a", priority = 3))
         advanceUntilIdle()
-        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("a", 8) }
+        coVerify(exactly = 1) { downloadRepository.moveToFront("a") }
 
         viewModel.lowerPriority(item("c", priority = 5))
         advanceUntilIdle()
-        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("c", 2) }
+        coVerify(exactly = 1) { downloadRepository.moveToBack("c") }
+        coVerify(exactly = 0) { downloadRepository.setDownloadPriority(any(), any()) }
     }
 
     // ── Freshness check / resync (the DownloadsResyncActions seam) ────────
@@ -866,7 +860,7 @@ class DownloadsViewModelTest {
     // (VM → holder → sync manager), not the holder in isolation.
 
     @Test
-    fun checkAllForUpdates_checks_batch_with_downloaded_ids_and_resets_checking() = runTest(mainDispatcher) {
+    fun checkAllForUpdates_checks_batch_with_downloaded_ids_and_resets_checking() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("i1", "i2")
 
         viewModel.resyncActions.checkAllForUpdates()
@@ -877,7 +871,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun checkAllForUpdates_while_checking_is_a_noop() = runTest(mainDispatcher) {
+    fun checkAllForUpdates_while_checking_is_a_noop() = runTest(mainDispatcherRule.testDispatcher) {
         // Suspend the first batch check until the test releases it, so the
         // second call observes checking == true.
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
@@ -898,13 +892,13 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun resyncOne_delegates_single_id_batch() = runTest(mainDispatcher) {
+    fun resyncOne_delegates_single_id_batch() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.resyncActions.resyncOne("i1")
         verify(exactly = 1) { syncManager.resyncBatch(listOf("i1")) }
     }
 
     @Test
-    fun resyncAll_resolves_flagged_ids_from_repository() = runTest(mainDispatcher) {
+    fun resyncAll_resolves_flagged_ids_from_repository() = runTest(mainDispatcherRule.testDispatcher) {
         every { offlineRepository.getItemsWithUpdates() } returns kotlinx.coroutines.flow.flowOf(
             listOf(update("u1"), update("u2")),
         )
@@ -916,7 +910,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun resyncAll_with_explicit_ids_delegates_and_skips_empty() = runTest(mainDispatcher) {
+    fun resyncAll_with_explicit_ids_delegates_and_skips_empty() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.resyncActions.resyncAll(listOf("u1", "u2"))
         verify(exactly = 1) { syncManager.resyncBatch(listOf("u1", "u2")) }
 
@@ -925,7 +919,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun forceResync_delegates_with_options_and_skips_empty_selections() = runTest(mainDispatcher) {
+    fun forceResync_delegates_with_options_and_skips_empty_selections() = runTest(mainDispatcherRule.testDispatcher) {
         val options = ResyncOptions(categories = setOf(ResyncCategory.METADATA))
 
         viewModel.resyncActions.forceResync(listOf("i1"), options)
@@ -937,13 +931,13 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun clearResyncProgress_delegates_to_sync_manager() = runTest(mainDispatcher) {
+    fun clearResyncProgress_delegates_to_sync_manager() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.resyncActions.clearResyncProgress()
         verify(exactly = 1) { syncManager.clearBatchProgress() }
     }
 
     @Test
-    fun forceResyncCandidates_filters_completed_and_dedupes_by_media_item_id() = runTest(mainDispatcher) {
+    fun forceResyncCandidates_filters_completed_and_dedupes_by_media_item_id() = runTest(mainDispatcherRule.testDispatcher) {
         pushItems(
             listOf(
                 item("dl-ep1", mediaItemId = "ep1", status = DownloadStatus.COMPLETED, seriesName = "Show", seasonNumber = 1, episodeNumber = 2),

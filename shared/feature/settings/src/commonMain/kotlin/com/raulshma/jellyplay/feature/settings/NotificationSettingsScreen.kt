@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.NotificationPreferences
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -86,54 +88,43 @@ sealed class NotificationSettingsDialog {
     object SeriesNotifications : NotificationSettingsDialog()
 }
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-fun NotificationSettingsScreen(
-    onBack: () -> Unit,
-    highlightSettingId: String? = null,
-    viewModel: NotificationSettingsViewModel = koinViewModel(),
-) {
-    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
-    val libraryFolders by viewModel.libraryFolders.collectAsStateWithLifecycle()
-    val platformIntents = rememberPlatformIntents()
-    // Capability flag (pinned == the intents seam's query in
-    // DesktopPlatformActualsTest); the intents object stays for the open call.
-    val canOpenSystemNotificationSettings = settingsCapabilities.supportsSystemNotificationSettings
-    // The declared row admissions both the SettingsItemList total and the
-    // emission `if`s below read — one gate per id, declared beside the group
-    // items (SettingsScreenGroups.notifications.rowAdmitted). The `enabled`
-    // and `showAdvanced` structural wrappers around the gated rows carry
-    // those halves of their All(...) gates, exactly the playback
-    // advanced-video precedent.
-    val rowFlags = RowAdmissionFlags(
-        showAdvanced = showAdvanced,
-        supportsSystemNotificationSettings = canOpenSystemNotificationSettings,
-        parentsOn = rowParentsOn(
-            NotificationRows.NotificationsEnable.id to preferences.enabled,
-            NotificationRows.QuietHours.id to preferences.quietHoursEnabled,
-        ),
-    )
-    var activeDialog by remember { mutableStateOf<NotificationSettingsDialog>(NotificationSettingsDialog.None) }
+/**
+ * The notifications screen's ONE ordered group declaration — the
+ * derivation-only shape (the group id set; the content slot stays empty)
+ * that BOTH the screen and the catalog contract test's section-7 pins
+ * consume. Per-group row emission stays hand-written: the screen maps the
+ * slot to its body inline in [notificationScreenGroups] (ADR-0009).
+ */
+internal val NotificationSettingsScreenSlots: List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.notifications.asScreenGroup(),
+)
 
-    PreferenceScreenScaffold(
-        title = stringResource(Res.string.settings_notifications),
-        onBack = onBack,
-        focusTag = "notifications_init",
-        advancedToggle = PreferenceAdvancedToggle(
-            showAdvanced = showAdvanced,
-            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-        ),
-        pickerHost = true,
-    ) { activePicker ->
-        val notifPrefs = preferences
-
-            item {
+/**
+ * The notifications screen's group body, mapped onto the ONE ordered
+ * declaration ([NotificationSettingsScreenSlots]) with its hand-written body
+ * attached — the shell derives the deep-link scroll resolution and the
+ * hidden-settings hint count from the declaration, and the per-row emission
+ * (the `enabled`/`showAdvanced` structural wrappers and their admission `if`s,
+ * ADR-0009) stays verbatim inside the slot.
+ */
+private fun notificationScreenGroups(
+    preferences: NotificationPreferences,
+    rowFlags: RowAdmissionFlags,
+    showAdvanced: Boolean,
+    highlightSettingId: String?,
+    libraryFolders: List<LibraryFolder>,
+    platformIntents: PlatformIntents,
+    viewModel: NotificationSettingsViewModel,
+    setActiveDialog: (NotificationSettingsDialog) -> Unit,
+): List<PreferenceScreenGroup> =
+    NotificationSettingsScreenSlots.withContent(
+        bodies = listOf(
+            { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Bell,
                     title = stringResource(Res.string.settings_notifications),
                     summary = {
-                        if (notifPrefs.enabled) stringResource(Res.string.settings_notifications_checking, notifPrefs.checkFrequency.localizedDisplayName().lowercase())
+                        if (preferences.enabled) stringResource(Res.string.settings_notifications_checking, preferences.checkFrequency.localizedDisplayName().lowercase())
                         else stringResource(Res.string.settings_disabled)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
@@ -151,13 +142,13 @@ fun NotificationSettingsScreen(
                         icon = Tabler.Outline.Bell,
                         title = rowTitle(NotificationRows.NotificationsEnable),
                         subtitle = rowSubtitle(NotificationRows.NotificationsEnable),
-                        checked = notifPrefs.enabled,
+                        checked = preferences.enabled,
                         highlighted = highlightSettingId == NotificationRows.NotificationsEnable.id,
                         onCheckedChange = { enabled ->
                             viewModel.updateNotificationPreferences { it.copy(enabled = enabled) }
                         },
                     )
-                    if (notifPrefs.enabled) {
+                    if (preferences.enabled) {
                         val frequencyTitle = rowTitle(NotificationRows.NotificationCheckFrequency)
                         // Localized labels resolved in composable scope; the
                         // picker's label lambda runs outside composition.
@@ -166,7 +157,7 @@ fun NotificationSettingsScreen(
                             icon = Tabler.Outline.Clock,
                             title = frequencyTitle,
                             subtitle = rowSubtitle(NotificationRows.NotificationCheckFrequency),
-                            trailingText = notifPrefs.checkFrequency.localizedDisplayName(),
+                            trailingText = preferences.checkFrequency.localizedDisplayName(),
                             highlighted = highlightSettingId == NotificationRows.NotificationCheckFrequency.id,
                             onClick = {
                                 activePicker.value = PickerState.List(
@@ -187,7 +178,7 @@ fun NotificationSettingsScreen(
                                 icon = Tabler.Outline.Moon,
                                 title = rowTitle(NotificationRows.QuietHours),
                                 subtitle = rowSubtitle(NotificationRows.QuietHours),
-                                checked = notifPrefs.quietHoursEnabled,
+                                checked = preferences.quietHoursEnabled,
                                 highlighted = highlightSettingId == NotificationRows.QuietHours.id,
                                 onCheckedChange = { enabled ->
                                     viewModel.updateNotificationPreferences { it.copy(quietHoursEnabled = enabled) }
@@ -198,9 +189,9 @@ fun NotificationSettingsScreen(
                                     icon = Tabler.Outline.Sunset,
                                     title = rowTitle(NotificationRows.QuietStart),
                                     subtitle = rowSubtitle(NotificationRows.QuietStart),
-                                    trailingText = formatMinutes(notifPrefs.quietHoursStart),
+                                    trailingText = formatMinutes(preferences.quietHoursStart),
                                     highlighted = highlightSettingId == NotificationRows.QuietStart.id,
-                                    onClick = { activeDialog = NotificationSettingsDialog.QuietStartPicker },
+                                    onClick = { setActiveDialog(NotificationSettingsDialog.QuietStartPicker) },
                                 )
                             }
                             if (SettingsScreenGroups.notifications.rowAdmitted(NotificationRows.QuietEnd.id, rowFlags)) {
@@ -208,16 +199,16 @@ fun NotificationSettingsScreen(
                                     icon = Tabler.Outline.Sunrise,
                                     title = rowTitle(NotificationRows.QuietEnd),
                                     subtitle = rowSubtitle(NotificationRows.QuietEnd),
-                                    trailingText = formatMinutes(notifPrefs.quietHoursEnd),
+                                    trailingText = formatMinutes(preferences.quietHoursEnd),
                                     highlighted = highlightSettingId == NotificationRows.QuietEnd.id,
-                                    onClick = { activeDialog = NotificationSettingsDialog.QuietEndPicker },
+                                    onClick = { setActiveDialog(NotificationSettingsDialog.QuietEndPicker) },
                                 )
                             }
                             SettingToggleItem(
                                 icon = Tabler.Outline.BellOff,
                                 title = rowTitle(NotificationRows.RespectSystemDnd),
                                 subtitle = rowSubtitle(NotificationRows.RespectSystemDnd),
-                                checked = notifPrefs.respectSystemDnd,
+                                checked = preferences.respectSystemDnd,
                                 highlighted = highlightSettingId == NotificationRows.RespectSystemDnd.id,
                                 onCheckedChange = { enabled ->
                                     viewModel.updateNotificationPreferences { it.copy(respectSystemDnd = enabled) }
@@ -237,7 +228,7 @@ fun NotificationSettingsScreen(
                             icon = Tabler.Outline.Volume,
                             title = rowTitle(NotificationRows.NotificationSound),
                             subtitle = rowSubtitle(NotificationRows.NotificationSound),
-                            checked = notifPrefs.soundEnabled,
+                            checked = preferences.soundEnabled,
                             highlighted = highlightSettingId == NotificationRows.NotificationSound.id,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(soundEnabled = enabled) }
@@ -247,7 +238,7 @@ fun NotificationSettingsScreen(
                             icon = Tabler.Outline.Bell,
                             title = rowTitle(NotificationRows.NotificationVibrate),
                             subtitle = rowSubtitle(NotificationRows.NotificationVibrate),
-                            checked = notifPrefs.vibrateEnabled,
+                            checked = preferences.vibrateEnabled,
                             highlighted = highlightSettingId == NotificationRows.NotificationVibrate.id,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(vibrateEnabled = enabled) }
@@ -257,7 +248,7 @@ fun NotificationSettingsScreen(
                             icon = Tabler.Outline.Bulb,
                             title = rowTitle(NotificationRows.NotificationLights),
                             subtitle = rowSubtitle(NotificationRows.NotificationLights),
-                            checked = notifPrefs.lightsEnabled,
+                            checked = preferences.lightsEnabled,
                             highlighted = highlightSettingId == NotificationRows.NotificationLights.id,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(lightsEnabled = enabled) }
@@ -267,7 +258,7 @@ fun NotificationSettingsScreen(
                             icon = Tabler.Outline.DeviceTv,
                             title = rowTitle(NotificationRows.NotificationNewEpisodes),
                             subtitle = rowSubtitle(NotificationRows.NotificationNewEpisodes),
-                            checked = notifPrefs.newEpisodesEnabled,
+                            checked = preferences.newEpisodesEnabled,
                             highlighted = highlightSettingId == NotificationRows.NotificationNewEpisodes.id,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(newEpisodesEnabled = enabled) }
@@ -283,7 +274,7 @@ fun NotificationSettingsScreen(
                                 icon = Tabler.Outline.LetterCase,
                                 title = maxPerCheckTitle,
                                 subtitle = rowSubtitle(NotificationRows.MaxPerCheck),
-                                trailingText = "${notifPrefs.maxPerCheck}",
+                                trailingText = "${preferences.maxPerCheck}",
                                 highlighted = highlightSettingId == NotificationRows.MaxPerCheck.id,
                                 onClick = {
                                     val options = listOf(5, 10, 15, 20, 30, 50, 100)
@@ -300,14 +291,14 @@ fun NotificationSettingsScreen(
                             )
                             val libraryCount = libraryFolders.size
                             val enabledLibraries = libraryFolders.count { folder ->
-                                notifPrefs.libraryConfigs[folder.id]?.enabled ?: true
+                                preferences.libraryConfigs[folder.id]?.enabled ?: true
                             }
                             SettingListItem(
                                 icon = Tabler.Outline.Folders,
                                 title = rowTitle(NotificationRows.NotificationLibraries),
                                 subtitle = stringResource(Res.string.settings_libraries_subtitle, enabledLibraries, libraryCount),
                                 highlighted = highlightSettingId == NotificationRows.NotificationLibraries.id,
-                                onClick = { activeDialog = NotificationSettingsDialog.LibrariesPicker },
+                                onClick = { setActiveDialog(NotificationSettingsDialog.LibrariesPicker) },
                             )
                             // The per-series counterpart of the libraries
                             // list — same link pattern (dialog state → sheet),
@@ -318,33 +309,84 @@ fun NotificationSettingsScreen(
                                     title = rowTitle(NotificationRows.NotificationSeries),
                                     subtitle = stringResource(
                                         Res.string.settings_series_notifications_subtitle,
-                                        notifPrefs.seriesConfigs.size,
+                                        preferences.seriesConfigs.size,
                                     ),
                                     highlighted = highlightSettingId == NotificationRows.NotificationSeries.id,
-                                    onClick = { activeDialog = NotificationSettingsDialog.SeriesNotifications },
+                                    onClick = { setActiveDialog(NotificationSettingsDialog.SeriesNotifications) },
                                 )
                             }
                         }
                     }
                     }
                 }
-            }
+            },
+        ),
+    )
 
-            if (!showAdvanced) {
-                item {
-                    HiddenSettingsHint(
-                        // Derived from the fused declarations (hiddenRowsFor):
-                        // the group's enable+advanced-gated rows (quiet-hours
-                        // pair included while quiet hours is on, the
-                        // system-settings row where its capability holds). The
-                        // disabled → 0 case falls out of the All(WhenOn) gates
-                        // for the advanced block.
-                        hiddenCount = hiddenRowsFor(listOf(SettingsScreenGroups.notifications), rowFlags),
-                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
-                    )
-                }
-            }
-    }
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun NotificationSettingsScreen(
+    onBack: () -> Unit,
+    highlightSettingId: String? = null,
+    viewModel: NotificationSettingsViewModel = koinViewModel(),
+) {
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
+    val libraryFolders by viewModel.libraryFolders.collectAsStateWithLifecycle()
+    val platformIntents = rememberPlatformIntents()
+    // Capability flag (pinned == the intents seam's query in
+    // DesktopPlatformActualsTest); the intents object stays for the open call.
+    val canOpenSystemNotificationSettings = settingsCapabilities.supportsSystemNotificationSettings
+    // The declared row admissions both the SettingsItemList total and the
+    // emission `if`s in the group body read — one gate per id, declared
+    // beside the group items (SettingsScreenGroups.notifications.rowAdmitted).
+    // The `enabled` and `showAdvanced` structural wrappers around the gated
+    // rows carry those halves of their All(...) gates, exactly the playback
+    // advanced-video precedent.
+    val rowFlags = RowAdmissionFlags(
+        showAdvanced = showAdvanced,
+        supportsSystemNotificationSettings = canOpenSystemNotificationSettings,
+        parentsOn = rowParentsOn(
+            NotificationRows.NotificationsEnable.id to preferences.enabled,
+            NotificationRows.QuietHours.id to preferences.quietHoursEnabled,
+        ),
+    )
+    var activeDialog by remember { mutableStateOf<NotificationSettingsDialog>(NotificationSettingsDialog.None) }
+
+    PreferenceScreenScaffold(
+        title = stringResource(Res.string.settings_notifications),
+        onBack = onBack,
+        focusTag = "notifications_init",
+        highlightSettingId = highlightSettingId,
+        // The screen's ONE ordered group declaration (built above) — the
+        // shell derives the deep-link scroll resolution from it and renders
+        // the hidden-settings hint while advanced is hidden.
+        groups = notificationScreenGroups(
+            preferences = preferences,
+            rowFlags = rowFlags,
+            showAdvanced = showAdvanced,
+            highlightSettingId = highlightSettingId,
+            libraryFolders = libraryFolders,
+            platformIntents = platformIntents,
+            viewModel = viewModel,
+            setActiveDialog = { activeDialog = it },
+        ),
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        hiddenHint = PreferenceHiddenHint(
+            // Derived in the shell from the declaration above (hiddenRowsFor
+            // over the slot's declared admissions): the enable+advanced-gated
+            // rows (quiet-hours pair included while quiet hours is on, the
+            // system-settings row where its capability holds). The
+            // disabled → 0 case falls out of the All(WhenOn) gates for the
+            // advanced block.
+            rowFlags = rowFlags,
+            onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+        ),
+        pickerHost = true,
+    )
 
     if (activeDialog is NotificationSettingsDialog.QuietStartPicker) {
         QuietHoursTimeSheet(

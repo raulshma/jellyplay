@@ -3,12 +3,12 @@ package com.raulshma.jellyplay.feature.settings
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -17,10 +17,10 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.Rule
 
 /**
  * The Privacy & Data hub's destructive one-shot actions: cache wipe
@@ -36,7 +36,8 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class PrivacyDataViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var editor: PreferencesEditor
     private lateinit var serverIdentityStore: ServerIdentityStore
@@ -47,18 +48,12 @@ class PrivacyDataViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         editor = mockk(relaxed = true)
         serverIdentityStore = mockk(relaxed = true)
         searchHistoryRepository = mockk(relaxed = true)
         storageAreas = mockk(relaxed = true)
 
         every { serverIdentityStore.activeUserId } returns activeUserId
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun viewModel(): PrivacyDataViewModel = PrivacyDataViewModel(
@@ -71,7 +66,7 @@ class PrivacyDataViewModelTest {
     // ---------------------------------------------------------------- cache wipes
 
     @Test
-    fun `clearCache wipes via the seam and posts CacheCleared`() = runTest(testDispatcher) {
+    fun `clearCache wipes via the seam and posts CacheCleared`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -83,7 +78,7 @@ class PrivacyDataViewModelTest {
     }
 
     @Test
-    fun `clearImageCache wipes only the image cache and posts ImageCacheCleared`() = runTest(testDispatcher) {
+    fun `clearImageCache wipes only the image cache and posts ImageCacheCleared`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -107,7 +102,7 @@ class PrivacyDataViewModelTest {
     // ---------------------------------------------------------------- search history
 
     @Test
-    fun `clearSearchHistory clears only the active user's history`() = runTest(testDispatcher) {
+    fun `clearSearchHistory clears only the active user's history`() = runTest(mainDispatcherRule.testDispatcher) {
         activeUserId.value = "user-7"
         val vm = viewModel()
         advanceUntilIdle()
@@ -120,7 +115,7 @@ class PrivacyDataViewModelTest {
     }
 
     @Test
-    fun `clearSearchHistory without an active user is a repo no-op but still confirms`() = runTest(testDispatcher) {
+    fun `clearSearchHistory without an active user is a repo no-op but still confirms`() = runTest(mainDispatcherRule.testDispatcher) {
         activeUserId.value = null
         val vm = viewModel()
         advanceUntilIdle()
@@ -135,7 +130,7 @@ class PrivacyDataViewModelTest {
     // ---------------------------------------------------------------- factory reset
 
     @Test
-    fun `factoryReset clears all preferences and posts FactoryResetDone`() = runTest(testDispatcher) {
+    fun `factoryReset clears all preferences and posts FactoryResetDone`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 

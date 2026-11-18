@@ -4,22 +4,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
+import com.raulshma.jellyplay.core.ui.components.biometricPromptAvailable
 import com.raulshma.jellyplay.core.ui.components.findFragmentActivity
-import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
 
 /**
  * Wraps the core:ui BiometricAuthHelper: availability comes from
- * rememberBiometricAvailability(), the FragmentActivity from the ambient
- * context. Gate is non-null only when a prompt could actually be launched
- * (activity present AND biometric strong available), so the screen can treat
- * null as "unavailable".
+ * PlatformCapabilities.biometricPromptAvailable(), the FragmentActivity from
+ * the ambient context. Gate is non-null only when a prompt could actually be
+ * launched (activity present AND biometric strong available), so the screen
+ * can treat null as "unavailable".
  */
 @Composable
 internal actual fun rememberBiometricGate(): BiometricGate? {
     val context = LocalContext.current
     val activity = remember(context) { context.findFragmentActivity() } ?: return null
-    val availability = rememberBiometricAvailability()
-    if (availability != BiometricAuthHelper.Availability.AVAILABLE) return null
+    if (!biometricPromptAvailable()) return null
     return remember(activity) {
         object : BiometricGate {
             override fun isAvailable(): Boolean = true

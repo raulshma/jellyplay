@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserDetailPage
 import com.raulshma.jellyplay.core.model.UserTopItem
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -11,21 +12,17 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the per-user statistics drill-down (`UserStatisticsDetailViewModel`):
@@ -45,25 +42,18 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserStatisticsDetailViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var repository: AdminStatisticsRepository
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         repository = mockk(relaxed = true)
         // loadPage reads the hot status flow once per page via first().
         every { repository.getPlaybackReportingStatus() } returns
             flowOf(PlaybackReportingStatus.AVAILABLE)
         coEvery { repository.refreshPlaybackReportingStatus() } just runs
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun page(vararg items: UserTopItem, hasMore: Boolean = false) =
@@ -74,7 +64,7 @@ class UserStatisticsDetailViewModelTest {
     // ── load ──
 
     @Test
-    fun `loadUser paints the first page and the plugin status`() = runTest(mainDispatcher) {
+    fun `loadUser paints the first page and the plugin status`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserDetailStatistics("u-1", 0, 50) } returns
             Result.success(page(item("i-1"), item("i-2"), hasMore = true))
 
@@ -92,7 +82,7 @@ class UserStatisticsDetailViewModelTest {
     }
 
     @Test
-    fun `loadUser failure surfaces the error`() = runTest(mainDispatcher) {
+    fun `loadUser failure surfaces the error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserDetailStatistics("u-1", 0, 50) } returns
             Result.failure(RuntimeException("plugin unavailable"))
 
@@ -109,7 +99,7 @@ class UserStatisticsDetailViewModelTest {
     // ── paging ──
 
     @Test
-    fun `loadMore appends the next page and stops when exhausted`() = runTest(mainDispatcher) {
+    fun `loadMore appends the next page and stops when exhausted`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserDetailStatistics("u-1", 0, 50) } returns
             Result.success(page(item("i-1"), hasMore = true))
         coEvery { repository.getUserDetailStatistics("u-1", 1, 50) } returns
@@ -135,7 +125,7 @@ class UserStatisticsDetailViewModelTest {
     }
 
     @Test
-    fun `loadMore while an append is in flight is suppressed`() = runTest(mainDispatcher) {
+    fun `loadMore while an append is in flight is suppressed`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserDetailStatistics("u-1", 0, 50) } returns
             Result.success(page(item("i-1"), hasMore = true))
         val appendGate = CompletableDeferred<Unit>()
@@ -169,7 +159,7 @@ class UserStatisticsDetailViewModelTest {
     }
 
     @Test
-    fun `loadMore during the cold load waits for hasMore to be proven`() = runTest(mainDispatcher) {
+    fun `loadMore during the cold load waits for hasMore to be proven`() = runTest(mainDispatcherRule.testDispatcher) {
         val coldGate = CompletableDeferred<Unit>()
         coEvery { repository.getUserDetailStatistics("u-1", 0, 50) } coAnswers {
             coldGate.await()
@@ -202,7 +192,7 @@ class UserStatisticsDetailViewModelTest {
     // ── reload / user switch ──
 
     @Test
-    fun `loadUser with the same id and data does not refetch`() = runTest(mainDispatcher) {
+    fun `loadUser with the same id and data does not refetch`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserDetailStatistics("u-1", 0, 50) } returns
             Result.success(page(item("i-1")))
 
@@ -216,7 +206,7 @@ class UserStatisticsDetailViewModelTest {
     }
 
     @Test
-    fun `loadUser with a different id resets state and reloads from page zero`() = runTest(mainDispatcher) {
+    fun `loadUser with a different id resets state and reloads from page zero`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.getUserDetailStatistics("u-1", 0, 50) } returns
             Result.success(page(item("i-1"), hasMore = true))
         coEvery { repository.getUserDetailStatistics("u-2", 0, 50) } returns

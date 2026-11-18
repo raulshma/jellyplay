@@ -6,35 +6,31 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChannelsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: LiveTvApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -50,7 +46,6 @@ class ChannelsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
         imageUrlProvider = mockk()
 
@@ -82,11 +77,6 @@ class ChannelsViewModelTest {
             Result.success(sampleChannels())
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun sampleChannels() = listOf(
         LiveTvChannel(id = "chan-a", name = "Alpha"),
         LiveTvChannel(id = "chan-b", name = "Bravo"),
@@ -108,7 +98,7 @@ class ChannelsViewModelTest {
     // ── loadChannels: favorites-first ordering ────────────────────────────
 
     @Test
-    fun loadChannels_sorts_favorites_first_keeping_their_relative_order() = runTest(mainDispatcher) {
+    fun loadChannels_sorts_favorites_first_keeping_their_relative_order() = runTest(mainDispatcherRule.testDispatcher) {
         // Server order a,b,c,d; favorites {a, c} → a and c lead, in server
         // order (sortedByDescending is stable), then the rest.
         seedFavorites(setOf("chan-c", "chan-a"))
@@ -125,7 +115,7 @@ class ChannelsViewModelTest {
     }
 
     @Test
-    fun loadChannels_without_favorites_keeps_the_server_order() = runTest(mainDispatcher) {
+    fun loadChannels_without_favorites_keeps_the_server_order() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -136,7 +126,7 @@ class ChannelsViewModelTest {
     }
 
     @Test
-    fun loadChannels_failure_sets_the_error_and_clears_loading() = runTest(mainDispatcher) {
+    fun loadChannels_failure_sets_the_error_and_clears_loading() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("guide offline"))
         val viewModel = newViewModel()
@@ -151,7 +141,7 @@ class ChannelsViewModelTest {
     // ── toggleFavorite: add/remove + resort ───────────────────────────────
 
     @Test
-    fun toggleFavorite_adds_the_channel_resorts_and_persists() = runTest(mainDispatcher) {
+    fun toggleFavorite_adds_the_channel_resorts_and_persists() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -167,7 +157,7 @@ class ChannelsViewModelTest {
     }
 
     @Test
-    fun toggleFavorite_removing_the_last_favorite_persists_and_keeps_the_current_order() = runTest(mainDispatcher) {
+    fun toggleFavorite_removing_the_last_favorite_persists_and_keeps_the_current_order() = runTest(mainDispatcherRule.testDispatcher) {
         seedFavorites(setOf("chan-d"))
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -193,7 +183,7 @@ class ChannelsViewModelTest {
     // ── now-playing mirror of the mini player ─────────────────────────────
 
     @Test
-    fun nowPlayingChannelId_mirrors_the_mini_player_item_id_flow() = runTest(mainDispatcher) {
+    fun nowPlayingChannelId_mirrors_the_mini_player_item_id_flow() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
         assertEquals(null, viewModel.nowPlayingChannelId.value)
@@ -208,7 +198,7 @@ class ChannelsViewModelTest {
     }
 
     @Test
-    fun setNowPlayingChannelId_overrides_the_mirror_directly() = runTest(mainDispatcher) {
+    fun setNowPlayingChannelId_overrides_the_mirror_directly() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -222,7 +212,7 @@ class ChannelsViewModelTest {
     // ── favoriteChannelIds projection ─────────────────────────────────────
 
     @Test
-    fun favoriteChannelIds_projects_the_runtime_state_favorite_set() = runTest(mainDispatcher) {
+    fun favoriteChannelIds_projects_the_runtime_state_favorite_set() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         val observed = mutableListOf<Set<String>>()
         val collector: Job = launch { viewModel.favoriteChannelIds.collect { observed += it } }

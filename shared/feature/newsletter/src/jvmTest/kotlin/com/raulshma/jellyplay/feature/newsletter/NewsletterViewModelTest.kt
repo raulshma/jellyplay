@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_failed
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_success
@@ -18,26 +19,23 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Newsletter ViewModel coverage: section-order resolution (stored order
@@ -50,9 +48,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewsletterViewModelTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: NewsletterApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -67,7 +64,6 @@ class NewsletterViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
         imageUrlProvider = mockk()
         notificationStore = mockk()
@@ -80,11 +76,6 @@ class NewsletterViewModelTest {
         every { imageUrlProvider.getImageUrl(any()) } returns "https://img/item"
         every { imageUrlProvider.getBackdropUrl(any()) } returns "https://img/backdrop"
         stubLoad { Result.success(NewsletterData(serverName = "TestServer")) }
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun createViewModel(): NewsletterViewModel = NewsletterViewModel(
@@ -124,7 +115,7 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `section order is stored order filtered by enabled sections`() = runTest(mainDispatcher) {
+    fun `section order is stored order filtered by enabled sections`() = runTest(mainDispatcherRule.testDispatcher) {
         notificationSlice.value = NotificationSlice(
             newsletterSectionOrder = listOf(
                 NewsletterSectionType.NEXT_UP,
@@ -146,7 +137,7 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `section order falls back to DEFAULT_ORDER when filter empties it`() = runTest(mainDispatcher) {
+    fun `section order falls back to DEFAULT_ORDER when filter empties it`() = runTest(mainDispatcherRule.testDispatcher) {
         notificationSlice.value = NotificationSlice(
             newsletterSectionOrder = listOf(NewsletterSectionType.CURATED_PICKS),
             enabledNewsletterSections = emptySet(),
@@ -158,7 +149,7 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `successful load populates state and writes the viewed timestamp`() = runTest(mainDispatcher) {
+    fun `successful load populates state and writes the viewed timestamp`() = runTest(mainDispatcherRule.testDispatcher) {
         val timestamp = slot<Long>()
         coEvery { notificationStore.setNewsletterLastViewed(capture(timestamp)) } returns Unit
 
@@ -183,7 +174,7 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `load failure surfaces the error message`() = runTest(mainDispatcher) {
+    fun `load failure surfaces the error message`() = runTest(mainDispatcherRule.testDispatcher) {
         stubLoad { Result.failure(IllegalStateException("boom")) }
         val vm = createViewModel()
         advanceUntilIdle()
@@ -195,7 +186,7 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `send now emits SendSuccess once on the one-shot channel`() = runTest(mainDispatcher) {
+    fun `send now emits SendSuccess once on the one-shot channel`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.sendNewsletter() } returns Result.success(Unit)
 
         val vm = createViewModel()
@@ -219,7 +210,7 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `send test emits TestSent with the test_sent resource`() = runTest(mainDispatcher) {
+    fun `send test emits TestSent with the test_sent resource`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.sendTestNewsletter() } returns Result.success(Unit)
 
         val vm = createViewModel()
@@ -236,7 +227,7 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `send failure emits SendFailed with the send_failed resource`() = runTest(mainDispatcher) {
+    fun `send failure emits SendFailed with the send_failed resource`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.sendNewsletter() } returns Result.failure(IllegalStateException("smtp down"))
 
         val vm = createViewModel()
@@ -254,7 +245,7 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `send result never replays to a late collector`() = runTest(mainDispatcher) {
+    fun `send result never replays to a late collector`() = runTest(mainDispatcherRule.testDispatcher) {
         // THE migration pin: the former sendResult uiState field was a
         // StateFlow value, so every new collector (process restoration,
         // re-subscription) received the old send's result again and the
@@ -278,7 +269,7 @@ class NewsletterViewModelTest {
     }
 
     @Test
-    fun `admin flag flows through from the current user`() = runTest(mainDispatcher) {
+    fun `admin flag flows through from the current user`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = createViewModel()
         advanceUntilIdle()
         assertFalse(vm.uiState.value.isAdmin)

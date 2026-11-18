@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.moodplaylist
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
@@ -23,19 +24,16 @@ import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the mood-playlist contract: presets + custom + favorite ids merged on
@@ -47,9 +45,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class MoodPlaylistsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private val libraryApiClient: LibraryApiClient = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
@@ -62,7 +59,6 @@ class MoodPlaylistsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { moodPlaylistRepository.observeMoodPlaylists() } returns customFlow
         every { moodPlaylistRepository.observePreferences() } returns preferencesFlow
         viewModel = MoodPlaylistsViewModel(
@@ -72,11 +68,6 @@ class MoodPlaylistsViewModelTest {
             audioQueueFacade = audioQueueFacade,
             moodPlaylistRepository = moodPlaylistRepository,
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun track(
@@ -127,7 +118,7 @@ class MoodPlaylistsViewModelTest {
     }
 
     @Test
-    fun init_mergesPresetsCustomAndFavoriteIds() = runTest(mainDispatcher) {
+    fun init_mergesPresetsCustomAndFavoriteIds() = runTest(mainDispatcherRule.testDispatcher) {
         val custom = moodPlaylist(id = "custom-1")
         customFlow.value = listOf(custom)
         preferencesFlow.value = listOf(MoodPlaylistPreference(playlistId = "happy", isFavorite = true))
@@ -139,7 +130,7 @@ class MoodPlaylistsViewModelTest {
     }
 
     @Test
-    fun generatePlaylist_filtersByKeywordExclusionAndRating() = runTest(mainDispatcher) {
+    fun generatePlaylist_filtersByKeywordExclusionAndRating() = runTest(mainDispatcherRule.testDispatcher) {
         val playlist = moodPlaylist(keywords = listOf("rock"), excluded = listOf("metal"), minRating = 4f)
         val keep = track("k", name = "Keep", genres = listOf("Rock"), rating = 5f)
         val belowMin = track("l", name = "Lower", genres = listOf("rock"), rating = 3f)
@@ -159,7 +150,7 @@ class MoodPlaylistsViewModelTest {
     }
 
     @Test
-    fun generatePlaylist_sortsByTitleAndTakesMaxItems() = runTest(mainDispatcher) {
+    fun generatePlaylist_sortsByTitleAndTakesMaxItems() = runTest(mainDispatcherRule.testDispatcher) {
         val playlist = moodPlaylist(sortBy = MoodPlaylistSort.TITLE, maxItems = 2)
         coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(
@@ -181,7 +172,7 @@ class MoodPlaylistsViewModelTest {
     }
 
     @Test
-    fun generatePlaylist_failure_setsErrorAndStopsLoading() = runTest(mainDispatcher) {
+    fun generatePlaylist_failure_setsErrorAndStopsLoading() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("boom"))
 
@@ -193,7 +184,7 @@ class MoodPlaylistsViewModelTest {
     }
 
     @Test
-    fun clearGenerated_resetsItemsAndSelection() = runTest(mainDispatcher) {
+    fun clearGenerated_resetsItemsAndSelection() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(track("a", genres = listOf("rock"))), 1, 0))
         viewModel.generatePlaylist(moodPlaylist())
@@ -206,7 +197,7 @@ class MoodPlaylistsViewModelTest {
     }
 
     @Test
-    fun playAll_delegatesGeneratedItemsWithStartIndex() = runTest(mainDispatcher) {
+    fun playAll_delegatesGeneratedItemsWithStartIndex() = runTest(mainDispatcherRule.testDispatcher) {
         val kept = track("a", genres = listOf("rock"))
         coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(kept), 1, 0))
@@ -224,7 +215,7 @@ class MoodPlaylistsViewModelTest {
     }
 
     @Test
-    fun toggleFavorite_flipsTheCurrentFavoriteState() = runTest(mainDispatcher) {
+    fun toggleFavorite_flipsTheCurrentFavoriteState() = runTest(mainDispatcherRule.testDispatcher) {
         preferencesFlow.value = listOf(MoodPlaylistPreference(playlistId = "happy", isFavorite = true))
         advanceUntilIdle()
         coEvery { moodPlaylistRepository.setPreference(any(), any(), any()) } just Runs
@@ -238,7 +229,7 @@ class MoodPlaylistsViewModelTest {
     }
 
     @Test
-    fun createCustomPlaylist_validatesNameAndKeywords() = runTest(mainDispatcher) {
+    fun createCustomPlaylist_validatesNameAndKeywords() = runTest(mainDispatcherRule.testDispatcher) {
         val captured = slot<MoodPlaylist>()
         coEvery { moodPlaylistRepository.upsert(capture(captured)) } just Runs
 
@@ -263,7 +254,7 @@ class MoodPlaylistsViewModelTest {
     }
 
     @Test
-    fun deleteCustomPlaylist_onlyDeletesCustomIds() = runTest(mainDispatcher) {
+    fun deleteCustomPlaylist_onlyDeletesCustomIds() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { moodPlaylistRepository.delete(any()) } just Runs
 
         viewModel.deleteCustomPlaylist(MoodPlaylistsPreset.all.first()) // preset id → guarded

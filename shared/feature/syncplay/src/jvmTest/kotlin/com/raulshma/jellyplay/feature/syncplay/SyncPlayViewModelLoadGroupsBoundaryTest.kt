@@ -6,26 +6,23 @@ import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Boundary invariants of [SyncPlayViewModel.loadGroups] NOT pinned by
@@ -41,9 +38,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncPlayViewModelLoadGroupsBoundaryTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (SyncPlayViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: SyncPlayRepository
     private lateinit var syncPlaySession: SyncPlaySession
@@ -53,7 +49,6 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
         syncPlaySession = mockk()
         syncPlayCastStore = mockk()
@@ -66,11 +61,6 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun newViewModel() = SyncPlayViewModel(
         syncPlayRepository = mediaRepository,
         syncPlaySession = syncPlaySession,
@@ -81,7 +71,7 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
         SyncPlayGroup(groupId = id, groupName = name, participantCount = 1)
 
     @Test
-    fun reloading_groups_while_in_a_group_keeps_currentGroup() = runTest(mainDispatcher) {
+    fun reloading_groups_while_in_a_group_keeps_currentGroup() = runTest(mainDispatcherRule.testDispatcher) {
         every { syncPlaySession.activeGroupId } returns "g1"
         coEvery { syncPlaySession.joinGroup("g1") } returns Result.success(Unit)
         coEvery { mediaRepository.getSyncPlayInfo("g1") } returns Result.success(
@@ -104,7 +94,7 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
     }
 
     @Test
-    fun reloading_groups_while_not_in_a_group_clears_stale_currentGroup() = runTest(mainDispatcher) {
+    fun reloading_groups_while_not_in_a_group_clears_stale_currentGroup() = runTest(mainDispatcherRule.testDispatcher) {
         // Seed a stale group (simulating a leftover header after an ejection
         // that bypassed state resets) and reload.
         every { syncPlaySession.activeGroupId } returns null
@@ -119,7 +109,7 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
     }
 
     @Test
-    fun auto_accept_with_an_empty_group_list_joins_nothing() = runTest(mainDispatcher) {
+    fun auto_accept_with_an_empty_group_list_joins_nothing() = runTest(mainDispatcherRule.testDispatcher) {
         castPrefs.value = SyncPlayCastSlice(syncPlayAutoAcceptInvites = true)
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
 

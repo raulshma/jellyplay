@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.every
@@ -15,19 +16,15 @@ import io.mockk.just
 import io.mockk.mockk
 import java.time.LocalDate
 import java.util.Locale
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import org.junit.Rule
 
 /**
  * Projection-detail gaps in [WatchProgressHeatmapViewModel] NOT pinned by
@@ -47,9 +44,8 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class WatchProgressHeatmapViewModelProjectionGapsTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to this module (WatchProgressHeatmapViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var watchHistoryRepository: WatchHistoryRepository
     private lateinit var detailFeed: DetailFeed
@@ -65,7 +61,6 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         watchHistoryRepository = mockk()
         detailFeed = mockk()
         imageUrlProvider = mockk()
@@ -92,11 +87,6 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
             Result.failure(RuntimeException("no detail"))
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun newViewModel(): WatchProgressHeatmapViewModel = WatchProgressHeatmapViewModel(
         watchHistoryRepository = watchHistoryRepository,
         detailFeed = detailFeed,
@@ -110,7 +100,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
     )
 
     @Test
-    fun selectDay_formatsTheHeaderWithTheEEEE_MMMM_d_yyyyPattern() = runTest(mainDispatcher) {
+    fun selectDay_formatsTheHeaderWithTheEEEE_MMMM_d_yyyyPattern() = runTest(mainDispatcherRule.testDispatcher) {
         val previous = Locale.getDefault()
         Locale.setDefault(Locale.ENGLISH)
         try {
@@ -133,7 +123,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
     }
 
     @Test
-    fun selectDay_forwardsTheIsoDateAndTheActiveFilterToTheDayQuery() = runTest(mainDispatcher) {
+    fun selectDay_forwardsTheIsoDateAndTheActiveFilterToTheDayQuery() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -150,7 +140,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
     }
 
     @Test
-    fun loadedActivities_mirrorVerbatimIntoState() = runTest(mainDispatcher) {
+    fun loadedActivities_mirrorVerbatimIntoState() = runTest(mainDispatcherRule.testDispatcher) {
         val activities = listOf(
             DailyWatchActivity(date = "2026-01-02", value = 120L),
             DailyWatchActivity(date = "2026-01-01", value = 45L),
@@ -165,7 +155,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
     }
 
     @Test
-    fun setYear_retainsTheActiveFilterInTheFollowUpLoad() = runTest(mainDispatcher) {
+    fun setYear_retainsTheActiveFilterInTheFollowUpLoad() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 

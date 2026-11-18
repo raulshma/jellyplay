@@ -13,28 +13,25 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Requests ViewModel boundary gaps NOT pinned by [RequestsViewModelTest]:
@@ -54,9 +51,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class RequestsViewModelQueryGapsTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (RequestsViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var arrRepository: ArrRepository
@@ -77,7 +73,6 @@ class RequestsViewModelQueryGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         seerrRepository = mockk()
         arrRepository = mockk()
         experimentalStore = mockk()
@@ -97,11 +92,6 @@ class RequestsViewModelQueryGapsTest {
         stubRequests { Result.success(SeerrRequestPage()) }
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun stubRequests(response: () -> Result<SeerrRequestPage>) {
         coEvery {
             seerrRepository.getRequests(any(), any(), any(), any(), any(), any(), any(), any())
@@ -117,7 +107,7 @@ class RequestsViewModelQueryGapsTest {
     private fun newViewModel(): RequestsViewModel = RequestsViewModel(
         seerrRepository = seerrRepository,
         arrRepository = arrRepository,
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     private fun page(items: List<SeerrRequestItem>, pages: Int = 1) =
@@ -135,7 +125,7 @@ class RequestsViewModelQueryGapsTest {
         )
 
     @Test
-    fun my_requests_only_forwards_the_logged_in_user_id() = runTest(mainDispatcher) {
+    fun my_requests_only_forwards_the_logged_in_user_id() = runTest(mainDispatcherRule.testDispatcher) {
         currentUserFlow.value = SeerrCurrentUser(id = 7, displayName = "Requester")
         stubRequests { Result.success(page(listOf(item(1)))) }
         val viewModel = newViewModel()
@@ -149,7 +139,7 @@ class RequestsViewModelQueryGapsTest {
     }
 
     @Test
-    fun clearSearch_with_a_blank_query_is_a_noop() = runTest(mainDispatcher) {
+    fun clearSearch_with_a_blank_query_is_a_noop() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(emptyList())) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -164,7 +154,7 @@ class RequestsViewModelQueryGapsTest {
     }
 
     @Test
-    fun media_type_and_my_requests_setters_reset_to_page_one() = runTest(mainDispatcher) {
+    fun media_type_and_my_requests_setters_reset_to_page_one() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(emptyList(), pages = 3)) }
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -184,7 +174,7 @@ class RequestsViewModelQueryGapsTest {
     }
 
     @Test
-    fun blank_search_strings_travel_as_null_not_empty() = runTest(mainDispatcher) {
+    fun blank_search_strings_travel_as_null_not_empty() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests { Result.success(page(emptyList())) }
         val viewModel = newViewModel()
         advanceUntilIdle()

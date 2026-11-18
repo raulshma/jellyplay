@@ -7,22 +7,18 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,6 +26,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * The dialog-machine gating gaps in [ArrQueueViewModel] NOT pinned by
@@ -53,9 +50,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArrQueueViewModelDialogGapsTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module (ArrQueueViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var arrRepository: ArrRepository
     private lateinit var experimentalStore: ExperimentalStore
@@ -64,7 +60,6 @@ class ArrQueueViewModelDialogGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         arrRepository = mockk()
         experimentalStore = mockk()
         experimentalSlice = MutableStateFlow(ExperimentalSlice())
@@ -74,14 +69,9 @@ class ArrQueueViewModelDialogGapsTest {
         coEvery { arrRepository.refreshQueue() } returns Result.success(Unit)
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun newViewModel(): ArrQueueViewModel = ArrQueueViewModel(
         arrRepository = arrRepository,
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     private fun item(queueId: Int) = ArrQueueItem(
@@ -102,7 +92,7 @@ class ArrQueueViewModelDialogGapsTest {
     }
 
     @Test
-    fun confirm_closesTheDialogBeforeTheRepositoryCallSettles() = runTest(mainDispatcher) {
+    fun confirm_closesTheDialogBeforeTheRepositoryCallSettles() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = CompletableDeferred<Unit>()
         gateDeleteRowOn(gate)
         val viewModel = newViewModel()
@@ -126,7 +116,7 @@ class ArrQueueViewModelDialogGapsTest {
     }
 
     @Test
-    fun delete_failure_neverReopensTheDialog() = runTest(mainDispatcher) {
+    fun delete_failure_neverReopensTheDialog() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns
             Result.failure(RuntimeException("radarr offline"))
         val viewModel = newViewModel()
@@ -144,7 +134,7 @@ class ArrQueueViewModelDialogGapsTest {
     }
 
     @Test
-    fun dismiss_whileActionInProgress_isRefused_thenDismissesOnceSettled() = runTest(mainDispatcher) {
+    fun dismiss_whileActionInProgress_isRefused_thenDismissesOnceSettled() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = CompletableDeferred<Unit>()
         gateDeleteRowOn(gate)
         val viewModel = newViewModel()
@@ -174,7 +164,7 @@ class ArrQueueViewModelDialogGapsTest {
     }
 
     @Test
-    fun bulkConfirm_followsTheSameClearBeforeActionLadder() = runTest(mainDispatcher) {
+    fun bulkConfirm_followsTheSameClearBeforeActionLadder() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = CompletableDeferred<Unit>()
         coEvery { arrRepository.deleteQueueItems(any(), any()) } coAnswers {
             gate.await()

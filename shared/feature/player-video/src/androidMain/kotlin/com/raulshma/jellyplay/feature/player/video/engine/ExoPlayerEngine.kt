@@ -1401,7 +1401,10 @@ class ExoPlayerEngine(
         spatialSupersededVirtualizer = false
         audioPipelineReconfiguring = false
         cachedVolume = 1f
-        lastUnmuteVolume = 1f
+        // The remembered unmute level lives in the volume chassis now — reset
+        // it with the rest of the per-item state (the former
+        // `lastUnmuteVolume = 1f` line).
+        volumeChassis.resetUnmuteMemory()
         resetPublishedEngineState()
 
         // Drop the libass overlay + handler so the next load() rebuilds them

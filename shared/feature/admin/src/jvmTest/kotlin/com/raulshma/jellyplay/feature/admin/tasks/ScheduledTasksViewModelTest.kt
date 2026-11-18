@@ -5,19 +5,15 @@ import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.TaskExecutionInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -25,6 +21,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the scheduled-tasks screen flow (`ScheduledTasksViewModel`) — the
@@ -44,9 +41,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ScheduledTasksViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var adminRepository: AdminRepository
 
@@ -69,21 +65,15 @@ class ScheduledTasksViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         adminRepository = mockk()
         every { adminRepository.scheduledTasks } returns wsTasksFlow
         coEvery { adminRepository.getScheduledTasks(any()) } returns Result.success(listOf(scanTask))
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     // ── REST load ──
 
     @Test
-    fun `load populates the task list`() = runTest(mainDispatcher) {
+    fun `load populates the task list`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = ScheduledTasksViewModel(adminRepository)
         advanceUntilIdle()
 
@@ -93,7 +83,7 @@ class ScheduledTasksViewModelTest {
     }
 
     @Test
-    fun `load failure surfaces the error`() = runTest(mainDispatcher) {
+    fun `load failure surfaces the error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getScheduledTasks(any()) } returns
             Result.failure(RuntimeException("offline"))
 
@@ -105,7 +95,7 @@ class ScheduledTasksViewModelTest {
     }
 
     @Test
-    fun `refresh toggles isRefreshing`() = runTest(mainDispatcher) {
+    fun `refresh toggles isRefreshing`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = ScheduledTasksViewModel(adminRepository)
         advanceUntilIdle()
 
@@ -119,7 +109,7 @@ class ScheduledTasksViewModelTest {
     // ── start / stop routing ──
 
     @Test
-    fun `startTask routes the id and re-fetches to paint the new state`() = runTest(mainDispatcher) {
+    fun `startTask routes the id and re-fetches to paint the new state`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = ScheduledTasksViewModel(adminRepository)
         advanceUntilIdle()
         coEvery { adminRepository.startTask("task-1") } returns Result.success(Unit)
@@ -133,7 +123,7 @@ class ScheduledTasksViewModelTest {
     }
 
     @Test
-    fun `cancelTask routes the id and re-fetches`() = runTest(mainDispatcher) {
+    fun `cancelTask routes the id and re-fetches`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = ScheduledTasksViewModel(adminRepository)
         advanceUntilIdle()
         coEvery { adminRepository.cancelTask("task-1") } returns Result.success(Unit)
@@ -148,7 +138,7 @@ class ScheduledTasksViewModelTest {
     // ── WS merge ──
 
     @Test
-    fun `WS push overlays live fields but keeps richer REST metadata`() = runTest(mainDispatcher) {
+    fun `WS push overlays live fields but keeps richer REST metadata`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = ScheduledTasksViewModel(adminRepository)
         advanceUntilIdle()
 
@@ -177,7 +167,7 @@ class ScheduledTasksViewModelTest {
     }
 
     @Test
-    fun `WS push values win over the REST snapshot when both are present`() = runTest(mainDispatcher) {
+    fun `WS push values win over the REST snapshot when both are present`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = ScheduledTasksViewModel(adminRepository)
         advanceUntilIdle()
 
@@ -195,7 +185,7 @@ class ScheduledTasksViewModelTest {
     }
 
     @Test
-    fun `WS push filters hidden tasks and admits unknown ones`() = runTest(mainDispatcher) {
+    fun `WS push filters hidden tasks and admits unknown ones`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = ScheduledTasksViewModel(adminRepository)
         advanceUntilIdle()
 

@@ -5,11 +5,11 @@ import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.core.datastore.reader.ReaderSlice
 import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,10 +21,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.Dispatchers
+import org.junit.Rule
 
 /**
  * Pins [ReaderPreferences] at its interface (the snapshot + the commands):
@@ -37,14 +35,14 @@ import kotlinx.coroutines.Dispatchers
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderPreferencesTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private lateinit var readerStore: ReaderStore
     private lateinit var preferences: ReaderPreferences
     private val readerSlice = MutableStateFlow(ReaderSlice())
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         readerStore = mockk()
         every { readerStore.reader } returns readerSlice
         coEvery { readerStore.setReaderTheme(any()) } returns Unit
@@ -67,17 +65,12 @@ class ReaderPreferencesTest {
         every { readerStore.lastCfi(any()) } returns null
         preferences = ReaderPreferences(
             store = readerStore,
-            scope = CoroutineScope(StandardTestDispatcher(mainDispatcher.scheduler)),
+            scope = CoroutineScope(StandardTestDispatcher(mainDispatcherRule.testDispatcher.scheduler)),
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun `rapid font-size taps accumulate through the synchronous snapshot`() = runTest(mainDispatcher) {
+    fun `rapid font-size taps accumulate through the synchronous snapshot`() = runTest(mainDispatcherRule.testDispatcher) {
         preferences.attach("item-1")
         assertEquals(ReaderStore.DEFAULT_FONT_SIZE_PX, preferences.snapshot.value.effective.fontSizePx)
 
@@ -97,7 +90,7 @@ class ReaderPreferencesTest {
 
     @Test
     fun `a store emission landing inside the in-flight window does not clobber a newer command`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             preferences.attach("item-1")
 
             preferences.setTheme(ReaderTheme.SEPIA)
@@ -117,7 +110,7 @@ class ReaderPreferencesTest {
         }
 
     @Test
-    fun `theme and font-size writes route into the override when one is active`() = runTest(mainDispatcher) {
+    fun `theme and font-size writes route into the override when one is active`() = runTest(mainDispatcherRule.testDispatcher) {
         readerSlice.value = ReaderSlice(
             readerTheme = ReaderTheme.DARK,
             readerFontSizePx = 17,
@@ -137,7 +130,7 @@ class ReaderPreferencesTest {
     }
 
     @Test
-    fun `writes go global without an override`() = runTest(mainDispatcher) {
+    fun `writes go global without an override`() = runTest(mainDispatcherRule.testDispatcher) {
         preferences.attach("item-1")
 
         preferences.setTheme(ReaderTheme.LIGHT)
@@ -151,7 +144,7 @@ class ReaderPreferencesTest {
 
     @Test
     fun `switching per-book off syncs the effective values into the globals then clears`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             readerSlice.value = ReaderSlice(
                 readerTheme = ReaderTheme.DARK,
                 readerFontSizePx = 17,
@@ -172,7 +165,7 @@ class ReaderPreferencesTest {
         }
 
     @Test
-    fun `switching per-book on seeds the override with the effective values`() = runTest(mainDispatcher) {
+    fun `switching per-book on seeds the override with the effective values`() = runTest(mainDispatcherRule.testDispatcher) {
         readerSlice.value = ReaderSlice(readerTheme = ReaderTheme.LIGHT, readerFontSizePx = 20)
         preferences.attach("item-1")
 
@@ -187,7 +180,7 @@ class ReaderPreferencesTest {
     }
 
     @Test
-    fun `commands clamp into the store bands`() = runTest(mainDispatcher) {
+    fun `commands clamp into the store bands`() = runTest(mainDispatcherRule.testDispatcher) {
         preferences.attach("item-1")
 
         preferences.setBrightnessPct(120)
@@ -205,7 +198,7 @@ class ReaderPreferencesTest {
     }
 
     @Test
-    fun `direction command pins the item choice and persists it`() = runTest(mainDispatcher) {
+    fun `direction command pins the item choice and persists it`() = runTest(mainDispatcherRule.testDispatcher) {
         preferences.attach("item-1")
         assertFalse(preferences.snapshot.value.directionPinned)
 
@@ -219,7 +212,7 @@ class ReaderPreferencesTest {
 
     @Test
     fun `attach re-points routing and clears the previous item's optimistic per-book state`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             preferences.attach("item-1")
             preferences.setUsePerBookAppearance(true) // seeds an override optimistically
             assertTrue(preferences.snapshot.value.perBookActive)
@@ -231,7 +224,7 @@ class ReaderPreferencesTest {
         }
 
     @Test
-    fun `last-cfi rides through to the store`() = runTest(mainDispatcher) {
+    fun `last-cfi rides through to the store`() = runTest(mainDispatcherRule.testDispatcher) {
         every { readerStore.lastCfi("item-1") } returns "epubcfi(/6/8)"
         preferences.attach("item-1")
 
@@ -242,7 +235,7 @@ class ReaderPreferencesTest {
     }
 
     @Test
-    fun `applyTypography writes only the changed axes`() = runTest(mainDispatcher) {
+    fun `applyTypography writes only the changed axes`() = runTest(mainDispatcherRule.testDispatcher) {
         val current = preferences.snapshot.value.typographyState()
         preferences.applyTypography(current.copy(justify = !current.justify))
         advanceUntilIdle()
@@ -256,7 +249,7 @@ class ReaderPreferencesTest {
     }
 
     @Test
-    fun `applyBehavior writes only the changed axes`() = runTest(mainDispatcher) {
+    fun `applyBehavior writes only the changed axes`() = runTest(mainDispatcherRule.testDispatcher) {
         val current = preferences.snapshot.value.behaviorState()
         preferences.applyBehavior(current.copy(readingSpeedWpm = current.readingSpeedWpm + 25))
         advanceUntilIdle()
@@ -273,7 +266,7 @@ class ReaderPreferencesTest {
 
     @Test
     fun `the controls-timeout knob defaults to the legacy 4 s`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             preferences.attach("item-1")
             assertEquals(DEFAULT_READER_CONTROLS_TIMEOUT_MS, preferences.snapshot.value.controlsTimeoutMs)
         }

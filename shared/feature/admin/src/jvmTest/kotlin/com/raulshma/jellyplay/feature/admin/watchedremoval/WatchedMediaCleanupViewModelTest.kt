@@ -7,27 +7,24 @@ import com.raulshma.jellyplay.core.model.CleanupActionType
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.ScanProgress
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Slim per-feature arm over the shared `MediaCleanupScanStateHolder` chassis
@@ -42,9 +39,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class WatchedMediaCleanupViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var repository: AdminStatisticsRepository
     private lateinit var authRepository: AuthRepository
@@ -58,18 +54,12 @@ class WatchedMediaCleanupViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         repository = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
         every { authRepository.currentUser } returns currentUserFlow
         every { repository.getAuditHistory(any()) } returns auditFlow
         every { repository.getScanProgress(any()) } returns MutableStateFlow(ScanProgress())
         coEvery { repository.getScanResultJson(any()) } returns null
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** A view model whose startScan immediately completes and loads [itemsJson]. */
@@ -85,7 +75,7 @@ class WatchedMediaCleanupViewModelTest {
     }
 
     @Test
-    fun `initial config is the watched-specific dry-run default`() = runTest(mainDispatcher) {
+    fun `initial config is the watched-specific dry-run default`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = WatchedMediaCleanupViewModel(repository, authRepository)
         advanceUntilIdle()
 
@@ -98,7 +88,7 @@ class WatchedMediaCleanupViewModelTest {
     }
 
     @Test
-    fun `scan forwards the live config to detectWatchedMedia`() = runTest(mainDispatcher) {
+    fun `scan forwards the live config to detectWatchedMedia`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = WatchedMediaCleanupViewModel(repository, authRepository)
         coEvery { repository.detectWatchedMedia(any()) } returns Result.failure(RuntimeException("offline"))
 
@@ -114,7 +104,7 @@ class WatchedMediaCleanupViewModelTest {
     }
 
     @Test
-    fun `delete routes through WATCHED_REMOVAL and audit is observed for the same action`() = runTest(mainDispatcher) {
+    fun `delete routes through WATCHED_REMOVAL and audit is observed for the same action`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = scanCompletingViewModel()
         viewModel.toggleItemSelection("a")
         viewModel.showDeleteConfirmation()
