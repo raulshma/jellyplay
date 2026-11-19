@@ -62,8 +62,7 @@ const val POSITION_NOT_READY_MAX_WAIT_MS = POSITION_PAUSED_RECHECK_MS
  * Lives in the player-contract module so both production engines
  * (`shared/feature/player-video` via `ReloadablePlayerEngine`) and test
  * doubles over the [MediaEngine] contract share one implementation — see
- * `CONTEXT.md` "feature/player/core (the engine-agnostic
- * `MediaEngine` contract and engine-shared machinery)".
+ * `CONTEXT.md` "Engine layer".
  */
 class EnginePositionTicker(
     private val scopeProvider: () -> CoroutineScope,
