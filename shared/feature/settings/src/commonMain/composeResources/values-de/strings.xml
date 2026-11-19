@@ -424,6 +424,7 @@
     <string name="settings_download_storage_location_subtitle">Ordnerpfad zum Speichern heruntergeladener Medien</string>
     <string name="settings_storage_internal">Interner Speicher</string>
     <string name="settings_storage_external">Externe SD-Karte</string>
+    <string name="settings_storage_builtin_external">Externer Speicher (integriert)</string>
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">Nach dem Ansehen löschen</string>

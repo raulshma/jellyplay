@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.graphics.SurfaceTexture
 import android.Manifest
 import android.os.Build
-import android.os.Environment
 import android.os.StatFs
 import android.view.Surface
 import android.view.TextureView
@@ -22,10 +21,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.raulshma.jellyplay.core.data.playback.AmbientVideoPlayer
+import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayout
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -53,24 +56,29 @@ internal actual fun rememberShareMediaAction(itemId: String, chooserTitle: Strin
 }
 
 /**
- * Android storage probe: DIRECTORY_MUSIC/DIRECTORY_MOVIES external volume,
- * filesDir fallback, StatFs block math - behind the common seam.
+ * Android storage probe: StatFs over the download destination the current
+ * `downloadStorageLocation` pref selects (the same `DownloadStorageLayout`
+ * rule `startDownload` writes through), behind the common seam.
  */
 class AndroidDetailStorageProbe(
-    private val context: Context,
+    private val downloadsStore: DownloadsStore,
+    private val storageLayout: DownloadStorageLayout,
 ) : DetailStorageProbe {
     override suspend fun availableBytes(isAudio: Boolean): Long = withContext(Dispatchers.IO) {
-        val downloadDir = context.getExternalFilesDir(
-            if (isAudio) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES,
-        ) ?: context.filesDir
-        val stat = StatFs(downloadDir.absolutePath)
+        // StatFs over the SELECTED destination dir (not the hardcoded primary
+        // external volume): with an SD card chosen as the download location,
+        // the sheet must report the card's free space.
+        val pref = downloadsStore.downloads.first().downloadStorageLocation
+        val mediaType = if (isAudio) MediaType.AUDIO.name else MediaType.MOVIE.name
+        val dir = storageLayout.destinationBaseDir(mediaType, pref)
+        val stat = StatFs(dir.absolutePath)
         stat.availableBlocksLong * stat.blockSizeLong
     }
 }
 
 /** Android platform pick for the details module (registered app-side). */
 fun androidDetailsModule(context: Context): Module = module {
-    single<DetailStorageProbe> { AndroidDetailStorageProbe(context) }
+    single<DetailStorageProbe> { AndroidDetailStorageProbe(get(), get()) }
     // The jvm-only detail defs (dependency closure reaches the
     // jvmShared halves of core:data — AudioQueueFacade, DownloadIntake,
     // OfflineSyncManager, SyncPlayManager) moved here out of commonMain's

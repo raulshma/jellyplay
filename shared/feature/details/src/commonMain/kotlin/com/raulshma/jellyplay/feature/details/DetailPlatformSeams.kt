@@ -55,11 +55,12 @@ interface DetailThemeMusic {
 
 interface DetailStorageProbe {
     /**
-     * Available bytes on the volume backing the download destination
-     * (music subtree for audio, movies otherwise) — the legacy
-     * `StatFs`-against-`getExternalFilesDir` probe on Android; the appdata
-     * downloads volume's `File.getUsableSpace()` on desktop
-     * (DesktopDownloadStorageLayout precedent).
+     * Available bytes on the volume backing the download destination — the
+     * volume the `downloadStorageLocation` pref selects on Android (the
+     * `DownloadStorageLayout` destination rule, StatFs'd; music subtree for
+     * audio, movies otherwise), the appdata downloads volume's
+     * `File.getUsableSpace()` on desktop (DesktopDownloadStorageLayout
+     * precedent).
      */
     suspend fun availableBytes(isAudio: Boolean): Long
 }

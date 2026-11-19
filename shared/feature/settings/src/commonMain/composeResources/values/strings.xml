@@ -670,6 +670,7 @@
     <string name="settings_download_storage_location_subtitle">Folder path for storing downloaded media</string>
     <string name="settings_storage_internal">Internal Storage</string>
     <string name="settings_storage_external">External SD Card</string>
+    <string name="settings_storage_builtin_external">External Storage (Built-in)</string>
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">Auto-delete after watching</string>

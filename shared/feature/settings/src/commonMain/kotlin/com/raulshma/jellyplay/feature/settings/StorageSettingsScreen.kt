@@ -104,6 +104,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_smar
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_status_value
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_storage
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_storage_breakdown
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_storage_builtin_external
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_storage_external
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_storage_internal
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_streaming_quality_auto_adaptive
@@ -831,6 +832,7 @@ fun StorageSettingsScreen(
 
                     val internalLabel = stringResource(Res.string.settings_storage_internal)
                     val externalLabel = stringResource(Res.string.settings_storage_external)
+                    val builtinExternalLabel = stringResource(Res.string.settings_storage_builtin_external)
                     val sdCardLabel = stringResource(Res.string.storage_sd_card)
                     val storageLocationTitle = rowTitle(StorageRows.DownloadStorageLocation)
                     // Build the picker from the *real*
@@ -845,7 +847,11 @@ fun StorageSettingsScreen(
                     val mountLabel = { kind: StorageMountKind ->
                         when (kind) {
                             StorageMountKind.INTERNAL -> internalLabel
-                            StorageMountKind.PRIMARY_EXTERNAL -> externalLabel
+                            // Emulated external (/storage/emulated) — the SAME
+                            // built-in flash as INTERNAL, not a card. Labeling
+                            // it "External SD Card" made it look like a second,
+                            // distinct SD option.
+                            StorageMountKind.PRIMARY_EXTERNAL -> builtinExternalLabel
                             StorageMountKind.REMOVABLE -> sdCardLabel
                             StorageMountKind.EXTERNAL -> externalLabel
                         }

@@ -422,6 +422,7 @@
     <string name="settings_download_storage_location_subtitle">다운로드한 미디어를 저장할 폴더 경로</string>
     <string name="settings_storage_internal">내부 저장공간</string>
     <string name="settings_storage_external">외부 SD 카드</string>
+    <string name="settings_storage_builtin_external">외부 저장소(내장)</string>
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">시청 후 삭제</string>

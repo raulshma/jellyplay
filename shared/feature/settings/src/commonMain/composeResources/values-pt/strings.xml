@@ -424,6 +424,7 @@
     <string name="settings_download_storage_location_subtitle">Caminho da pasta para armazenar mídia descarregada</string>
     <string name="settings_storage_internal">Armazenamento interno</string>
     <string name="settings_storage_external">Cartão SD externo</string>
+    <string name="settings_storage_builtin_external">Armazenamento externo (integrado)</string>
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">Eliminar após ver</string>

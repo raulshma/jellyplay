@@ -424,6 +424,7 @@
     <string name="settings_download_storage_location_subtitle">Chemin du dossier pour stocker les médias téléchargés</string>
     <string name="settings_storage_internal">Stockage interne</string>
     <string name="settings_storage_external">Carte SD externe</string>
+    <string name="settings_storage_builtin_external">Stockage externe (intégré)</string>
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">Supprimer après visionnage</string>
