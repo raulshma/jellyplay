@@ -6,11 +6,8 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.VideoQueueController
 import com.raulshma.jellyplay.core.data.playback.PipController
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
-import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PerformanceDetection
@@ -132,7 +129,6 @@ class VideoPlayerViewModel(
     private val artworkUrls: ArtworkUrls,
     // Bare ctor parameter; DI passes it by name and no public val exposes it.
     castManager: CastManager,
-    private val syncPlayManager: SyncPlayManager,
     private val activePlayerController: ActivePlayerController,
     val pipController: PipController,
     // Public for the screen: the zoom-safe Compose overlay consumes the same
@@ -362,7 +358,7 @@ class VideoPlayerViewModel(
         itemPlaybackPreferenceRepository = sessionSources.itemPlaybackPreferenceRepository,
         castManager = castManager,
         jellyfinRemotePlayCastStrategy = sessionSources.jellyfinRemotePlayCastStrategy,
-        syncPlayManager = syncPlayManager,
+        syncPlayManager = sessionSources.syncPlayManager,
         adaptiveBitrateManager = sessionSources.adaptiveBitrateManager,
         networkMonitor = sessionSources.networkMonitor,
         activePlayerController = activePlayerController,
@@ -514,26 +510,22 @@ class VideoPlayerViewModel(
      */
     fun onEvent(event: VideoPlayerUiEvent) {
         when (event) {
-            is VideoPlayerUiEvent.Initialize -> {
-                // A user-driven player open: the still-watching streak starts
-                // fresh (auto-advance loads bypass onEvent and keep it) — and
-                // so does the autoplay-limit binge streak (#17).
-                playbackSession.autoplayController.onUserInteraction()
-                playbackSession.upNext.resetAutoAdvanceStreak()
-                playbackSession.initialize(
+            // The six manual "move to another item" arms fold into the
+            // session's ONE advance verb (the variant mapping is the whole
+            // arm — the engagement/binge-streak choreography lives on the
+            // session).
+            is VideoPlayerUiEvent.Initialize -> playbackSession.userAdvance(
+                UserAdvance.FreshOpen(
                     itemId = event.itemId,
                     mediaSourceId = event.mediaSourceId,
                     startPositionTicks = event.startPositionTicks,
                     subtitleStreamIndex = event.subtitleStreamIndex,
                     audioStreamIndex = event.audioStreamIndex,
                     forceStream = event.forceStream,
-                )
-            }
-            is VideoPlayerUiEvent.PlayEpisode -> {
-                // Manual episode navigation resets the still-watching streak.
-                playbackSession.autoplayController.onUserInteraction()
-                playbackSession.upNext.playEpisode(event.episodeId, event.startPositionTicks)
-            }
+                ),
+            )
+            is VideoPlayerUiEvent.PlayEpisode ->
+                playbackSession.userAdvance(UserAdvance.Episode(event.episodeId, event.startPositionTicks))
             is VideoPlayerUiEvent.RestartPlayback -> playbackSession.transport.restart()
             is VideoPlayerUiEvent.RetryPlayback -> retryPlayback()
             is VideoPlayerUiEvent.RetryWithEngine -> retryWithEngine(event.playerType)
@@ -556,24 +548,9 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.ApplySubtitleStyle -> playbackSession.subtitleStyleController.applySubtitleStyle()
             is VideoPlayerUiEvent.UpdatePipSourceRect ->
                 playbackSession.pipTransport.updatePipSourceRect(event.left, event.top, event.right, event.bottom)
-            is VideoPlayerUiEvent.PlayPreviousEpisode -> {
-                // Manual navigation: the still-watching streak restarts.
-                playbackSession.autoplayController.onUserInteraction()
-                playbackSession.upNext.playPreviousEpisode()
-            }
-            is VideoPlayerUiEvent.PlayNextEpisode -> {
-                // Manual navigation: the still-watching streak restarts.
-                playbackSession.autoplayController.onUserInteraction()
-                // MANUAL play-next (the card's "Watch now" button): the
-                // autoplay-limit binge streak restarts too (#17) — the
-                // countdown's expiry arm routes through the slice instead.
-                playbackSession.upNext.playNextManually()
-            }
-            is VideoPlayerUiEvent.MarkWatchedAndSkip -> {
-                // A deliberate user advance — resets the still-watching streak.
-                playbackSession.autoplayController.onUserInteraction()
-                playbackSession.upNext.markWatchedAndSkip()
-            }
+            is VideoPlayerUiEvent.PlayPreviousEpisode -> playbackSession.userAdvance(UserAdvance.Previous)
+            is VideoPlayerUiEvent.PlayNextEpisode -> playbackSession.userAdvance(UserAdvance.Next)
+            is VideoPlayerUiEvent.MarkWatchedAndSkip -> playbackSession.userAdvance(UserAdvance.WatchedAndSkip)
             is VideoPlayerUiEvent.MarkUnwatchedAndQuit -> playbackSession.upNext.markUnwatchedAndQuit()
             is VideoPlayerUiEvent.ToggleDialogueBoost -> toggleDialogueBoost()
             is VideoPlayerUiEvent.SetDialogueBoostStrength -> setDialogueBoostStrength(event.strength)
@@ -597,11 +574,7 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetSeriesSubtitleDisabled -> setSeriesSubtitleDisabled(event.disabled)
             is VideoPlayerUiEvent.SetSeriesAudioDescriptionPreference ->
                 setSeriesPreferAudioDescription(event.remember)
-            is VideoPlayerUiEvent.PlayQueueItem -> {
-                // Manual navigation: the still-watching streak restarts.
-                playbackSession.autoplayController.onUserInteraction()
-                playbackSession.upNext.playQueueItem(event.index)
-            }
+            is VideoPlayerUiEvent.PlayQueueItem -> playbackSession.userAdvance(UserAdvance.QueueItem(event.index))
             is VideoPlayerUiEvent.RemoveQueueItem -> playbackSession.videoQueue.removeAt(event.index)
             is VideoPlayerUiEvent.MoveQueueItem -> playbackSession.videoQueue.move(event.fromIndex, event.toIndex)
             VideoPlayerUiEvent.ClearQueue -> playbackSession.videoQueue.clear()
@@ -627,8 +600,8 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.StillWatchingTick -> playbackSession.stillWatching.onTick()
             is VideoPlayerUiEvent.SetVideoAutoplayNext -> playbackSession.uiCommands.setVideoAutoplayNext(event.enabled)
             is VideoPlayerUiEvent.SetInputBindingEnabled -> playbackSession.inputBindingToggle.setEnabled(event.bindingId, event.enabled)
-            is VideoPlayerUiEvent.SetSyncPlayRepeatMode -> setSyncPlayRepeatMode(event.mode)
-            is VideoPlayerUiEvent.SetSyncPlayShuffleMode -> setSyncPlayShuffleMode(event.mode)
+            is VideoPlayerUiEvent.SetSyncPlayRepeatMode -> playbackSession.setSyncPlayRepeatMode(event.mode)
+            is VideoPlayerUiEvent.SetSyncPlayShuffleMode -> playbackSession.setSyncPlayShuffleMode(event.mode)
             is VideoPlayerUiEvent.LoadSeasonEpisodes -> playbackSession.upNext.loadSeason(event.seasonId)
         }
     }
@@ -967,17 +940,9 @@ class VideoPlayerViewModel(
     // #14 offer, the close channel, nowPlayingReporter.markEnded) is
     // session-owned; the pure [EndOfMediaDecision] fold module stays as is.
 
-    private fun setSyncPlayRepeatMode(mode: SyncPlayRepeatMode) {
-        launch {
-            syncPlayManager.setGroupRepeatMode(mode)
-        }
-    }
-
-    private fun setSyncPlayShuffleMode(mode: SyncPlayShuffleMode) {
-        launch {
-            syncPlayManager.setGroupShuffleMode(mode)
-        }
-    }
+    // The SyncPlay group-mode launches (the repeat/shuffle picks' manager
+    // calls) moved onto the session — the funnel arms above forward one-line
+    // to the session verbs.
 
     // shouldAttemptCinemaMode (the load spine's cinema gate — the cached
     // aggregate, the SyncPlay flag, the media-detail holder) and
@@ -1036,13 +1001,14 @@ class VideoPlayerViewModel(
      * rows and the composite `"{provider}:{id}"` key for external-provider
      * rows — matching how [SubtitleManager] records its ready hints.
      *
-     * Returns true when the subtitle was activated now; false when it has not
-     * surfaced yet (the side-load into the engine is asynchronous — mpv
-     * republishes its track list on a delay, ExoPlayer re-prepares the media
-     * item). In that case the ready hint is armed as a pending selection so it
-     * applies automatically on the next track-list emissions instead of the
-     * user having to re-tap "Use" — and callers should not navigate away from
-     * the download row.
+     * The resolution + effects live in the track-selection hub
+     * ([PlaybackSession.trackSelectionHelper] `useDownloadedSubtitle` — the
+     * verdict's three shapes and their exact user messages are data);
+     * this screen-facing funnel keeps the shared-tag trace (log BEFORE the
+     * hub resolves) and relays the verdict's message. Returns true when the
+     * subtitle was activated now; false when it has not surfaced yet (the
+     * armed-pending verdict — callers should not navigate away from the
+     * download row) or is not ready.
      */
     fun useDownloadedSubtitle(rowKey: String): Boolean {
         val hint = playbackSession.subtitles.state.value.readySubtitles[rowKey]
@@ -1052,20 +1018,14 @@ class VideoPlayerViewModel(
                 "pickerRows=" + playbackSession.trackSelectionHelper.state.value.subtitleTracks
                     .joinToString { "(i=${it.index},id=${it.id},si=${it.streamIndex},sel=${it.isSelected},'${it.label.take(24)}')" },
         )
-        if (hint == null) {
-            userMessageBus.info("Subtitle not active yet — please try again shortly")
-            return false
+        val verdict = playbackSession.trackSelectionHelper.useDownloadedSubtitle(rowKey)
+        // The resolution trace: only when a hint existed and resolution ran
+        // (the not-ready verdict never attempts it — same shape as before).
+        if (verdict !is UseDownloadedVerdict.NotReady) {
+            Log.d(USE_LOG_TAG, "Resolution: ${verdict.resolved?.let { "index=${it.index} id=${it.id}" } ?: "<none>"}")
         }
-        val option = playbackSession.trackSelectionHelper.findSubtitleOptionFor(hint)
-        Log.d(USE_LOG_TAG, "Resolution: ${option?.let { "index=${it.index} id=${it.id}" } ?: "<none>"}")
-        if (option == null) {
-            playbackSession.trackSelectionHelper.requestSubtitleSelection(hint)
-            userMessageBus.info("Subtitle still loading — it will be selected automatically")
-            return false
-        }
-        selectSubtitleTrack(option)
-        userMessageBus.info("Subtitle selected")
-        return true
+        userMessageBus.info(verdict.userMessage)
+        return verdict is UseDownloadedVerdict.Selected
     }
 
     // ── Background-cast media-session swap ──────────────────────────────────

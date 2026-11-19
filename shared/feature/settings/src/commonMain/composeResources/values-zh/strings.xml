@@ -424,6 +424,7 @@
     <string name="settings_download_storage_location_subtitle">用于存储已下载媒体的文件夹路径</string>
     <string name="settings_storage_internal">内部存储</string>
     <string name="settings_storage_external">外部 SD 卡</string>
+    <string name="settings_storage_builtin_external">外部存储（内置）</string>
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">观看后删除</string>

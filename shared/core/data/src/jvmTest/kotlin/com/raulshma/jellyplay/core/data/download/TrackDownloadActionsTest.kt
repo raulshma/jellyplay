@@ -53,7 +53,7 @@ class TrackDownloadActionsTest {
             windowReads += 1
             return rows
         }
-        override suspend fun deleteDownload(id: String): Result<Unit> {
+        override suspend fun deleteDownload(id: String, keepSeriesArm: Boolean): Result<Unit> {
             removedIds += id
             return Result.success(Unit)
         }

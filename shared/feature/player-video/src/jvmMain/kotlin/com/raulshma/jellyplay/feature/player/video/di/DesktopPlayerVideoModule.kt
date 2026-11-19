@@ -48,10 +48,11 @@ import org.koin.dsl.module
  * the desktop playback host is live (SwingPanel/HWND surface +
  * Route.VideoPlayer unguarded on Windows), and the per-session engine
  * factory is NOT bound here — [PlayerEngineFactory] must return an mpv
- * engine carrying the composing surface's HWND, which only the app layer
- * can build (MpvDesktopEngine lives in apps/desktop), so apps/desktop's
- * DesktopPlayerModule owns that binding and delegates EXTERNAL picks to the
- * public NoOpPlayerEngineFactory.  no-op seam bindings stay here;
+ * engine carrying the composing surface's HWND, wired with the app layer's
+ * engine/input-conf providers (PlayerEngineStore, DesktopPaths …), so
+ * apps/desktop's DesktopPlayerModule owns that binding and delegates
+ * EXTERNAL picks to the public NoOpPlayerEngineFactory.  no-op seam
+ * bindings stay here;
  * they still cover non-Windows JVMs where the route stays guarded. The
  * jvmTest suite never resolves Koin — it builds its own fakes.
  */
@@ -145,11 +146,11 @@ val desktopPlayerVideoModule: Module = module {
                 nowPlayingReporter = get(),
                 sleepCountdown = get(),
                 videoMiniPlayerState = get(),
+                syncPlayManager = get(),
             ),
             imageUrlProvider = get(),
             artworkUrls = get(),
             castManager = get(),
-            syncPlayManager = get(),
             activePlayerController = get(),
             pipController = get(),
             fontProvider = get(),

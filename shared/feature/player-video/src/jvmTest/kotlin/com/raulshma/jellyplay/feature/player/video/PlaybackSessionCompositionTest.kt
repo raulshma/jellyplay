@@ -83,7 +83,7 @@ class PlaybackSessionCompositionTest {
 
     @Test
     fun `resetForNewItem runs the synchronous prefix in the load-bearing order`() {
-        val body = Regex("""override fun resetForNewItem\(selection: MediaStreamSelection\) \{[\s\S]*?\n    \}""")
+        val body = Regex("""private fun resetForNewItem\(selection: MediaStreamSelection\) \{[\s\S]*?\n    \}""")
             .find(sessionSource)?.value
         assertTrue(body != null, "resetForNewItem body not found in PlaybackSession")
         val anchor = body!!.withIndexSequence(

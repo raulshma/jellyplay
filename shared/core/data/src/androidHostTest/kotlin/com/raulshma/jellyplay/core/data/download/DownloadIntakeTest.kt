@@ -7,10 +7,12 @@ import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -88,5 +90,30 @@ class DownloadIntakeTest {
         val result = intake.startFromItem(browseItem(MediaType.AUDIO))
 
         assertEquals(DownloadRequestResult.Failed("no source"), result)
+    }
+
+    // ── ADR-0015: the sheet's Default arms; the disarm verb is null-only ──
+
+    @Test
+    fun `startSeries Inherit writes a FOLLOW_GLOBAL arm row`() = runTest {
+        coEvery { downloadRepository.downloadSeries(any(), any()) } returns Result.success(emptyList())
+
+        intake.startSeries("series-1", policyChoice = DownloadIntake.SeriesPolicyChoice.Inherit)
+
+        // "Default" is now an ARM (follow-global, survives hygiene) — not the
+        // disarm verb; only the Downloads screen's un-arm action writes null.
+        coVerify(exactly = 1) { policyStore.setSeriesPolicy("series-1", AutoDownloadMode.FOLLOW_GLOBAL) }
+        coVerify(exactly = 0) { policyStore.setSeriesPolicy("series-1", null) }
+    }
+
+    @Test
+    fun `startSeries an explicit Set is written verbatim and not clobbered by the arm`() = runTest {
+        coEvery { downloadRepository.downloadSeries(any(), any()) } returns Result.success(emptyList())
+
+        intake.startSeries("series-1", policyChoice = DownloadIntake.SeriesPolicyChoice.Set(AutoDownloadMode.NEVER))
+
+        // Exactly one policy write, the explicit mode — the implicit-arm
+        // funnel never touches a series that carries a sheet choice here.
+        coVerify(exactly = 1) { policyStore.setSeriesPolicy("series-1", AutoDownloadMode.NEVER) }
     }
 }

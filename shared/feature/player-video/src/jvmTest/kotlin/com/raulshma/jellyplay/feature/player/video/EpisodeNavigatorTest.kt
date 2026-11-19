@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -13,23 +14,18 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Drives [EpisodeNavigator] through its interface — the choreography formerly
@@ -40,7 +36,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class EpisodeNavigatorTest {
 
-    private val dispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private val catalogue: EpisodeCatalogue = mockk(relaxed = true)
 
     private lateinit var sessionState: MutableStateFlow<PlayerSessionState>
@@ -92,18 +89,12 @@ class EpisodeNavigatorTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(dispatcher)
         sessionState = MutableStateFlow(PlayerSessionState(currentItemId = "ep2"))
         episodes = EpisodeBrowserState()
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun `next resolves the sibling, marks the current item played and initializes from zero`() = runTest(dispatcher) {
+    fun `next resolves the sibling, marks the current item played and initializes from zero`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
         val nav = navigator(this)
 
@@ -118,7 +109,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `next at season end is a no-op that never marks played`() = runTest(dispatcher) {
+    fun `next at season end is a no-op that never marks played`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep1"), episode("ep2"))
         val nav = navigator(this)
 
@@ -131,7 +122,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `next holds the latch until the session settles on a non-null sibling`() = runTest(dispatcher) {
+    fun `next holds the latch until the session settles on a non-null sibling`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         val nav = navigator(this)
 
@@ -156,7 +147,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `next latch releases on session error`() = runTest(dispatcher) {
+    fun `next latch releases on session error`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         val nav = navigator(this)
 
@@ -169,7 +160,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `next releases the latch on settle timeout`() = runTest(dispatcher) {
+    fun `next releases the latch on settle timeout`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         val nav = navigator(this)
 
@@ -182,7 +173,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `next on a failed season resolution reports the error and stays idle`() = runTest(dispatcher) {
+    fun `next on a failed season resolution reports the error and stays idle`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { catalogue.loadSeasonEpisodes(any(), any(), any()) } returns Result.failure(RuntimeException("offline timeout"))
         val nav = navigator(this)
 
@@ -196,7 +187,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `next routes through the SyncPlay queue when the sibling is queued`() = runTest(dispatcher) {
+    fun `next routes through the SyncPlay queue when the sibling is queued`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
         val nav = EpisodeNavigator(
             scope = this,
@@ -228,7 +219,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `previous resumes from the sibling's saved position`() = runTest(dispatcher) {
+    fun `previous resumes from the sibling's saved position`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep1", positionTicks = 250L), episode("ep2"))
         val nav = navigator(this)
 
@@ -239,7 +230,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `previous at season start is a no-op`() = runTest(dispatcher) {
+    fun `previous at season start is a no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         detail = MediaDetail(
             item = MediaItem(
                 id = "ep1",
@@ -260,7 +251,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `previous routes through the SyncPlay queue when the sibling is queued`() = runTest(dispatcher) {
+    fun `previous routes through the SyncPlay queue when the sibling is queued`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep1"), episode("ep2"))
         val nav = EpisodeNavigator(
             scope = this,
@@ -288,7 +279,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `refreshAdjacent writes the next and previous siblings`() = runTest(dispatcher) {
+    fun `refreshAdjacent writes the next and previous siblings`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
         val nav = navigator(this)
 
@@ -300,7 +291,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `loadSeason publishes the resolved list and clears the loading flag`() = runTest(dispatcher) {
+    fun `loadSeason publishes the resolved list and clears the loading flag`() = runTest(mainDispatcherRule.testDispatcher) {
         stubSeason(episode("ep1"), episode("ep2"))
         val nav = navigator(this)
 
@@ -313,7 +304,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `loadSeries publishes seasons then the current season's episodes`() = runTest(dispatcher) {
+    fun `loadSeries publishes seasons then the current season's episodes`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { catalogue.loadSeriesEpisodes("series-1", any()) } returns Result.success(
             EpisodeCatalogueSnapshot.empty("series-1").copy(
                 seasons = listOf(episode("season-1"), episode("season-2")),
@@ -331,7 +322,7 @@ class EpisodeNavigatorTest {
     }
 
     @Test
-    fun `non-series details are ignored`() = runTest(dispatcher) {
+    fun `non-series details are ignored`() = runTest(mainDispatcherRule.testDispatcher) {
         detail = MediaDetail(item = MediaItem(id = "m1", name = "A Movie", mediaType = MediaType.MOVIE))
         val nav = navigator(this)
 

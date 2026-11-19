@@ -39,13 +39,13 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import kotlinx.datetime.LocalDate as KotlinLocalDate
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toKotlinLocalDate
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -63,10 +63,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
+import org.junit.Rule
 
 /**
  * UpcomingCalendarViewModel coverage (hand-rolled fakes over the repository
@@ -83,7 +82,8 @@ import kotlinx.coroutines.withContext
 @OptIn(ExperimentalCoroutinesApi::class)
 class UpcomingCalendarViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var arr: FakeArrRepository
     private lateinit var seerr: FakeSeerrRepository
@@ -91,7 +91,6 @@ class UpcomingCalendarViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         arr = FakeArrRepository()
         seerr = FakeSeerrRepository()
         // Real store over an in-memory DataStore — no tmpdir file (concurrent
@@ -102,11 +101,6 @@ class UpcomingCalendarViewModelTest {
             dataStore = FakePreferencesDataStore(),
             externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private suspend fun enableDirectArr() {
@@ -120,7 +114,7 @@ class UpcomingCalendarViewModelTest {
         // scope) so it still reports the cold `false` seed while VM init's
         // synchronous refresh() runs — the init timing the flag tests pin
         // (ExperimentalFeatureGate's KDoc). advanceUntilIdle warms it.
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     private fun item(

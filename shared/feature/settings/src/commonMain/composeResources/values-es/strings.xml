@@ -424,6 +424,7 @@
     <string name="settings_download_storage_location_subtitle">Ruta de carpeta para almacenar medios descargados</string>
     <string name="settings_storage_internal">Almacenamiento interno</string>
     <string name="settings_storage_external">Tarjeta SD externa</string>
+    <string name="settings_storage_builtin_external">Almacenamiento externo (integrado)</string>
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">Eliminar tras ver</string>

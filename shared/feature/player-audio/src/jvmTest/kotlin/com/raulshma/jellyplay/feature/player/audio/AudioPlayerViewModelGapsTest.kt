@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -31,15 +32,11 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,6 +44,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Gap suite for [AudioPlayerViewModel] — the branches its sibling suite
@@ -75,7 +73,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class AudioPlayerViewModelGapsTest {
 
-    private val testDispatcher = UnconfinedTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     private lateinit var queueManager: AudioQueueManager
     private lateinit var effectsManager: AudioEffectsManager
@@ -124,7 +123,6 @@ class AudioPlayerViewModelGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         queueManager = mockk(relaxed = true)
         effectsManager = mockk(relaxed = true)
         engine = mockk(relaxed = true)
@@ -209,11 +207,6 @@ class AudioPlayerViewModelGapsTest {
             cast = cast,
             audioQueueFacade = audioQueueFacade,
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun detail(itemId: String, blurHash: String? = "hash-$itemId") = MediaDetail(
@@ -469,7 +462,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 1) { downloads.deleteDownload("dl-1") }
+        coVerify(exactly = 1) { downloads.deleteDownload("dl-1", keepSeriesArm = false) }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 
@@ -480,7 +473,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 0) { downloads.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloads.deleteDownload(any(), any()) }
         coVerify(exactly = 1) { trackDownloadActions.flip("track-1") }
     }
 
@@ -490,7 +483,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 0) { downloads.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloads.deleteDownload(any(), any()) }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 

@@ -121,7 +121,7 @@ class PlayedStateSyncImplResilienceTest {
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 0) { downloadRepository.getDownloadByMediaItemId(any()) }
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
     }
 
     @Test
@@ -135,7 +135,7 @@ class PlayedStateSyncImplResilienceTest {
         val result = sync.flip(ITEM_ID, played = true)
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
     }
 
     // ── 3. The #157 heal defers the local reset when undelivered ────────

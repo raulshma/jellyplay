@@ -32,26 +32,23 @@ import androidx.datastore.preferences.core.emptyPreferences
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the "Hidden from Next Up" management ViewModel: the metadata hydration
@@ -70,7 +67,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class NextUpExcludedViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeDiscovery: HomeDiscoveryStore
     private lateinit var detailFeed: DetailFeed
@@ -81,14 +79,13 @@ class NextUpExcludedViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         homeDiscovery = mockk(relaxed = true)
         detailFeed = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         every { homeDiscovery.homeDiscovery } returns homeDiscoverySlice
         every { imageUrlProvider.getImageUrl(any()) } answers { "https://server/Items/${firstArg<String>()}/Images/Primary" }
         editor = PreferencesEditor(
-            scope = CoroutineScope(testDispatcher + Job()),
+            scope = CoroutineScope(mainDispatcherRule.testDispatcher + Job()),
             editScope = PreferencesEditScope(
                 stores = PreferenceStores(
                     playback = mockk<PlaybackStore>(relaxed = true),
@@ -118,11 +115,6 @@ class NextUpExcludedViewModelTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun series(id: String, name: String, year: Int?) =
         MediaItem(id = id, name = name, mediaType = MediaType.SERIES, year = year)
 
@@ -132,7 +124,7 @@ class NextUpExcludedViewModelTest {
     // ---------------------------------------------------------------- hydration
 
     @Test
-    fun `excluded ids hydrate to rows with series metadata`() = runTest(testDispatcher) {
+    fun `excluded ids hydrate to rows with series metadata`() = runTest(mainDispatcherRule.testDispatcher) {
         homeDiscoverySlice.value = HomeDiscoverySlice(
             nextUpExcludedSeriesIds = setOf("s1", "s2"),
         )
@@ -154,7 +146,7 @@ class NextUpExcludedViewModelTest {
     }
 
     @Test
-    fun `a failed detail fetch keeps the row as a still-restorable placeholder`() = runTest(testDispatcher) {
+    fun `a failed detail fetch keeps the row as a still-restorable placeholder`() = runTest(mainDispatcherRule.testDispatcher) {
         homeDiscoverySlice.value = HomeDiscoverySlice(nextUpExcludedSeriesIds = setOf("s1", "s2"))
         coEvery { detailFeed.getMediaDetail("s1", force = false) } returns
             Result.success(MediaDetail(item = series("s1", "Series One", 2020)))
@@ -171,7 +163,7 @@ class NextUpExcludedViewModelTest {
     }
 
     @Test
-    fun `an empty exclusion set shows the empty state without fetching`() = runTest(testDispatcher) {
+    fun `an empty exclusion set shows the empty state without fetching`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -182,7 +174,7 @@ class NextUpExcludedViewModelTest {
     // ---------------------------------------------------------------- restore commands
 
     @Test
-    fun `restore routes through includeSeriesInNextUp and the row leaves the list`() = runTest(testDispatcher) {
+    fun `restore routes through includeSeriesInNextUp and the row leaves the list`() = runTest(mainDispatcherRule.testDispatcher) {
         homeDiscoverySlice.value = HomeDiscoverySlice(nextUpExcludedSeriesIds = setOf("s1", "s2"))
         coEvery { detailFeed.getMediaDetail(any(), force = false) } answers {
             Result.success(MediaDetail(item = series(firstArg(), "Series", 2020)))
@@ -207,7 +199,7 @@ class NextUpExcludedViewModelTest {
     }
 
     @Test
-    fun `restoreAll routes through clearNextUpExclusions and empties the list`() = runTest(testDispatcher) {
+    fun `restoreAll routes through clearNextUpExclusions and empties the list`() = runTest(mainDispatcherRule.testDispatcher) {
         homeDiscoverySlice.value = HomeDiscoverySlice(nextUpExcludedSeriesIds = setOf("s1", "s2"))
         coEvery { detailFeed.getMediaDetail(any(), force = false) } answers {
             Result.success(MediaDetail(item = series(firstArg(), "Series", 2020)))

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.BookTocCache
@@ -38,7 +39,6 @@ import io.mockk.mockk
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -48,16 +48,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * THE DICE-ROLL CROSS-MODULE CONTRACT TEST — the one test that drives a roll
@@ -118,15 +117,16 @@ import kotlin.test.assertTrue
  *     sections write re-applies it — and the double's cache agrees with the
  *     painted roll afterwards (the composition, not just the feature half).
  *
- * Harness mirrors [HomeRefresherTest]: MockK collaborators, inlined
- * StandardTestDispatcher, a scope over the test scheduler, runCurrent (never
+ * Harness mirrors [HomeRefresherTest]: MockK collaborators, the
+ * MainDispatcherRule fixture, a scope over the test scheduler, runCurrent (never
  * advanceUntilIdle — the periodic loop is an infinite delay chain), stop +
  * scope cancel in @After.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DiscoverRollContractTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeFeed: HomeFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -179,7 +179,6 @@ class DiscoverRollContractTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         offlineModeManager = mockk(relaxed = true)
         fakeTimeSource = FakeTimeSource()
 
@@ -219,7 +218,6 @@ class DiscoverRollContractTest {
         refresher?.stop()
         refresherScope?.cancel()
 
-        Dispatchers.resetMain()
     }
 
     /**

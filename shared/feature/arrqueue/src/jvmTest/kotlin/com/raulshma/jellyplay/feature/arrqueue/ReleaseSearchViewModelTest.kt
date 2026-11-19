@@ -5,21 +5,18 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.Rule
 
 /**
  * ReleaseSearch ViewModel coverage (the ArrQueueViewModelTest style): the
@@ -31,22 +28,15 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReleaseSearchViewModelTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var arrReleaseOperations: ArrReleaseOperations
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         arrReleaseOperations = mockk()
         coEvery { arrReleaseOperations.releaseHistoryStatuses(any()) } returns Result.success(emptyMap())
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun item() = ArrQueueItem(

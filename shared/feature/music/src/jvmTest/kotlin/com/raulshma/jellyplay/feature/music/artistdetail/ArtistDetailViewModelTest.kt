@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserDataChange
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
@@ -19,15 +20,10 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,6 +31,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 /**
  * Pins the artist detail contract on the [com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator]
@@ -48,9 +45,8 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArtistDetailViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val detailFeed: DetailFeed = mockk()
     private val userDataChanges: UserDataChanges = mockk()
@@ -70,7 +66,6 @@ class ArtistDetailViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         // The deferred refresher collects this for the whole VM lifetime.
         every { userDataChanges.userDataChanges } returns userDataEvents
         viewModel = ArtistDetailViewModel(
@@ -83,11 +78,6 @@ class ArtistDetailViewModelTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     /** Loads an artist detail + albums so the screen state is populated. */
     private fun loadArtist(artistName: String = "Artist") {
         coEvery { detailFeed.getMediaDetail("ar1", any()) } returns Result.success(
@@ -98,7 +88,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun loadArtist_populatesNameAlbumsAndClearsLoading() = runTest(mainDispatcher) {
+    fun loadArtist_populatesNameAlbumsAndClearsLoading() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist("Artist")
 
         advanceUntilIdle()
@@ -110,7 +100,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun loadArtist_detailFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
+    fun loadArtist_detailFailure_setsRawErrorOverNoContent() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { detailFeed.getMediaDetail("ar1", any()) } returns
             Result.failure(RuntimeException("no artist"))
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
@@ -128,7 +118,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun loadArtist_albumsFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
+    fun loadArtist_albumsFailure_setsRawErrorOverNoContent() = runTest(mainDispatcherRule.testDispatcher) {
         // The albums half now fails the whole fetch (all-or-nothing): the old
         // ladder left it silently empty — an artist that looked to have no
         // albums, with no error and no retry path.
@@ -148,7 +138,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun startInstantMix_started_setsMixFirstTrackIdFromOutcomeQueue() = runTest(mainDispatcher) {
+    fun startInstantMix_started_setsMixFirstTrackIdFromOutcomeQueue() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Started(
@@ -171,7 +161,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun startInstantMix_empty_setsSharedMixUnavailableError() = runTest(mainDispatcher) {
+    fun startInstantMix_empty_setsSharedMixUnavailableError() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Empty
@@ -185,7 +175,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun startInstantMix_failed_mapsCauseMessage() = runTest(mainDispatcher) {
+    fun startInstantMix_failed_mapsCauseMessage() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
@@ -200,7 +190,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun startInstantMix_suppressed_isSilent() = runTest(mainDispatcher) {
+    fun startInstantMix_suppressed_isSilent() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Suppressed
@@ -214,7 +204,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun consumeMixEvent_clearsMixFirstTrackId() = runTest(mainDispatcher) {
+    fun consumeMixEvent_clearsMixFirstTrackId() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Started(
@@ -235,7 +225,7 @@ class ArtistDetailViewModelTest {
     // ── Re-entry guard + deferred refresh (the album host's fixture shape) ───
 
     @Test
-    fun loadArtist_onAnAlreadyLoadedArtistIsANoOp() = runTest(mainDispatcher) {
+    fun loadArtist_onAnAlreadyLoadedArtistIsANoOp() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
 
@@ -251,7 +241,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun loadArtist_afterAFailedInstantMixIsStillANoOp() = runTest(mainDispatcher) {
+    fun loadArtist_afterAFailedInstantMixIsStillANoOp() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
         // A failed mix shares the screen's `error` field; the re-entry guard
@@ -274,7 +264,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun loadArtist_thrownRepoFailure_clearsSpinnerSetsErrorAndReloadsOnReEntry() = runTest(mainDispatcher) {
+    fun loadArtist_thrownRepoFailure_clearsSpinnerSetsErrorAndReloadsOnReEntry() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { detailFeed.getMediaDetail("ar1", any()) } throws IllegalStateException("engine blew up")
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
 
@@ -300,7 +290,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun loadArtist_afterAFailedLoudLoadReloads() = runTest(mainDispatcher) {
+    fun loadArtist_afterAFailedLoudLoadReloads() = runTest(mainDispatcherRule.testDispatcher) {
         // Detail half succeeds, albums half fails: the loud load FAILED (the
         // all-or-nothing publish leaves nothing on screen behind the error),
         // so the re-entry guard must not skip — this is the flag's positive
@@ -326,7 +316,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_successHealsAFailedLoudLoadForReEntry() = runTest(mainDispatcher) {
+    fun deferredRefresh_successHealsAFailedLoudLoadForReEntry() = runTest(mainDispatcherRule.testDispatcher) {
         // Loud failure: nothing on screen behind the error, and the failed
         // loud load armed the re-entry guard.
         coEvery { detailFeed.getMediaDetail("ar1", any()) } returns Result.success(
@@ -364,7 +354,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcher) {
+    fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
         assertFalse(viewModel.isLoading)
@@ -391,7 +381,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_failureKeepsLastContentInsteadOfFlashingError() = runTest(mainDispatcher) {
+    fun deferredRefresh_failureKeepsLastContentInsteadOfFlashingError() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
 
@@ -424,7 +414,7 @@ class ArtistDetailViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_failedHalfKeepsTheWholeStalePairInsteadOfMixing() = runTest(mainDispatcher) {
+    fun deferredRefresh_failedHalfKeepsTheWholeStalePairInsteadOfMixing() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
 
@@ -451,7 +441,7 @@ class ArtistDetailViewModelTest {
     // adapter's own surfaces (pair publish, heal, guard, spinner).
 
     @Test
-    fun refreshArtist_bypassesTheDetailCache() = runTest(mainDispatcher) {
+    fun refreshArtist_bypassesTheDetailCache() = runTest(mainDispatcherRule.testDispatcher) {
         loadArtist()
         advanceUntilIdle()
         coEvery { detailFeed.getMediaDetail("ar1", true) } returns Result.success(

@@ -11,12 +11,12 @@ import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SessionNowPlayingItem
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import java.time.Instant
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -25,12 +25,12 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the settings-root ViewModel's non-Composable surface: the cache-size
@@ -46,7 +46,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var settingsBackupIo: SettingsBackupIo
     private lateinit var preferencesStore: UserPreferencesStore
@@ -66,7 +67,6 @@ class SettingsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         settingsBackupIo = mockk()
         preferencesStore = mockk(relaxed = true)
         projections = mockk(relaxed = true)
@@ -84,11 +84,6 @@ class SettingsViewModelTest {
         every { recentsStore.recents } returns recents
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun viewModel(): SettingsViewModel = SettingsViewModel(
         settingsBackupIo = settingsBackupIo,
         preferencesStore = preferencesStore,
@@ -103,7 +98,7 @@ class SettingsViewModelTest {
     // ------------------------------------------------------------ cache size
 
     @Test
-    fun `refreshCacheSize converts the seam's byte estimate to whole mebibytes`() = runTest(testDispatcher) {
+    fun `refreshCacheSize converts the seam's byte estimate to whole mebibytes`() = runTest(mainDispatcherRule.testDispatcher) {
         // 5 MiB + 123 partial bytes must truncate, not round.
         coEvery { settingsBackupIo.estimateCacheSizeBytes() } returns 5L * 1024 * 1024 + 123
         val vm = viewModel()
@@ -119,7 +114,7 @@ class SettingsViewModelTest {
     // ------------------------------------------------------------ preferences collection
 
     @Test
-    fun `projected screen preferences flow into the exposed state live`() = runTest(testDispatcher) {
+    fun `projected screen preferences flow into the exposed state live`() = runTest(mainDispatcherRule.testDispatcher) {
         screenPrefs.value = SettingsScreenPreferences(showAdvancedSettings = true)
         val vm = viewModel()
         advanceUntilIdle()
@@ -135,7 +130,7 @@ class SettingsViewModelTest {
     // ------------------------------------------------------------ session surface
 
     @Test
-    fun `admin user loads only the live non-server sessions`() = runTest(testDispatcher) {
+    fun `admin user loads only the live non-server sessions`() = runTest(mainDispatcherRule.testDispatcher) {
         val now = Instant.now().toString()
         val live = SessionInfo(id = "s1", client = "Jellyfin Web", deviceName = "Chrome", lastActivityDate = now, isActive = true)
         val staleIdle = SessionInfo(id = "s2", client = "Jellyfin Web", deviceName = "Tablet", lastActivityDate = "2020-01-01T00:00:00Z", isActive = true)
@@ -162,7 +157,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `non-admin user never polls sessions`() = runTest(testDispatcher) {
+    fun `non-admin user never polls sessions`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
         currentUser.value = UserInfo(id = "u2", name = "User", serverAddress = "http://x", accessToken = "t", isAdmin = false)
@@ -173,7 +168,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `sendMessageToSession posts success and failure as distinct one-shot arms`() = runTest(testDispatcher) {
+    fun `sendMessageToSession posts success and failure as distinct one-shot arms`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -195,7 +190,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `server user list emission is mirrored into state`() = runTest(testDispatcher) {
+    fun `server user list emission is mirrored into state`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -208,7 +203,7 @@ class SettingsViewModelTest {
     // ------------------------------------------------------------ recents
 
     @Test
-    fun `recordSettingUsed delegates to the recents store`() = runTest(testDispatcher) {
+    fun `recordSettingUsed delegates to the recents store`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -219,7 +214,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `clearRecentSettings delegates to the recents store`() = runTest(testDispatcher) {
+    fun `clearRecentSettings delegates to the recents store`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 

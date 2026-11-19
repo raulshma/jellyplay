@@ -4,8 +4,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins the wizard page geometry that OnboardingViewModel.setStep coerces
- * against (`0..OnboardingStep.count - 1`): the step list itself, its
+ * Pins the wizard page geometry that OnboardingViewModel.navigateToPage
+ * coerces against (`0..OnboardingStep.count - 1`): the step list itself, its
  * contiguous zero-based indices, and the companion count alias. If a step is
  * ever inserted or dropped, the coercion bounds move with it — these tests
  * make that change visible instead of silent.
@@ -44,7 +44,7 @@ class OnboardingStepTest {
     fun companion_count_matches_the_entries_size() {
         assertEquals(OnboardingStep.entries.size, OnboardingStep.count)
         assertEquals(10, OnboardingStep.count)
-        // The inclusive upper bound setStep coerces into.
+        // The inclusive upper bound navigateToPage coerces into.
         assertEquals(OnboardingStep.count - 1, OnboardingStep.COMPLETION.index)
     }
 

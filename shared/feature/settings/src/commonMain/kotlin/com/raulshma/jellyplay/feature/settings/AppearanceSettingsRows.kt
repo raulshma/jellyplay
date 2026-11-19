@@ -1432,6 +1432,57 @@ internal val AppearanceThemeRows: List<SettingsRow> = listOf(
     AppearanceRows.ScheduledEnd,
 )
 
+// ── The theme group's exception sets ─────────────────────────────────────
+// The rows the strict admission count ([RowAdmission.ContentGated] — counted
+// by no total, the screens add their terms explicitly) and the form-factor
+// fork keep out of the derived total, named where the rows are declared so
+// the contract tests' count arithmetic derives from these lists instead of
+// restating hand-counted literals.
+
+/**
+ * The content-gated rows: their emission rides theme state the admission
+ * flags vocabulary does not carry (the per-variant accent support, the
+ * standard-vs-themed branch, the Android-12 dynamic-color capability, the
+ * active-dark + OLED allowance, the SCHEDULED theme mode) — the screens add
+ * the rows' content terms explicitly ([appearanceThemeScreenRowTotal]).
+ */
+internal val AppearanceThemeContentGatedRows: List<SettingsRow> = listOf(
+    AppearanceRows.StyleAccent,
+    AppearanceRows.DynamicTheming,
+    AppearanceRows.OledMode,
+    AppearanceRows.AccentColor,
+    AppearanceRows.ColorStyle,
+    AppearanceRows.ScheduledStart,
+    AppearanceRows.ScheduledEnd,
+)
+
+/**
+ * The highlight-alias row: theme_scheduler's screen face IS the theme_mode
+ * row ([THEME_HIGHLIGHT_IDS]) — ContentGated and counted by no total (the
+ * shipped quirk shape).
+ */
+internal val AppearanceThemeHighlightAliasRows: List<SettingsRow> = listOf(
+    AppearanceRows.ThemeScheduler,
+)
+
+/** The TV-only always-visible pair — [AppearanceRows.LayoutMode]'s form-factor twins ([RowAdmission.Tv]). */
+internal val AppearanceThemeTvOnlyRows: List<SettingsRow> = listOf(
+    AppearanceRows.ScreenFit,
+    AppearanceRows.TvUiScale,
+)
+
+/** The SCHEDULED theme-mode start/end pair (content-gated behind the mode + advanced). */
+internal val AppearanceThemeScheduledPairRows: List<SettingsRow> = listOf(
+    AppearanceRows.ScheduledStart,
+    AppearanceRows.ScheduledEnd,
+)
+
+/** The standard-variant branch pair — the content term the screen adds for [ThemeVariant.STANDARD]. */
+internal val AppearanceThemeStandardBranchRows: List<SettingsRow> = listOf(
+    AppearanceRows.AccentColor,
+    AppearanceRows.ColorStyle,
+)
+
 /**
  * The navigation-customization group's rows — HAND-MAINTAINED residuals: the
  * navigation knobs live in the spec-less NavigationStore until it migrates.
@@ -1542,6 +1593,14 @@ internal val AppearanceEyeCareRows: List<SettingsRow> = listOf(
 internal val AppearanceNewsletterRows: List<SettingsRow> = listOf(
     AppearanceRows.NewsletterEnabled,
     AppearanceRows.NewsletterDeliveryDay,
+    AppearanceRows.NewsletterSections,
+)
+
+/**
+ * The newsletter_sections declared row renders as the runtime-reorderable
+ * enum rows the screen counts explicitly — the strict count's minus-one.
+ */
+internal val AppearanceNewsletterRuntimeReorderableRows: List<SettingsRow> = listOf(
     AppearanceRows.NewsletterSections,
 )
 

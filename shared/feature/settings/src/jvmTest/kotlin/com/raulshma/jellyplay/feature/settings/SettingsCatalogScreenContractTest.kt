@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import kotlin.reflect.KClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -691,7 +692,7 @@ class SettingsCatalogScreenContractTest {
             "language.general split line drifted",
         )
         assertEquals(
-            LanguageSettingsSearchItems.size - 3,
+            LanguageSettingsSearchItems.size - LanguageGeneralRows.size,
             SettingsScreenGroups.languageSubtitles.itemIds.size,
             "language.subtitles must absorb every non-trio declaration",
         )
@@ -878,40 +879,50 @@ class SettingsCatalogScreenContractTest {
         // conditional, so no admission function).
         assertEquals(11, SettingsScreenGroups.storageNetwork.items.size, "the storage.network declaration changed — update this pin")
 
-        // Downloads: the three download_schedule_* window rows only when
-        // scheduling is on (their declared WhenOn gate); the five auto-download
-        // rows (check-now included) only when the policy mode is not NEVER;
-        // clean-up-now only when the keep-days window is set; every other
-        // record renders unconditionally (its non-advanced base).
+        // Downloads: the download_schedule_* window rows only when
+        // scheduling is on (their declared WhenOn gate); the auto-download
+        // retention rows (check-now included) only when the policy mode is
+        // not NEVER; clean-up-now only when the keep-days window is set;
+        // every other record renders unconditionally (its non-advanced base).
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 9,
+            SettingsScreenGroups.storageDownloads.items.size -
+                StorageDownloadScheduleWindowRows.size -
+                StorageAutoDownloadRetentionRows.size -
+                StorageAutoDownloadCleanUpNowRows.size,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to false)),
             ),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 6,
+            SettingsScreenGroups.storageDownloads.items.size -
+                StorageAutoDownloadRetentionRows.size -
+                StorageAutoDownloadCleanUpNowRows.size,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true)),
             ),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 9, // minus the three schedule windows, the five auto-download rows, and the clean-up action — every parent-gated row
+            SettingsScreenGroups.storageDownloads.items.size - // minus every parent-gated row:
+                StorageDownloadScheduleWindowRows.size - // the schedule windows
+                StorageAutoDownloadRetentionRows.size - // the auto-download retention rows
+                StorageAutoDownloadCleanUpNowRows.size, // the clean-up action
             rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to false))),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 6, // minus the five auto-download rows and the clean-up action
+            SettingsScreenGroups.storageDownloads.items.size - // minus the retention rows and the clean-up action:
+                StorageAutoDownloadRetentionRows.size -
+                StorageAutoDownloadCleanUpNowRows.size,
             rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true))),
         )
-        // The auto-download retention cluster: the five policy rows ride the
+        // The auto-download retention cluster: the retention rows ride the
         // mode picker, and clean-up-now additionally rides the
         // keep-days picker being non-zero — with the schedule and
         // auto-download windows on, only the clean-up action stays gated
         // off; turning the keep-days window on admits every declared row.
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 1, // minus the clean-up action (the keep-days window is still off)
+            SettingsScreenGroups.storageDownloads.items.size - StorageAutoDownloadCleanUpNowRows.size, // minus the clean-up action (the keep-days window is still off)
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true, StorageRows.AutoDownloadMode.id to true)),
@@ -949,18 +960,24 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         // Naive derivation: with every gate off, the non-advanced
-        // declarations survive EXCEPT the five Platform-gated rows (the
-        // orientation row and the four touch rows — both capabilities are
-        // off here) and the two WhenOn(autoplay) still-watching rows (no
+        // declarations survive EXCEPT the Platform-gated rows (the
+        // orientation fork row and the touch fork rows — both capabilities
+        // are off here) and the WhenOn(autoplay) still-watching rows (no
         // parents on). The Always-admitted input-bindings editor row (every
         // platform has some input surface) and the desktop-backed
         // volume-memory toggle (this JVM's seam) stay in.
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } - 5 - 2,
+            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } -
+                PlaybackPlayerOrientationRows.size -
+                PlaybackPlayerTouchRows.size -
+                PlaybackPlayerStillWatchingRows.size,
             allGatesOff,
         )
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } - 4 - 2, // the orientation capability reveals exactly its own row
+            // the orientation capability reveals exactly its own row
+            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } -
+                PlaybackPlayerTouchRows.size -
+                PlaybackPlayerStillWatchingRows.size,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -972,7 +989,10 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } - 1 - 2, // the touch capability reveals exactly its four rows; the orientation row stays hidden
+            // the touch capability reveals exactly the touch fork rows; the orientation row stays hidden
+            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } -
+                PlaybackPlayerOrientationRows.size -
+                PlaybackPlayerStillWatchingRows.size,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -985,11 +1005,12 @@ class SettingsCatalogScreenContractTest {
         )
         // Every non-advanced declaration renders with caps on (isTv off: the
         // two TV rows ride isTv alone — shipped semantics, also without
-        // advanced mode), EXCEPT the two still-watching rows and the
+        // advanced mode), EXCEPT the still-watching rows and the
         // pause-screensaver delay row, which ride their parent toggles (their
         // declared WhenOn gates — the flags here carry no parentsOn).
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } - 2,
+            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } -
+                PlaybackPlayerStillWatchingRows.size,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -1001,7 +1022,11 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - 6, // minus the two TV rows, the two WhenOn(autoplay) still-watching rows, the WhenOn(pause_screensaver) delay row, and the Platform(Pip) auto-PiP row (off on this desktop JVM's seam)
+            SettingsScreenGroups.playbackPlayer.items.size - // minus the still-dropped exception rows:
+                PlaybackPlayerTvRows.size - // the two TV rows
+                PlaybackPlayerStillWatchingRows.size - // the WhenOn(autoplay) still-watching rows
+                PlaybackPlayerPauseScreensaverDelayRows.size - // the WhenOn(pause_screensaver) delay row
+                PlaybackPlayerAutoPipRows.size, // the Platform(Pip) auto-PiP row (off on this desktop JVM's seam)
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -1016,12 +1041,15 @@ class SettingsCatalogScreenContractTest {
         // semantics, also without advanced mode); every other advanced
         // declaration (the resume-on-headset-plug row among them) admits
         // under advanced, and the Always-admitted input-bindings editor row
-        // needs no advanced. The two WhenOn(autoplay) still-watching rows
-        // (no parents on), the WhenOn(pause_screensaver) delay row (no
-        // parents on), and the Platform(Pip) auto-PiP row (off on this
-        // desktop JVM's seam — TV does not back it) drop.
+        // needs no advanced. The WhenOn(autoplay) still-watching rows (no
+        // parents on), the WhenOn(pause_screensaver) delay row (no parents
+        // on), and the Platform(Pip) auto-PiP row (off on this desktop JVM's
+        // seam — TV does not back it) drop.
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - 2 - 1 - 1,
+            SettingsScreenGroups.playbackPlayer.items.size - // minus the still-dropped exception rows:
+                PlaybackPlayerStillWatchingRows.size -
+                PlaybackPlayerPauseScreensaverDelayRows.size -
+                PlaybackPlayerAutoPipRows.size,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -1035,13 +1063,14 @@ class SettingsCatalogScreenContractTest {
 
         // Advanced video: the whole group only composes behind the advanced
         // toggle (its declared Advanced base — the flags carry that toggle);
-        // the dialogue-boost strength row, the five per-codec passthrough
-        // rows AND the spatial headphones sub-knob additionally ride their
-        // parent toggles (their declared All gates), and the issue #186
-        // Re-detect action row rides the profile row's AUTO state — with no
-        // parents on, those eight drop.
+        // the parent-gated rows (the dialogue-boost strength row, the
+        // per-codec passthrough rows, the spatial headphones sub-knob and
+        // the issue #186 Re-detect action row riding the profile row's AUTO
+        // state) additionally ride their parent toggles (their declared All
+        // gates) — with no parents on, they all drop.
         assertEquals(
-            SettingsScreenGroups.playbackAdvancedVideo.items.size - 8,
+            SettingsScreenGroups.playbackAdvancedVideo.items.size -
+                PlaybackAdvancedVideoParentGatedRows.size,
             rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, RowAdmissionFlags(showAdvanced = true)),
         )
         val boostOn = RowAdmissionFlags(
@@ -1080,7 +1109,10 @@ class SettingsCatalogScreenContractTest {
             playbackEngineScreenRowTotal("exo_"),
         )
         assertEquals(
-            SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("mpv_") } - 3 - 4 + 1, // minus the audio-device trio and the FOUR render rows (both capabilities off — mpv_hdr_passthrough left the render-profile gate for the plain advanced gate when passthrough went cross-host); +1: the reset row
+            SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("mpv_") } - // both capabilities off — the mpv branch falls back to its base row set:
+                PlaybackEngineMpvAudioDeviceRows.size - // the audio-device trio
+                PlaybackEngineMpvRenderRows.size + // the render-profile rows (mpv_hdr_passthrough left the render-profile gate for the plain advanced gate when passthrough went cross-host)
+                1, // +1: the reset row
             playbackEngineScreenRowTotal(
                 "mpv_",
                 supportsAudioDeviceSelection = false,
@@ -1219,7 +1251,7 @@ class SettingsCatalogScreenContractTest {
         // The leading trio: the app-language row only where the locale
         // override applies (its declared AppLocaleOverride Platform gate).
         assertEquals(
-            SettingsScreenGroups.languageGeneral.items.size - 1, // minus the app-language row behind its AppLocaleOverride capability (off in these flags)
+            SettingsScreenGroups.languageGeneral.items.size - LanguageGeneralLocaleGatedRows.size, // minus the app-language row behind its AppLocaleOverride capability (off in these flags)
             rowTotalFor(SettingsScreenGroups.languageGeneral, RowAdmissionFlags(supportsAppLocaleOverride = false)),
         )
         assertEquals(
@@ -1227,19 +1259,19 @@ class SettingsCatalogScreenContractTest {
             rowTotalFor(SettingsScreenGroups.languageGeneral, RowAdmissionFlags(supportsAppLocaleOverride = true)),
         )
 
-        // Subtitles: 4 always (tester/font-size/forced-only + the
-        // always-shown high-contrast row — declared advanced yet never
-        // gated); the style rows behind advanced; the HDR font-size row
+        // Subtitles: the non-advanced rows plus the always-shown
+        // high-contrast row (declared advanced yet never gated — the shipped
+        // quirk); the style rows behind advanced; the HDR font-size row
         // behind the HDR toggle.
         assertEquals(
-            SettingsScreenGroups.languageSubtitles.items.count { !it.isAdvanced } + 1, // +1: the always-shown high-contrast row (declared advanced yet never gated — the shipped quirk)
+            SettingsScreenGroups.languageSubtitles.items.count { !it.isAdvanced } + LanguageSubtitlesAlwaysShownRows.size,
             rowTotalFor(
                 SettingsScreenGroups.languageSubtitles,
                 RowAdmissionFlags(showAdvanced = false, parentsOn = rowParentsOn(LanguageRows.HdrSubtitleStyle.id to true)),
             ),
         )
         assertEquals(
-            SettingsScreenGroups.languageSubtitles.items.size - 1, // minus the HDR font-size row behind its WhenOn(HDR style) parent (no parents on in these flags)
+            SettingsScreenGroups.languageSubtitles.items.size - LanguageSubtitlesParentGatedRows.size, // minus the HDR font-size row behind its WhenOn(HDR style) parent (no parents on in these flags)
             rowTotalFor(SettingsScreenGroups.languageSubtitles, RowAdmissionFlags(showAdvanced = true)),
         )
         assertEquals(
@@ -1277,7 +1309,7 @@ class SettingsCatalogScreenContractTest {
             homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = true),
         )
         assertEquals(
-            SettingsScreenGroups.homeDisplay.items.size - 2,
+            SettingsScreenGroups.homeDisplay.items.size - HomeDisplayGatedRows.size,
             homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = false),
             "the display declaration changed — update this pin",
         )
@@ -1329,7 +1361,7 @@ class SettingsCatalogScreenContractTest {
             homeCardsScreenRowTotal(isTv = true),
         )
         assertEquals(
-            SettingsScreenGroups.homeCards.items.size - 2,
+            SettingsScreenGroups.homeCards.items.size - HomeCardsTvOnlyRows.size,
             homeCardsScreenRowTotal(isTv = false),
         )
         assertTrue(
@@ -1349,10 +1381,22 @@ class SettingsCatalogScreenContractTest {
     fun `appearance theme row total tracks the declaration and its content gates`() {
         val standard = ThemeVariant.STANDARD
         val themed = ThemeVariant.SYNTHWAVE // carries accent options + dark-locked
-        // Standard variant, gates off: theme_mode + theme_style, plus the
-        // standard-branch accent_color + color_style = 4.
+        // The declared-half derivations, over the same declarations the
+        // screen reads: the always-shown pair under flags-off, and the
+        // advanced rows the toggle reveals (the flags-expressible fork:
+        // layout_mode in and the TV pair out on touch/desktop, inverted on
+        // TV).
+        val flagsOffDeclared = rowTotalFor(SettingsScreenGroups.appearanceTheme, RowAdmissionFlags())
+        val advancedRevealedNonTv =
+            rowTotalFor(SettingsScreenGroups.appearanceTheme, RowAdmissionFlags(showAdvanced = true)) - flagsOffDeclared
+        val advancedRevealedTv =
+            rowTotalFor(SettingsScreenGroups.appearanceTheme, RowAdmissionFlags(showAdvanced = true, isTv = true)) - flagsOffDeclared
+        val standardBranchContent = AppearanceThemeStandardBranchRows.size
+        // Standard variant, gates off: theme_mode + theme_style (the
+        // flags-off declared half), plus the standard-branch accent_color +
+        // color_style content term.
         assertEquals(
-            4,
+            flagsOffDeclared + standardBranchContent,
             appearanceThemeScreenRowTotal(
                 variant = standard,
                 isDarkActive = false,
@@ -1399,12 +1443,13 @@ class SettingsCatalogScreenContractTest {
                 themeMode = ThemeMode.SYSTEM,
             ),
         )
-        // The advanced toggle reveals the nine declared advanced rows
-        // (contrast, library_view_mode, layout_mode, theme_music, nav_labels,
-        // date_format, font_scale, color_blind_mode, hand_mode) on
-        // touch/desktop plus the two content terms the standard branch added.
+        // The advanced toggle reveals the declared advanced rows (the
+        // flags-expressible fork's non-TV set: contrast, library_view_mode,
+        // layout_mode, theme_music, nav_labels, date_format, font_scale,
+        // color_blind_mode, hand_mode) plus the two content terms the
+        // standard branch added.
         assertEquals(
-            4 + 9,
+            flagsOffDeclared + standardBranchContent + advancedRevealedNonTv,
             appearanceThemeScreenRowTotal(
                 variant = standard,
                 isDarkActive = false,
@@ -1415,11 +1460,10 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         // The form-factor fork: layout_mode is touch/desktop-only, and the
-        // two TV-only always-visible rows (the "Screen fit" overscan picker
-        // and the UI-scale picker — no advanced gate on either) appear in
-        // its place, so the TV count nets +2 over the touch/desktop one.
+        // TV-only always-visible rows ([AppearanceThemeTvOnlyRows] — no
+        // advanced gate on either) appear in its place.
         assertEquals(
-            4 + 8 + 2,
+            flagsOffDeclared + standardBranchContent + advancedRevealedTv,
             appearanceThemeScreenRowTotal(
                 variant = standard,
                 isDarkActive = false,
@@ -1431,7 +1475,8 @@ class SettingsCatalogScreenContractTest {
         )
         // SCHEDULED mode reveals the start/end pair.
         assertEquals(
-            4 + 9 + 2,
+            flagsOffDeclared + standardBranchContent + advancedRevealedNonTv +
+                AppearanceThemeScheduledPairRows.size,
             appearanceThemeScreenRowTotal(
                 variant = standard,
                 isDarkActive = false,
@@ -1441,27 +1486,27 @@ class SettingsCatalogScreenContractTest {
                 themeMode = ThemeMode.SCHEDULED,
             ),
         )
-        // The declared half is exactly the advanced-flag base minus the
-        // content-gated exceptions and the theme_scheduler highlight-alias —
-        // the strict guard keeps them in sync. (The exception set is 7
-        // ContentGated rows + the alias. The form-factor fork: under the
-        // default (non-TV) flags layout_mode's All(Advanced, NotTv) admits
-        // while screen_fit's and tv_ui_scale's Tv rows both drop; on TV it
-        // inverts — layout_mode drops and the TV pair admits, so the TV
-        // half nets one more. The non-TV declared half is
-        // 21 - 7 - 1 - 2 = 11 under advanced.)
+        // The declared half is exactly the declaration minus the named
+        // exception sets — the content-gated rows, the theme_scheduler
+        // highlight-alias, and the TV-only pair (whose Tv gate drops them
+        // under the default non-TV flags) — the strict guard keeps the sets
+        // in sync with the gates.
         val declared = rowTotalFor(
             SettingsScreenGroups.appearanceTheme,
             RowAdmissionFlags(showAdvanced = true),
         )
         assertEquals(
-            SettingsScreenGroups.appearanceTheme.items.size - 7 - 1 - 2,
+            SettingsScreenGroups.appearanceTheme.items.size -
+                AppearanceThemeContentGatedRows.size -
+                AppearanceThemeHighlightAliasRows.size -
+                AppearanceThemeTvOnlyRows.size,
             declared,
         )
-        // On TV only layout_mode drops: the TV pair (screen_fit +
-        // tv_ui_scale) admits, so the TV half is one over the non-TV one.
+        // On TV only layout_mode drops: the TV pair admits, so the TV half
+        // is the non-TV one plus the fork swap (the pair minus the one row
+        // it replaces).
         assertEquals(
-            declared + 1,
+            declared + AppearanceThemeTvOnlyRows.size - 1,
             rowTotalFor(
                 SettingsScreenGroups.appearanceTheme,
                 RowAdmissionFlags(showAdvanced = true, isTv = true),
@@ -1483,12 +1528,13 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.appearanceEyeCare.items.size,
             rowTotalFor(SettingsScreenGroups.appearanceEyeCare, RowAdmissionFlags(showAdvanced = true)),
         )
-        // Newsletter: the declared trio minus the sections row (which renders
-        // as the runtime-reorderable rows the screen counts explicitly).
+        // Newsletter: the declared trio minus the sections row
+        // ([AppearanceNewsletterRuntimeReorderableRows] — it renders as the
+        // runtime-reorderable rows the screen counts explicitly).
         val sectionCount = 4
         assertEquals(
-            SettingsScreenGroups.appearanceNewsletter.items.size - 1 + sectionCount,
-            rowTotalFor(SettingsScreenGroups.appearanceNewsletter, RowAdmissionFlags(showAdvanced = true)) - 1 + sectionCount,
+            SettingsScreenGroups.appearanceNewsletter.items.size - AppearanceNewsletterRuntimeReorderableRows.size + sectionCount,
+            rowTotalFor(SettingsScreenGroups.appearanceNewsletter, RowAdmissionFlags(showAdvanced = true)) - AppearanceNewsletterRuntimeReorderableRows.size + sectionCount,
         )
     }
 
@@ -1582,7 +1628,7 @@ class SettingsCatalogScreenContractTest {
 
     @Test
     fun `screen-shell slot declarations derive the same hidden counts as their group declarations`() {
-        // The five migrated screens' hoisted slot declarations — the ONE
+        // The migrated screens' hoisted slot declarations — the ONE
         // ordered declarations the screens map their hand-written bodies
         // onto ([AppearanceSettingsScreenSlots] et al., beside each screen).
         // Consumed directly here, so a screen reorder or re-flag updates
@@ -1600,6 +1646,8 @@ class SettingsCatalogScreenContractTest {
         val languageSlots = LanguageSettingsScreenSlots
         val storageSlots = StorageSettingsScreenSlots
         val securitySlots = SecuritySettingsScreenSlots
+        val notificationSlots = NotificationSettingsScreenSlots
+        val backupSlots = BackupSettingsScreenSlots
         // The playback declaration is parameterized by the preferred player
         // (the engine slot's content-count hook is the one runtime-keyed
         // shape the flags vocabulary cannot express); the shipped JVM shape
@@ -1646,6 +1694,29 @@ class SettingsCatalogScreenContractTest {
                 RowAdmissionFlags(showAdvanced = false, supportsAppLock = true, supportsBiometric = false),
             ),
             hiddenRowsFor(securitySlots, RowAdmissionFlags(showAdvanced = false, supportsAppLock = true, supportsBiometric = false)),
+        )
+        // The notifications screen's single slot: the parent-gated legs are
+        // the interesting shape (the quiet-hours pair counts only while both
+        // toggles are on, the system-settings row where its capability
+        // holds) — the shell derives the exact same delta the screen's
+        // hiddenHint passes as rowFlags.
+        val notificationsFlags = RowAdmissionFlags(
+            showAdvanced = false,
+            supportsSystemNotificationSettings = true,
+            parentsOn = rowParentsOn(
+                NotificationRows.NotificationsEnable.id to true,
+                NotificationRows.QuietHours.id to true,
+            ),
+        )
+        assertEquals(
+            hiddenRowsFor(listOf(SettingsScreenGroups.notifications), notificationsFlags),
+            hiddenRowsFor(notificationSlots, notificationsFlags),
+        )
+        // The backup screen's single slot: no hiddenHint rides the screen
+        // (it takes no advanced tier), but the slot/group parity still holds.
+        assertEquals(
+            hiddenRowsFor(listOf(SettingsScreenGroups.backup), RowAdmissionFlags()),
+            hiddenRowsFor(backupSlots, RowAdmissionFlags()),
         )
 
         // Playback: the engine slot's prefix hook is the declared-admission
@@ -1793,6 +1864,207 @@ class SettingsCatalogScreenContractTest {
             stray,
             "groups parked in rootRevealGroups that no longer target the root screen — drop them from the declaration",
         )
+    }
+
+    // ── 10. The sub-screen deep-link totality contract ──────────────────
+
+    /**
+     * The root-screen counterpart (section 9) generalized to every
+     * sub-screen route: a search hit deep-links its route with the row id
+     * baked in ([SettingsBrowsePane] navigates `Route.X(id)`), and the
+     * target screen can only scroll to and expand the group that declares
+     * the id ([PreferenceScreenScaffold.groups] → the
+     * [rememberHighlightScrollIndex] derivation). The three pins below hold
+     * the pairing total in BOTH directions, data-driven over the catalog's
+     * route kinds — a future searchable domain whose screen has not migrated
+     * onto the shell fails the scan until its route is bound or named.
+     */
+
+    /**
+     * Route kind → the ONE ordered group declaration the sub-screen renders
+     * (the [SettingsScreenGroups] members its hoisted `XScreenSlots`
+     * declaration derives from — the same objects the section-7 slot pins
+     * consume). A screen migrating onto the shell adds its route here; the
+     * maps key on the route CLASS so the catalog's highlight-carrying route
+     * copies (`withHighlightSettingId`) match the bare binding.
+     */
+    private val screenGroupsByRoute: Map<KClass<out Route>, List<SettingsSearchItemGroup>> = mapOf(
+        Route.AppearanceSettings::class to listOf(
+            SettingsScreenGroups.appearanceTheme,
+            SettingsScreenGroups.appearanceNavigation,
+            SettingsScreenGroups.appearanceLibrary,
+            SettingsScreenGroups.appearancePerformance,
+            SettingsScreenGroups.appearanceEyeCare,
+            SettingsScreenGroups.appearanceNewsletter,
+        ),
+        Route.HomeSettings::class to listOf(
+            SettingsScreenGroups.homeDisplay,
+            SettingsScreenGroups.homeNextUp,
+            SettingsScreenGroups.homeLayout,
+            SettingsScreenGroups.homeCards,
+        ),
+        Route.PerformanceSettings::class to listOf(
+            SettingsScreenGroups.performanceLevel,
+            SettingsScreenGroups.performanceMotion,
+            SettingsScreenGroups.performanceImages,
+            SettingsScreenGroups.performanceAmbient,
+            SettingsScreenGroups.playbackBuffers,
+        ),
+        Route.PlaybackSettings::class to listOf(
+            SettingsScreenGroups.playbackPlayer,
+            SettingsScreenGroups.playbackAdvancedVideo,
+            SettingsScreenGroups.playbackEngine,
+            SettingsScreenGroups.playbackSyncPlay,
+            SettingsScreenGroups.playbackCasting,
+            SettingsScreenGroups.playbackDvr,
+            SettingsScreenGroups.playbackMediaSegments,
+        ),
+        Route.AudioSettings::class to listOf(
+            SettingsScreenGroups.audio,
+            SettingsScreenGroups.audioCache,
+        ),
+        Route.LanguageSettings::class to listOf(
+            SettingsScreenGroups.languageGeneral,
+            SettingsScreenGroups.languageTrackSelection,
+            SettingsScreenGroups.languageSubtitles,
+        ),
+        Route.StorageSettings::class to listOf(
+            SettingsScreenGroups.storageCache,
+            SettingsScreenGroups.storageNetwork,
+            SettingsScreenGroups.storageDownloads,
+        ),
+        Route.SecuritySettings::class to listOf(SettingsScreenGroups.security),
+        Route.NotificationSettings::class to listOf(SettingsScreenGroups.notifications),
+        Route.BackupSettings::class to listOf(SettingsScreenGroups.backup),
+    )
+
+    /**
+     * The catalog route kinds whose target declares no screen groups — each
+     * entry named. Two families plus the root: the navigation-only
+     * destinations (the row is a launcher for a non-settings surface — the
+     * deep link navigates and never highlights) and the not-yet-migrated
+     * screens (the ADR-0009 follow-up set — migrating a screen onto the
+     * shell moves its route into [screenGroupsByRoute] and deletes its
+     * entry). A route kind in NEITHER map fails the scan below.
+     */
+    private val routesWithoutDeclaredGroups: Map<KClass<out Route>, String> = mapOf(
+        // The root screen's coverage is its own family (section 9 pins
+        // rootRevealGroups, the auto-expand subset of the root's groups).
+        Route.Settings::class to "the root screen — pinned by the section-9 reveal family",
+        // Navigation-only destinations: the row is a launcher (the activity
+        // insights / system entrances, the management screens, the tools),
+        // not a highlight target.
+        Route.Favorites::class to "the Favorites app surface (launcher row)",
+        Route.WatchProgressHeatmap::class to "the watch-progress heatmap surface (launcher row)",
+        Route.ArrQueue::class to "the ARR queue surface (launcher row)",
+        Route.UpcomingCalendar::class to "the upcoming-calendar surface (launcher row)",
+        Route.Requests::class to "the requests surface (launcher row)",
+        Route.AdminDashboard::class to "the admin dashboard surface (launcher row)",
+        Route.Onboarding::class to "the setup wizard flow (launcher row)",
+        Route.ServerManagement::class to "the server management screen (section 8: must not mark the highlight)",
+        Route.UserManagement::class to "the user management screen (section 8: must not mark the highlight)",
+        Route.SubtitleTester::class to "the subtitle tester tool (launcher row)",
+        Route.NextUpExcluded::class to "the Next Up exclusion editor (dedicated surface)",
+        Route.MyMediaHidden::class to "the hidden-libraries restore editor (dedicated surface)",
+        // The not-yet-migrated screens (the ADR-0009 follow-up set).
+        Route.PinnedHomeSections::class to "PinnedHomeSectionsScreen (inline body) — migrate onto the shell",
+        Route.HomeLayoutPresets::class to "HomeLayoutPresetsScreen (inline body) — migrate onto the shell",
+        Route.LibraryHomeSections::class to "LibraryHomeSectionsScreen (inline body) — migrate onto the shell",
+        Route.DiscoverRows::class to "DiscoverRowsScreen (inline body) — migrate onto the shell",
+        Route.Integrations::class to "IntegrationsScreen (bespoke body) — migrate onto the shell",
+        Route.SeerrSettings::class to "SeerrSettingsScreen (inline body) — migrate onto the shell",
+        Route.JellyPlaySync::class to "JellyPlaySyncScreen (bespoke body) — migrate onto the shell",
+        Route.About::class to "AboutScreen (bespoke body) — migrate onto the shell",
+        Route.ExperimentalSettings::class to "ExperimentalSettingsScreen (the spec-direct hold-out, inline body)",
+        Route.ArrSettings::class to "ArrSettingsScreen (bespoke body) — migrate onto the shell",
+    )
+
+    /**
+     * The declared ids a screen renders as its own rows while the id
+     * deep-links a DIFFERENT route — the drill-in launcher shape (the home
+     * screen's dedicated editors, the language screen's tester tool). Named
+     * per screen; each id's actual route is covered by the route-kind scan
+     * (its route's [routesWithoutDeclaredGroups] entry names the target).
+     */
+    private val declaredIdsRoutingElsewhere: Map<KClass<out Route>, Set<String>> = mapOf(
+        Route.HomeSettings::class to setOf(
+            HomeRows.NextUpHidden.id, // → Route.NextUpExcluded
+            HomeRows.HiddenLibraries.id, // → Route.MyMediaHidden
+            HomeRows.PinnedHomeSections.id, // → Route.PinnedHomeSections
+            HomeRows.HomeLayoutPresets.id, // → Route.HomeLayoutPresets
+            HomeRows.ConfigureLibraries.id, // → Route.LibraryHomeSections
+            HomeRows.DiscoverRows.id, // → Route.DiscoverRows
+        ),
+        Route.LanguageSettings::class to setOf(
+            LanguageRows.SubtitleTester.id, // → Route.SubtitleTester
+        ),
+    )
+
+    /** The data-driven scan: every catalog route kind is bound or named. */
+    @Test
+    fun `every catalog route is a declared screen binding or a named exemption`() {
+        val routeKinds = SettingsSearchCatalog.items.map { it.route::class }.toSet()
+        assertTrue(routeKinds.isNotEmpty(), "no catalog routes — the route scan is broken")
+        val unaccounted = routeKinds - screenGroupsByRoute.keys - routesWithoutDeclaredGroups.keys
+        assertEquals(
+            emptySet(),
+            unaccounted,
+            "catalog routes with no declared screen groups and no named exemption — bind the screen's " +
+                "groups in screenGroupsByRoute (a declaration-path screen) or name the route in " +
+                "routesWithoutDeclaredGroups",
+        )
+        // The staleness leg: every binding and every named exemption still
+        // has catalog items routed to it (a migrated-away entry or an
+        // exemption whose row died is deleted, not kept).
+        val stale = (screenGroupsByRoute.keys + routesWithoutDeclaredGroups.keys) - routeKinds
+        assertEquals(
+            emptySet(),
+            stale,
+            "declared/exempt routes with no catalog items routed to them — delete the stale entry",
+        )
+    }
+
+    /** The forward pin: every id routed to R is covered by R's declared groups. */
+    @Test
+    fun `every catalog item routed to a sub-screen belongs to that screen's declared groups`() {
+        // The vlc_video_output class of bug, per screen: an id whose deep
+        // link navigates to screen R but that no group R declares can neither
+        // scroll nor expand — the highlight lands nowhere.
+        screenGroupsByRoute.forEach { (routeKind, groups) ->
+            val routedIds = SettingsSearchCatalog.items.filter { it.route::class == routeKind }.map { it.id }
+            assertTrue(routedIds.isNotEmpty(), "$routeKind binding has no catalog items — the binding is stale")
+            val covered = groups.flatMap { it.itemIdSet }.toSet()
+            val uncovered = routedIds.filterNot { it in covered }
+            assertEquals(
+                emptyList(),
+                uncovered,
+                "ids routed to $routeKind that no group of that screen declares — declare them in the " +
+                    "screen's group so the deep link scrolls",
+            )
+        }
+    }
+
+    /** The reverse pin: every id in R's declared groups routes to R (or is a named drill-in). */
+    @Test
+    fun `every declared group id is a catalog item routed to its screen`() {
+        // The auto_delete_after_watch class of bug (declared in a group, no
+        // routed search item): a highlight target that highlights nothing.
+        // The named exemptions are the drill-in launchers — rows the screen
+        // renders whose id deep-links the dedicated surface they open.
+        screenGroupsByRoute.forEach { (routeKind, groups) ->
+            val routedIds = SettingsSearchCatalog.items
+                .filter { it.route::class == routeKind }
+                .map { it.id }
+                .toSet()
+            val exempt = declaredIdsRoutingElsewhere[routeKind] ?: emptySet()
+            val stray = groups.flatMap { it.itemIdSet }.filterNot { it in routedIds || it in exempt }
+            assertEquals(
+                emptyList(),
+                stray,
+                "ids declared in $routeKind's groups that route to no catalog item of that screen — " +
+                    "remove them from the group or name them in declaredIdsRoutingElsewhere",
+            )
+        }
     }
 }
 

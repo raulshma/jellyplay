@@ -6,22 +6,19 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * The reviews Reviews screen's VM: the item resolution rides the cached
@@ -33,18 +30,9 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReviewsViewModelTest {
 
-    // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
-    @BeforeTest
-    fun setUpMainDispatcher() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDownMainDispatcher() {
-        Dispatchers.resetMain()
-    }
 
     private lateinit var detailFeed: DetailFeed
     private lateinit var seerrRepository: SeerrRepository
@@ -68,7 +56,7 @@ class ReviewsViewModelTest {
     }
 
     @Test
-    fun `load success resolves the tmdb id and fetches the full review list`() = runTest(mainDispatcher) {
+    fun `load success resolves the tmdb id and fetches the full review list`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
         val reviews = (1..8).map { TmdbReview(id = "r$it", author = "A$it", content = "B$it") }
@@ -85,7 +73,7 @@ class ReviewsViewModelTest {
     }
 
     @Test
-    fun `a failed reviews leg degrades to an empty list, not an error`() = runTest(mainDispatcher) {
+    fun `a failed reviews leg degrades to an empty list, not an error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
         coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns Result.failure(RuntimeException("tmdb down"))
@@ -99,7 +87,7 @@ class ReviewsViewModelTest {
     }
 
     @Test
-    fun `a series resolves through the tv wire media type`() = runTest(mainDispatcher) {
+    fun `a series resolves through the tv wire media type`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("s1", any()) } returns Result.success(
             MediaDetail(
@@ -117,7 +105,7 @@ class ReviewsViewModelTest {
     }
 
     @Test
-    fun `detail failure emits Error and never reaches the reviews fetch`() = runTest(mainDispatcher) {
+    fun `detail failure emits Error and never reaches the reviews fetch`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(RuntimeException("boom"))
 
@@ -129,7 +117,7 @@ class ReviewsViewModelTest {
     }
 
     @Test
-    fun `an item without a tmdb id yields an empty success without a reviews fetch`() = runTest(mainDispatcher) {
+    fun `an item without a tmdb id yields an empty success without a reviews fetch`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail(tmdbId = null))
 
@@ -143,7 +131,7 @@ class ReviewsViewModelTest {
     }
 
     @Test
-    fun `a non-rated media type (episode) yields an empty success without a reviews fetch`() = runTest(mainDispatcher) {
+    fun `a non-rated media type (episode) yields an empty success without a reviews fetch`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("e1", any()) } returns Result.success(
             MediaDetail(
@@ -162,7 +150,7 @@ class ReviewsViewModelTest {
     }
 
     @Test
-    fun `load resets a prior Success state to Loading before resolving`() = runTest(mainDispatcher) {
+    fun `load resets a prior Success state to Loading before resolving`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
         coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns

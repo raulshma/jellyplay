@@ -104,6 +104,8 @@ class TrackSelectionHelperTest {
         getRuleContentType: () -> com.raulshma.jellyplay.core.model.RuleContentType =
             { com.raulshma.jellyplay.core.model.RuleContentType.EPISODE },
         getRuleTitles: () -> List<String> = { listOf("Test Series", "Episode 1") },
+        findReadySubtitleHint: (String) -> ReadySubtitleHint? = { null },
+        onSubtitleSelectionChanged: () -> Unit = {},
     ) = TrackSelectionHelper(
         engineStore = engineStore,
         subtitleStore = subtitleStore,
@@ -116,6 +118,8 @@ class TrackSelectionHelperTest {
         playbackPreferenceResolver = resolver,
         getRuleContentType = getRuleContentType,
         getRuleTitles = getRuleTitles,
+        findReadySubtitleHint = findReadySubtitleHint,
+        onSubtitleSelectionChanged = onSubtitleSelectionChanged,
         scope = scope,
     )
 
@@ -1087,6 +1091,89 @@ class TrackSelectionHelperTest {
 
         // Only the ladder's own auto-Off ran; the dropped intent did not select.
         verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, 0) }
+    }
+
+    // ─── Downloaded-subtitle "Use" verdicts ──────────────────────────────────
+    //
+    // The downloaded-subtitle sheet row's "Use" action resolves IN the hub
+    // (useDownloadedSubtitle): the three verdicts of UseDownloadedVerdict —
+    // not-ready, armed-pending (the SAME pending-arming effect as
+    // requestSubtitleSelection), and selected (the SAME sheet-pick selection
+    // chain + the cue-preview poke).
+
+    @Test
+    fun useDownloadedSubtitle_noReadyHint_returnsNotReady() {
+        helper = makeHelper(findReadySubtitleHint = { null })
+        availableTracks.value = listOf(
+            mediaTrack(1, "Downloaded", "ger", TrackType.SUBTITLE, isSelected = false, id = "external:7"),
+        )
+        helper.updateTracksFromEngine()
+        io.mockk.clearMocks(engine, answers = false)
+
+        val verdict = helper.useDownloadedSubtitle("row-1")
+
+        assertTrue(verdict is UseDownloadedVerdict.NotReady)
+        assertEquals("Subtitle not active yet — please try again shortly", verdict.userMessage)
+        assertNull(verdict.resolved)
+        // Nothing was armed and nothing selected: no engine pick ran.
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, any()) }
+    }
+
+    @Test
+    fun useDownloadedSubtitle_hintWithoutPickerRow_armsThePendingSelection() {
+        availableTracks.value = emptyList()
+        helper = makeHelper(
+            findReadySubtitleHint = { ReadySubtitleHint(trackId = "external:7", serverStreamIndex = 7) },
+        )
+        helper.updateTracksFromEngine()
+        io.mockk.clearMocks(engine, answers = false)
+
+        val verdict = helper.useDownloadedSubtitle("row-1")
+
+        assertTrue(verdict is UseDownloadedVerdict.ArmedPending)
+        assertEquals("Subtitle still loading — it will be selected automatically", verdict.userMessage)
+        assertNull(verdict.resolved)
+        assertEquals(
+            ReadySubtitleHint(trackId = "external:7", serverStreamIndex = 7),
+            (verdict as UseDownloadedVerdict.ArmedPending).armedHint,
+        )
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, any()) }
+
+        // The arming effect: when the side-load lands on a later emission, the
+        // armed intent consumed it and activated the track (the same
+        // requestSubtitleSelection semantics, not a dead verdict).
+        availableTracks.value = listOf(
+            mediaTrack(0, "Downloaded", "ger", TrackType.SUBTITLE, isSelected = false, id = "external:7"),
+        )
+        helper.updateTracksFromEngine()
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
+        assertEquals(0, helper.state.value.subtitleTracks.first { it.isSelected }.index)
+    }
+
+    @Test
+    fun useDownloadedSubtitle_rowResolved_runsTheSheetPickChain_andPokesThePreview() {
+        availableTracks.value = listOf(
+            mediaTrack(1, "Downloaded", "ger", TrackType.SUBTITLE, isSelected = false, id = "external:7"),
+        )
+        var previewPokes = 0
+        helper = makeHelper(
+            findReadySubtitleHint = { ReadySubtitleHint(trackId = "external:7", serverStreamIndex = 7) },
+            onSubtitleSelectionChanged = { previewPokes++ },
+        )
+        helper.updateTracksFromEngine()
+        io.mockk.clearMocks(engine, answers = false)
+
+        val verdict = helper.useDownloadedSubtitle("row-1")
+
+        assertTrue(verdict is UseDownloadedVerdict.Selected)
+        assertEquals("Subtitle selected", verdict.userMessage)
+        assertEquals(1, verdict.resolved?.index)
+        // The SAME selection chain a sheet pick runs: the engine select…
+        verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
+        // …the picker row's selected flag…
+        assertEquals(1, helper.state.value.subtitleTracks.first { it.isSelected }.index)
+        // …and the cue-preview poke (the same one a toggle/sheet pick carries).
+        assertEquals(1, previewPokes)
     }
 
     private fun mediaTrack(

@@ -55,6 +55,7 @@ class AutoDownloadCheckTest {
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
         coEvery { policyStore.seriesPolicies(any()) } returns emptyMap()
+        coEvery { policyStore.armedSeriesIds() } returns emptyList()
         coEvery { policyStore.recordAutoDownloadSuggestions(any()) } returns 0
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
         coEvery { downloadIntake.startSeries(any(), any(), any()) } returns Result.success(emptyList())
@@ -208,5 +209,109 @@ class AutoDownloadCheckTest {
         coVerify(exactly = 0) { downloadIntake.startSeries("s1", any(), any()) }
         coVerify(exactly = 1) { downloadIntake.startSeries("s2", any(), any()) }
         coVerify(exactly = 1) { policyStore.recordAutoDownloadSuggestions(any()) }
+    }
+
+    // ── ADR-0015: armed series outlive local files ────────────────────
+
+    @Test
+    fun `an armed series with zero downloads is still visited`() = runTest {
+        // The gh-225 shape: watch-boundary hygiene emptied the series, but its
+        // arm keeps it in the checked universe (coverage ∪ arms).
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = emptySet()))
+        coEvery { policyStore.armedSeriesIds() } returns listOf("s1")
+        coEvery { policyStore.seriesPolicies(listOf("s1")) } returns
+            mapOf("s1" to AutoDownloadMode.FOLLOW_GLOBAL)
+
+        val outcome = check().checkOnce(attempt = 0)
+
+        assertEquals(Outcome.Complete(), outcome)
+        coVerify(exactly = 1) { episodeCatalogue.loadSeriesEpisodes("s1", any()) }
+    }
+
+    @Test
+    fun `a series in both the coverage and the armed halves of the universe is visited once`() = runTest {
+        // Implicit arming gives nearly every downloaded series an arm row too,
+        // so the universe union's halves overlap heavily — the dedup keeps the
+        // pass from visiting s1 twice (a duplicate visit re-runs the enqueue
+        // choreography and double-counts it against maxPerPass).
+        coEvery { policyStore.armedSeriesIds() } returns listOf("s1")
+        coEvery { policyStore.seriesPolicies(listOf("s1")) } returns
+            mapOf("s1" to AutoDownloadMode.FOLLOW_GLOBAL)
+
+        val outcome = check().checkOnce(attempt = 0)
+
+        assertEquals(Outcome.Complete(), outcome)
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-new-1")))
+        }
+    }
+
+    @Test
+    fun `a FOLLOW_GLOBAL arm under a global NEVER is visited but skipped`() = runTest {
+        every { downloadsStore.downloads } returns MutableStateFlow(
+            DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER, autoDownloadLookahead = 0),
+        )
+        coEvery { policyStore.seriesPolicies(listOf("s1")) } returns
+            mapOf("s1" to AutoDownloadMode.FOLLOW_GLOBAL)
+
+        val outcome = check().checkOnce(attempt = 0)
+
+        assertEquals(Outcome.Complete(), outcome)
+        // Visited: the arm put s1 in the universe, so the per-series policy
+        // read asks for exactly it — then the resolved NEVER skips the series
+        // (no enqueue, no Ask prompt, no catalogue round-trip).
+        coVerify(exactly = 1) { policyStore.seriesPolicies(listOf("s1")) }
+        coVerify(exactly = 0) { episodeCatalogue.loadSeriesEpisodes(any(), any()) }
+        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any(), any()) }
+        coVerify(exactly = 0) { policyStore.recordAutoDownloadSuggestions(any()) }
+    }
+
+    @Test
+    fun `a FOLLOW_GLOBAL arm under a global INSTANT enqueues`() = runTest {
+        coEvery { policyStore.seriesPolicies(listOf("s1")) } returns
+            mapOf("s1" to AutoDownloadMode.FOLLOW_GLOBAL)
+
+        val outcome = check().checkOnce(attempt = 0)
+
+        assertEquals(Outcome.Complete(), outcome)
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-new-1")))
+        }
+    }
+
+    @Test
+    fun `an armed-emptied series anchors on its last watched episode and enqueues the next aired one`() = runTest {
+        // The ADR-0015 resume mechanics: with zero downloaded rows, the
+        // positional anchor comes from the snapshot's played flag alone — the
+        // watched ep-1 anchors the window and the next aired episode (ep-2)
+        // is enqueued (lookahead 1).
+        every { downloadsStore.downloads } returns MutableStateFlow(
+            DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 1),
+        )
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = emptySet()))
+        coEvery { policyStore.armedSeriesIds() } returns listOf("s1")
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(
+            EpisodeCatalogueSnapshot(
+                seriesId = "s1",
+                seasons = listOf(season("season-1")),
+                episodesBySeason = mapOf(
+                    "season-1" to listOf(
+                        episode("ep-1", "season-1").copy(isPlayed = true),
+                        episode("ep-2", "season-1"),
+                    ),
+                ),
+                fetchedSeasonIds = setOf("season-1"),
+                sortedEpisodes = listOf(episode("ep-1", "season-1"), episode("ep-2", "season-1")),
+                epoch = 0L,
+            ),
+        )
+
+        check().checkOnce(attempt = 0)
+
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-2")))
+        }
     }
 }

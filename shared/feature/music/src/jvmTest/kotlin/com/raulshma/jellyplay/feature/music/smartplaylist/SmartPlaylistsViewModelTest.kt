@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.smartplaylist
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
@@ -27,19 +28,16 @@ import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the smart-playlist contract: presets + custom merge on init, the
@@ -52,9 +50,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class SmartPlaylistsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private val libraryApiClient: LibraryApiClient = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
@@ -66,7 +63,6 @@ class SmartPlaylistsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { smartPlaylistRepository.observeSmartPlaylists() } returns customFlow
         viewModel = SmartPlaylistsViewModel(
             libraryApiClient = libraryApiClient,
@@ -75,11 +71,6 @@ class SmartPlaylistsViewModelTest {
             audioQueueFacade = audioQueueFacade,
             smartPlaylistRepository = smartPlaylistRepository,
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun track(
@@ -113,7 +104,7 @@ class SmartPlaylistsViewModelTest {
     }
 
     @Test
-    fun init_mergesPresetsWithCustomPlaylists() = runTest(mainDispatcher) {
+    fun init_mergesPresetsWithCustomPlaylists() = runTest(mainDispatcherRule.testDispatcher) {
         val custom = SmartPlaylist(id = "custom-1", name = "Mine", criteria = emptyList())
         customFlow.value = listOf(custom)
 
@@ -123,7 +114,7 @@ class SmartPlaylistsViewModelTest {
     }
 
     @Test
-    fun generatePlaylist_favoritesShortcut_queriesFavorites() = runTest(mainDispatcher) {
+    fun generatePlaylist_favoritesShortcut_queriesFavorites() = runTest(mainDispatcherRule.testDispatcher) {
         val favorites = SmartPlaylistsViewModel.defaultPlaylists.first { it.id == "favorites" }
         val high = track("high", rating = 5f)
         val low = track("low", rating = 3f)
@@ -139,7 +130,7 @@ class SmartPlaylistsViewModelTest {
     }
 
     @Test
-    fun generatePlaylist_genreCriteria_filterServerSideAndClientSide() = runTest(mainDispatcher) {
+    fun generatePlaylist_genreCriteria_filterServerSideAndClientSide() = runTest(mainDispatcherRule.testDispatcher) {
         val playlist = SmartPlaylist(
             id = "rock",
             name = "Rock",
@@ -173,7 +164,7 @@ class SmartPlaylistsViewModelTest {
     }
 
     @Test
-    fun generatePlaylist_unplayedPreset_filtersPlayedTracks() = runTest(mainDispatcher) {
+    fun generatePlaylist_unplayedPreset_filtersPlayedTracks() = runTest(mainDispatcherRule.testDispatcher) {
         val unplayed = SmartPlaylistsViewModel.defaultPlaylists.first { it.id == "unplayed" }
         val played = track("p1", played = true, genres = listOf("x"))
         val fresh = track("p2", played = false, genres = listOf("x"))
@@ -187,7 +178,7 @@ class SmartPlaylistsViewModelTest {
     }
 
     @Test
-    fun generatePlaylist_failure_setsErrorAndStopsLoading() = runTest(mainDispatcher) {
+    fun generatePlaylist_failure_setsErrorAndStopsLoading() = runTest(mainDispatcherRule.testDispatcher) {
         val playlist = SmartPlaylist(id = "rock", name = "Rock", criteria = emptyList())
         coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("boom"))
@@ -200,7 +191,7 @@ class SmartPlaylistsViewModelTest {
     }
 
     @Test
-    fun playAll_delegatesGeneratedItemsWithStartIndex() = runTest(mainDispatcher) {
+    fun playAll_delegatesGeneratedItemsWithStartIndex() = runTest(mainDispatcherRule.testDispatcher) {
         val playlist = SmartPlaylist(
             id = "rock",
             name = "Rock",
@@ -224,7 +215,7 @@ class SmartPlaylistsViewModelTest {
     }
 
     @Test
-    fun clearGenerated_resetsItems() = runTest(mainDispatcher) {
+    fun clearGenerated_resetsItems() = runTest(mainDispatcherRule.testDispatcher) {
         val playlist = SmartPlaylist(
             id = "rock",
             name = "Rock",
@@ -243,7 +234,7 @@ class SmartPlaylistsViewModelTest {
     }
 
     @Test
-    fun createCustomPlaylist_validatesName() = runTest(mainDispatcher) {
+    fun createCustomPlaylist_validatesName() = runTest(mainDispatcherRule.testDispatcher) {
         val captured = slot<SmartPlaylist>()
         coEvery { smartPlaylistRepository.upsert(capture(captured)) } just Runs
 
@@ -266,7 +257,7 @@ class SmartPlaylistsViewModelTest {
     }
 
     @Test
-    fun deleteCustomPlaylist_onlyDeletesCustomIds() = runTest(mainDispatcher) {
+    fun deleteCustomPlaylist_onlyDeletesCustomIds() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { smartPlaylistRepository.delete(any()) } just Runs
 
         viewModel.deleteCustomPlaylist(

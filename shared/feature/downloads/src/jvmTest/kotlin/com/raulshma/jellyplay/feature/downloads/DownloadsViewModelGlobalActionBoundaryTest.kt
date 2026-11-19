@@ -10,24 +10,21 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Empty-target and empty-list boundary gaps in [DownloadsViewModel] NOT pinned
@@ -37,22 +34,23 @@ import kotlin.test.assertTrue
  * 1. [DownloadsViewModel.applyBulkAction] with PAUSE/All when NO downloading
  *    items exist and RETRY_FAILED/All when NO failed items exist are guarded
  *    no-ops — no repository call fires at all.
- * 2. [DownloadsViewModel.moveToFront] / [DownloadsViewModel.lowerPriority]
- *    against an EMPTY list fall back to the 0 baseline (`maxOfOrNull`/`minOfOrNull`
- *    → null → 0), i.e. +1 / −1 respectively.
- * 3. [DownloadsResyncActions.checkAllForUpdates] (via the VM's
+ * 2. [DownloadsResyncActions.checkAllForUpdates] (via the VM's
  *    `resyncActions` accessor) forwards an EMPTY downloaded-id
  *    batch (the sync manager, not the VM, decides what an empty batch means).
- * 4. DELETE/Selected on a selection whose ids no longer match the current
+ * 3. DELETE/Selected on a selection whose ids no longer match the current
  *    list (list changed under the selection) is a no-op — the target fold
  *    intersects selection with the LIVE list.
+ *
+ * (The former moveToFront/lowerPriority empty-list baseline tests retired
+ * with the arithmetic itself: placement is now the queue's composite verb
+ * — the VM forwards the row id — and the 0-baseline behavior is pinned at
+ * the seam by DownloadRepositoryImplPlacementTest.)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadsViewModelGlobalActionBoundaryTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module (DownloadsViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var downloadRepository: DownloadQueue
     /** The gh-181 suggestion/policy seam (a separate mock from the queue view of the repository). */
@@ -68,7 +66,6 @@ class DownloadsViewModelGlobalActionBoundaryTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         downloadRepository = mockk<DownloadQueue>(relaxed = true)
         policyRepository = mockk(relaxed = true)
         intake = mockk(relaxed = true)
@@ -85,11 +82,6 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         downloadsStore = mockk(relaxed = true)
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
         viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun item(
@@ -110,7 +102,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     )
 
     @Test
-    fun pauseAll_withNoDownloadingItems_isAGuardedNoop() = runTest(mainDispatcher) {
+    fun pauseAll_withNoDownloadingItems_isAGuardedNoop() = runTest(mainDispatcherRule.testDispatcher) {
         downloadsFlow.value = listOf(
             item("pa", status = DownloadStatus.PAUSED),
             item("ok", status = DownloadStatus.COMPLETED),
@@ -124,7 +116,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     }
 
     @Test
-    fun retryAllFailed_withNoFailedItems_isAGuardedNoop() = runTest(mainDispatcher) {
+    fun retryAllFailed_withNoFailedItems_isAGuardedNoop() = runTest(mainDispatcherRule.testDispatcher) {
         downloadsFlow.value = listOf(item("ok", status = DownloadStatus.COMPLETED))
         advanceUntilIdle()
 
@@ -136,29 +128,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     }
 
     @Test
-    fun moveToFront_onAnEmptyList_usesTheZeroBaselinePlusOne() = runTest(mainDispatcher) {
-        downloadsFlow.value = emptyList()
-        advanceUntilIdle()
-
-        viewModel.moveToFront(item("solo"))
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("solo", 1) }
-    }
-
-    @Test
-    fun lowerPriority_onAnEmptyList_usesTheZeroBaselineMinusOne() = runTest(mainDispatcher) {
-        downloadsFlow.value = emptyList()
-        advanceUntilIdle()
-
-        viewModel.lowerPriority(item("solo"))
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("solo", -1) }
-    }
-
-    @Test
-    fun checkAllForUpdates_forwardsAnEmptyDownloadedIdBatch() = runTest(mainDispatcher) {
+    fun checkAllForUpdates_forwardsAnEmptyDownloadedIdBatch() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
 
         viewModel.resyncActions.checkAllForUpdates()
@@ -169,7 +139,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     }
 
     @Test
-    fun deleteSelected_withSelectionMissingFromTheLiveList_isANoop() = runTest(mainDispatcher) {
+    fun deleteSelected_withSelectionMissingFromTheLiveList_isANoop() = runTest(mainDispatcherRule.testDispatcher) {
         // Selection captured an id that has since left the (500-row-windowed)
         // list: the bulk delete intersects with the LIVE list, so nothing is
         // deleted and no message is emitted.
@@ -180,7 +150,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
         // The stale selection is kept (only a successful bulk delete clears it).
         assertEquals(setOf("vanished"), viewModel.uiState.value.selectedIds)
     }

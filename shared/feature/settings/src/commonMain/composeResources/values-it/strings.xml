@@ -424,6 +424,7 @@
     <string name="settings_download_storage_location_subtitle">Percorso cartella per archiviare i media scaricati</string>
     <string name="settings_storage_internal">Memoria interna</string>
     <string name="settings_storage_external">SD card esterna</string>
+    <string name="settings_storage_builtin_external">Archiviazione esterna (integrata)</string>
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">Elimina dopo la visione</string>

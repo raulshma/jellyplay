@@ -2,39 +2,38 @@ package com.raulshma.jellyplay.feature.livetv.components
 
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the ONE recording choreography [RecordActions] owns for every Live TV
  * tab: the synchronous Requesting flip (the in-flight latch the dialog state
  * rides), the single repository call, and the Success/Error outcome carrying
- * its [RecordRequest] identity. Uses the module's inlined-MainDispatcherRule
- * pattern (jvmTest has no :core:testing access); the queueing dispatcher keeps
- * the launched repository call inert until the scheduler is advanced.
+ * its [RecordRequest] identity. Uses the shared MainDispatcherRule fixture;
+ * the queueing dispatcher keeps the launched repository call inert until the
+ * scheduler is advanced.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RecordActionsTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var scope: CoroutineScope
     private lateinit var repository: LiveTvApiClient
@@ -43,8 +42,7 @@ class RecordActionsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
-        scope = CoroutineScope(Job() + mainDispatcher)
+        scope = CoroutineScope(Job() + mainDispatcherRule.testDispatcher)
         repository = mockk(relaxed = true)
         observed = mutableListOf()
         actions = RecordActions(repository, scope) { observed += it }
@@ -53,7 +51,6 @@ class RecordActionsTest {
     @AfterTest
     fun tearDown() {
         scope.cancel()
-        Dispatchers.resetMain()
     }
 
     private fun program(id: String, timerId: String? = null, seriesTimerId: String? = null) = LiveTvProgram(
@@ -67,7 +64,7 @@ class RecordActionsTest {
     )
 
     @Test
-    fun in_flight_Requesting_is_published_synchronously_before_the_repository_answers() = runTest(mainDispatcher) {
+    fun in_flight_Requesting_is_published_synchronously_before_the_repository_answers() = runTest(mainDispatcherRule.testDispatcher) {
         // Park the repository so the request stays in flight.
         val gate = CompletableDeferred<Unit>()
         coEvery { repository.createTimer("prog-1") } coAnswers { gate.await(); Result.success(Unit) }
@@ -91,7 +88,7 @@ class RecordActionsTest {
     }
 
     @Test
-    fun failure_publishes_Error_with_the_request_identity_and_the_raw_message() = runTest(mainDispatcher) {
+    fun failure_publishes_Error_with_the_request_identity_and_the_raw_message() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.createSeriesTimer("prog-1") } returns Result.failure(RuntimeException("conflict"))
 
         actions.recordSeries(program(id = "prog-1"))
@@ -105,7 +102,7 @@ class RecordActionsTest {
     }
 
     @Test
-    fun a_null_exception_message_stays_null_so_each_tab_applies_its_own_fallback() = runTest(mainDispatcher) {
+    fun a_null_exception_message_stays_null_so_each_tab_applies_its_own_fallback() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.createTimer("prog-1") } returns Result.failure(RuntimeException(null as String?))
 
         actions.recordOnce(program(id = "prog-1"))
@@ -133,7 +130,7 @@ class RecordActionsTest {
     }
 
     @Test
-    fun cancelTimer_carries_the_program_and_timer_identity() = runTest(mainDispatcher) {
+    fun cancelTimer_carries_the_program_and_timer_identity() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.cancelTimer("timer-9") } returns Result.success(Unit)
 
         assertTrue(actions.cancelTimer(program(id = "prog-1", timerId = "timer-9")))
@@ -152,7 +149,7 @@ class RecordActionsTest {
     }
 
     @Test
-    fun id_based_timer_cancel_carries_the_timer_identity_without_a_program() = runTest(mainDispatcher) {
+    fun id_based_timer_cancel_carries_the_timer_identity_without_a_program() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.cancelTimer("t1") } returns Result.success(Unit)
 
         actions.cancelTimer("t1")
@@ -166,7 +163,7 @@ class RecordActionsTest {
     }
 
     @Test
-    fun id_based_series_cancel_carries_the_series_timer_identity_without_a_program() = runTest(mainDispatcher) {
+    fun id_based_series_cancel_carries_the_series_timer_identity_without_a_program() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { repository.cancelSeriesTimer("st1") } returns Result.success(Unit)
 
         actions.cancelSeries("st1")

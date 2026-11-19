@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -19,19 +20,15 @@ import io.mockk.just
 import io.mockk.mockk
 import java.time.LocalDate
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,6 +36,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Watch Progress heatmap ViewModel coverage (requests/downloads conveyor test
@@ -52,11 +50,10 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class WatchProgressHeatmapViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (requests conveyor port pattern). The VM's
-    // init does real work on the main dispatcher, so setMain must precede
-    // construction.
-    private val mainDispatcher = StandardTestDispatcher()
+    // The VM's init does real work on the main dispatcher, so the rule's
+    // setMain (at rule start) must precede construction.
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var watchHistoryRepository: WatchHistoryRepository
     private lateinit var detailFeed: DetailFeed
@@ -70,7 +67,6 @@ class WatchProgressHeatmapViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         watchHistoryRepository = mockk()
         detailFeed = mockk()
         imageUrlProvider = mockk()
@@ -81,11 +77,6 @@ class WatchProgressHeatmapViewModelTest {
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns emptyList()
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "http://img"
         stubDailyActivity { emptyList() }
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** Routes every getDailyActivity call into [dailyActivityCalls]. */
@@ -110,7 +101,7 @@ class WatchProgressHeatmapViewModelTest {
     // ── init: plugin status + min-date parse ─────────────────────────────
 
     @Test
-    fun init_refreshes_playback_reporting_status() = runTest(mainDispatcher) {
+    fun init_refreshes_playback_reporting_status() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -119,7 +110,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun plugin_status_gate_follows_the_repository_flow() = runTest(mainDispatcher) {
+    fun plugin_status_gate_follows_the_repository_flow() = runTest(mainDispatcherRule.testDispatcher) {
         playbackReportingStatus.value = PlaybackReportingStatus.UNAVAILABLE
 
         val viewModel = newViewModel()
@@ -129,7 +120,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun init_parses_minimum_activity_date_from_the_iso_prefix() = runTest(mainDispatcher) {
+    fun init_parses_minimum_activity_date_from_the_iso_prefix() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { watchHistoryRepository.getMinimumActivityDate() } returns "2023-05-14T10:30:00Z"
 
         val viewModel = newViewModel()
@@ -139,7 +130,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun init_degrades_unparseable_minimum_activity_date_to_null() = runTest(mainDispatcher) {
+    fun init_degrades_unparseable_minimum_activity_date_to_null() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { watchHistoryRepository.getMinimumActivityDate() } returns "not-a-date"
 
         val viewModel = newViewModel()
@@ -149,7 +140,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun init_without_minimum_activity_date_stays_null() = runTest(mainDispatcher) {
+    fun init_without_minimum_activity_date_stays_null() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -159,7 +150,7 @@ class WatchProgressHeatmapViewModelTest {
     // ── streak walk ───────────────────────────────────────────────────────
 
     @Test
-    fun streaks_walk_gaps_and_anchor_on_today() = runTest(mainDispatcher) {
+    fun streaks_walk_gaps_and_anchor_on_today() = runTest(mainDispatcherRule.testDispatcher) {
         val today = LocalDate.now()
         // Two runs: today + yesterday (current streak 2) and a 5-day run a
         // month back (longest streak 5), separated by a >1 day gap.
@@ -181,7 +172,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun streaks_gap_boundary_breaks_run_at_exactly_one_missed_day() = runTest(mainDispatcher) {
+    fun streaks_gap_boundary_breaks_run_at_exactly_one_missed_day() = runTest(mainDispatcherRule.testDispatcher) {
         val today = LocalDate.now()
         // consecutive pair, one-day gap, another pair → longest run = 2.
         val base = today.minusDays(10)
@@ -198,7 +189,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun streaks_count_yesterday_anchored_run_but_not_today() = runTest(mainDispatcher) {
+    fun streaks_count_yesterday_anchored_run_but_not_today() = runTest(mainDispatcherRule.testDispatcher) {
         val today = LocalDate.now()
         // [yesterday-2 .. yesterday] with today inactive: HEAD's walk starts
         // at today and stops immediately — yesterday's run never counts.
@@ -213,7 +204,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun streaks_ignore_zero_value_days() = runTest(mainDispatcher) {
+    fun streaks_ignore_zero_value_days() = runTest(mainDispatcherRule.testDispatcher) {
         val today = LocalDate.now()
         // Zero-value rows exist in the payload but never count as active.
         val dates = listOf(today.minusDays(2), today.minusDays(1), today)
@@ -229,7 +220,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun streaks_short_circuit_on_empty_activity() = runTest(mainDispatcher) {
+    fun streaks_short_circuit_on_empty_activity() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -249,7 +240,7 @@ class WatchProgressHeatmapViewModelTest {
     )
 
     @Test
-    fun selectDay_resolves_media_details_and_builds_selected_day_info() = runTest(mainDispatcher) {
+    fun selectDay_resolves_media_details_and_builds_selected_day_info() = runTest(mainDispatcherRule.testDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
         coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.success(
@@ -275,7 +266,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun selectDay_media_detail_failure_falls_back_to_no_resolution() = runTest(mainDispatcher) {
+    fun selectDay_media_detail_failure_falls_back_to_no_resolution() = runTest(mainDispatcherRule.testDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
         coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("gone"))
@@ -294,7 +285,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun selectDay_reuses_resolved_items_across_selections() = runTest(mainDispatcher) {
+    fun selectDay_reuses_resolved_items_across_selections() = runTest(mainDispatcherRule.testDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
         coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.success(
@@ -315,7 +306,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun selectDay_null_clears_the_selection() = runTest(mainDispatcher) {
+    fun selectDay_null_clears_the_selection() = runTest(mainDispatcherRule.testDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
         coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("gone"))
@@ -335,7 +326,7 @@ class WatchProgressHeatmapViewModelTest {
     // ── share requests (one-shot channel) ─────────────────────────────────
 
     @Test
-    fun share_requests_are_one_shot_channel_emissions_that_never_replay() = runTest(mainDispatcher) {
+    fun share_requests_are_one_shot_channel_emissions_that_never_replay() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -367,7 +358,7 @@ class WatchProgressHeatmapViewModelTest {
     // ── year/filter/refresh loads ─────────────────────────────────────────
 
     @Test
-    fun init_and_setYear_forward_the_year_to_the_loader() = runTest(mainDispatcher) {
+    fun init_and_setYear_forward_the_year_to_the_loader() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -383,7 +374,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun setFilter_forwards_the_filter_and_clears_the_selected_day() = runTest(mainDispatcher) {
+    fun setFilter_forwards_the_filter_and_clears_the_selected_day() = runTest(mainDispatcherRule.testDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
         coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("gone"))
@@ -403,7 +394,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun load_failure_surfaces_error_then_refresh_recovers() = runTest(mainDispatcher) {
+    fun load_failure_surfaces_error_then_refresh_recovers() = runTest(mainDispatcherRule.testDispatcher) {
         stubDailyActivity { throw RuntimeException("offline") }
 
         val viewModel = newViewModel()
@@ -424,7 +415,7 @@ class WatchProgressHeatmapViewModelTest {
     }
 
     @Test
-    fun refresh_reloads_with_the_current_year_and_filter() = runTest(mainDispatcher) {
+    fun refresh_reloads_with_the_current_year_and_filter() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
         val callsBeforeRefresh = dailyActivityCalls.size

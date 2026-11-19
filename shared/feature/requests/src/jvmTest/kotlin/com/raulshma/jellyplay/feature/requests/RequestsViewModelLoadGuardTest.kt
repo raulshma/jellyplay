@@ -11,27 +11,24 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Load-pipeline guard gaps in [RequestsViewModel] NOT pinned by
@@ -48,9 +45,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class RequestsViewModelLoadGuardTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (RequestsViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var arrRepository: ArrRepository
@@ -64,7 +60,6 @@ class RequestsViewModelLoadGuardTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         seerrRepository = mockk()
         arrRepository = mockk()
         experimentalStore = mockk()
@@ -95,11 +90,6 @@ class RequestsViewModelLoadGuardTest {
         }
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun item(id: Int, tmdbId: Int = id, type: String = "movie") = SeerrRequestItem(
         id = id,
         type = type,
@@ -109,11 +99,11 @@ class RequestsViewModelLoadGuardTest {
     private fun newViewModel(): RequestsViewModel = RequestsViewModel(
         seerrRepository = seerrRepository,
         arrRepository = arrRepository,
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     @Test
-    fun loadRequests_whileALoadIsInFlight_isSkippedByTheLoadingGuard() = runTest(mainDispatcher) {
+    fun loadRequests_whileALoadIsInFlight_isSkippedByTheLoadingGuard() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         coEvery {
             seerrRepository.getRequests(any(), any(), any(), any(), any(), any(), any(), any())
@@ -146,7 +136,7 @@ class RequestsViewModelLoadGuardTest {
     }
 
     @Test
-    fun enrichRequests_skipsAlreadyEnrichedTmdbIds_onSubsequentLoads() = runTest(mainDispatcher) {
+    fun enrichRequests_skipsAlreadyEnrichedTmdbIds_onSubsequentLoads() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 

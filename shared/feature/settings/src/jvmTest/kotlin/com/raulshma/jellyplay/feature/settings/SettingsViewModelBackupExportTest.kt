@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
 import androidx.lifecycle.viewModelScope
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import kotlinx.coroutines.cancel
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -31,17 +32,15 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Tops up [SettingsViewModel] beyond [SettingsViewModelTest] (which pins the
@@ -52,13 +51,13 @@ import kotlin.test.assertTrue
  * clear/reset delegations.
  *
  * Stores/repositories are mockk'd with real [MutableStateFlow] stubs; the
- * main-dispatcher rule is inlined (StandardTestDispatcher + setMain/resetMain
- * — module jvmTest pattern).
+ * shared MainDispatcherRule fixture installs a StandardTestDispatcher on Main.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelBackupExportTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var settingsBackupIo: SettingsBackupIo
     private lateinit var preferencesStore: UserPreferencesStore
@@ -78,7 +77,6 @@ class SettingsViewModelBackupExportTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         settingsBackupIo = mockk()
         preferencesStore = mockk(relaxed = true)
         projections = mockk(relaxed = true)
@@ -96,11 +94,6 @@ class SettingsViewModelBackupExportTest {
         every { recentsStore.recents } returns recents
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     /** Every VM created here; all cancelled in [vmTest]'s finally (see below). */
     private val createdViewModels = mutableListOf<SettingsViewModel>()
 
@@ -112,7 +105,7 @@ class SettingsViewModelBackupExportTest {
      * for hundreds of thousands of virtual iterations (a near-permanent hang
      * that also OOMs the worker through mockk's per-invocation bookkeeping).
      */
-    private fun vmTest(block: suspend TestScope.() -> Unit): Unit = runTest(testDispatcher) {
+    private fun vmTest(block: suspend TestScope.() -> Unit): Unit = runTest(mainDispatcherRule.testDispatcher) {
         try {
             block()
         } finally {

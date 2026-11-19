@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
@@ -37,18 +38,14 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.time.Instant
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -56,6 +53,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveTvPlayerViewModelTest {
@@ -83,9 +81,11 @@ class LiveTvPlayerViewModelTest {
      */
     private val fixedNowMs: Long = Instant.parse("2026-06-22T15:00:00Z").toEpochMilliseconds()
 
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
+
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
         liveTvRepo = mockk<LiveTvApiClient>(relaxed = true)
         playbackRepo = mockk(relaxed = true)
         playbackIdentity = mockk(relaxed = true)
@@ -125,11 +125,6 @@ class LiveTvPlayerViewModelTest {
         // Default: no EPG programs. Individual tests override as needed.
         coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns
             Result.success(emptyList<LiveTvProgram>())
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun channels(count: Int) = (0 until count).map {

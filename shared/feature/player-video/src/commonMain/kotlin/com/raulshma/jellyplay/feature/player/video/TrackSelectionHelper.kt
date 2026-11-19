@@ -70,9 +70,16 @@ internal class TrackSelectionHelper(
     // second). Defaults keep the engine inert-safe for tests that don't care.
     private val getRuleContentType: () -> RuleContentType = { RuleContentType.ALL },
     private val getRuleTitles: () -> List<String> = { emptyList() },
-    // poked after toggleSubtitles flips the active subtitle so the
-    // cross-controller consumers (the cue preview) refresh like a sheet pick.
+    // poked after toggleSubtitles flips the active subtitle AND after the
+    // downloaded-subtitle "Use" arm activates one (both are sheet-pick-shaped
+    // selections), so the cross-controller consumers (the cue preview) refresh
+    // like a sheet pick.
     private val onSubtitleSelectionChanged: () -> Unit = {},
+    // The SubtitleManager's ready-hint read for the downloaded-subtitle sheet
+    // rows (the "Use" action's lookup: row key → the side-load hint recorded
+    // when the download surfaced). Default null so the unit tests that don't
+    // exercise the Use action compile unchanged.
+    private val findReadySubtitleHint: (rowKey: String) -> ReadySubtitleHint? = { null },
     private val scope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow(TrackState())
@@ -379,6 +386,38 @@ internal class TrackSelectionHelper(
             it.index >= SERVER_TRACK_INDEX_BASE &&
                 it.index - SERVER_TRACK_INDEX_BASE == serverStreamIndex
         }
+    }
+
+    /**
+     * The downloaded-subtitle sheet row's "Use" action, resolved IN the hub
+     * (the track-selection home): read the row's ready hint
+     * ([findReadySubtitleHint]), resolve it to a picker row
+     * ([findSubtitleOptionFor]), and act on the three verdicts:
+     *
+     *  - no hint yet → [UseDownloadedVerdict.NotReady] (nothing to resolve);
+     *  - hint but no picker row (the side-load into the engine is still
+     *    asynchronous) → arm the pending-selection intent
+     *    ([requestSubtitleSelection] — it applies automatically on the next
+     *    track-list emissions) and return [UseDownloadedVerdict.ArmedPending];
+     *  - a row → the SAME selection chain a sheet pick runs
+     *    ([selectSubtitleTrack] with the held-selection guard, the per-item
+     *    persist and the cross-episode memory) plus the
+     *    [onSubtitleSelectionChanged] poke, and return
+     *    [UseDownloadedVerdict.Selected].
+     */
+    fun useDownloadedSubtitle(rowKey: String): UseDownloadedVerdict {
+        val hint = findReadySubtitleHint(rowKey)
+        if (hint == null) {
+            return UseDownloadedVerdict.NotReady()
+        }
+        val option = findSubtitleOptionFor(hint)
+        if (option == null) {
+            requestSubtitleSelection(hint)
+            return UseDownloadedVerdict.ArmedPending(armedHint = hint)
+        }
+        selectSubtitleTrack(option)
+        onSubtitleSelectionChanged()
+        return UseDownloadedVerdict.Selected(option = option)
     }
 
     private fun tryConsumePendingServerSubtitleSelection() {
@@ -1228,5 +1267,56 @@ internal class TrackSelectionHelper(
         if (lang.isEmpty()) return -1
         val sameLang = tracks.filter { it.language?.lowercase()?.trim() == lang }
         return sameLang.indexOf(target)
+    }
+}
+
+/**
+ * The downloaded-subtitle "Use" action's verdict ([TrackSelectionHelper.useDownloadedSubtitle]):
+ * the three outcomes the former ViewModel arms branched over, as data — each
+ * variant carries the exact user-message string the caller relays through the
+ * message bus, so the wording lives beside the verdict it belongs to. The
+ * type-level default is the string; the helper constructs the variants bare.
+ *
+ *  - [NotReady]: the row's ready hint has not surfaced yet — nothing was
+ *    resolved, nothing armed. Retry shortly.
+ *  - [ArmedPending]: the hint exists but no picker row resolves it yet (the
+ *    side-load into the engine is asynchronous) — the pending-selection
+ *    intent is ARMED and applies automatically on the next track-list
+ *    emissions; [armedHint] is what was armed.
+ *  - [Selected]: the row resolved and the hub ran the full sheet-pick
+ *    selection chain; [option] is the row that was selected.
+ */
+internal sealed interface UseDownloadedVerdict {
+
+    /** The user-facing notice the caller relays through the message bus verbatim. */
+    val userMessage: String
+
+    /**
+     * The picker row the ready hint resolved to — null on [NotReady] (no hint,
+     * resolution never ran) and [ArmedPending] (hint, resolution missed).
+     */
+    val resolved: TrackOption?
+
+    /** The "not ready yet" verdict — the row's side-load has not surfaced a hint. */
+    data class NotReady(
+        override val userMessage: String = "Subtitle not active yet — please try again shortly",
+    ) : UseDownloadedVerdict {
+        override val resolved: TrackOption? get() = null
+    }
+
+    /** The side-load still in flight; the pending-selection intent is armed. */
+    data class ArmedPending(
+        val armedHint: ReadySubtitleHint,
+        override val userMessage: String = "Subtitle still loading — it will be selected automatically",
+    ) : UseDownloadedVerdict {
+        override val resolved: TrackOption? get() = null
+    }
+
+    /** The row resolved and the hub selected it. */
+    data class Selected(
+        val option: TrackOption,
+        override val userMessage: String = "Subtitle selected",
+    ) : UseDownloadedVerdict {
+        override val resolved: TrackOption? get() = option
     }
 }

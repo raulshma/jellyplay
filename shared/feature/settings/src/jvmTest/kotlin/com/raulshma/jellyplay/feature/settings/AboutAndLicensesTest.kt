@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -14,20 +15,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Polls until [condition] holds, pumping the test scheduler between waits.
@@ -59,7 +57,8 @@ private suspend fun TestScope.awaitUntil(timeoutMs: Long = 5_000, condition: () 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AboutViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private val experimentalState = MutableStateFlow(
         ExperimentalSlice(
             selfUpdateCheckEnabled = false,
@@ -76,7 +75,6 @@ class AboutViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         appMetaProvider = mockk(relaxed = true)
         logCollector = mockk(relaxed = true)
         serverAdminActions = mockk<ServerAdminActions>(relaxed = true).apply { every { isSupported } returns true }
@@ -90,11 +88,6 @@ class AboutViewModelTest {
         every { authRepository.currentServer } returns MutableStateFlow(
             ServerInfo(id = "s1", name = "Media", address = "https://jelly.example")
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun viewModel() = AboutViewModel(
@@ -206,18 +199,13 @@ class AboutViewModelTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class LicensesViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private lateinit var jsonSource: AboutLibrariesJsonSource
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         jsonSource = mockk(relaxed = true)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     @Test

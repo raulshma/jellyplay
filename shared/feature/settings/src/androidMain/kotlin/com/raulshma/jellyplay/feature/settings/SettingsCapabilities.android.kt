@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.feature.settings
 
-import android.os.Build
+import com.raulshma.jellyplay.core.ui.components.supportsDynamicColor
 
 internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabilities(
-    supportsDynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+    supportsDynamicColor = supportsDynamicColor,
     supportsNotifications = true,
     supportsAppLocaleOverride = true,
     supportsAudioCache = true,

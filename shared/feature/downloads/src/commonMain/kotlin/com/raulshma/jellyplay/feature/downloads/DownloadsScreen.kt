@@ -366,6 +366,20 @@ fun DownloadsScreen(
         )
 
         if (downloads.isEmpty()) {
+            // Armed series survive the empty list (that is the point of
+            // ADR-0015): a series whose files were all deleted but whose arm
+            // row lives on still needs its un-arm escape hatch here, above the
+            // empty state.
+            val armedRows by viewModel.seriesPolicyActions.armedSeries.collectAsStateWithLifecycle()
+            if (armedRows.isNotEmpty()) {
+                ArmedSeriesCard(
+                    rows = armedRows,
+                    onUnArm = viewModel.seriesPolicyActions::unArmSeries,
+                    modifier = Modifier
+                        .padding(horizontal = adaptiveInfo.contentPadding(isTv))
+                        .padding(bottom = 12.dp),
+                )
+            }
             ScreenEmptyState(
                 icon = Tabler.Outline.Download,
                 title = stringResource(Res.string.downloads_empty_title),
@@ -482,15 +496,29 @@ fun DownloadsScreen(
                         // (empty included — answering them is the screen's most
                         // urgent action).
                         item(key = "auto_download_suggestions", contentType = "suggestions") {
-                            val suggestionList by viewModel.suggestions.collectAsStateWithLifecycle()
+                            val suggestionList by viewModel.seriesPolicyActions.suggestions.collectAsStateWithLifecycle()
                             if (suggestionList.isNotEmpty()) {
                                 AutoDownloadSuggestionsCard(
                                     suggestions = suggestionList,
                                     onDownloadAll = {
-                                        viewModel.downloadSuggestions(suggestionList.map { it.episodeId })
+                                        viewModel.seriesPolicyActions.downloadSuggestions(suggestionList.map { it.episodeId })
                                     },
-                                    onDownload = { viewModel.downloadSuggestions(listOf(it)) },
-                                    onDismiss = { viewModel.dismissSuggestions(listOf(it)) },
+                                    onDownload = { viewModel.seriesPolicyActions.downloadSuggestions(listOf(it)) },
+                                    onDismiss = { viewModel.seriesPolicyActions.dismissSuggestions(listOf(it)) },
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                )
+                            }
+                        }
+                        // Armed series (ADR-0015): every arm row — zero-download
+                        // series included — with its resolved mode and the un-arm
+                        // verb, right below the prompts it shares the policy store
+                        // with (one "auto-download state" block above the list).
+                        item(key = "armed_series", contentType = "armedSeries") {
+                            val armedRows by viewModel.seriesPolicyActions.armedSeries.collectAsStateWithLifecycle()
+                            if (armedRows.isNotEmpty()) {
+                                ArmedSeriesCard(
+                                    rows = armedRows,
+                                    onUnArm = viewModel.seriesPolicyActions::unArmSeries,
                                     modifier = Modifier.padding(bottom = 4.dp),
                                 )
                             }

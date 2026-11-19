@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -200,4 +201,12 @@ data class PlayerSessionSources(
     val sleepCountdown: SleepCountdown,
     /** The mini-player state the load spine's reclaim gate probes. */
     val videoMiniPlayerState: VideoMiniPlayerState,
+    /**
+     * The SyncPlay manager the session owns outright: the bridge, the load
+     * pipeline's reconcile and the group repeat/shuffle mode verbs
+     * ([PlaybackSession.setSyncPlayRepeatMode] /
+     * [PlaybackSession.setSyncPlayShuffleMode]) all draw it from here — the
+     * former ViewModel constructor slot retired with the session verbs.
+     */
+    val syncPlayManager: SyncPlayManager,
 )

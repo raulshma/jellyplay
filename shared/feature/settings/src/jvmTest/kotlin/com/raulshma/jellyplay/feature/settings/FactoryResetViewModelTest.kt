@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotCreated
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -67,13 +68,13 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * The factory-reset review screen: the one-shot current-vs-factory snapshot
@@ -96,7 +97,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class FactoryResetViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var playbackStore: PlaybackStore
     private lateinit var appearanceStore: AppearanceStore
@@ -126,7 +128,6 @@ class FactoryResetViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         playbackStore = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
         videoPlayerStore = mockk(relaxed = true)
@@ -174,11 +175,6 @@ class FactoryResetViewModelTest {
         every { pinRateLimiter.getPinLockoutState() } returns PinLockoutState.NOT_LOCKED
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun withAppearance(slice: AppearanceSlice) {
         every { appearanceStore.appearance } returns MutableStateFlow(slice)
     }
@@ -222,7 +218,7 @@ class FactoryResetViewModelTest {
     // ---------------------------------------------------------------- snapshot
 
     @Test
-    fun `all-default slices reproduce the factory baseline`() = runTest(testDispatcher) {
+    fun `all-default slices reproduce the factory baseline`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -230,7 +226,7 @@ class FactoryResetViewModelTest {
     }
 
     @Test
-    fun `non-default slice values land in the one-shot snapshot`() = runTest(testDispatcher) {
+    fun `non-default slice values land in the one-shot snapshot`() = runTest(mainDispatcherRule.testDispatcher) {
         withAppearance(AppearanceSlice(themeMode = ThemeMode.DARK, oledMode = true))
         val vm = viewModel()
         advanceUntilIdle()
@@ -244,7 +240,7 @@ class FactoryResetViewModelTest {
     // ---------------------------------------------------------------- destructive delegates
 
     @Test
-    fun `resetCategory delegates to the editor`() = runTest(testDispatcher) {
+    fun `resetCategory delegates to the editor`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -254,7 +250,7 @@ class FactoryResetViewModelTest {
     }
 
     @Test
-    fun `resetAll clears all preferences through the editor`() = runTest(testDispatcher) {
+    fun `resetAll clears all preferences through the editor`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -297,7 +293,7 @@ class FactoryResetViewModelTest {
     }
 
     @Test
-    fun `seam-present resetAll parks on the capture - a second confirmation is refused until it settles`() = runTest(testDispatcher) {
+    fun `seam-present resetAll parks on the capture - a second confirmation is refused until it settles`() = runTest(mainDispatcherRule.testDispatcher) {
         val captureEntries = mutableListOf<Int>()
         val captureGate = CompletableDeferred<Unit>()
         val vm = seamPresentViewModel()
@@ -322,7 +318,7 @@ class FactoryResetViewModelTest {
     }
 
     @Test
-    fun `seam-present resetAll with a failed capture still completes and raises the warning face`() = runTest(testDispatcher) {
+    fun `seam-present resetAll with a failed capture still completes and raises the warning face`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = seamPresentViewModel()
         // A failed capture must warn through the one-shot face — and never block the reset.
         coEvery { pluginApi.createSnapshot() } returns Result.failure(IllegalStateException("500"))
@@ -339,7 +335,7 @@ class FactoryResetViewModelTest {
     }
 
     @Test
-    fun `seam-present resetAll runs only after the capture settles - capture-before-reset ordering`() = runTest(testDispatcher) {
+    fun `seam-present resetAll runs only after the capture settles - capture-before-reset ordering`() = runTest(mainDispatcherRule.testDispatcher) {
         val order = mutableListOf<String>()
         val vm = seamPresentViewModel()
         coEvery { pluginApi.createSnapshot() } coAnswers {

@@ -44,7 +44,7 @@ import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.AccentColorPicker
 import com.raulshma.jellyplay.core.ui.components.ColorStylePicker
-import com.raulshma.jellyplay.feature.onboarding.supportsDynamicColor
+import com.raulshma.jellyplay.core.ui.components.supportsDynamicColor
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.Res
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_appearance_contrast
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_appearance_dynamic_theming

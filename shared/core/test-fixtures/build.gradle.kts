@@ -79,6 +79,14 @@ kotlin {
             // carries its own player-contract edge, same rule as core:data
             // above — this module must never become a reason to widen one.
             implementation(project(":shared:core:player-contract"))
+            // MainDispatcherRule's supertype (TestWatcher, junit4) and its
+            // setMain/resetMain edge (kotlinx-coroutines-test). implementation,
+            // not api: every test lane already carries both edges of its own
+            // (kotlin("test") → junit4 comes from the base convention plugin;
+            // coroutines-test is declared per lane) — this module must never
+            // become a reason to widen one.
+            implementation(libs.junit)
+            implementation(libs.coroutines.test)
         }
         getByName("jvmMain").dependencies {
             // The desktop audio-queue fakes (DesktopAudioQueueManagerFixtures)

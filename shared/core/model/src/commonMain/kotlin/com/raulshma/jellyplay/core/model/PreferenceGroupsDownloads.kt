@@ -15,13 +15,32 @@ import kotlinx.serialization.Serializable
  * - [ASK]: record them as pending suggestions the user confirms on the
  *   Downloads screen (plus a summary notification on Android).
  * - [NEVER]: the pass does nothing for that series.
+ * - [FOLLOW_GLOBAL]: a SERIES-ROW sentinel (ADR-0015) — the series is armed
+ *   and its effective mode is the global preference.
  */
 @Immutable
 @Serializable
-enum class AutoDownloadMode { INSTANT, ASK, NEVER }
+enum class AutoDownloadMode { INSTANT, ASK, NEVER, FOLLOW_GLOBAL }
 
-/** Whether this mode keeps the auto-download machinery (schedule + passes) alive. */
+/**
+ * Whether this mode keeps the auto-download machinery (schedule + passes)
+ * alive. [FOLLOW_GLOBAL] is a series-row sentinel (ADR-0015), never a legal
+ * global value — the DownloadsStore setter's write-side clamp owns that
+ * invariant; this projection only has to keep the sentinel "on" (an armed
+ * series must not cancel the periodic pass).
+ */
 val AutoDownloadMode.isEnabled: Boolean get() = this != AutoDownloadMode.NEVER
+
+/**
+ * The ONE policy-resolution home (ADR-0015): a stored policy row — or a
+ * missing row — resolves against the global mode. [FOLLOW_GLOBAL] rows and
+ * absent rows both yield the global mode; an explicit [INSTANT]/[ASK]/[NEVER]
+ * row wins. Every consumer of `series_download_policies` (the auto-download
+ * check, the Downloads screen's armed list) resolves through this, never by
+ * hand — a second hand-fold of the FOLLOW_GLOBAL branch is a defect.
+ */
+fun AutoDownloadMode?.resolveAgainst(global: AutoDownloadMode): AutoDownloadMode =
+    if (this == null || this == AutoDownloadMode.FOLLOW_GLOBAL) global else this
 
 @Immutable
 @Serializable

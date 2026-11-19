@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_cleartext
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_connection_failed
@@ -17,23 +18,19 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 
@@ -58,7 +55,8 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddServerViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var authRepository: AuthRepository
     private lateinit var serverDiscoveryRepository: ServerDiscoveryRepository
@@ -68,7 +66,6 @@ class AddServerViewModelTest {
 
     @Before
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
         serverDiscoveryRepository = mockk()
         networkOfflineStore = mockk(relaxed = true)
@@ -78,11 +75,6 @@ class AddServerViewModelTest {
             localNetworkStatus = LocalNetworkStatus { _ -> blamePermission },
             networkOfflineStore = networkOfflineStore,
         )
-    }
-
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     // The phase machine replaced the flat flags; these helpers keep the
@@ -104,7 +96,7 @@ class AddServerViewModelTest {
     // ------------------------------------------------------ connect (manual)
 
     @Test
-    fun connectToServer_blankAddress_setsRequiredError_withoutCallingRepository() = runTest(testDispatcher) {
+    fun connectToServer_blankAddress_setsRequiredError_withoutCallingRepository() = runTest(mainDispatcherRule.testDispatcher) {
         var resultInvoked = false
         viewModel.connectToServer("   ") { resultInvoked = true }
 
@@ -120,7 +112,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_unknownHost_resolvesToLocalResource() = runTest(testDispatcher) {
+    fun connectToServer_unknownHost_resolvesToLocalResource() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("http://server") } returns
             Result.failure(java.net.UnknownHostException("server"))
 
@@ -134,7 +126,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_wrappedRootCause_classifiesInnermostCause() = runTest(testDispatcher) {
+    fun connectToServer_wrappedRootCause_classifiesInnermostCause() = runTest(mainDispatcherRule.testDispatcher) {
         // getRootCause walks the chain: the wrapper is a plain RuntimeError,
         // the SSLException at the bottom must win the classification.
         coEvery { authRepository.addServer("https://server") } returns
@@ -150,7 +142,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_cleartextMessageInRootCause_mapsToCleartextResource() = runTest(testDispatcher) {
+    fun connectToServer_cleartextMessageInRootCause_mapsToCleartextResource() = runTest(mainDispatcherRule.testDispatcher) {
         // Cleartext traffic permitted is surfaced by OkHttp inside a plain
         // IOException message, not an exception type.
         coEvery { authRepository.addServer("http://server") } returns
@@ -166,7 +158,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_permissionBlamedTimeout_mapsToLocalNetworkDenied() = runTest(testDispatcher) {
+    fun connectToServer_permissionBlamedTimeout_mapsToLocalNetworkDenied() = runTest(mainDispatcherRule.testDispatcher) {
         blamePermission = true
         coEvery { authRepository.addServer("http://192.168.1.10:8096") } returns
             Result.failure(java.net.SocketTimeoutException("connect timed out"))
@@ -181,7 +173,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_permissionBlameIgnored_forNonPermissionFailures() = runTest(testDispatcher) {
+    fun connectToServer_permissionBlameIgnored_forNonPermissionFailures() = runTest(mainDispatcherRule.testDispatcher) {
         // The blame only reclassifies timeout/connect/resolve failures; an
         // SSL failure against a LAN host keeps its specific message.
         blamePermission = true
@@ -198,7 +190,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_shortRawMessage_carriedRaw() = runTest(testDispatcher) {
+    fun connectToServer_shortRawMessage_carriedRaw() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("http://server") } returns
             Result.failure(RuntimeException("boom"))
 
@@ -212,7 +204,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_orgPrefixedMessage_fallsBackToGenericResource() = runTest(testDispatcher) {
+    fun connectToServer_orgPrefixedMessage_fallsBackToGenericResource() = runTest(mainDispatcherRule.testDispatcher) {
         // SDK exception messages starting with "org." are treated as noise —
         // the user gets the generic failure string.
         coEvery { authRepository.addServer("http://server") } returns
@@ -228,7 +220,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_success_reportsResult_andClearsConnecting() = runTest(testDispatcher) {
+    fun connectToServer_success_reportsResult_andClearsConnecting() = runTest(mainDispatcherRule.testDispatcher) {
         val info = mockk<ServerInfo>()
         coEvery { authRepository.addServer("http://server") } returns Result.success(info)
         var received: Result<ServerInfo>? = null
@@ -242,7 +234,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun updateManualAddress_clearsConnectError() = runTest(testDispatcher) {
+    fun updateManualAddress_clearsConnectError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("http://server") } returns
             Result.failure(RuntimeException("boom"))
         viewModel.connectToServer("http://server") {}
@@ -258,7 +250,7 @@ class AddServerViewModelTest {
     // ------------------------------------------------------ self-signed trust
 
     @Test
-    fun connectToServer_tlsFailure_onHttps_setsTrustPromptAddress() = runTest(testDispatcher) {
+    fun connectToServer_tlsFailure_onHttps_setsTrustPromptAddress() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX path building failed"))
 
@@ -277,7 +269,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_tlsFailure_withoutScheme_promptsNormalizedHttpsAddress() = runTest(testDispatcher) {
+    fun connectToServer_tlsFailure_withoutScheme_promptsNormalizedHttpsAddress() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLPeerUnverifiedException("Certificate not trusted"))
 
@@ -294,7 +286,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_tlsFailure_onHttpAddress_neverPrompts() = runTest(testDispatcher) {
+    fun connectToServer_tlsFailure_onHttpAddress_neverPrompts() = runTest(mainDispatcherRule.testDispatcher) {
         // Cleartext addresses cannot present a certificate — belt-and-braces
         // guard even though an SSLException on http is not expected.
         coEvery { authRepository.addServer("http://server") } returns
@@ -307,7 +299,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun connectToServer_nonTlsFailure_neverPrompts() = runTest(testDispatcher) {
+    fun connectToServer_nonTlsFailure_neverPrompts() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("https://server") } returns
             Result.failure(java.net.ConnectException("refused"))
 
@@ -318,7 +310,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun confirmTrustServer_persistsCanonicalHost_andRetriesConnect() = runTest(testDispatcher) {
+    fun confirmTrustServer_persistsCanonicalHost_andRetriesConnect() = runTest(mainDispatcherRule.testDispatcher) {
         val info = mockk<ServerInfo>()
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX")) andThen
@@ -343,7 +335,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun confirmTrustServer_retriesOnlyAfterTheStoreFlowShowsTheEntry() = runTest(testDispatcher) {
+    fun confirmTrustServer_retriesOnlyAfterTheStoreFlowShowsTheEntry() = runTest(mainDispatcherRule.testDispatcher) {
         val info = mockk<ServerInfo>()
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX")) andThen
@@ -372,7 +364,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun confirmTrustServer_degradesToProceeding_whenPropagationNeverHappens() = runTest(testDispatcher) {
+    fun confirmTrustServer_degradesToProceeding_whenPropagationNeverHappens() = runTest(mainDispatcherRule.testDispatcher) {
         val info = mockk<ServerInfo>()
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX")) andThen
@@ -394,7 +386,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun dismissTrustPrompt_clearsPrompt_withoutPersisting() = runTest(testDispatcher) {
+    fun dismissTrustPrompt_clearsPrompt_withoutPersisting() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
         viewModel.connectToServer("https://selfsigned.example.com") {}
@@ -409,7 +401,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun updateManualAddress_clearsTrustPrompt() = runTest(testDispatcher) {
+    fun updateManualAddress_clearsTrustPrompt() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
         viewModel.connectToServer("https://selfsigned.example.com") {}
@@ -422,7 +414,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun confirmTrustServer_withoutPrompt_isANoOp() = runTest(testDispatcher) {
+    fun confirmTrustServer_withoutPrompt_isANoOp() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.confirmTrustServer()
         advanceUntilIdle()
 
@@ -432,7 +424,7 @@ class AddServerViewModelTest {
     // ------------------------------------------------------------- discovery
 
     @Test
-    fun startDiscovery_collectsServers_dedupes_byIdAndAddress_completes() = runTest(testDispatcher) {
+    fun startDiscovery_collectsServers_dedupes_byIdAndAddress_completes() = runTest(mainDispatcherRule.testDispatcher) {
         val a = DiscoveredServer(id = "1", name = "one", address = "http://192.168.1.10:8096")
         val sameAddress = DiscoveredServer(id = "2", name = "dupe", address = "http://192.168.1.10:8096")
         val b = DiscoveredServer(id = "3", name = "two", address = "http://192.168.1.11:8096")
@@ -450,7 +442,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun startDiscovery_failure_setsDiscoveryFailed() = runTest(testDispatcher) {
+    fun startDiscovery_failure_setsDiscoveryFailed() = runTest(mainDispatcherRule.testDispatcher) {
         every { serverDiscoveryRepository.discoverLocalServers() } returns
             flow<DiscoveredServer> { throw RuntimeException("multicast lock") }
 
@@ -462,7 +454,7 @@ class AddServerViewModelTest {
     }
 
     @Test
-    fun stopDiscovery_stopsScanning() = runTest(testDispatcher) {
+    fun stopDiscovery_stopsScanning() = runTest(mainDispatcherRule.testDispatcher) {
         every { serverDiscoveryRepository.discoverLocalServers() } returns flowOf()
         viewModel.startDiscovery()
 

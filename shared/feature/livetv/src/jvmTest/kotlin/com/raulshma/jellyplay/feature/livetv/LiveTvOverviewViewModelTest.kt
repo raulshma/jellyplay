@@ -4,40 +4,30 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveTvOverviewViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: LiveTvApiClient
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
         stubAllQueriesSucceed(recordings = 2, activeRecordings = 1, timers = 3, seriesTimers = 4)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** Happy-path answer for all four badge queries with the given sizes. */
@@ -82,7 +72,7 @@ class LiveTvOverviewViewModelTest {
     private fun seriesTimer(id: Int) = DvrSeriesTimer(id = "st$id", name = "Series $id")
 
     @Test
-    fun init_refresh_queries_all_four_counts_in_parallel_and_populates_the_badges() = runTest(mainDispatcher) {
+    fun init_refresh_queries_all_four_counts_in_parallel_and_populates_the_badges() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         // init{ refresh() } has not run yet — the seed state is all-zero.
         assertEquals(LiveTvBadges(), viewModel.badges.value)
@@ -101,7 +91,7 @@ class LiveTvOverviewViewModelTest {
     }
 
     @Test
-    fun each_single_repo_failure_degrades_only_its_own_badge_to_zero() = runTest(mainDispatcher) {
+    fun each_single_repo_failure_degrades_only_its_own_badge_to_zero() = runTest(mainDispatcherRule.testDispatcher) {
         val expectedWhenHealthy = mapOf(
             BadgeQuery.RECORDINGS to 2,
             BadgeQuery.ACTIVE_RECORDINGS to 1,
@@ -141,7 +131,7 @@ class LiveTvOverviewViewModelTest {
     }
 
     @Test
-    fun all_repo_failures_degrade_every_badge_to_zero_instead_of_throwing() = runTest(mainDispatcher) {
+    fun all_repo_failures_degrade_every_badge_to_zero_instead_of_throwing() = runTest(mainDispatcherRule.testDispatcher) {
         stubQueryFails(BadgeQuery.RECORDINGS)
         stubQueryFails(BadgeQuery.ACTIVE_RECORDINGS)
         stubQueryFails(BadgeQuery.UPCOMING)
@@ -154,7 +144,7 @@ class LiveTvOverviewViewModelTest {
     }
 
     @Test
-    fun refresh_recomputes_every_badge_from_the_current_repo_data() = runTest(mainDispatcher) {
+    fun refresh_recomputes_every_badge_from_the_current_repo_data() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
         assertEquals(

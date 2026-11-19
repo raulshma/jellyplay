@@ -2,26 +2,23 @@ package com.raulshma.jellyplay.feature.shortcuts
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.reflect.KClass
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import org.junit.Rule
 
 /**
  * Shortcuts ViewModel coverage (requests/syncplay conveyor test style — no
@@ -35,10 +32,9 @@ import kotlin.test.assertFalse
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShortcutsViewModelTest {
 
-    // The conveyor pattern's MainDispatcherRule (:core:testing in legacy
-    // suites), inlined — jvmTest has no access to that module
     // (requests/downloads precedent).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var currentUser: MutableStateFlow<UserInfo?>
     private lateinit var authRepository: AuthRepository
@@ -53,15 +49,9 @@ class ShortcutsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         currentUser = MutableStateFlow(null)
         authRepository = mockk()
         every { authRepository.currentUser } returns currentUser
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     // ── WhileSubscribed(5_000) lifecycle ────────────────────────────────────

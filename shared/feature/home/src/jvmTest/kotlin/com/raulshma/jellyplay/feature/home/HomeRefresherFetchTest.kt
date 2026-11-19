@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import kotlin.test.Test
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
@@ -42,14 +43,12 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.Dispatchers
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Invariants pinned (the fetch-core + trigger branches [HomeRefresherTest]
@@ -73,15 +72,16 @@ import kotlin.test.assertTrue
  *    [HomeLoadPhase.InlineRefreshing] only. Both settle to
  *    [HomeLoadPhase.Ready] when the fetch resolves.
  *
- * Harness mirrors [HomeRefresherTest]: MockK collaborators, inlined
- * StandardTestDispatcher (Dispatchers.setMain), a scope over the test
+ * Harness mirrors [HomeRefresherTest]: MockK collaborators, the
+ * MainDispatcherRule fixture, a scope over the test
  * scheduler (NOT a child of TestScope), and a [stopRefresher] teardown —
  * never `advanceUntilIdle`, the periodic loop is an infinite delay chain.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeRefresherFetchTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeFeed: HomeFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -103,7 +103,6 @@ class HomeRefresherFetchTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         homeFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
@@ -126,7 +125,6 @@ class HomeRefresherFetchTest {
         refresher?.stop()
         refresherScope?.cancel()
 
-        Dispatchers.resetMain()
     }
 
     private fun TestScope.buildRefresher(

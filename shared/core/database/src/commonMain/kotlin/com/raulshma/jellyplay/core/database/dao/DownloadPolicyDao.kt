@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.database.dao
 
 import androidx.room3.Dao
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Upsert
 import com.raulshma.jellyplay.core.database.entity.AutoDownloadSuggestionEntity
@@ -8,12 +10,14 @@ import com.raulshma.jellyplay.core.database.entity.SeriesDownloadPolicyEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * The gh-181 download-policy tables: per-series mode overrides
- * ([SeriesDownloadPolicyEntity]) and the ASK-mode pending prompts
+ * The gh-181 download-policy tables, repurposed by ADR-0015: the per-series
+ * ARM rows ([SeriesDownloadPolicyEntity] — explicit sheet overrides beside
+ * implicit follow-global arms) and the ASK-mode pending prompts
  * ([AutoDownloadSuggestionEntity]). Both live with the download feature but
  * are deliberately not [DownloadDao] — that interface owns the transfer queue;
- * these rows are policy and prompt state, queried by the auto-download check
- * and the Downloads screen's suggestion card.
+ * these rows are policy, intent, and prompt state, queried by the
+ * auto-download check and rendered by the Downloads screen's suggestion and
+ * armed-series surfaces.
  */
 @Dao
 interface DownloadPolicyDao {
@@ -28,17 +32,47 @@ interface DownloadPolicyDao {
     suspend fun getPoliciesBySeriesIds(seriesIds: List<String>): List<SeriesDownloadPolicyEntity>
 
     /**
-     * Whether ANY series carries an override. The schedulers' keep-alive gate
-     * reads this: a global NEVER with even one per-series INSTANT/ASK series
-     * must not cancel the periodic pass (the overrides would starve).
+     * Whether ANY series carries a policy row. The schedulers' keep-alive gate
+     * reads this: a global NEVER with even one armed series (explicit
+     * INSTANT/ASK/NEVER override or an implicit FOLLOW_GLOBAL arm, ADR-0015)
+     * must not cancel the periodic pass — the arms' series would starve.
      */
     @Query("SELECT COUNT(*) FROM series_download_policies")
     suspend fun countPolicies(): Int
 
+    /**
+     * The whole-arms-table observation seam (table-level invalidation) — the
+     * Downloads screen's armed-series list (ADR-0015 consequence: armed series
+     * are invisible in the downloads list at zero rows, so the state needs its
+     * own surface or it is undiscoverable).
+     */
+    @Query("SELECT * FROM series_download_policies")
+    fun observePolicies(): Flow<List<SeriesDownloadPolicyEntity>>
+
     @Upsert
     suspend fun upsertPolicy(policy: SeriesDownloadPolicyEntity)
 
-    /** Called when a series' downloads are fully removed — an override with no downloads is dead state. */
+    /**
+     * The implicit-arm write (ADR-0015 decision 2): IGNORE-on-conflict so an
+     * existing row — an explicit sheet override, or any earlier arm — is never
+     * clobbered by a later download of the same series. Returns 0 when a row
+     * already existed.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertPolicyIfAbsent(policy: SeriesDownloadPolicyEntity): Long
+
+    /** Backfills an arm's blank display name once a download request carries one. */
+    @Query("UPDATE series_download_policies SET seriesName = :name WHERE seriesId = :seriesId")
+    suspend fun updatePolicySeriesName(seriesId: String, name: String)
+
+    /**
+     * The un-arm verb. Superseded rationale (gh-181: "an override with no
+     * downloads is dead state") — under ADR-0015 the row IS the series'
+     * auto-download intent record and survives watched-deletion hygiene; only
+     * list-management deletion at zero rows (via the policy store's
+     * clearSeriesArmIfNoDownloads) and the explicit NEVER sheet choice reach
+     * this delete.
+     */
     @Query("DELETE FROM series_download_policies WHERE seriesId = :seriesId")
     suspend fun deletePolicyBySeriesId(seriesId: String)
 
@@ -71,7 +105,7 @@ interface DownloadPolicyDao {
     @Query("UPDATE auto_download_suggestions SET dismissedAt = :dismissedAt WHERE episodeId IN (:episodeIds)")
     suspend fun dismissSuggestions(episodeIds: List<String>, dismissedAt: Long)
 
-    /** Cleared alongside the policy row when a series' downloads are fully removed. */
+    /** Cleared alongside the arm row when a series un-arms (ADR-0015's zero-rows rule). */
     @Query("DELETE FROM auto_download_suggestions WHERE seriesId = :seriesId")
     suspend fun deleteSuggestionsBySeriesId(seriesId: String)
 }

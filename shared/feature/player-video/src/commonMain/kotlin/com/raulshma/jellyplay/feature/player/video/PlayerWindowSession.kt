@@ -7,15 +7,94 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.RefreshRateMode
-import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.session.CastSessionSlice
+import com.raulshma.jellyplay.feature.player.video.state.WindowLifecyclePolicy
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+
+/**
+ * The window/lifecycle cluster's ONE registration point — the remembered
+ * holder `VideoPlayerScreen`'s root now calls instead of composing the pair
+ * inline (the `rememberTrickplayFeeds` holder convention): the #145
+ * programmatic-close collector (`closePlayer` parked via
+ * `repeatOnLifecycle(RESUMED)`) followed by [PlayerWindowSessionEffects] at
+ * the SAME position the contiguous block occupied, so effect dispatch order
+ * is unchanged.
+ *
+ * Programmatic closes must never run against a STOPPED activity. The old
+ * collectors were plain LaunchedEffects, which keep collecting behind the
+ * keyguard — an episode ending (background audio, SyncPlay, a lockscreen
+ * play) or a late PiP-dismiss signal while the phone was locked called
+ * finish() on a hidden window, and unlock revealed the browse UI with the
+ * player silently gone. PiP dismiss is now handled solely by the ViewModel
+ * (its collector folds it into closePlayer); the screen consumes only
+ * closePlayer, parked via repeatOnLifecycle(RESUMED). closePlayer is
+ * Channel(BUFFERED), so events raised while stopped are deferred and
+ * delivered on the next resume instead of tearing the window down unseen.
+ *
+ * The close lambda is captured live via `rememberUpdatedState` — the
+ * collector keys on the lifecycle owner, so without it the screen would keep
+ * invoking the onBack lambda captured at first composition (a nav lambda
+ * that may have been rebuilt by the parent).
+ */
+@Composable
+internal fun rememberPlayerWindowSession(
+    lifecycleOwner: LifecycleOwner,
+    closePlayer: Flow<Unit>,
+    onClosePlayer: () -> Unit,
+    windowOps: PlayerWindowOps,
+    isInPipMode: Boolean,
+    isTv: Boolean,
+    isPlaying: Boolean,
+    keepScreenOnDuringVideo: Boolean,
+    frameRateMatching: Boolean,
+    refreshRateMode: RefreshRateMode,
+    videoFrameRate: Float?,
+    mediaStreams: List<MediaStream>,
+    rememberBrightness: Boolean,
+    brightnessLevel: Float,
+    isScreenLocked: Boolean,
+    pipController: PipController,
+    cast: CastSessionSlice,
+    releasePlayer: () -> Unit,
+    detachForBackgroundCast: () -> Unit,
+    setScreenLocked: (Boolean) -> Unit,
+    clearPlayerView: () -> Unit,
+) {
+    val currentOnClosePlayer by rememberUpdatedState(onClosePlayer)
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(WindowLifecyclePolicy.programmaticCloseState) {
+            closePlayer.collect { currentOnClosePlayer() }
+        }
+    }
+    PlayerWindowSessionEffects(
+        windowOps = windowOps,
+        isInPipMode = isInPipMode,
+        isTv = isTv,
+        isPlaying = isPlaying,
+        keepScreenOnDuringVideo = keepScreenOnDuringVideo,
+        frameRateMatching = frameRateMatching,
+        refreshRateMode = refreshRateMode,
+        videoFrameRate = videoFrameRate,
+        mediaStreams = mediaStreams,
+        rememberBrightness = rememberBrightness,
+        brightnessLevel = brightnessLevel,
+        isScreenLocked = isScreenLocked,
+        lifecycleOwner = lifecycleOwner,
+        pipController = pipController,
+        cast = cast,
+        releasePlayer = releasePlayer,
+        detachForBackgroundCast = detachForBackgroundCast,
+        setScreenLocked = setScreenLocked,
+        clearPlayerView = clearPlayerView,
+    )
+}
 
 /**
  * The player screen's host-window/lifecycle effect session, extracted verbatim
@@ -44,7 +123,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * The ViewModel dispatches and the mutable view-ref write arrive as plain
  * lambdas; the PiP controller and the cast session slice are passed whole
  * (the seams the screen already reads). No Compose state is returned — the
- * session composes the effects and nothing else.
+ * session composes the effects and nothing else. Every predicate the bodies
+ * arm on is the state module's [WindowLifecyclePolicy] fold (the
+ * [SeekChipCommitClock] precedent — pure decisions, JVM-testable).
  */
 @Composable
 internal fun PlayerWindowSessionEffects(
@@ -70,7 +151,7 @@ internal fun PlayerWindowSessionEffects(
 ) {
     // Restore immersive mode when leaving PiP
     LaunchedEffect(isInPipMode) {
-        if (!isInPipMode) {
+        if (WindowLifecyclePolicy.rehideSystemBarsOnPipExit(isInPipMode)) {
             windowOps.hideSystemBars()
         }
     }
@@ -87,7 +168,7 @@ internal fun PlayerWindowSessionEffects(
             // handle floating mid-screen. Uses the host's authoritative
             // isInPictureInPictureMode flag (synchronously current, unlike the
             // collected isInPipMode state which lags a frame).
-            if (focused && !windowOps.isInPipMode) {
+            if (WindowLifecyclePolicy.rehideSystemBarsOnWindowFocus(focused, windowOps.isInPipMode)) {
                 windowOps.hideSystemBars()
             }
         }
@@ -116,27 +197,38 @@ internal fun PlayerWindowSessionEffects(
             // used to do inline: unlock orientation, clear FLAG_KEEP_SCREEN_ON,
             // restore OS-default brightness, re-show the system bars and hand
             // the display mode back (all host-alive guarded on Android).
-            if (isBgCasting && !currentlyInPip) {
-                windowOps.restoreOnPlayerExit(restoreOrientation)
-                clearPlayerView()
-                detachForBackgroundCast()
-            } else if (!currentlyInPip) {
-                windowOps.restoreOnPlayerExit(restoreOrientation)
-                clearPlayerView()
-                releasePlayer()
+            when (
+                WindowLifecyclePolicy.teardown(
+                    isBackgroundCasting = isBgCasting,
+                    isInPipMode = currentlyInPip,
+                )
+            ) {
+                WindowLifecyclePolicy.TeardownAction.DetachForBackgroundCast -> {
+                    windowOps.restoreOnPlayerExit(restoreOrientation)
+                    clearPlayerView()
+                    detachForBackgroundCast()
+                }
+                WindowLifecyclePolicy.TeardownAction.Release -> {
+                    windowOps.restoreOnPlayerExit(restoreOrientation)
+                    clearPlayerView()
+                    releasePlayer()
+                }
+                WindowLifecyclePolicy.TeardownAction.None -> {}
             }
         }
     }
 
     LaunchedEffect(isPlaying, keepScreenOnDuringVideo) {
-        windowOps.setKeepScreenOn(isPlaying && keepScreenOnDuringVideo)
+        windowOps.setKeepScreenOn(
+            WindowLifecyclePolicy.keepScreenOn(isPlaying, keepScreenOnDuringVideo),
+        )
     }
 
 
 
     LaunchedEffect(frameRateMatching, refreshRateMode, videoFrameRate) {
-        if (frameRateMatching && refreshRateMode != RefreshRateMode.OFF && videoFrameRate != null) {
-            val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
+        if (WindowLifecyclePolicy.shouldMatchFrameRate(frameRateMatching, refreshRateMode, videoFrameRate)) {
+            val videoStream = WindowLifecyclePolicy.frameRateTargetStream(mediaStreams)
             windowOps.matchFrameRate(
                 frameRate = videoFrameRate,
                 targetWidth = videoStream?.width,
@@ -150,7 +242,7 @@ internal fun PlayerWindowSessionEffects(
         // -1f (BRIGHTNESS_OVERRIDE_NONE) is the "user hasn't set a level" sentinel;
         // 0.5f is a legitimate brightness a user can pick, so it must not be used
         // as the guard. Re-applies the saved level on recreate/resume.
-        if (rememberBrightness && brightnessLevel >= 0f) {
+        if (WindowLifecyclePolicy.appliesSavedBrightness(rememberBrightness, brightnessLevel)) {
             windowOps.applyWindowBrightness(brightnessLevel)
         }
     }
@@ -164,9 +256,7 @@ internal fun PlayerWindowSessionEffects(
     // observers' owner — one declaration, shared).
     DisposableEffect(windowOps, rememberBrightness, brightnessLevel, lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME &&
-                rememberBrightness && brightnessLevel >= 0f
-            ) {
+            if (WindowLifecyclePolicy.resumeReappliesBrightness(event, rememberBrightness, brightnessLevel)) {
                 windowOps.applyWindowBrightness(brightnessLevel)
             }
         }
@@ -186,7 +276,7 @@ internal fun PlayerWindowSessionEffects(
     val screenLockedAtStop by rememberUpdatedState(isScreenLocked)
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP && screenLockedAtStop) {
+            if (WindowLifecyclePolicy.stopResetsScreenLock(event, screenLockedAtStop)) {
                 setScreenLocked(false)
             }
         }

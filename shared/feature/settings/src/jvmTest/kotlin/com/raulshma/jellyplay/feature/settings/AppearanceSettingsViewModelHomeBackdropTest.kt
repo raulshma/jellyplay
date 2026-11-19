@@ -7,34 +7,30 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 /**
  * Covers the `homeBackdropEnabled` setter wiring on
  * [AppearanceSettingsViewModel] — mirroring [LibraryLayoutViewModelTest]'s
- * mockk style — without touching the DataStore.
- *
- * The :core:testing MainDispatcherRule is inlined
- * (StandardTestDispatcher + setMain/resetMain — downloads-conveyor jvmTest
- * pattern) because jvmTest has no access to that module.
+ * mockk style — without touching the DataStore. The shared MainDispatcherRule
+ * fixture installs a StandardTestDispatcher on Main.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppearanceSettingsViewModelHomeBackdropTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var projections: PreferenceProjections
     private lateinit var appearanceStore: AppearanceStore
@@ -47,7 +43,6 @@ class AppearanceSettingsViewModelHomeBackdropTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         projections = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
@@ -60,11 +55,6 @@ class AppearanceSettingsViewModelHomeBackdropTest {
             MutableStateFlow(NavigationCustomizationPreferences())
         every { editScope.homeDiscovery } returns homeDiscoveryStore
         every { editor.edit(capture(editBlocks)) } returns mockk<Job>()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     @Test

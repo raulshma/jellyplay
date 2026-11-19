@@ -137,10 +137,10 @@ class PreferenceScreenScaffoldWiringGuardTest {
         // screen silently dropping off it fails even if some OTHER call site
         // drifts first and masks the per-call verdict.
         val declarationCalls = calls.filter { groupsArg.containsMatchIn(it.args) }
-        if (declarationCalls.size != 8) {
+        if (declarationCalls.size != 10) {
             problems +=
-                "  - expected 8 declaration-path calls (Appearance, Audio, Home, " +
-                    "Language, Performance, Playback, Security, Storage) but found ${declarationCalls.size} " +
+                "  - expected 10 declaration-path calls (Appearance, Audio, Backup, Home, " +
+                    "Language, Notification, Performance, Playback, Security, Storage) but found ${declarationCalls.size} " +
                     "(${declarationCalls.map { it.file }}) — a screen stopped passing its groups?"
         }
 

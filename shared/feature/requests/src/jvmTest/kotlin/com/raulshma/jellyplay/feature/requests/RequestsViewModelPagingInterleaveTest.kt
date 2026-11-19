@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.every
@@ -18,20 +19,16 @@ import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * The append-page interleaving pins for [RequestsViewModel] (the
@@ -45,9 +42,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class RequestsViewModelPagingInterleaveTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (RequestsViewModelLoadGuardTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var arrRepository: ArrRepository
@@ -61,7 +57,6 @@ class RequestsViewModelPagingInterleaveTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         seerrRepository = mockk()
         arrRepository = mockk()
         experimentalStore = mockk()
@@ -91,11 +86,6 @@ class RequestsViewModelPagingInterleaveTest {
         }
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun item(id: Int) = SeerrRequestItem(
         id = id,
         type = "movie",
@@ -105,11 +95,11 @@ class RequestsViewModelPagingInterleaveTest {
     private fun newViewModel(): RequestsViewModel = RequestsViewModel(
         seerrRepository = seerrRepository,
         arrRepository = arrRepository,
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     @Test
-    fun a_nextPage_tap_landing_mid_flight_is_suppressed_entirely() = runTest(mainDispatcher) {
+    fun a_nextPage_tap_landing_mid_flight_is_suppressed_entirely() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle() // init load + the debounce echo: both skip 0
         assertEquals(listOf(0, 0), requestSkips)
@@ -136,7 +126,7 @@ class RequestsViewModelPagingInterleaveTest {
     }
 
     @Test
-    fun a_suppressed_tap_cannot_reorder_onto_a_completed_load() = runTest(mainDispatcher) {
+    fun a_suppressed_tap_cannot_reorder_onto_a_completed_load() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -163,7 +153,7 @@ class RequestsViewModelPagingInterleaveTest {
     }
 
     @Test
-    fun a_nextPage_at_the_last_page_is_terminal() = runTest(mainDispatcher) {
+    fun a_nextPage_at_the_last_page_is_terminal() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 

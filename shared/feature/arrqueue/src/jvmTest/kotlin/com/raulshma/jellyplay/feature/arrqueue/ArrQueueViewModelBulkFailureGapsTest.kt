@@ -9,27 +9,24 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Bulk-delete failure-path gaps in [ArrQueueViewModel] NOT pinned by
@@ -48,9 +45,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArrQueueViewModelBulkFailureGapsTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module (ArrQueueViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var arrRepository: ArrRepository
     private lateinit var experimentalStore: ExperimentalStore
@@ -59,7 +55,6 @@ class ArrQueueViewModelBulkFailureGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         arrRepository = mockk()
         experimentalStore = mockk()
         experimentalSlice = MutableStateFlow(ExperimentalSlice())
@@ -67,11 +62,6 @@ class ArrQueueViewModelBulkFailureGapsTest {
         every { experimentalStore.experimental } returns experimentalSlice
         every { arrRepository.queue() } returns queueFlow
         coEvery { arrRepository.refreshQueue() } returns Result.success(Unit)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun enableDirectArr() {
@@ -82,7 +72,7 @@ class ArrQueueViewModelBulkFailureGapsTest {
 
     private fun newViewModel(): ArrQueueViewModel = ArrQueueViewModel(
         arrRepository = arrRepository,
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     private fun item(queueId: Int, tmdbId: Int? = queueId) = ArrQueueItem(
@@ -95,7 +85,7 @@ class ArrQueueViewModelBulkFailureGapsTest {
     )
 
     @Test
-    fun deleteSelected_failure_emitsRaw_keepsSelection_andResetsTheBusyFlag() = runTest(mainDispatcher) {
+    fun deleteSelected_failure_emitsRaw_keepsSelection_andResetsTheBusyFlag() = runTest(mainDispatcherRule.testDispatcher) {
         enableDirectArr()
         coEvery { arrRepository.deleteQueueItems(any(), any()) } returns
             Result.failure(RuntimeException("radarr offline"))
@@ -118,7 +108,7 @@ class ArrQueueViewModelBulkFailureGapsTest {
     }
 
     @Test
-    fun deleteSelected_success_withoutSearchAgain_firesNoSearches() = runTest(mainDispatcher) {
+    fun deleteSelected_success_withoutSearchAgain_firesNoSearches() = runTest(mainDispatcherRule.testDispatcher) {
         enableDirectArr()
         coEvery { arrRepository.deleteQueueItems(any(), any()) } returns Result.success(Unit)
         queueFlow.value = listOf(item(1, tmdbId = 11), item(2, tmdbId = null))
@@ -139,7 +129,7 @@ class ArrQueueViewModelBulkFailureGapsTest {
     }
 
     @Test
-    fun refresh_failure_withNullMessage_surfacesNoError() = runTest(mainDispatcher) {
+    fun refresh_failure_withNullMessage_surfacesNoError() = runTest(mainDispatcherRule.testDispatcher) {
         enableDirectArr()
         coEvery { arrRepository.refreshQueue() } returns Result.failure(RuntimeException(null as String?))
         val viewModel = newViewModel()

@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationSpec
 import com.raulshma.jellyplay.feature.book.epub.EpubReaderHandle
 import androidx.compose.ui.graphics.ImageBitmap
@@ -25,7 +26,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,7 +35,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,11 +42,10 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import okio.Path
 import okio.Path.Companion.toPath
+import org.junit.Rule
 
 /**
  * Pins the mark/jump/resume logic of [BookReaderViewModel]: the
@@ -60,7 +58,8 @@ import okio.Path.Companion.toPath
 @OptIn(ExperimentalCoroutinesApi::class)
 class BookReaderViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private lateinit var detailFeed: DetailFeed
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var playbackIdentity: PlaybackIdentity
@@ -72,7 +71,6 @@ class BookReaderViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         detailFeed = mockk()
         playbackRepository = mockk()
         playbackIdentity = mockk()
@@ -105,13 +103,8 @@ class BookReaderViewModelTest {
         every { readerStore.perBookAppearance(any()) } returns null
         readerPreferences = ReaderPreferences(
             store = readerStore,
-            scope = CoroutineScope(StandardTestDispatcher(mainDispatcher.scheduler)),
+            scope = CoroutineScope(StandardTestDispatcher(mainDispatcherRule.testDispatcher.scheduler)),
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun viewModel(
@@ -121,7 +114,7 @@ class BookReaderViewModelTest {
             com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
         // The read-aloud sentence split hops to this dispatcher — the test
         // main, so advanceUntilIdle() drives the split deterministically.
-        speechSplitDispatcher: CoroutineDispatcher = mainDispatcher,
+        speechSplitDispatcher: CoroutineDispatcher = mainDispatcherRule.testDispatcher,
     ): BookReaderViewModel = BookReaderViewModel(
         detailFeed = detailFeed,
         playbackRepository = playbackRepository,
@@ -134,7 +127,7 @@ class BookReaderViewModelTest {
         speechEngine = speechEngine,
         playbackFocus = playbackFocus,
         speechSplitDispatcher = speechSplitDispatcher,
-        flushScope = CoroutineScope(UnconfinedTestDispatcher(mainDispatcher.scheduler)),
+        flushScope = CoroutineScope(UnconfinedTestDispatcher(mainDispatcherRule.testDispatcher.scheduler)),
     )
 
     private fun detail(path: String, positionTicks: Long = 0L): MediaDetail =
@@ -153,7 +146,7 @@ class BookReaderViewModelTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `paged bookmark toggle adds page ticks then removes the same row`() = runTest(mainDispatcher) {
+    fun `paged bookmark toggle adds page ticks then removes the same row`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("comic.cbz", positionTicks = BookProgressPolicy.pageToTicks(1))
 
         val vm = viewModel()
@@ -182,7 +175,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `reflowable bookmark encodes percent cfi and chapter label`() = runTest(mainDispatcher) {
+    fun `reflowable bookmark encodes percent cfi and chapter label`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
 
         val vm = viewModel()
@@ -216,7 +209,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `null-cfi reflowable bookmark matches by encoded percent`() = runTest(mainDispatcher) {
+    fun `null-cfi reflowable bookmark matches by encoded percent`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         // A legacy row: percent ticks, no CFI anchor.
         annotationsRepository.seedBookmark(
@@ -251,7 +244,7 @@ class BookReaderViewModelTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `paged jump resolves bookmark ticks into the pager`() = runTest(mainDispatcher) {
+    fun `paged jump resolves bookmark ticks into the pager`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("comic.cbz", positionTicks = 0L)
 
         val vm = viewModel()
@@ -281,7 +274,7 @@ class BookReaderViewModelTest {
      * position instead.
      */
     @Test
-    fun `paged deep link jumpPage outranks the server resume position`() = runTest(mainDispatcher) {
+    fun `paged deep link jumpPage outranks the server resume position`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("comic.cbz", positionTicks = BookProgressPolicy.pageToTicks(1))
 
         val vm = viewModel()
@@ -293,7 +286,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `reflowable jump is a no-op for a null-cfi row`() = runTest(mainDispatcher) {
+    fun `reflowable jump is a no-op for a null-cfi row`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val vm = viewModel()
         vm.load("item-1")
@@ -320,7 +313,7 @@ class BookReaderViewModelTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `selection becomes an annotation with anchor text and chapter label`() = runTest(mainDispatcher) {
+    fun `selection becomes an annotation with anchor text and chapter label`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val vm = viewModel()
         vm.load("item-1")
@@ -360,7 +353,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `annotation at selection resolves the edit-mode row target`() = runTest(mainDispatcher) {
+    fun `annotation at selection resolves the edit-mode row target`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         annotationsRepository.seedAnnotation(
             ReaderAnnotation(
@@ -394,7 +387,7 @@ class BookReaderViewModelTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `stored last cfi rides the reflowable ready content`() = runTest(mainDispatcher) {
+    fun `stored last cfi rides the reflowable ready content`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = BookProgressPolicy.percentToTicks(0.3))
         every { readerStore.lastCfi("item-1") } returns "epubcfi(/6/12!/4/2)"
 
@@ -408,7 +401,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `relocated cfi persists through the debounced flush`() = runTest(mainDispatcher) {
+    fun `relocated cfi persists through the debounced flush`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
 
         val vm = viewModel()
@@ -430,7 +423,7 @@ class BookReaderViewModelTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `location flow carries the boot resume percent before any event`() = runTest(mainDispatcher) {
+    fun `location flow carries the boot resume percent before any event`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = BookProgressPolicy.percentToTicks(0.3))
 
         val vm = viewModel()
@@ -445,7 +438,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `percent and relocated events ride one report path`() = runTest(mainDispatcher) {
+    fun `percent and relocated events ride one report path`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
 
         val vm = viewModel()
@@ -482,7 +475,7 @@ class BookReaderViewModelTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `typography and behavior setters write clamped values through the store`() = runTest(mainDispatcher) {
+    fun `typography and behavior setters write clamped values through the store`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val vm = viewModel()
         vm.load("item-1")
@@ -521,7 +514,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `theme write routes into the override when one is active`() = runTest(mainDispatcher) {
+    fun `theme write routes into the override when one is active`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         readerSlice.value = ReaderSlice(
             readerTheme = ReaderTheme.DARK,
@@ -546,7 +539,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `theme write goes global without an override`() = runTest(mainDispatcher) {
+    fun `theme write goes global without an override`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
 
         val vm = viewModel()
@@ -563,7 +556,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `effective flows prefer the item override`() = runTest(mainDispatcher) {
+    fun `effective flows prefer the item override`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         readerSlice.value = ReaderSlice(
             readerTheme = ReaderTheme.DARK,
@@ -582,7 +575,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `switching per-book off syncs the effective values into the globals then clears`() = runTest(mainDispatcher) {
+    fun `switching per-book off syncs the effective values into the globals then clears`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         readerSlice.value = ReaderSlice(
             readerTheme = ReaderTheme.DARK,
@@ -604,7 +597,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `switching per-book on seeds the override with the effective values`() = runTest(mainDispatcher) {
+    fun `switching per-book on seeds the override with the effective values`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         readerSlice.value = ReaderSlice(readerTheme = ReaderTheme.LIGHT, readerFontSizePx = 20)
 
@@ -627,7 +620,7 @@ class BookReaderViewModelTest {
 
     @Test
     fun `read aloud requests the context, speaks, advances chapters and finishes at book end`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             stubDetail("novel.epub", positionTicks = 0L)
             val engine = FakeBookSpeechEngine()
             val vm = viewModel(speechEngine = engine)
@@ -707,7 +700,7 @@ class BookReaderViewModelTest {
         }
 
     @Test
-    fun `start read aloud is a no-op without an engine`() = runTest(mainDispatcher) {
+    fun `start read aloud is a no-op without an engine`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val vm = viewModel() // Noop engine: UNAVAILABLE
         val host = FakeEpubHost()
@@ -725,7 +718,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `speech rate and pitch writes clamp and configure the engine`() = runTest(mainDispatcher) {
+    fun `speech rate and pitch writes clamp and configure the engine`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val engine = FakeBookSpeechEngine()
         val vm = viewModel(speechEngine = engine)
@@ -747,7 +740,7 @@ class BookReaderViewModelTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `end of chapter sleep timer stops read aloud and announces the stop`() = runTest(mainDispatcher) {
+    fun `end of chapter sleep timer stops read aloud and announces the stop`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val engine = FakeBookSpeechEngine()
         val vm = viewModel(speechEngine = engine)
@@ -787,7 +780,7 @@ class BookReaderViewModelTest {
     }
 
     @Test
-    fun `read aloud claims the focus floor and releases it on stop`() = runTest(mainDispatcher) {
+    fun `read aloud claims the focus floor and releases it on stop`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val engine = FakeBookSpeechEngine()
         val claims = mutableListOf<String>()
@@ -833,7 +826,7 @@ class BookReaderViewModelTest {
      * recovery never resurrects it (resume is the user's tap).
      */
     @Test
-    fun `engine going UNAVAILABLE mid session ends the speech session`() = runTest(mainDispatcher) {
+    fun `engine going UNAVAILABLE mid session ends the speech session`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val engine = FakeBookSpeechEngine()
         val vm = viewModel(speechEngine = engine)
@@ -873,7 +866,7 @@ class BookReaderViewModelTest {
      */
     @Test
     fun `a displaced focus claimant pauses read aloud and release never auto resumes`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             stubDetail("novel.epub", positionTicks = 0L)
             val engine = FakeBookSpeechEngine()
             val claimState = MutableStateFlow<com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState>(
@@ -924,7 +917,7 @@ class BookReaderViewModelTest {
         }
 
     @Test
-    fun `timed sleep timer fires after the countdown`() = runTest(mainDispatcher) {
+    fun `timed sleep timer fires after the countdown`() = runTest(mainDispatcherRule.testDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val vm = viewModel()
         val port = FakeReaderSession(null)

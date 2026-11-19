@@ -8,10 +8,7 @@ import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskState
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -28,16 +25,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AdminDashboardViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var adminRepository: AdminRepository
 
@@ -78,7 +74,6 @@ class AdminDashboardViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         adminRepository = mockk()
         every { adminRepository.libraryScanTask } returns scanTaskFlow
         every { adminRepository.scheduledTasks } returns tasksFlow
@@ -100,7 +95,7 @@ class AdminDashboardViewModelTest {
     )
 
     @Test
-    fun `load populates all sections from the summary`() = runTest(mainDispatcher) {
+    fun `load populates all sections from the summary`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
 
         val viewModel = AdminDashboardViewModel(adminRepository)
@@ -113,7 +108,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `summary-level null telemetry degrades without error`() = runTest(mainDispatcher) {
+    fun `summary-level null telemetry degrades without error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns
             Result.success(summary(systemInfo = null, itemCounts = null))
 
@@ -127,7 +122,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `running tasks are derived from the summary task snapshot`() = runTest(mainDispatcher) {
+    fun `running tasks are derived from the summary task snapshot`() = runTest(mainDispatcherRule.testDispatcher) {
         val running = scanTask.copy(state = TaskState.RUNNING)
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = listOf(running)))
 
@@ -140,7 +135,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `WS pushes update running tasks and drop idle ones`() = runTest(mainDispatcher) {
+    fun `WS pushes update running tasks and drop idle ones`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = emptyList()))
         val viewModel = AdminDashboardViewModel(adminRepository)
         advanceUntilIdle()
@@ -157,7 +152,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `a sub-percent progress push does not rebuild the dashboard state`() = runTest(mainDispatcher) {
+    fun `a sub-percent progress push does not rebuild the dashboard state`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = emptyList()))
         val viewModel = AdminDashboardViewModel(adminRepository)
         advanceUntilIdle()
@@ -183,7 +178,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `WS pushes exclude hidden tasks from the running list`() = runTest(mainDispatcher) {
+    fun `WS pushes exclude hidden tasks from the running list`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = emptyList()))
         val viewModel = AdminDashboardViewModel(adminRepository)
         advanceUntilIdle()
@@ -204,7 +199,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `REST snapshot does not overwrite running tasks after a WS push`() = runTest(mainDispatcher) {
+    fun `REST snapshot does not overwrite running tasks after a WS push`() = runTest(mainDispatcherRule.testDispatcher) {
         val snapshotRunning = scanTask.copy(state = TaskState.RUNNING)
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = listOf(snapshotRunning)))
 
@@ -232,7 +227,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `stale WS replay does not suppress the REST refresh`() = runTest(mainDispatcher) {
+    fun `stale WS replay does not suppress the REST refresh`() = runTest(mainDispatcherRule.testDispatcher) {
         // Dead socket: the channel's last push is old (timestamp 0), but its
         // shared flow still replays the last list to a new collector.
         val oldRunning = scanTask.copy(state = TaskState.RUNNING, currentProgressPercentage = 10.0)
@@ -261,7 +256,7 @@ class AdminDashboardViewModelTest {
     // ── live session feed (WS Sessions push) ─────────────────────────────
 
     @Test
-    fun `session pushes update the list and drop ended sessions`() = runTest(mainDispatcher) {
+    fun `session pushes update the list and drop ended sessions`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(sessions = emptyList()))
         val viewModel = AdminDashboardViewModel(adminRepository, sessionFeed)
         advanceUntilIdle()
@@ -278,7 +273,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `a playstate-only session push does not rebuild the dashboard state`() = runTest(mainDispatcher) {
+    fun `a playstate-only session push does not rebuild the dashboard state`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(sessions = emptyList()))
         val viewModel = AdminDashboardViewModel(adminRepository, sessionFeed)
         advanceUntilIdle()
@@ -305,7 +300,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `REST snapshot does not overwrite sessions after a fresh WS push`() = runTest(mainDispatcher) {
+    fun `REST snapshot does not overwrite sessions after a fresh WS push`() = runTest(mainDispatcherRule.testDispatcher) {
         val snapshotSessions = listOf(SessionInfo(id = "s-9", userName = "Old", deviceName = "Stale"))
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(sessions = snapshotSessions))
 
@@ -328,7 +323,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `a stale session feed keeps the REST snapshot authoritative`() = runTest(mainDispatcher) {
+    fun `a stale session feed keeps the REST snapshot authoritative`() = runTest(mainDispatcherRule.testDispatcher) {
         // Dead socket: the channel's last push is old (timestamp 0), but its
         // shared flow still replays the last list to a new collector.
         val replayed = listOf(session.copy(deviceName = "Replay"))
@@ -350,7 +345,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `stop session still refreshes only the sessions read`() = runTest(mainDispatcher) {
+    fun `stop session still refreshes only the sessions read`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
         coEvery { adminRepository.stopSession("s-1") } returns Result.success(Unit)
         val refreshed = listOf(SessionInfo(id = "s-2", userName = "Bob", deviceName = "Tablet"))
@@ -371,7 +366,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `scan state seeds Idle from an IDLE snapshot task`() = runTest(mainDispatcher) {
+    fun `scan state seeds Idle from an IDLE snapshot task`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
 
         val viewModel = AdminDashboardViewModel(adminRepository)
@@ -381,7 +376,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `scan state seeds Running with progress from a RUNNING snapshot task`() = runTest(mainDispatcher) {
+    fun `scan state seeds Running with progress from a RUNNING snapshot task`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(
             summary(tasks = listOf(scanTask.copy(state = TaskState.RUNNING, currentProgressPercentage = 42.0))),
         )
@@ -394,7 +389,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `WS IDLE push during optimistic window preserves Running`() = runTest(mainDispatcher) {
+    fun `WS IDLE push during optimistic window preserves Running`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = emptyList()))
         coEvery { adminRepository.startLibraryScan() } returns Result.success(Unit)
         val viewModel = AdminDashboardViewModel(adminRepository)
@@ -422,7 +417,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `WS IDLE push with no optimistic window settles Idle`() = runTest(mainDispatcher) {
+    fun `WS IDLE push with no optimistic window settles Idle`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
 
         val viewModel = AdminDashboardViewModel(adminRepository)
@@ -435,7 +430,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `scanLibrary delegates to the repository scan operation`() = runTest(mainDispatcher) {
+    fun `scanLibrary delegates to the repository scan operation`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
         coEvery { adminRepository.startLibraryScan() } returns Result.success(Unit)
 
@@ -449,7 +444,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `restart failure surfaces error`() = runTest(mainDispatcher) {
+    fun `restart failure surfaces error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
         coEvery { adminRepository.restartServer() } returns Result.failure(RuntimeException("nope"))
 
@@ -465,7 +460,7 @@ class AdminDashboardViewModelTest {
     // ── stop-session dialog choreography (PendingConfirmation machine) ──
 
     @Test
-    fun `stop session success clears the pending dialog and refreshes only the sessions`() = runTest(mainDispatcher) {
+    fun `stop session success clears the pending dialog and refreshes only the sessions`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
         coEvery { adminRepository.stopSession("s-1") } returns Result.success(Unit)
         val refreshedSessions = listOf(SessionInfo(id = "s-2", userName = "Bob", deviceName = "Tablet"))
@@ -492,7 +487,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `a failed sessions refetch after a successful stop degrades silently`() = runTest(mainDispatcher) {
+    fun `a failed sessions refetch after a successful stop degrades silently`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
         coEvery { adminRepository.stopSession("s-1") } returns Result.success(Unit)
         coEvery { adminRepository.getSessions() } returns Result.failure(RuntimeException("offline"))
@@ -511,7 +506,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `dismiss during an in-flight stop retains the pending session`() = runTest(mainDispatcher) {
+    fun `dismiss during an in-flight stop retains the pending session`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
         // Park the stop request mid-flight so isStoppingSession stays raised.
         val gate = CompletableDeferred<Unit>()
@@ -536,7 +531,7 @@ class AdminDashboardViewModelTest {
     }
 
     @Test
-    fun `stop session failure keeps the dialog open and surfaces the error`() = runTest(mainDispatcher) {
+    fun `stop session failure keeps the dialog open and surfaces the error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
         coEvery { adminRepository.stopSession("s-1") } returns Result.failure(RuntimeException("nope"))
         val viewModel = AdminDashboardViewModel(adminRepository)
@@ -553,11 +548,6 @@ class AdminDashboardViewModelTest {
         assertTrue(!viewModel.uiState.value.isStoppingSession)
         // A failed stop does not reload the dashboard (only the initial load).
         coVerify(exactly = 1) { adminRepository.getDashboardSummary() }
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
 }

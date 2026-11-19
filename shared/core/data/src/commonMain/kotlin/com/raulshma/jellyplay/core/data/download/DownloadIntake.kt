@@ -9,10 +9,15 @@ import com.raulshma.jellyplay.core.model.MediaType
 /**
  * The series download sheet's (AutoDownloadMode?, confirmed) pair folded
  * into the intake's [DownloadIntake.SeriesPolicyChoice]: `null` is an
- * explicit Default (clear the override), a mode is a Set.
+ * explicit Default (an ADR-0015 follow-global arm — NOT a disarm), a mode is
+ * a Set. A [AutoDownloadMode.FOLLOW_GLOBAL] read (the stored implicit arm)
+ * must map back to the sheet's Default chip the same way a `null` read
+ * does — treat it as `null` here.
  */
 fun AutoDownloadMode?.toSeriesPolicyChoice(): DownloadIntake.SeriesPolicyChoice =
-    this?.let { DownloadIntake.SeriesPolicyChoice.Set(it) } ?: DownloadIntake.SeriesPolicyChoice.Inherit
+    this?.takeIf { it != AutoDownloadMode.FOLLOW_GLOBAL }
+        ?.let { DownloadIntake.SeriesPolicyChoice.Set(it) }
+        ?: DownloadIntake.SeriesPolicyChoice.Inherit
 
 /**
  * Feature-facing intake seam for offline downloads.
@@ -68,15 +73,22 @@ interface DownloadIntake {
     ): DownloadResult
 
     /**
-     * The sheet's per-series new-episode policy outcome (gh-181). A sealed
-     * type because "do nothing" and "explicitly reset to the global default"
-     * are different user intents that `AutoDownloadMode?` cannot spell.
+     * The sheet's per-series new-episode policy outcome (gh-181; ADR-0015).
+     * A sealed type because "do nothing" and "explicitly reset to the global
+     * default" are different user intents that `AutoDownloadMode?` cannot
+     * spell.
      */
     sealed interface SeriesPolicyChoice {
         /** No policy intent — the caller (e.g. the auto-download check) never touches the stored row. */
         data object LeaveUnchanged : SeriesPolicyChoice
 
-        /** The user picked "Default": clear any stored override (follow the global setting). */
+        /**
+         * The user picked "Default": store the ADR-0015 follow-global ARM —
+         * the series stays armed (in the check's universe, surviving
+         * watched-deletion hygiene) with its effective mode resolved against
+         * the global preference. This is deliberately NOT the disarm verb:
+         * only the Downloads screen's un-arm action writes a null row.
+         */
         data object Inherit : SeriesPolicyChoice
 
         /** The user picked a mode: store it as this series' override. */
@@ -84,9 +96,12 @@ interface DownloadIntake {
     }
 
     /**
-     * The series' stored policy override, or null when it follows the global
-     * setting — the download sheet's pre-load read so its chips open on the
-     * stored choice instead of always on Default.
+     * The series' stored policy row for the download sheet's pre-load read,
+     * so its chips open on the stored choice instead of always on Default.
+     * A [AutoDownloadMode.FOLLOW_GLOBAL] return is the implicit arm
+     * (ADR-0015) — the sheet must display it as the Default chip selected
+     * ([toSeriesPolicyChoice] already folds it there); never render the
+     * sentinel as its own chip or offer it in the picker.
      */
     suspend fun seriesPolicy(seriesId: String): AutoDownloadMode?
 

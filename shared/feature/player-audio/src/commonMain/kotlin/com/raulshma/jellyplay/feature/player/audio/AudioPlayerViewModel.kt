@@ -561,7 +561,10 @@ class AudioPlayerViewModel(
         val existing = _currentDownloadItem.value
         if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
             launch {
-                downloads.deleteDownload(existing.id)
+                // Music rows carry no seriesId — the ADR-0015 un-arm rule can
+                // never fire for them; explicit false says so (required param
+                // on the window seam).
+                downloads.deleteDownload(existing.id, keepSeriesArm = false)
             }
             return
         }

@@ -32,8 +32,9 @@ import org.koin.dsl.module
  * Desktop player wiring.
  *
  * - Video: [PlayerEngineFactory] is bound here (the shared
- *   desktopPlayerVideoModule deliberately does not bind it — MpvDesktopEngine
- *   is an app-layer type) to a factory that creates one mpv engine PER SESSION
+ *   desktopPlayerVideoModule deliberately does not bind it — the factory
+ *   carries the app-layer session-harness recorder and the store/path
+ *   providers) to a factory that creates one mpv engine PER SESSION
  *   carrying the composing SwingPanel surface's HWND.
  * - [DesktopAudioQueueManager] is the real desktop audio core: the Android
  *   media3 AudioPlaybackManager semantics mirrored over a DEDICATED

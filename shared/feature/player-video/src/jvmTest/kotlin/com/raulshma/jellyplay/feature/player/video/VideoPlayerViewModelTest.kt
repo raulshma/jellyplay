@@ -367,4 +367,92 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
             userDataMutator.setPlayed("item-1", played = true)
         }
     }
+
+    // ── The manual advance verb forwards (the session's userAdvance) ──────
+    //
+    // The six manual "move to another item" arms are one-line mappings onto
+    // the session's [PlaybackSession.userAdvance] (the variant carries the
+    // payload). These pins keep the VM-level intent the former inline arms
+    // carried: the forward lands in the session's load/advance machinery and
+    // the engagement-streak reset rides the verb.
+
+    @Test
+    fun playEpisodeEvent_forwardsTheSessionAdvance_thePickedEpisodeLoads() {
+        setExternalPlayer()
+        coEvery { playbackSourceResolver.resolveStartPositionTicks("ep-9", 4_000_000L) } returns 4_000_000L
+        coEvery { detailFeed.getMediaDetail("ep-9", force = false) } returns Result.success(
+            itemDetail("ep-9", "Picked Episode", 30_000_000_000L)
+        )
+        // Arm the engagement streak before the manual pick: the advance must
+        // reset it (the former inline arm's invariant, now the verb's).
+        viewModel.playbackSession.autoplayController.setStillWatchingThreshold(1)
+        viewModel.playbackSession.autoplayController.recordAutoAdvance()
+        assertTrue(viewModel.playbackSession.autoplayController.needsStillWatchingCheck())
+
+        viewModel.onEvent(VideoPlayerUiEvent.PlayEpisode("ep-9", startPositionTicks = 4_000_000L))
+
+        // The picked episode's load ran (resume position seeded synchronously,
+        // the loading veil lifted) and the streak reset rode the verb.
+        assertEquals(4_000_000L / 10_000, viewModel.currentPositionMs.value)
+        assertFalse(viewModel.uiState.value.isInitializing)
+        assertFalse(viewModel.playbackSession.autoplayController.needsStillWatchingCheck())
+    }
+
+    @Test
+    fun playQueueItemEvent_forwardsTheSessionAdvance_thePickedRowLoads() {
+        setExternalPlayer()
+        viewModel.playbackSession.videoQueue.enqueueLast(
+            com.raulshma.jellyplay.core.data.playback.VideoQueueItem(itemId = "q-1", title = "Queued"),
+        )
+        coEvery { playbackSourceResolver.resolveStartPositionTicks("q-1", 0L) } returns 0L
+        coEvery { detailFeed.getMediaDetail("q-1", force = false) } returns Result.success(
+            itemDetail("q-1", "Queued Item")
+        )
+
+        viewModel.onEvent(VideoPlayerUiEvent.PlayQueueItem(0))
+
+        assertFalse(viewModel.uiState.value.isInitializing)
+        assertEquals("q-1", viewModel.playbackSession.playbackFacts().currentItemId)
+    }
+
+    @Test
+    fun markWatchedAndSkipEvent_forwardsTheSessionAdvance_marksPlayed() {
+        loadCurrentEpisodeExternally()
+
+        viewModel.onEvent(VideoPlayerUiEvent.MarkWatchedAndSkip)
+
+        // The deliberate advance reached the session verb: the mark landed
+        // through the same mutator the session's watched-threshold arm uses
+        // (the no-next close half is pinned session-side in UserAdvanceTest).
+        coVerify(atLeast = 1) { userDataMutator.setPlayed("item-1", played = true) }
+    }
+
+    // ── The SyncPlay group-mode forwards (the session verbs) ──────────────
+
+    @Test
+    fun setSyncPlayRepeatModeEvent_forwardsToTheSessionVerb() {
+        viewModel.onEvent(VideoPlayerUiEvent.SetSyncPlayRepeatMode(com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_ALL))
+
+        coVerify(exactly = 1) {
+            syncPlayManager.setGroupRepeatMode(com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_ALL)
+        }
+    }
+
+    @Test
+    fun setSyncPlayShuffleModeEvent_forwardsToTheSessionVerb() {
+        viewModel.onEvent(VideoPlayerUiEvent.SetSyncPlayShuffleMode(com.raulshma.jellyplay.core.model.SyncPlayShuffleMode.SHUFFLE))
+
+        coVerify(exactly = 1) {
+            syncPlayManager.setGroupShuffleMode(com.raulshma.jellyplay.core.model.SyncPlayShuffleMode.SHUFFLE)
+        }
+    }
+
+    // ── The downloaded-subtitle "Use" funnel (the hub verdict relay) ──────
+
+    @Test
+    fun useDownloadedSubtitle_noReadyHint_relaysNotReady_returnsFalse() {
+        // No download surfaced a ready hint for the row: the hub's NotReady
+        // verdict — the funnel returns false and nothing was armed.
+        assertFalse(viewModel.useDownloadedSubtitle("row-1"))
+    }
 }

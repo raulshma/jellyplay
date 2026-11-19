@@ -67,6 +67,37 @@ class DownloadStorageLayout(
     ): ResolvedDownloadPath {
         val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
         val isBookType = mediaType == MediaType.BOOK.name
+        val baseDir = destinationBaseDir(mediaType, storageLocationPref)
+
+        check(hasMinimumFreeSpace(baseDir)) {
+            "Insufficient storage space. Less than 100 MB available on device."
+        }
+
+        val safeName = sanitizeName(name)
+        val extension = deriveExtension(container, isAudioType, isBookType)
+        val file = File(baseDir, "${safeName}_${idHint}.$extension")
+        return ResolvedDownloadPath(
+            baseDir = baseDir,
+            fileName = file.name,
+            filePath = file.absolutePath,
+        )
+    }
+
+    /**
+     * The directory downloads of [mediaType] land in under
+     * [storageLocationPref] — filesDir's downloads subtree for INTERNAL, else
+     * the selected app-private external root (falling back to the internal
+     * subtree when the requested mount is gone, e.g. an unmounted SD card).
+     * Created if missing.
+     *
+     * Exposed beyond [resolve] so the download-sheet free-space probe stats
+     * the SAME volume the file actually writes to: the probe used to hardcode
+     * the primary external volume, so with an SD card selected the sheet
+     * reported internal storage's free space.
+     */
+    fun destinationBaseDir(mediaType: String, storageLocationPref: String): File {
+        val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
+        val isBookType = mediaType == MediaType.BOOK.name
         // Books land next to the reader's own container (app-private), not a
         // media-scanned public collection — DIRECTORY_DOCUMENTS keeps them out
         // of Movies/Music while still scoping the external roots per app.
@@ -96,19 +127,7 @@ class DownloadStorageLayout(
             else -> externalRootForPref(pref, dirType) ?: File(context.filesDir, internalSubdir)
         }
         if (!baseDir.exists()) baseDir.mkdirs()
-
-        check(hasMinimumFreeSpace(baseDir)) {
-            "Insufficient storage space. Less than 100 MB available on device."
-        }
-
-        val safeName = sanitizeName(name)
-        val extension = deriveExtension(container, isAudioType, isBookType)
-        val file = File(baseDir, "${safeName}_${idHint}.$extension")
-        return ResolvedDownloadPath(
-            baseDir = baseDir,
-            fileName = file.name,
-            filePath = file.absolutePath,
-        )
+        return baseDir
     }
 
     /**

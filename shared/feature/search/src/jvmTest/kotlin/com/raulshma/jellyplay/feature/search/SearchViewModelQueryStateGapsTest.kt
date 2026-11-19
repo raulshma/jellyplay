@@ -16,29 +16,26 @@ import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Query-state and debounce gaps in [SearchViewModel] NOT pinned by
@@ -77,10 +74,8 @@ class SearchViewModelQueryStateGapsTest {
             Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
     }
 
-
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (SearchViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var libraryFeed: LibraryFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -97,7 +92,6 @@ class SearchViewModelQueryStateGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         libraryFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
 
@@ -115,11 +109,6 @@ class SearchViewModelQueryStateGapsTest {
         )
 
         viewModel = createViewModel()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun createViewModel() = SearchViewModel(
@@ -147,7 +136,7 @@ class SearchViewModelQueryStateGapsTest {
     }
 
     @Test
-    fun `clearing the query back to blank reloads discovery suggestions`() = runTest(mainDispatcher) {
+    fun `clearing the query back to blank reloads discovery suggestions`() = runTest(mainDispatcherRule.testDispatcher) {
         // The setUp VM's init-block suggestion fetch is still queued on the
         // shared test scheduler. Run it against the default stub and drop the
         // recorded call so the returnsMany sequence and the exact-count
@@ -203,7 +192,7 @@ class SearchViewModelQueryStateGapsTest {
     }
 
     @Test
-    fun `a failed discovery fetch degrades to empty suggestions`() = runTest(mainDispatcher) {
+    fun `a failed discovery fetch degrades to empty suggestions`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { libraryApiClient.getSearchSuggestions(any()) } returns
             Result.failure(RuntimeException("network down"))
         viewModel = createViewModel()
@@ -215,7 +204,7 @@ class SearchViewModelQueryStateGapsTest {
 
     @Test
     fun `identical query re-sets within the debounce window reach the engine once`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             // A stub that consumes the queries argument and records every
             // emission that survived the debounce + distinct pipeline.
             val seenQueries = mutableListOf<String>()

@@ -6,7 +6,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * The queue reads and transfer controls the downloads screen offers (list,
- * live per-row progress, pause/resume/enqueue/cancel/retry/delete, priority).
+ * live per-row progress, pause/resume/enqueue/cancel/retry/delete, priority,
+ * queue placement).
  * Moved from feature:downloads (which declared it over an unnameable
  * jvmShared `DownloadRepository`) with the promoted-interface pass that
  * retired the per-read QuickDownloadActions template adapters: the surface is
@@ -60,9 +61,38 @@ interface DownloadQueue {
     /** The composite retry verb — same enqueue-inside shape as [resumeDownload], from byte 0. */
     suspend fun retryDownload(id: String): Result<Unit>
 
-    /** Deletes a download (artifacts + offline rows). */
-    suspend fun deleteDownload(id: String): Result<Unit>
+    /**
+     * Deletes a download (artifacts + offline rows).
+     *
+     * ADR-0015's un-arm verb split rides [keepSeriesArm]: this screen's
+     * single/bulk delete is the LIST-MANAGEMENT half — a series deleted to
+     * zero rows loses its arm (the policy row that keeps it in the
+     * auto-download check's universe) — so callers pass `keepSeriesArm =
+     * false` explicitly. The classification is explicit HERE rather than
+     * defaulted because [com.raulshma.jellyplay.core.data.repository.DownloadRepository]
+     * is the only supertype allowed to carry the default (Kotlin forbids one
+     * override inheriting defaults from several supertypes); only
+     * watch-boundary callers route around this seam via the repository verb.
+     */
+    suspend fun deleteDownload(id: String, keepSeriesArm: Boolean): Result<Unit>
 
     /** Moves a row's queue priority (bulk move-up/move-down ordering). */
     suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit>
+
+    /**
+     * The queue-placement composite verbs (the downloads screen's move-to-front /
+     * lower-priority row actions): the caller hands only the row id — the
+     * placement number is computed inside the implementation over the
+     * authoritative queue state (the same DAO snapshot
+     * [getAllDownloadsSnapshot] reads; a caller's rendered list can be
+     * stale), then persisted through the same write [setDownloadPriority]
+     * runs. Higher priority = closer to the front of the pending queue (the
+     * DAO orders it `priority DESC`); an empty queue bases placement at 0
+     * (front → 1, back → −1), the baselines the ViewModel arithmetic used
+     * before this verb existed.
+     */
+    suspend fun moveToFront(id: String): Result<Unit>
+
+    /** The toward-the-back twin of [moveToFront]. */
+    suspend fun moveToBack(id: String): Result<Unit>
 }

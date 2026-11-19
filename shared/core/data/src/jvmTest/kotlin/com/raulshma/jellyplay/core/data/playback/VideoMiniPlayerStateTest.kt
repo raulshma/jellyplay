@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -9,16 +10,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.junit.Rule
 
 /**
  * Direct pins for [VideoMiniPlayerState]'s engine-retention choreography on
@@ -103,19 +102,18 @@ class VideoMiniPlayerStateTest {
         override fun setAspectRatio(ratio: com.raulshma.jellyplay.feature.player.video.engine.AspectRatio) = Unit
     }
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     private lateinit var state: VideoMiniPlayerState
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         state = VideoMiniPlayerState()
     }
 
     @AfterTest
     fun tearDown() {
         state.release()
-        Dispatchers.resetMain()
     }
 
     private fun enter(engine: FakeEngine, itemId: String = "item-1") {
@@ -144,7 +142,7 @@ class VideoMiniPlayerStateTest {
     }
 
     @Test
-    fun `auto release fires at the timeout and releases the engine`() = runTest(testDispatcher.scheduler) {
+    fun `auto release fires at the timeout and releases the engine`() = runTest(mainDispatcherRule.testDispatcher.scheduler) {
         val engine = FakeEngine()
         enter(engine)
 
@@ -162,7 +160,7 @@ class VideoMiniPlayerStateTest {
     }
 
     @Test
-    fun `re-entering mini mode restarts the timeout window`() = runTest(testDispatcher.scheduler) {
+    fun `re-entering mini mode restarts the timeout window`() = runTest(mainDispatcherRule.testDispatcher.scheduler) {
         val first = FakeEngine()
         val second = FakeEngine()
         enter(first)
@@ -182,7 +180,7 @@ class VideoMiniPlayerStateTest {
     }
 
     @Test
-    fun `reclaim identity guard - a different item never receives the engine`() = runTest(testDispatcher.scheduler) {
+    fun `reclaim identity guard - a different item never receives the engine`() = runTest(mainDispatcherRule.testDispatcher.scheduler) {
         val engine = FakeEngine()
         enter(engine, itemId = "item-1")
 
@@ -203,7 +201,7 @@ class VideoMiniPlayerStateTest {
     }
 
     @Test
-    fun `typed reclaim hands back the registered MediaEngine and pops the session`() = runTest(testDispatcher.scheduler) {
+    fun `typed reclaim hands back the registered MediaEngine and pops the session`() = runTest(mainDispatcherRule.testDispatcher.scheduler) {
         val engine = TypedEngine()
         enterTyped(engine)
 
@@ -222,7 +220,7 @@ class VideoMiniPlayerStateTest {
     }
 
     @Test
-    fun `typed reclaim without the capability returns null and leaves the deposit intact`() = runTest(testDispatcher.scheduler) {
+    fun `typed reclaim without the capability returns null and leaves the deposit intact`() = runTest(mainDispatcherRule.testDispatcher.scheduler) {
         // A broad deposit (no registered capability — a foreign depositor's
         // shape): the typed reclaim must NOT pop the session, because the
         // popped engine would be dropped without ever being released.
@@ -238,7 +236,7 @@ class VideoMiniPlayerStateTest {
     }
 
     @Test
-    fun `re-entering broad overwrites the capability - typed reclaim no longer fires`() = runTest(testDispatcher.scheduler) {
+    fun `re-entering broad overwrites the capability - typed reclaim no longer fires`() = runTest(mainDispatcherRule.testDispatcher.scheduler) {
         val typed = TypedEngine()
         enterTyped(typed)
 
@@ -252,7 +250,7 @@ class VideoMiniPlayerStateTest {
     }
 
     @Test
-    fun `release resets the whole ladder`() = runTest(testDispatcher.scheduler) {
+    fun `release resets the whole ladder`() = runTest(mainDispatcherRule.testDispatcher.scheduler) {
         val engine = FakeEngine(playing = true)
         enter(engine)
         runCurrent()
@@ -271,7 +269,7 @@ class VideoMiniPlayerStateTest {
     }
 
     @Test
-    fun `release cancels the pending timeout - the engine is released exactly once`() = runTest(testDispatcher.scheduler) {
+    fun `release cancels the pending timeout - the engine is released exactly once`() = runTest(mainDispatcherRule.testDispatcher.scheduler) {
         val engine = FakeEngine()
         enter(engine)
 
@@ -285,7 +283,7 @@ class VideoMiniPlayerStateTest {
     }
 
     @Test
-    fun `togglePlayPause drives the engine and release makes it a no-op`() = runTest(testDispatcher.scheduler) {
+    fun `togglePlayPause drives the engine and release makes it a no-op`() = runTest(mainDispatcherRule.testDispatcher.scheduler) {
         val engine = FakeEngine(playing = true)
         enter(engine)
 

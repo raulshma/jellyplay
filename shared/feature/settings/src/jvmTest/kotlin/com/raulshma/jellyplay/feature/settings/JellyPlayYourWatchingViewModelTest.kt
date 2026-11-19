@@ -6,24 +6,21 @@ import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayMyAnalytics
 import com.raulshma.jellyplay.core.network.api.JellyPlayMyAnalyticsTotals
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsRoutes
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import org.junit.Rule
 
 /**
  * The "Your watching" screen's model (the mockk idiom, the
@@ -34,21 +31,16 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class JellyPlayYourWatchingViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var pluginApi: JellyPlayAnalyticsRoutes
     private lateinit var statusStore: JellyPlayPluginStatusStore
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         pluginApi = mockk(relaxed = true)
         statusStore = mockk(relaxed = true)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** featureGate stays null: the probe-only fallback keeps the pre-toggle behavior. */

@@ -4,20 +4,18 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import io.mockk.coEvery
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Unit tests for the EPG record-confirmation dialog state machine introduced to
@@ -27,33 +25,27 @@ import kotlin.test.assertTrue
  * The constructor launches auto-refresh/now-tick loops on the VM scope, so we
  * construct the VM outside of `runTest` and assert immediate state changes —
  * mirroring how [EpgViewModel.requestRecord] is invoked synchronously from the
- * UI layer on a tap. (The MainDispatcherRule is inlined as
- * setMain(StandardTestDispatcher) — jvmTest has no :core:testing access, and
- * the queued dispatcher keeps the ctor loops inert.)
+ * UI layer on a tap. (MainDispatcherRule installs a StandardTestDispatcher on
+ * Main, and the queued dispatcher keeps the ctor loops inert.)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EpgViewModelRecordTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: LiveTvApiClient
     private lateinit var viewModel: EpgViewModel
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         coEvery { mediaRepository.getLiveTvGuide(any(), any(), any()) } returns Result.success(
             EpgGuide(channels = emptyList(), programs = emptyList())
         )
         // The real clock is fine here: this suite never advances the
         // scheduler, so no time-derived behaviour is ever observed.
-        viewModel = EpgViewModel(mediaRepository, timeSource = SystemTimeSource(), gridDispatcher = mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
+        viewModel = EpgViewModel(mediaRepository, timeSource = SystemTimeSource(), gridDispatcher = mainDispatcherRule.testDispatcher)
     }
 
     @Test

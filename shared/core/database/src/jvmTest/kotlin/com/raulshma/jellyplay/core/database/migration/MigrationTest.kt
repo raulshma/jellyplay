@@ -1362,6 +1362,56 @@ class MigrationTest {
     }
 
     /**
+     * Verifies the v63→v64 migration adds `series_download_policies.seriesName`
+     * (TEXT NOT NULL DEFAULT '') — the ADR-0015 arm's display-name cache: the
+     * Downloads screen's armed list renders series with zero local rows, whose
+     * offline_media rows are orphan-pruned, so the arm carries the name the
+     * download request saw at arm time. The starting schema is created from
+     * the tracked `63.json` via room3's [MigrationTestHelper] (see
+     * [room3Helper]), seeded with a pre-ADR explicit override row, and the
+     * migrated result is validated against the tracked `64.json` with the
+     * same TableInfo comparison Room 3 itself runs when opening a migrated
+     * database — a drift between [MIGRATION_63_64]'s DDL and the entity
+     * declaration (the column DEFAULT must mirror the
+     * @ColumnInfo(defaultValue)) fails loudly here. The probes confirm the
+     * pre-existing row picks up the blank default and the column carries an
+     * arm name both ways.
+     */
+    @Test
+    fun migrateV63_64_addsSeriesDownloadPolicySeriesName() = runTest {
+        val helper = room3Helper("migrate-v63-64.db")
+        val v63 = helper.createDatabase(63)
+        v63.execSQL("INSERT INTO series_download_policies (seriesId, mode) VALUES ('series-1', 'ASK')")
+        v63.close()
+
+        val db = helper.runMigrationsAndValidate(64, listOf(MIGRATION_63_64))
+
+        // The pre-existing override row picks up the blank display-name default.
+        db.prepare("SELECT seriesId, mode, seriesName FROM series_download_policies").use { c ->
+            assertTrue(c.step())
+            assertEquals("series-1", c.getText(0))
+            assertEquals("ASK", c.getText(1))
+            assertEquals("", c.getText(2))
+            assertFalse(c.step())
+        }
+        // The new column is writable and readable with the arm grammar — a
+        // FOLLOW_GLOBAL arm row written with a name reads it back intact.
+        db.execSQL(
+            "INSERT INTO series_download_policies (seriesId, mode, seriesName) VALUES ('series-2', 'FOLLOW_GLOBAL', 'Series Two')",
+        )
+        db.prepare(
+            "SELECT seriesId, mode, seriesName FROM series_download_policies WHERE seriesId = 'series-2'",
+        ).use { c ->
+            assertTrue(c.step())
+            assertEquals("series-2", c.getText(0))
+            assertEquals("FOLLOW_GLOBAL", c.getText(1))
+            assertEquals("Series Two", c.getText(2))
+            assertFalse(c.step())
+        }
+        db.close()
+    }
+
+    /**
      * Verifies the v53→v54 backfill: every `downloads` row whose `container`
      * is NULL gets the container code resolved by the injected
      * [ContainerProbe] (file header magic bytes) persisted, while rows whose

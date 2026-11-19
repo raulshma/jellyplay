@@ -2,20 +2,17 @@ package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pure state-machine coverage for [AudioRadioController] over MutableStateFlow
@@ -24,7 +21,8 @@ import kotlin.test.assertTrue
  */
 class AudioRadioControllerTest {
 
-    private val dispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var queue: MutableStateFlow<List<AudioQueueItem>>
     private lateinit var currentIndex: MutableStateFlow<Int>
@@ -34,16 +32,10 @@ class AudioRadioControllerTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(dispatcher)
         queue = MutableStateFlow(emptyList())
         currentIndex = MutableStateFlow(0)
         enqueued = emptyList()
         mixFetches = 0
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun track(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.AUDIO)
@@ -54,7 +46,7 @@ class AudioRadioControllerTest {
     )
 
     private fun controller(): AudioRadioController = AudioRadioController(
-        scope = kotlinx.coroutines.CoroutineScope(dispatcher),
+        scope = kotlinx.coroutines.CoroutineScope(mainDispatcherRule.testDispatcher),
         queueFlow = queue,
         currentIndexFlow = currentIndex,
         fetchMix = {
@@ -68,7 +60,7 @@ class AudioRadioControllerTest {
         enqueued.flatten().map { it.id }
 
     @Test
-    fun `no refill while remaining tracks exceed the threshold`() = runTest(dispatcher) {
+    fun `no refill while remaining tracks exceed the threshold`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         c.start("seed")
         queue.value = (1..10).map { queued("t$it") }
@@ -80,7 +72,7 @@ class AudioRadioControllerTest {
     }
 
     @Test
-    fun `refills when the queue is within the threshold and dedupes queued ids`() = runTest(dispatcher) {
+    fun `refills when the queue is within the threshold and dedupes queued ids`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         c.start("seed")
         queue.value = listOf(queued("a"), queued("b"), queued("c"), queued("current"))
@@ -95,7 +87,7 @@ class AudioRadioControllerTest {
     }
 
     @Test
-    fun `empty mix batch does not crash the radio and re-fires on the next advance`() = runTest(dispatcher) {
+    fun `empty mix batch does not crash the radio and re-fires on the next advance`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         c.start("seed")
         queue.value = listOf(queued("current"))
@@ -117,7 +109,7 @@ class AudioRadioControllerTest {
     }
 
     @Test
-    fun `three consecutive failed fetches deactivate the radio`() = runTest(dispatcher) {
+    fun `three consecutive failed fetches deactivate the radio`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         c.start("seed")
         queue.value = listOf(queued("current"))
@@ -136,7 +128,7 @@ class AudioRadioControllerTest {
     }
 
     @Test
-    fun `stop clears the state and later emissions trigger nothing`() = runTest(dispatcher) {
+    fun `stop clears the state and later emissions trigger nothing`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         c.start("seed")
         queue.value = listOf(queued("current"))
@@ -151,7 +143,7 @@ class AudioRadioControllerTest {
     }
 
     @Test
-    fun `refill is capped when the queue reaches MAX_QUEUE`() = runTest(dispatcher) {
+    fun `refill is capped when the queue reaches MAX_QUEUE`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         c.start("seed")
         queue.value = (1..AudioRadioController.MAX_QUEUE).map { queued("t$it") }
@@ -167,7 +159,7 @@ class AudioRadioControllerTest {
 
     private fun controllerWithFetchGate(gate: CompletableDeferred<Unit>): AudioRadioController =
         AudioRadioController(
-            scope = kotlinx.coroutines.CoroutineScope(dispatcher),
+            scope = kotlinx.coroutines.CoroutineScope(mainDispatcherRule.testDispatcher),
             queueFlow = queue,
             currentIndexFlow = currentIndex,
             fetchMix = {
@@ -179,7 +171,7 @@ class AudioRadioControllerTest {
         )
 
     @Test
-    fun `in-flight refill does not append when the queue was replaced during the fetch`() = runTest(dispatcher) {
+    fun `in-flight refill does not append when the queue was replaced during the fetch`() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = CompletableDeferred<Unit>()
         val c = controllerWithFetchGate(gate)
         c.start("seed")
@@ -206,7 +198,7 @@ class AudioRadioControllerTest {
     }
 
     @Test
-    fun `in-flight refill does not append after the radio stopped during the fetch`() = runTest(dispatcher) {
+    fun `in-flight refill does not append after the radio stopped during the fetch`() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = CompletableDeferred<Unit>()
         val c = controllerWithFetchGate(gate)
         c.start("seed")

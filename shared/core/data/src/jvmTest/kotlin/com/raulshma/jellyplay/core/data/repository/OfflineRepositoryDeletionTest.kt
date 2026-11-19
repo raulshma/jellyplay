@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.model.SystemTimeSource
+import io.mockk.mockk
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import java.io.File
 import kotlin.io.path.createTempDirectory
@@ -62,6 +63,7 @@ class OfflineRepositoryDeletionTest {
             database.downloadDao(),
             database,
             timeSource = SystemTimeSource(),
+            downloadPolicyDao = mockk(relaxed = true),
         )
     }
 

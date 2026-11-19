@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
@@ -239,6 +240,30 @@ class SeriesDownloadStateHolderTest {
         // The sheet stays open with what it has; only the spinner flag clears.
         assertTrue(state.loadingSeasons.isEmpty())
         assertEquals(setOf("season1"), state.episodesBySeason.keys)
+    }
+
+    /**
+     * The sheet's chips open on the STORED policy (the pre-load read), and a
+     * FOLLOW_GLOBAL row — the ADR-0015 implicit arm — DISPLAYS as Default:
+     * the sentinel is never a chip, and
+     * [com.raulshma.jellyplay.core.data.download.toSeriesPolicyChoice] folds
+     * it back to Inherit on confirm, so the mapping is display-only.
+     */
+    @Test
+    fun requestSeriesDownload_storedPolicy_preloadsTheChipChoice() = runTest {
+        stubLoad("s1", mapOf("season1" to listOf(episode("e1"))))
+        val holder = buildHolder()
+
+        coEvery { downloadIntake.seriesPolicy("s1") } returns AutoDownloadMode.ASK
+        holder.requestSeriesDownload(series())
+        advanceUntilIdle()
+        assertEquals(AutoDownloadMode.ASK, holder.state.value!!.storedPolicy)
+
+        // The implicit arm's sentinel reads as the Default chip (null).
+        coEvery { downloadIntake.seriesPolicy("s1") } returns AutoDownloadMode.FOLLOW_GLOBAL
+        holder.requestSeriesDownload(series())
+        advanceUntilIdle()
+        assertEquals(null, holder.state.value!!.storedPolicy)
     }
 
     @Test

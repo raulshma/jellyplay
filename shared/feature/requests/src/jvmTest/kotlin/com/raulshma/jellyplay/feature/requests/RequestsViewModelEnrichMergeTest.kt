@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.every
@@ -21,22 +22,18 @@ import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import org.junit.Rule
 
 /**
  * The enrichment fan-out core shared by media-details + *arr download-progress
@@ -55,9 +52,8 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class RequestsViewModelEnrichMergeTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (RequestsViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var arrRepository: ArrRepository
@@ -69,7 +65,6 @@ class RequestsViewModelEnrichMergeTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         seerrRepository = mockk()
         arrRepository = mockk()
         experimentalStore = mockk()
@@ -85,11 +80,6 @@ class RequestsViewModelEnrichMergeTest {
         stubRequests { Result.success(SeerrRequestPage()) }
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     private fun stubRequests(response: () -> Result<SeerrRequestPage>) {
         coEvery {
             seerrRepository.getRequests(any(), any(), any(), any(), any(), any(), any(), any())
@@ -99,7 +89,7 @@ class RequestsViewModelEnrichMergeTest {
     private fun newViewModel(): RequestsViewModel = RequestsViewModel(
         seerrRepository = seerrRepository,
         arrRepository = arrRepository,
-        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcherRule.testDispatcher)),
     )
 
     private fun page(items: List<SeerrRequestItem>) = SeerrRequestPage(
@@ -133,7 +123,7 @@ class RequestsViewModelEnrichMergeTest {
     )
 
     @Test
-    fun out_of_order_enrich_completions_both_land() = runTest(mainDispatcher) {
+    fun out_of_order_enrich_completions_both_land() = runTest(mainDispatcherRule.testDispatcher) {
         gateMovieDetails()
         stubRequests { Result.success(page(listOf(item(1, tmdbId = 11), item(2, tmdbId = 22)))) }
         val viewModel = newViewModel()
@@ -157,7 +147,7 @@ class RequestsViewModelEnrichMergeTest {
     }
 
     @Test
-    fun duplicate_tmdb_ids_across_requests_fetch_once() = runTest(mainDispatcher) {
+    fun duplicate_tmdb_ids_across_requests_fetch_once() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { seerrRepository.getMovieDetails(any()) } coAnswers {
             movieCalls += firstArg<Int>()
             Result.success(SeerrMovieDetails())
@@ -173,7 +163,7 @@ class RequestsViewModelEnrichMergeTest {
     }
 
     @Test
-    fun same_tmdb_id_across_movie_and_tv_fetches_BOTH_endpoints() = runTest(mainDispatcher) {
+    fun same_tmdb_id_across_movie_and_tv_fetches_BOTH_endpoints() = runTest(mainDispatcherRule.testDispatcher) {
         // tmdb ids collide across the movie/tv namespaces: one fetch per
         // (tmdbId, type) pair, each hitting its own endpoint — never one
         // endpoint chosen by whichever row came last.
@@ -200,7 +190,7 @@ class RequestsViewModelEnrichMergeTest {
     }
 
     @Test
-    fun per_item_enrich_failures_are_swallowed() = runTest(mainDispatcher) {
+    fun per_item_enrich_failures_are_swallowed() = runTest(mainDispatcherRule.testDispatcher) {
         stubRequests {
             Result.success(page(listOf(item(1, tmdbId = 11, type = "movie"), item(2, tmdbId = 22, type = "tv"))))
         }
@@ -217,7 +207,7 @@ class RequestsViewModelEnrichMergeTest {
     }
 
     @Test
-    fun out_of_order_queue_completions_fill_both_maps() = runTest(mainDispatcher) {
+    fun out_of_order_queue_completions_fill_both_maps() = runTest(mainDispatcherRule.testDispatcher) {
         every {
             experimentalStore.experimental
         } returns MutableStateFlow(ExperimentalSlice(enabledExperimentalFeatures = setOf(ExperimentalFeature.DIRECT_ARR_INTEGRATION)))

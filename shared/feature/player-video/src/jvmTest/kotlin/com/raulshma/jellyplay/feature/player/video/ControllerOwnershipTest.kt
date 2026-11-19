@@ -49,6 +49,9 @@ import java.io.File
  *    `SubtitleHubSheetModule.kt`) must never read the playback session
  *    handle — the GLOSSARY "Session slice" law at the source
  *    (see [screenSideFiles_neverReadThePlaybackSessionHandle]).
+ * 5. The VM — the ONE sanctioned session-handle reader outside the session
+ *    itself — may reach only an explicit whitelist of `playbackSession.*`
+ *    symbols (see [viewModelSessionHandle_reachesOnlyWhitelistedSymbols]).
  *
  * Lower the baseline when another slice migrates; never raise it.
  */
@@ -214,9 +217,15 @@ class ControllerOwnershipTest {
         // for the background-cast handoff latch's defensive clear at VM
         // construction (the #145 PiP-latch treatment — a stale-true latch
         // skipped Initialize and dead-aired the next player VM; pins in
-        // BackgroundCastHandoffLatchTest). Lower the
+        // BackgroundCastHandoffLatchTest). Lowered to 1_132 (2026-11-18,
+        // candidate 4) when the six manual advance arms folded into the
+        // session's one [PlaybackSession.userAdvance] verb (the [UserAdvance]
+        // mapping), the SyncPlay group-mode launches moved onto the session
+        // verbs, and the downloaded-subtitle "Use" resolution moved into the
+        // track-selection hub — the funnel arms became one-line forwards.
+        // Lower the
         // ceiling when a slice moves out; never raise it to admit growth.
-        val maxVideoPlayerViewModelLines = 1_172
+        val maxVideoPlayerViewModelLines = 1_132
         val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
         val lines = vm.sourceText().lineSequence().count()
         assertTrue(
@@ -261,9 +270,24 @@ class ControllerOwnershipTest {
         // single-flight across rapid skips + external initializes) with the
         // resurrection guards at its two write sites, and the slot
         // choreography documented at [PlaybackSession.loadCinemaIntro].
-        // Lower the ceiling when a cluster moves out; never raise it to admit
-        // growth.
-        val maxPlaybackSessionLines = 3_056
+        // Lowered to 2_987 (2026-11-18) when the SessionLifecycleHooks
+        // interface moved out to SessionLifecycleHooks.kt — the
+        // hooks-self-implements shape retired: the session's root interface
+        // is [SessionLoadOutputs] only, the hook bodies became private funs
+        // behind the private `sessionHooks` delegate the lifecycleHooks
+        // dispatch resolves to. Raised to 3_052 (2026-11-18, candidate 4)
+        // for the approved interface additions the VM now forwards one-line:
+        // the manual advance verb ([PlaybackSession.userAdvance] over the
+        // [UserAdvance] variants — the six arms' shared engagement-streak +
+        // load choreography), the SyncPlay group repeat/shuffle mode verbs
+        // (their launches moved here from the VM with the manager threading),
+        // and the track hub's ready-hint seam construction (the
+        // downloaded-subtitle "Use" verdict's lookup). The choreography is
+        // session-owned by design — no extracted-collaborator alternative
+        // exists for a verb whose every fact and effect target is a session
+        // collaborator. Lower the ceiling when a cluster moves out;
+        // never raise it to admit growth.
+        val maxPlaybackSessionLines = 3_052
         val session = mainSources().first { it.name == "PlaybackSession.kt" }
         val lines = session.sourceText().lineSequence().count()
         assertTrue(
@@ -283,9 +307,18 @@ class ControllerOwnershipTest {
         // branches into the sheet modules, so its TOTAL line count is a
         // one-way guard too. Baseline: 2_140 — the then-current 2_138 lines
         // plus two lines of slack, pinned EXACTLY like every other guard in
-        // this suite. Lower the ceiling when a section moves out; never
+        // this suite. Lowered to 2_046 (2026-11-18, candidate 2) when the
+        // root's three wiring clusters moved into remembered holders — the
+        // resume-chip snackbar dance (VideoPlayerScreenInfo's
+        // rememberResumeChipEffect + the state module's ResumeChipPolicy),
+        // the BACK hide-or-exit ladder + focus-grab handoff edge
+        // (VideoPlayerScreenOverlays' rememberPlayerBackLadder +
+        // PlayerBackFocusLadder) and the window/lifecycle effect session
+        // (PlayerWindowSession's rememberPlayerWindowSession +
+        // WindowLifecyclePolicy) — the chrome-binding / trickplay-feeds
+        // holder idiom. Lower the ceiling when a section moves out; never
         // raise it to admit growth.
-        val maxVideoPlayerScreenLines = 2_140
+        val maxVideoPlayerScreenLines = 2_046
         val screen = mainSources().first { it.name == "VideoPlayerScreen.kt" }
         val lines = screen.sourceText().lineSequence().count()
         assertTrue(
@@ -331,6 +364,88 @@ class ControllerOwnershipTest {
                     "program against the session slices (the GLOSSARY \"Session slice\" seam)",
             )
         }
+    }
+
+    @Test
+    fun viewModelSessionHandle_reachesOnlyWhitelistedSymbols() {
+        // The VM-side companion to screenSideFiles_neverReadThePlaybackSessionHandle:
+        // the VM is the one sanctioned session-handle reader (the composition
+        // root), so its exact reach — every `playbackSession.<symbol>` the VM
+        // source names — is pinned as an explicit whitelist. Baseline
+        // (2026-11-18): the 36 symbols below, enumerated at the
+        // session-root-narrowing refactor that retired the
+        // hooks-self-implements shape (PlaybackSession stopped implementing
+        // SessionLifecycleHooks; the 11 hook funs dropped off the session's
+        // reachable surface — the VM never called any of them). 37
+        // (2026-11-18, candidate 4): +userAdvance / +setSyncPlayRepeatMode /
+        // +setSyncPlayShuffleMode — the six manual advance arms folded into
+        // the session's advance verb and the SyncPlay group-mode launches
+        // moved onto the session verbs (the VM's forwards are one-line);
+        // -autoplayController / -initialize (their only readers were the six
+        // advance arms, folded into userAdvance). A VM change
+        // touching a new `playbackSession.*` symbol fails here until the
+        // whitelist is reviewed: the intended shape is one-line forwards to
+        // the owned collaborators, so a new direct reach is a composition-root
+        // contract change, not a silent one. An entry that outlives its last
+        // reader fails too — trim the set when the VM stops reaching a symbol.
+        // The scan matches direct receiver spellings (`playbackSession.x` /
+        // `playbackSession?.x`, whitespace-tolerant); a local alias of the
+        // handle would evade it — the same accepted limit as the screen-side
+        // scan.
+        val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
+        val reachedSymbols = Regex("playbackSession\\s*\\??\\.(\\w+)")
+            .findAll(vm.sourceText().stripComments())
+            .map { it.groupValues[1] }
+            .toSet()
+        val allowedSymbols = setOf(
+            "arm",
+            "cachedAggregate",
+            "createSessionSlices",
+            "engine",
+            "engineCommands",
+            "engineEventCoordinator",
+            "engineFlow",
+            "inputBindingToggle",
+            "markEngineConfigDirty",
+            "mediaSessionController",
+            "performRelease",
+            "pipTransport",
+            "playbackFacts",
+            "playbackPreferenceWriter",
+            "releaseScope",
+            "render",
+            "retryPlayback",
+            "retryWithEngine",
+            "sessionState",
+            "setSyncPlayRepeatMode",
+            "setSyncPlayShuffleMode",
+            "skipIntro",
+            "skipSegment",
+            "stillWatching",
+            "subtitles",
+            "subtitlePreview",
+            "subtitleStyleController",
+            "switchMediaSource",
+            "trackSelectionHelper",
+            "transport",
+            "trickplayManager",
+            "uiCommands",
+            "upNext",
+            "userAdvance",
+            "videoQueue",
+            "warmNextEpisode",
+            "warmNextStream",
+        )
+        assertEquals(
+            allowedSymbols,
+            reachedSymbols,
+            "VideoPlayerViewModel's playbackSession.* reach drifted: new " +
+                "symbols=${reachedSymbols - allowedSymbols}, retired " +
+                "entries=${allowedSymbols - reachedSymbols}. A new direct " +
+                "session reach is a composition-root contract change — review " +
+                "the whitelist and extend it deliberately (or route through an " +
+                "owned collaborator); a retired entry must leave the set.",
+        )
     }
 
     @Test

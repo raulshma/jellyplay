@@ -1,17 +1,14 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -19,6 +16,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the #14 offer-delete-after-playback decision table
@@ -34,10 +32,11 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class PostPlaybackActionsControllerTest {
 
-    private val dispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     /** The controller's Eagerly-shared scope — cancelled in teardown (the UpNextControllerTest pattern). */
-    private val controllerScope = CoroutineScope(SupervisorJob() + dispatcher)
+    private val controllerScope = CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher)
 
     private val canDelete = MutableStateFlow(true)
 
@@ -84,15 +83,10 @@ class PostPlaybackActionsControllerTest {
             notifyDeleteFailed = { title -> failedNotices.add(title) },
         )
 
-    @BeforeTest
-    fun setUp() {
-        Dispatchers.setMain(dispatcher)
-    }
 
     @AfterTest
     fun tearDown() {
         controllerScope.cancel()
-        Dispatchers.resetMain()
     }
 
     // ── the decision table ─────────────────────────────────────────────────
@@ -170,7 +164,7 @@ class PostPlaybackActionsControllerTest {
     // ── the controller lifecycle ───────────────────────────────────────────
 
     @Test
-    fun `natural end arms the offer for a pref-matching movie`() = runTest(dispatcher) {
+    fun `natural end arms the offer for a pref-matching movie`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         c.onPlaybackEndedNaturally()
@@ -183,7 +177,7 @@ class PostPlaybackActionsControllerTest {
     }
 
     @Test
-    fun `keep dismisses and the latch blocks a second offer for the same item`() = runTest(dispatcher) {
+    fun `keep dismisses and the latch blocks a second offer for the same item`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         c.onPlaybackEndedNaturally()
         advanceUntilIdle()
@@ -198,7 +192,7 @@ class PostPlaybackActionsControllerTest {
     }
 
     @Test
-    fun `a new item may offer again`() = runTest(dispatcher) {
+    fun `a new item may offer again`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         c.onPlaybackEndedNaturally()
         advanceUntilIdle()
@@ -212,7 +206,7 @@ class PostPlaybackActionsControllerTest {
     }
 
     @Test
-    fun `suppressed sessions never arm the offer`() = runTest(dispatcher) {
+    fun `suppressed sessions never arm the offer`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         incognito = true
@@ -234,7 +228,7 @@ class PostPlaybackActionsControllerTest {
     }
 
     @Test
-    fun `missing delete permission suppresses the armed precheck`() = runTest(dispatcher) {
+    fun `missing delete permission suppresses the armed precheck`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         canDelete.value = false
 
@@ -246,7 +240,7 @@ class PostPlaybackActionsControllerTest {
 
     @Test
     fun `delete runs the server delete path with cache invalidation and closes the player`() =
-        runTest(dispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             seriesIdHint = "series-1"
             val c = controller()
             c.onPlaybackEndedNaturally()
@@ -272,7 +266,7 @@ class PostPlaybackActionsControllerTest {
         }
 
     @Test
-    fun `failed delete dismisses the dialog surfaces the failure and stays open`() = runTest(dispatcher) {
+    fun `failed delete dismisses the dialog surfaces the failure and stays open`() = runTest(mainDispatcherRule.testDispatcher) {
         deleteResult = Result.failure(IllegalStateException("boom"))
         val c = controller()
         c.onPlaybackEndedNaturally()
@@ -289,7 +283,7 @@ class PostPlaybackActionsControllerTest {
     // ── the end-of-media close hold ────────────────────────────────────────
 
     @Test
-    fun `a natural end that arms the offer holds the close`() = runTest(dispatcher) {
+    fun `a natural end that arms the offer holds the close`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         val holds = c.onPlaybackEndedNaturally()
@@ -301,7 +295,7 @@ class PostPlaybackActionsControllerTest {
     }
 
     @Test
-    fun `a suppressed end never holds the close`() = runTest(dispatcher) {
+    fun `a suppressed end never holds the close`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         // Each arm gets a fresh item id: the latch registers on EVALUATION
@@ -332,7 +326,7 @@ class PostPlaybackActionsControllerTest {
 
     @Test
     fun `keep releases the hold exactly once and a keep with nothing pending fires nothing`() =
-        runTest(dispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val c = controller()
 
             // No pending offer yet: the keep is a no-op.
@@ -350,7 +344,7 @@ class PostPlaybackActionsControllerTest {
         }
 
     @Test
-    fun `a failed permission read releases the hold without raising`() = runTest(dispatcher) {
+    fun `a failed permission read releases the hold without raising`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         canDelete.value = false
 
@@ -365,7 +359,7 @@ class PostPlaybackActionsControllerTest {
     // ── twin end events (Issue #10: the natural end dispatches twice) ─────
 
     @Test
-    fun `a twin end event of an armed item keeps holding the close until resolved`() = runTest(dispatcher) {
+    fun `a twin end event of an armed item keeps holding the close until resolved`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         // The reporter's end-of-stream safety net fires first and arms.
@@ -387,7 +381,7 @@ class PostPlaybackActionsControllerTest {
     }
 
     @Test
-    fun `a twin end event of a suppressed item never holds`() = runTest(dispatcher) {
+    fun `a twin end event of a suppressed item never holds`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         incognito = true
@@ -396,7 +390,7 @@ class PostPlaybackActionsControllerTest {
     }
 
     @Test
-    fun `a failed permission read ends the armed ownership for late twins`() = runTest(dispatcher) {
+    fun `a failed permission read ends the armed ownership for late twins`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
         canDelete.value = false
 
@@ -408,7 +402,7 @@ class PostPlaybackActionsControllerTest {
     }
 
     @Test
-    fun `no delete sources - the feature is inert`() = runTest(dispatcher) {
+    fun `no delete sources - the feature is inert`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller(sources = null)
 
         assertFalse(c.onPlaybackEndedNaturally(), "no seams, no hold")
@@ -419,7 +413,7 @@ class PostPlaybackActionsControllerTest {
     }
 
     @Test
-    fun `commands without a pending offer are no-ops`() = runTest(dispatcher) {
+    fun `commands without a pending offer are no-ops`() = runTest(mainDispatcherRule.testDispatcher) {
         val c = controller()
 
         c.keepItem()

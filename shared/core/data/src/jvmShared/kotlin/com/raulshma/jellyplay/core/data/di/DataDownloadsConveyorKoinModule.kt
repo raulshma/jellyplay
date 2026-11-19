@@ -57,6 +57,11 @@ internal val dataDownloadsConveyorModule: Module = module {
             offlineMediaDao = get(),
             playbackStateDao = get(),
             syncBaselineDao = get(),
+            // The implicit-arm funnel's leaf DAO write edge (ADR-0015) — the
+            // DAO directly, never the SeriesDownloadPolicyStore interface:
+            // that single resolves DownloadRepositoryImpl, and the writer must
+            // stay cycle-free of it (see the conveyor KDoc above).
+            downloadPolicyDao = get(),
             database = get(),
             downloadsStore = get(),
             storagePolicy = get(),

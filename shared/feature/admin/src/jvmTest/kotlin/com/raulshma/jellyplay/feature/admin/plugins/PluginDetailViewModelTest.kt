@@ -6,24 +6,21 @@ import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginStatus
 import com.raulshma.jellyplay.core.model.PluginVersionInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the plugin detail flow (`PluginDetailViewModel`):
@@ -44,21 +41,14 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class PluginDetailViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var adminRepository: PluginAdminRepository
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         adminRepository = mockk(relaxed = true)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun TestScope.initializedViewModel(
@@ -89,7 +79,7 @@ class PluginDetailViewModelTest {
     // ── load ──
 
     @Test
-    fun `initialize resolves the plugin package info and config page`() = runTest(mainDispatcher) {
+    fun `initialize resolves the plugin package info and config page`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = initializedViewModel()
 
         assertEquals("guid-1", viewModel.state.plugin?.id)
@@ -101,7 +91,7 @@ class PluginDetailViewModelTest {
     }
 
     @Test
-    fun `initialize with an unknown id falls back to the route placeholder`() = runTest(mainDispatcher) {
+    fun `initialize with an unknown id falls back to the route placeholder`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getInstalledPlugins() } returns Result.success(emptyList())
         val viewModel = PluginDetailViewModel(adminRepository)
 
@@ -116,7 +106,7 @@ class PluginDetailViewModelTest {
     }
 
     @Test
-    fun `initialize failure surfaces the error with the route placeholder`() = runTest(mainDispatcher) {
+    fun `initialize failure surfaces the error with the route placeholder`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getInstalledPlugins() } returns
             Result.failure(RuntimeException("server down"))
         val viewModel = PluginDetailViewModel(adminRepository)
@@ -130,7 +120,7 @@ class PluginDetailViewModelTest {
     }
 
     @Test
-    fun `re-initializing the same plugin does not refetch`() = runTest(mainDispatcher) {
+    fun `re-initializing the same plugin does not refetch`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = initializedViewModel()
 
         viewModel.initialize("guid-1", "TV Head")
@@ -143,7 +133,7 @@ class PluginDetailViewModelTest {
 
     @Test
     fun `toggleEnabled on an active plugin routes to disable with optimistic override`() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             val viewModel = initializedViewModel(status = PluginStatus.ACTIVE)
 
             viewModel.toggleEnabled()
@@ -159,7 +149,7 @@ class PluginDetailViewModelTest {
         }
 
     @Test
-    fun `toggleEnabled on a disabled plugin routes to enable`() = runTest(mainDispatcher) {
+    fun `toggleEnabled on a disabled plugin routes to enable`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = initializedViewModel(status = PluginStatus.DISABLED)
 
         viewModel.toggleEnabled()
@@ -172,7 +162,7 @@ class PluginDetailViewModelTest {
     }
 
     @Test
-    fun `toggleEnabled failure keeps the override clear-free error`() = runTest(mainDispatcher) {
+    fun `toggleEnabled failure keeps the override clear-free error`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = initializedViewModel(status = PluginStatus.ACTIVE)
         coEvery { adminRepository.setPluginEnabled(any(), any(), any()) } returns
             Result.failure(RuntimeException("forbidden"))
@@ -188,7 +178,7 @@ class PluginDetailViewModelTest {
     }
 
     @Test
-    fun `toggleEnabled without a loaded plugin is a no-op`() = runTest(mainDispatcher) {
+    fun `toggleEnabled without a loaded plugin is a no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = PluginDetailViewModel(adminRepository)
 
         viewModel.toggleEnabled()
@@ -200,7 +190,7 @@ class PluginDetailViewModelTest {
     // ── uninstall ──
 
     @Test
-    fun `uninstall routes to the repository and fires completion on success`() = runTest(mainDispatcher) {
+    fun `uninstall routes to the repository and fires completion on success`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = initializedViewModel()
         var completed = false
 
@@ -213,7 +203,7 @@ class PluginDetailViewModelTest {
     }
 
     @Test
-    fun `uninstall failure surfaces the error and never completes`() = runTest(mainDispatcher) {
+    fun `uninstall failure surfaces the error and never completes`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = initializedViewModel()
         coEvery { adminRepository.uninstallPlugin(any()) } returns
             Result.failure(RuntimeException("uninstall failed"))
@@ -230,7 +220,7 @@ class PluginDetailViewModelTest {
     // ── install a specific version ──
 
     @Test
-    fun `installVersion routes package guid version and repository url`() = runTest(mainDispatcher) {
+    fun `installVersion routes package guid version and repository url`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = initializedViewModel()
         coEvery { adminRepository.installPackage(any(), any(), any(), any()) } returns Result.success(Unit)
         val older = PluginVersionInfo(version = "0.9", repositoryUrl = "https://old.example.com")
@@ -252,7 +242,7 @@ class PluginDetailViewModelTest {
     }
 
     @Test
-    fun `installVersion failure surfaces the error and clears the pin`() = runTest(mainDispatcher) {
+    fun `installVersion failure surfaces the error and clears the pin`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = initializedViewModel()
         coEvery { adminRepository.installPackage(any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("download failed"))
@@ -267,7 +257,7 @@ class PluginDetailViewModelTest {
     // ── error surface ──
 
     @Test
-    fun `clearError resets the error`() = runTest(mainDispatcher) {
+    fun `clearError resets the error`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = initializedViewModel()
         coEvery { adminRepository.setPluginEnabled(any(), any(), any()) } returns
             Result.failure(RuntimeException("boom"))

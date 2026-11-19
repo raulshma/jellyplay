@@ -87,6 +87,38 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pick
  */
 private const val NullOptionKey = "\u0000null-option"
 
+/**
+ * Prefix for an option's fallback lazy-row key. Some pickers key on a custom
+ * option type (`StorageMount` for the download-location picker) that is not
+ * Bundle-saveable, so the row keys on its index in the caller's list instead —
+ * a plain Int/String is always accepted by `SaveableStateHolder`. The NUL
+ * prefix keeps the fallback key from colliding with a real String option.
+ */
+private const val IndexedOptionKeyPrefix = "\u0000indexed-option-"
+
+/**
+ * One picker option paired with its index in the caller's ORIGINAL [items]
+ * list. The index is the Bundle-safe lazy-row key fallback for custom option
+ * types; pairing it here (rather than re-deriving it after search filtering)
+ * keeps a row's key stable while the user filters the list.
+ */
+private data class IndexedPickerOption<out T>(val index: Int, val item: T) {
+
+    /**
+     * The lazy-row key fed to `SaveableStateHolder`: the option value itself
+     * for Bundle-safe primitives/Strings/enums (preserving option identity
+     * across filter edits), else the original-list index. Issue #224: keying a
+     * `StorageMount` value directly crashed the app with
+     * `Type of the key … is not supported`.
+     */
+    fun lazyRowKey(): Any = when (val value = item) {
+        null -> NullOptionKey
+        is String, is Int, is Long, is Short, is Byte, is Float, is Double,
+        is Boolean, is Char, is Enum<*> -> value
+        else -> "$IndexedOptionKeyPrefix$index"
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsChipPickerSheet(
@@ -269,11 +301,18 @@ internal fun <T> SettingsListPickerSheet(
     var searching by rememberSaveable(title) { mutableStateOf(false) }
     var query by rememberSaveable(title) { mutableStateOf("") }
     val searchLabel = stringResource(Res.string.settings_picker_search)
+    // Pair each option with its original index once, before search filtering:
+    // the lazy-row key falls back to that index for non-Bundle-saveable option
+    // types (see IndexedPickerOption.lazyRowKey), and it must not shift with
+    // the filtered list.
+    val indexedItems = remember(items) {
+        items.mapIndexed { index, item -> IndexedPickerOption(index, item) }
+    }
     // The match runs per option (label + subtitle + toString); remembered off
     // the query so recompositions that don't change it skip the re-filter.
-    val visibleItems = remember(items, query) {
-        items.filter {
-            matchesPickerQuery(query, label(it), subtitle(it), it.toString())
+    val visibleItems = remember(indexedItems, query) {
+        indexedItems.filter {
+            matchesPickerQuery(query, label(it.item), subtitle(it.item), it.item.toString())
         }
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -313,16 +352,16 @@ internal fun <T> SettingsListPickerSheet(
                 Text(stringResource(Res.string.settings_picker_no_results), modifier = Modifier.padding(24.dp))
             }
             LazyColumn(modifier = Modifier.weight(1f, fill = false).tvFocusGroupRestorer()) {
-                // Row key = the option value itself (options are distinct
-                // choices), so an option's identity survives filter edits
-                // instead of shifting with its index. A null option keys on
-                // an identity sentinel — Unit/strings could collide with a
-                // real option's value.
+                // Row key = the option value itself for Bundle-safe values, so
+                // an option's identity survives filter edits instead of
+                // shifting with its index; custom option types key on their
+                // original-list index (see IndexedPickerOption.lazyRowKey).
                 itemsIndexed(
                     visibleItems,
-                    key = { _, item -> item ?: NullOptionKey },
+                    key = { _, option -> option.lazyRowKey() },
                     contentType = { _, _ -> "option" },
-                ) { index, item ->
+                ) { index, option ->
+                    val item = option.item
                     val selected = isSelected(item)
                     val shape = when {
                         visibleItems.size == 1 -> ShapeCache.smooth16

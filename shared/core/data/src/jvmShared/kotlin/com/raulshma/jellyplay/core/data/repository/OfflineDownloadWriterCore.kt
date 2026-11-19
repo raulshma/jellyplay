@@ -4,14 +4,17 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.DownloadPolicyDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
+import com.raulshma.jellyplay.core.database.entity.SeriesDownloadPolicyEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
@@ -68,6 +71,14 @@ public class OfflineDownloadWriterCore(
     private val offlineMediaDao: OfflineMediaDao,
     private val playbackStateDao: PlaybackStateDao,
     private val syncBaselineDao: SyncBaselineDao,
+    /**
+     * The arm table's write edge — the one implicit-arm funnel (ADR-0015
+     * decision 2) rides [startDownload] below. A leaf DAO dependency on
+     * purpose: injecting the [SeriesDownloadPolicyStore] interface here would
+     * re-introduce the repo↔delegate construction cycle the
+     * dataDownloadsConveyorModule KDoc recorded as dissolved.
+     */
+    private val downloadPolicyDao: DownloadPolicyDao,
     private val database: JellyPlayDatabase,
     private val downloadsStore: DownloadsStore,
     private val storagePolicy: StoragePolicy,
@@ -166,6 +177,29 @@ public class OfflineDownloadWriterCore(
             container = request.container,
         )
         downloadDao.insertDownload(entity)
+        // THE implicit-arm funnel (ADR-0015 decision 2): every series-shaped
+        // download arms its series — single-item intake, series batch,
+        // auto-enqueue, and bulk/quick actions all converge on this one
+        // startDownload body, so no entry point can forget the arm. Without
+        // implicit arming, users running the global INSTANT/ASK mode carry no
+        // policy row and the gh-225 bug (armed universe membership lost at
+        // zero rows) stays broken for them. insert-if-absent never clobbers an
+        // explicit sheet override; an existing arm with a blank display name
+        // is backfilled when this request carries one.
+        request.seriesId?.let { seriesId ->
+            val existingArm = downloadPolicyDao.getPolicyBySeriesId(seriesId)
+            if (existingArm == null) {
+                downloadPolicyDao.insertPolicyIfAbsent(
+                    SeriesDownloadPolicyEntity(
+                        seriesId = seriesId,
+                        mode = AutoDownloadMode.FOLLOW_GLOBAL.name,
+                        seriesName = request.seriesName.orEmpty(),
+                    ),
+                )
+            } else if (existingArm.seriesName.isBlank() && !request.seriesName.isNullOrBlank()) {
+                downloadPolicyDao.updatePolicySeriesName(seriesId, request.seriesName)
+            }
+        }
         entity.toDownloadItem()
     }
 

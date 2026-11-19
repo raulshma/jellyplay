@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_ssl
 import io.mockk.coEvery
@@ -13,23 +14,19 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 /**
  * Pins the [AddServerConnectPhase] / [AddServerDiscoveryPhase] machine that
@@ -61,7 +58,8 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddServerViewModelPhaseTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var authRepository: AuthRepository
     private lateinit var serverDiscoveryRepository: ServerDiscoveryRepository
@@ -70,7 +68,6 @@ class AddServerViewModelPhaseTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
         serverDiscoveryRepository = mockk()
         networkOfflineStore = mockk(relaxed = true)
@@ -83,15 +80,10 @@ class AddServerViewModelPhaseTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     // ── 1. the connect ladder ────────────────────────────────────────────
 
     @Test
-    fun connect_passesThroughConnecting_thenLandsIdleOnSuccess() = runTest(testDispatcher) {
+    fun connect_passesThroughConnecting_thenLandsIdleOnSuccess() = runTest(mainDispatcherRule.testDispatcher) {
         val info = mockk<ServerInfo>()
         val gate = CompletableDeferred<Result<ServerInfo>>()
         coEvery { authRepository.addServer("http://server") } coAnswers { gate.await() }
@@ -112,7 +104,7 @@ class AddServerViewModelPhaseTest {
     }
 
     @Test
-    fun connect_genericFailure_landsInFailed_withTheClassifiedError() = runTest(testDispatcher) {
+    fun connect_genericFailure_landsInFailed_withTheClassifiedError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("http://server") } returns
             Result.failure(RuntimeException("boom"))
 
@@ -127,7 +119,7 @@ class AddServerViewModelPhaseTest {
     // ── 2. TlsTrustPending carries the error ─────────────────────────────
 
     @Test
-    fun connect_tlsFailure_landsInTlsTrustPending_carryingErrorAndArmedRetry() = runTest(testDispatcher) {
+    fun connect_tlsFailure_landsInTlsTrustPending_carryingErrorAndArmedRetry() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX path building failed"))
 
@@ -148,7 +140,7 @@ class AddServerViewModelPhaseTest {
     // ── 3. clearError cannot orphan a trust dialog ───────────────────────
 
     @Test
-    fun clearError_duringFailed_returnsToIdle() = runTest(testDispatcher) {
+    fun clearError_duringFailed_returnsToIdle() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("http://server") } returns
             Result.failure(RuntimeException("boom"))
         viewModel.connectToServer("http://server") {}
@@ -161,7 +153,7 @@ class AddServerViewModelPhaseTest {
     }
 
     @Test
-    fun clearError_duringTlsTrustPending_isANoop_theDialogKeepsItsError() = runTest(testDispatcher) {
+    fun clearError_duringTlsTrustPending_isANoop_theDialogKeepsItsError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
         viewModel.connectToServer("https://selfsigned.example.com") {}
@@ -186,7 +178,7 @@ class AddServerViewModelPhaseTest {
     // ── 4. dismiss keeps the error visible ───────────────────────────────
 
     @Test
-    fun dismissTrustPrompt_returnsToFailed_withTheSameError() = runTest(testDispatcher) {
+    fun dismissTrustPrompt_returnsToFailed_withTheSameError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
         viewModel.connectToServer("https://selfsigned.example.com") {}
@@ -204,7 +196,7 @@ class AddServerViewModelPhaseTest {
     // ── 5. confirm: consume guard, await, retry outcome ──────────────────
 
     @Test
-    fun confirmTrustServer_keepsDialogUpDuringAwait_consumesRetryImmediately_retriesToIdle() = runTest(testDispatcher) {
+    fun confirmTrustServer_keepsDialogUpDuringAwait_consumesRetryImmediately_retriesToIdle() = runTest(mainDispatcherRule.testDispatcher) {
         val info = mockk<ServerInfo>()
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX")) andThen
@@ -236,7 +228,7 @@ class AddServerViewModelPhaseTest {
     }
 
     @Test
-    fun confirmTrustServer_doubleTapWhileAwaiting_retriesOnlyOnce_writesGrantTwice() = runTest(testDispatcher) {
+    fun confirmTrustServer_doubleTapWhileAwaiting_retriesOnlyOnce_writesGrantTwice() = runTest(mainDispatcherRule.testDispatcher) {
         val info = mockk<ServerInfo>()
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX")) andThen
@@ -263,7 +255,7 @@ class AddServerViewModelPhaseTest {
     }
 
     @Test
-    fun confirmTrustServer_propagationTimeout_retryFailsTlsAgain_rePrompts() = runTest(testDispatcher) {
+    fun confirmTrustServer_propagationTimeout_retryFailsTlsAgain_rePrompts() = runTest(mainDispatcherRule.testDispatcher) {
         // BOTH attempts fail TLS: the documented re-prompt loop is preserved
         // deliberately — on propagation timeout the retry proceeds anyway and
         // fails like an ungranted host, re-arming the dialog (do not "fix"
@@ -293,7 +285,7 @@ class AddServerViewModelPhaseTest {
     // ── 6. updateManualAddress: one atomic write ─────────────────────────
 
     @Test
-    fun updateManualAddress_fromTlsTrustPending_landsInIdle_inOneWrite_andConfirmNoOps() = runTest(testDispatcher) {
+    fun updateManualAddress_fromTlsTrustPending_landsInIdle_inOneWrite_andConfirmNoOps() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
         viewModel.connectToServer("https://selfsigned.example.com") {}
@@ -321,7 +313,7 @@ class AddServerViewModelPhaseTest {
     // ── 7. orthogonality: connect never stops discovery ──────────────────
 
     @Test
-    fun connect_leavesDiscoveryRunning_thePhasesAreOrthogonal() = runTest(testDispatcher) {
+    fun connect_leavesDiscoveryRunning_thePhasesAreOrthogonal() = runTest(mainDispatcherRule.testDispatcher) {
         // Orthogonality BY INTENT: today's connect never stops a running scan
         // (the server-count row keeps its scanning spinner during a connect).
         // Pin it so a future mutual-exclusion change is a conscious one.

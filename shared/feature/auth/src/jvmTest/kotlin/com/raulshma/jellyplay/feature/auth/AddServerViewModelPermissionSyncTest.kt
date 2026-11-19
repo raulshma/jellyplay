@@ -5,27 +5,24 @@ import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.DiscoveredServer
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * The local-network permission choreography machine behind
@@ -46,7 +43,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddServerViewModelPermissionSyncTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var authRepository: AuthRepository
     private lateinit var serverDiscoveryRepository: ServerDiscoveryRepository
@@ -55,7 +53,6 @@ class AddServerViewModelPermissionSyncTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
         serverDiscoveryRepository = mockk()
         networkOfflineStore = mockk(relaxed = true)
@@ -66,11 +63,6 @@ class AddServerViewModelPermissionSyncTest {
             localNetworkStatus = LocalNetworkStatus { false },
             networkOfflineStore = networkOfflineStore,
         )
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** A never-completing scan: keeps [AddServerDiscoveryPhase.Running] set. */
@@ -86,7 +78,7 @@ class AddServerViewModelPermissionSyncTest {
     // ── rationale predicate ───────────────────────────────────────────────
 
     @Test
-    fun desktopShape_enforcedFalse_grantedTrue_neverShowsRationale_andStartsDiscovery() = runTest(testDispatcher) {
+    fun desktopShape_enforcedFalse_grantedTrue_neverShowsRationale_andStartsDiscovery() = runTest(mainDispatcherRule.testDispatcher) {
         stubNeverEndingScan()
 
         viewModel.onLocalNetworkAccessSynced(enforced = false, granted = true)
@@ -97,7 +89,7 @@ class AddServerViewModelPermissionSyncTest {
     }
 
     @Test
-    fun androidDenied_showsRationale_withoutStartingDiscovery() = runTest(testDispatcher) {
+    fun androidDenied_showsRationale_withoutStartingDiscovery() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onLocalNetworkAccessSynced(enforced = true, granted = false)
 
         val state = viewModel.uiState.value
@@ -107,7 +99,7 @@ class AddServerViewModelPermissionSyncTest {
     }
 
     @Test
-    fun enforcedAndGranted_showsNoRationale() = runTest(testDispatcher) {
+    fun enforcedAndGranted_showsNoRationale() = runTest(mainDispatcherRule.testDispatcher) {
         stubNeverEndingScan()
 
         viewModel.onLocalNetworkAccessSynced(enforced = true, granted = true)
@@ -118,7 +110,7 @@ class AddServerViewModelPermissionSyncTest {
     // ── grant transition ─────────────────────────────────────────────────
 
     @Test
-    fun grantArrivingAfterDenial_clearsRationale_andStartsDiscovery() = runTest(testDispatcher) {
+    fun grantArrivingAfterDenial_clearsRationale_andStartsDiscovery() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onLocalNetworkAccessSynced(enforced = true, granted = false)
         assertTrue(viewModel.uiState.value.localNetworkRationale)
         coVerify(exactly = 0) { serverDiscoveryRepository.discoverLocalServers() }
@@ -136,7 +128,7 @@ class AddServerViewModelPermissionSyncTest {
     // ── re-entry + dedupe parity ─────────────────────────────────────────
 
     @Test
-    fun grantedSyncAfterAScanCompleted_startsAFreshScan_andResetsServers() = runTest(testDispatcher) {
+    fun grantedSyncAfterAScanCompleted_startsAFreshScan_andResetsServers() = runTest(mainDispatcherRule.testDispatcher) {
         // First entry: the scan completes with a server found.
         val server = DiscoveredServer(id = "1", name = "one", address = "http://192.168.1.10:8096")
         every { serverDiscoveryRepository.discoverLocalServers() } returns flowOf(server)
@@ -156,7 +148,7 @@ class AddServerViewModelPermissionSyncTest {
     }
 
     @Test
-    fun grantedSyncWhileScanRunning_isDedupedByTheDiscoveringGuard() = runTest(testDispatcher) {
+    fun grantedSyncWhileScanRunning_isDedupedByTheDiscoveringGuard() = runTest(mainDispatcherRule.testDispatcher) {
         stubNeverEndingScan()
         viewModel.onLocalNetworkAccessSynced(enforced = false, granted = true)
         runCurrent()

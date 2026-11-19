@@ -2426,6 +2426,47 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.ConfirmExit,
 )
 
+// ── The player group's gate-fork exception sets ──────────────────────────
+// The rows the strict count treats specially (the capability forks, the
+// parent-toggle rows, the TV pair), named where the rows are declared so the
+// contract tests' count arithmetic derives from these lists instead of
+// restating hand-counted literals.
+
+/** The screen-orientation fork row ([RowAdmission.Platform] on [RowAdmissionCapability.ScreenOrientation]). */
+internal val PlaybackPlayerOrientationRows: List<SettingsRow> = listOf(
+    PlaybackRows.Orientation,
+)
+
+/** The touch-gesture fork rows ([RowAdmission.Platform] on [RowAdmissionCapability.TouchGestures] — the seek-duration row included). */
+internal val PlaybackPlayerTouchRows: List<SettingsRow> = listOf(
+    PlaybackRows.SeekDuration,
+    PlaybackRows.Gestures,
+    PlaybackRows.GestureIndicatorSide,
+    PlaybackRows.DoubleTapHoldSeek,
+)
+
+/** The still-watching pair riding [PlaybackRows.VideoAutoplayNext] ([RowAdmission.WhenOn]). */
+internal val PlaybackPlayerStillWatchingRows: List<SettingsRow> = listOf(
+    PlaybackRows.StillWatchingMode,
+    PlaybackRows.StillWatchingEpisodes,
+)
+
+/** The screensaver delay row riding [PlaybackRows.PauseScreensaver] (All(Advanced, WhenOn)). */
+internal val PlaybackPlayerPauseScreensaverDelayRows: List<SettingsRow> = listOf(
+    PlaybackRows.PauseScreensaverDelay,
+)
+
+/** The auto-PiP row behind the Android PiP stack (All(Advanced, Platform(Pip))). */
+internal val PlaybackPlayerAutoPipRows: List<SettingsRow> = listOf(
+    PlaybackRows.AutoEnterPip,
+)
+
+/** The TV-only pair — admitted on the form factor alone (the shipped count semantics). */
+internal val PlaybackPlayerTvRows: List<SettingsRow> = listOf(
+    PlaybackRows.AndroidTvWatchNext,
+    PlaybackRows.TvZoomMode,
+)
+
 internal val PlaybackAdvancedVideoRows: List<SettingsRow> = listOf(
     PlaybackRows.DialogueBoost,
     PlaybackRows.DialogueBoostStrength,
@@ -2457,6 +2498,23 @@ internal val PlaybackAdvancedVideoRows: List<SettingsRow> = listOf(
     PlaybackRows.LiveStreamOption,
 )
 
+/**
+ * The advanced-video group's parent-gated rows — the All(Advanced, WhenOn)
+ * rows that drop while their parent toggle is off: the dialogue-boost
+ * strength row, the five per-codec passthrough rows, the spatial headphones
+ * sub-knob and the issue #186 Re-detect action row.
+ */
+internal val PlaybackAdvancedVideoParentGatedRows: List<SettingsRow> = listOf(
+    PlaybackRows.DialogueBoostStrength,
+    PlaybackRows.PassthroughCodecAc3,
+    PlaybackRows.PassthroughCodecEac3,
+    PlaybackRows.PassthroughCodecDts,
+    PlaybackRows.PassthroughCodecDtshd,
+    PlaybackRows.PassthroughCodecTruehd,
+    PlaybackRows.SpatialAudioOnlyHeadphones,
+    PlaybackRows.RedetectPerformance,
+)
+
 internal val PlaybackEngineMpvRows: List<SettingsRow> = listOf(
     PlaybackRows.MpvVideoOutput,
     PlaybackRows.MpvScaler,
@@ -2483,6 +2541,31 @@ internal val PlaybackEngineMpvRows: List<SettingsRow> = listOf(
     PlaybackRows.MpvInputConf,
     PlaybackRows.MpvCustomButtons,
     PlaybackRows.ResetEngineDefaults,
+)
+
+/**
+ * The mpv branch's capability-gated rows — the branch's declared rows that
+ * drop where the desktop binary's capabilities are off (the fallback-to-base
+ * delta the contract test derives).
+ */
+
+/** The audio-device trio ([RowAdmission.Platform] on [RowAdmissionCapability.AudioDeviceSelection]). */
+internal val PlaybackEngineMpvAudioDeviceRows: List<SettingsRow> = listOf(
+    PlaybackRows.MpvAudioDevice,
+    PlaybackRows.MpvAudioExclusive,
+    PlaybackRows.MpvAudioMode,
+)
+
+/**
+ * The render-profile rows ([RowAdmission.Platform] on
+ * [RowAdmissionCapability.MpvRenderProfiles] — hdr passthrough left the
+ * render-profile gate for the plain advanced one).
+ */
+internal val PlaybackEngineMpvRenderRows: List<SettingsRow> = listOf(
+    PlaybackRows.MpvShaderPack,
+    PlaybackRows.MpvToneMapping,
+    PlaybackRows.MpvRenderQuality,
+    PlaybackRows.MpvInterpolationTscale,
 )
 
 internal val PlaybackEngineVlcRows: List<SettingsRow> = listOf(

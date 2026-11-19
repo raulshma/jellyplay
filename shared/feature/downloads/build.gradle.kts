@@ -33,6 +33,10 @@ kotlin {
         // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
             implementation(libs.coroutines.test)
+            // The shared MainDispatcherRule fixture, replacing this lane's
+            // hand-inlined setMain/resetMain boilerplate (test-scoped only —
+            // see the fixtures module's house rules).
+            implementation(project(":shared:core:test-fixtures"))
             implementation(libs.mockk)
         }
         getByName("androidMain").dependencies {

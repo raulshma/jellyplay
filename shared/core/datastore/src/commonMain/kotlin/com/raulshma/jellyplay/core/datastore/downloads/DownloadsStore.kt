@@ -224,11 +224,19 @@ class DownloadsStore constructor(
      * for INSTANT/ASK users rather than silently flipping it off — the
      * cross-key invariant the [DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MODE]
      * row's null encode opts out of.
+     *
+     * [AutoDownloadMode.FOLLOW_GLOBAL] is a SERIES-ROW sentinel (ADR-0015),
+     * never a legal global value — no settings UI offers it, so reaching this
+     * setter with it is a programming error. Clamped to NEVER rather than
+     * poisoning the global key with the sentinel name (the legacy boolean
+     * mirror follows the clamped value).
      */
     suspend fun setAutoDownloadMode(mode: AutoDownloadMode) {
+        val globalMode =
+            if (mode == AutoDownloadMode.FOLLOW_GLOBAL) AutoDownloadMode.NEVER else mode
         dataStore.edit {
-            it[Keys.AUTO_DOWNLOAD_MODE] = mode.name
-            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = mode.isEnabled
+            it[Keys.AUTO_DOWNLOAD_MODE] = globalMode.name
+            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = globalMode.isEnabled
         }
     }
 

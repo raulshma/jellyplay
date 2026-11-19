@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSearchPreviewState
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -19,9 +20,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.Dispatchers
+import org.junit.Rule
 
 /**
  * Direct [HomeSearchStateHolder] tests — the query-lifecycle cases migrated
@@ -33,9 +32,8 @@ import kotlinx.coroutines.Dispatchers
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeSearchStateHolderTest {
 
-    // MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     /** Inline-search kernel — targeted fake instead of five collaborators. */
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
@@ -44,7 +42,6 @@ class HomeSearchStateHolderTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         every { mediaSearchEngine.preview(any()) } returns flowOf(
             MediaSearchPreviewState(query = "", jellyfin = emptyList(), seerr = emptyList(), isSearching = false)
@@ -55,7 +52,6 @@ class HomeSearchStateHolderTest {
     fun stopHolder() {
         holderScope?.cancel()
 
-        Dispatchers.resetMain()
     }
 
     private fun TestScope.buildHolder(): HomeSearchStateHolder {

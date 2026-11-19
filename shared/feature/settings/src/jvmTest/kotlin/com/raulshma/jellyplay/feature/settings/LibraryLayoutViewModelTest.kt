@@ -8,34 +8,32 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
- * The :core:testing MainDispatcherRule is inlined
- * (StandardTestDispatcher + setMain/resetMain — downloads-conveyor jvmTest
- * pattern) because jvmTest has no access to that module.
+ * The shared MainDispatcherRule fixture installs a StandardTestDispatcher on
+ * Main.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryLayoutViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var homeDiscoveryStore: HomeDiscoveryStore
     private lateinit var editor: PreferencesEditor
@@ -45,7 +43,6 @@ class LibraryLayoutViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         homeDiscoveryStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
         libraryFeed = mockk(relaxed = true)
@@ -53,11 +50,6 @@ class LibraryLayoutViewModelTest {
         playlistRepository = mockk(relaxed = true)
         every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
         coEvery { libraryFeed.getLibraryFolders(force = false) } returns Result.success(emptyList())
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     @Test

@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -23,25 +24,21 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import org.junit.Assert.assertSame
 import kotlin.test.assertTrue
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PersonDetailViewModelTest {
 
-    // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var detailFeed: DetailFeed
     private lateinit var userDataChanges: UserDataChanges
@@ -73,7 +70,6 @@ class PersonDetailViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         detailFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
         libraryApiClient = mockk(relaxed = true)
@@ -83,11 +79,6 @@ class PersonDetailViewModelTest {
         // a Result return) — every test here starts co-star-silent.
         coEvery { libraryApiClient.getPeople(any(), any(), any()) } returns Result.success(emptyList())
         viewModel = buildViewModel()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     @Test
@@ -101,7 +92,7 @@ class PersonDetailViewModelTest {
      * resolved patch — and leaves non-matching items referentially equal.
      */
     @Test
-    fun `markItemPlayed flips only the matching item in the filmography`() = runTest(mainDispatcher) {
+    fun `markItemPlayed flips only the matching item in the filmography`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN, overview = "An actor.")
         val withProgress = MediaItem(
@@ -128,7 +119,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `loadPerson success emits Success with name filmography biography and profile image`() = runTest(mainDispatcher) {
+    fun `loadPerson success emits Success with name filmography biography and profile image`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN, overview = "An actor.")
         val filmography = listOf(
@@ -151,7 +142,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `loadPerson null biography is not emitted`() = runTest(mainDispatcher) {
+    fun `loadPerson null biography is not emitted`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN, overview = "")
         coEvery { detailFeed.getMediaDetail("p1", force = false) } returns Result.success(MediaDetail(item = person))
@@ -167,7 +158,7 @@ class PersonDetailViewModelTest {
     // ── role: role credits off the filmography's projected People ────────────
 
     @Test
-    fun `filmography People resolve the person's role credits into the state`() = runTest(mainDispatcher) {
+    fun `filmography People resolve the person's role credits into the state`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
         val acting = PersonInfo(id = "p1", name = "Person One", role = "John Smith", type = "Actor")
@@ -192,7 +183,7 @@ class PersonDetailViewModelTest {
     // ── co-star: co-star enrichment leg ─────────────────────────────────────────
 
     @Test
-    fun `co-stars anchor on the most-recent filmography entry and exclude the person`() = runTest(mainDispatcher) {
+    fun `co-stars anchor on the most-recent filmography entry and exclude the person`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
         val older = MediaItem(id = "m1", name = "Old Movie", mediaType = MediaType.MOVIE, year = 2000)
@@ -220,7 +211,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `showFrequentCostars off skips the co-star query`() = runTest(mainDispatcher) {
+    fun `showFrequentCostars off skips the co-star query`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
         coEvery { detailFeed.getMediaDetail("p1", force = false) } returns Result.success(MediaDetail(item = person))
@@ -237,7 +228,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `empty filmography skips the co-star query`() = runTest(mainDispatcher) {
+    fun `empty filmography skips the co-star query`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
         coEvery { detailFeed.getMediaDetail("p1", force = false) } returns Result.success(MediaDetail(item = person))
@@ -253,7 +244,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `a failed co-star query keeps the Success state with no costars`() = runTest(mainDispatcher) {
+    fun `a failed co-star query keeps the Success state with no costars`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
         coEvery { detailFeed.getMediaDetail("p1", force = false) } returns Result.success(MediaDetail(item = person))
@@ -274,7 +265,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `loadPerson blank profile url is not emitted`() = runTest(mainDispatcher) {
+    fun `loadPerson blank profile url is not emitted`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN, overview = "bio")
         coEvery { detailFeed.getMediaDetail("p1", force = false) } returns Result.success(MediaDetail(item = person))
@@ -289,7 +280,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `loadPerson detail failure emits Error`() = runTest(mainDispatcher) {
+    fun `loadPerson detail failure emits Error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("p1", force = false) } returns Result.failure(RuntimeException("detail boom"))
         coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(emptyList())
@@ -306,7 +297,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `loadPerson items failure emits Error preferring items message`() = runTest(mainDispatcher) {
+    fun `loadPerson items failure emits Error preferring items message`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("p1", force = false) } returns Result.failure(RuntimeException("detail boom"))
         coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.failure(RuntimeException("items boom"))
@@ -319,7 +310,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `loadPerson failure with null messages falls back to generic error`() = runTest(mainDispatcher) {
+    fun `loadPerson failure with null messages falls back to generic error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("p1", force = false) } returns Result.failure(RuntimeException())
         coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.failure(RuntimeException())
@@ -331,7 +322,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `a thrown repo failure on the loud load surfaces Error instead of stranding Loading`() = runTest(mainDispatcher) {
+    fun `a thrown repo failure on the loud load surfaces Error instead of stranding Loading`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("p1", force = false) } throws IllegalStateException("engine blew up")
         coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(emptyList())
@@ -347,7 +338,7 @@ class PersonDetailViewModelTest {
     }
 
     @Test
-    fun `loadPerson on an already-successful person is a no-op`() = runTest(mainDispatcher) {
+    fun `loadPerson on an already-successful person is a no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("p1", force = false) } returns Result.success(
             MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))

@@ -62,6 +62,7 @@ class OfflineRepositoryImplSearchTest {
             downloadDao,
             database,
             timeSource = SystemTimeSource(),
+            downloadPolicyDao = mockk(relaxed = true),
         )
     }
 

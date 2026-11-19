@@ -1132,9 +1132,10 @@ class DetailViewModel internal constructor(
     internal val artwork: ArtworkUrls get() = artworkUrls
 
     /**
-     * Available bytes on the volume backing the download destination
-     * (`DIRECTORY_MUSIC` for audio, `DIRECTORY_MOVIES` otherwise). Read off the
-     * main thread — callers should await this from a coroutine or `produceState`.
+     * Available bytes on the volume backing the download destination — the
+     * volume the `downloadStorageLocation` pref selects (music subtree for
+     * audio, movies otherwise). Read off the main thread — callers should
+     * await this from a coroutine or `produceState`.
      *
      * Extracted from the inline `StatFs`/`Environment` probe that previously
      * lived in the download-confirmation composable so the UI layer no longer

@@ -7,25 +7,22 @@ import com.raulshma.jellyplay.core.model.arr.ArrPreferences
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the *arr settings wiring (LibraryLayout jvmTest pattern: mockk
@@ -40,7 +37,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArrSettingsViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var arrRepository: ArrRepository
     private lateinit var arrPreferencesStore: ArrPreferencesStore
@@ -49,7 +47,6 @@ class ArrSettingsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         arrRepository = mockk(relaxed = true)
         arrPreferencesStore = mockk(relaxed = true)
         secureCredentialsStore = mockk(relaxed = true)
@@ -58,11 +55,6 @@ class ArrSettingsViewModelTest {
         every { arrRepository.invalidateServers() } returns Unit
         every { secureCredentialsStore.getManualServers() } returns emptyList()
         coEvery { arrRepository.resolveServers() } returns Result.success(ArrServiceSummary())
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun viewModel() =

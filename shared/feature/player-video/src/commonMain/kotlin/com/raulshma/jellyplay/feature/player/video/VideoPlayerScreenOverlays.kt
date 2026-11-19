@@ -21,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,8 +56,12 @@ import com.raulshma.jellyplay.core.model.BufferingVeil
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.TrickplayMode
+import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
+import com.raulshma.jellyplay.feature.player.video.state.PlayerBackFocusLadder
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PinLockOverlay
@@ -535,6 +540,95 @@ internal fun rememberExitConfirmController(
     confirmEnabled: () -> Boolean,
     onExit: () -> Unit,
 ): PlayerExitConfirmController = remember { PlayerExitConfirmController(confirmEnabled, onExit) }
+
+/**
+ * The BACK hide-or-exit ladder + the focus-grab handoff edge — the wiring
+ * half of the cluster `VideoPlayerScreen`'s root carried inline (hoisted
+ * beside the ladder's exit interposer, the [rememberTrickplayFeeds]
+ * placement precedent). Owns the always-on back interception
+ * ([JellyPlayBackHandler] — the seam's Android actual wires the system back;
+ * the desktop actual is a no-op and Esc is the shell's concern) and the
+ * hide-edge focus handoff effect, in that order, and returns the exit
+ * interposer the root renders as [ExitConfirmOverlay].
+ *
+ * The back handler IS the screen's single BACK decision-maker, and it runs
+ * exactly once per press on every pipeline pairing: the TV D-pad arm set
+ * deliberately carries no BACK_OR_HIDE arm (the arm acting on the KeyDown
+ * AND the predictive-back callback replaying the same press on the KeyUp's
+ * Pre-IME stage double-acted: one press hid the controls AND exited), and
+ * PlayerActivity.onBackPressed suppresses the legacy key path on API 33+
+ * whenever a back callback IS registered — on API <33 (and in any
+ * no-callback window) the legacy path is the ONLY dispatch, so there is
+ * nothing to suppress. The verdict is the chrome module's
+ * (`PlayerChromeController.backVerdict` — sheet → close, TV-visible → hide,
+ * else exit, the hide arm TV-only per the touch-exits ladder); the
+ * verdict→action dispatch and the handoff priority ladder are the state
+ * module's [PlayerBackFocusLadder]. The gate reads arrive as values (the
+ * handoff effect's restart keys) — exactly the former
+ * `LaunchedEffect(chrome.visible, isTv, …)` key set.
+ */
+@Composable
+internal fun rememberPlayerBackLadder(
+    isTv: Boolean,
+    hasHardwareKeyboard: Boolean,
+    chrome: PlayerChromeController,
+    controlsVisible: Boolean,
+    cinemaIntroVisible: Boolean,
+    nextEpisodeVisible: Boolean,
+    skipSegmentVisible: Boolean,
+    closeSheet: () -> Unit,
+    confirmExit: () -> Boolean,
+    onExit: () -> Unit,
+    tvCinemaIntroFocusRequester: FocusRequester,
+    tvNextEpisodeFocusRequester: FocusRequester,
+    tvSkipSegmentFocusRequester: FocusRequester,
+    keyboardFocusRequester: FocusRequester,
+): PlayerExitConfirmController {
+    val exitConfirm = rememberExitConfirmController(confirmExit, onExit)
+    JellyPlayBackHandler(enabled = true) {
+        when (
+            PlayerBackFocusLadder.backAction(
+                chrome.backVerdict(hideArm = PlayerBackFocusLadder.systemBackHideArm(isTv)),
+            )
+        ) {
+            PlayerBackFocusLadder.BackAction.CloseSheet -> closeSheet()
+            PlayerBackFocusLadder.BackAction.HideControls -> chrome.hide()
+            PlayerBackFocusLadder.BackAction.None -> {}
+            PlayerBackFocusLadder.BackAction.ExitIntent -> exitConfirm.onBackPress()
+        }
+    }
+    LaunchedEffect(controlsVisible, isTv, nextEpisodeVisible, skipSegmentVisible, cinemaIntroVisible) {
+        when (
+            PlayerBackFocusLadder.focusHandoff(
+                isTv = isTv,
+                hasHardwareKeyboard = hasHardwareKeyboard,
+                controlsVisible = controlsVisible,
+                cinemaIntroVisible = cinemaIntroVisible,
+                nextEpisodeVisible = nextEpisodeVisible,
+                skipSegmentVisible = skipSegmentVisible,
+            )
+        ) {
+            PlayerBackFocusLadder.FocusHandoff.CinemaIntro ->
+                tvCinemaIntroFocusRequester.tryRequestFocus("tv_cinema_intro")
+            PlayerBackFocusLadder.FocusHandoff.NextEpisode ->
+                tvNextEpisodeFocusRequester.tryRequestFocus("tv_next_episode")
+            PlayerBackFocusLadder.FocusHandoff.SkipSegment ->
+                tvSkipSegmentFocusRequester.tryRequestFocus("tv_skip_segment")
+            PlayerBackFocusLadder.FocusHandoff.DeferToGrabEffect ->
+                harnessFocusDiag(
+                    "hide-edge handoff: box case deferred to the grab effect (showControls=false)",
+                )
+            PlayerBackFocusLadder.FocusHandoff.KeyboardRegrab -> {
+                // Same call on every platform (Android behavior untouched); the
+                // captured result is a desktop-only harness-gated diag line.
+                val autoHideEdgeOk = keyboardFocusRequester.tryRequestFocus("keyboard_player")
+                harnessFocusDiag("auto-hide edge regrab ok=$autoHideEdgeOk")
+            }
+            PlayerBackFocusLadder.FocusHandoff.None -> {}
+        }
+    }
+    return exitConfirm
+}
 
 /**
  * The in-player exit confirmation: a scrim (tap = stay) with a centered card

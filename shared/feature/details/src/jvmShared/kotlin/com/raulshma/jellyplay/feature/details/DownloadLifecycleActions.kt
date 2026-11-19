@@ -344,10 +344,16 @@ internal class DownloadLifecycleActions(
     /**
      * The session series' stored policy override (null = Default) — the
      * download sheet's pre-load read so its chips open on the stored choice.
+     * A FOLLOW_GLOBAL row (the ADR-0015 implicit arm) DISPLAYS as Default —
+     * the sentinel is never a chip
+     * ([com.raulshma.jellyplay.core.data.download.toSeriesPolicyChoice] folds
+     * it back to
+     * Inherit on confirm).
      */
     suspend fun seriesPolicy(): AutoDownloadMode? {
         val seriesId = session.value?.seriesId ?: return null
         return downloadIntake.seriesPolicy(seriesId)
+            ?.takeIf { it != AutoDownloadMode.FOLLOW_GLOBAL }
     }
 
     fun prepareDownloadSheetEpisodes() {

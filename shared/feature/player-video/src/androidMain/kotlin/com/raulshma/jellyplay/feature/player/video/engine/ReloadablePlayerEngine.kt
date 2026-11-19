@@ -14,8 +14,10 @@ import kotlinx.coroutines.flow.shareIn
  *
  * This layer hoists the behaviour that was previously re-derived per adapter:
  *  - snapshot / restore of `position + playbackSpeed + isPlaying` across a rebuild
- *  - remembered unmute level + `MediaStreamVolume` sync (the clamp / mute
- *    decisions themselves live in commonMain's [PlaybackVolumePolicy])
+ *  - the four volume/mute commands + the remembered unmute level — composed
+ *    over commonMain's [VolumeCommandChassis] (the clamp / mute decisions
+ *    live in [PlaybackVolumePolicy]; the `MediaStreamVolume` sync stays this
+ *    engine's seam)
  *  - the `callbackFlow + EnginePositionTicker` shell for `positionFlow`
  *  - the shared replay-1 internal position flow ([InternalPositionSource])
  *  - the `EngineVideoStats` change-guard
@@ -73,15 +75,19 @@ abstract class ReloadablePlayerEngine(
         }
     }
 
-    // ── Volume / mute — delegations to the common templates ────────────────
-    // The four MediaEngine volume/mute commands are FINAL delegations to the
-    // commonMain VolumeCommandTemplates (over PlaybackVolumePolicy) — the same
-    // choreography the desktop mpv adapter runs, so the two can no longer
-    // drift. The remember call is unified BEFORE the native write (the former
-    // Exo/Vlc order) — this fixed mpv's drift, where the delta bodies wrote
-    // the native handle first and remembered second. What genuinely diverges
-    // per engine stays a seam on VolumeCommandTemplates.NativeVolumeSurface,
-    // bridged to the protected members below by [volumeCommands]:
+    // ── Volume / mute — the chassis over the common templates ───────────────
+    // The four MediaEngine volume/mute commands ride the commonMain
+    // VolumeCommandChassis — the VolumeCommandTemplates finals (over
+    // PlaybackVolumePolicy), the dispatch containment and the unmute memory
+    // (remember-before-write, the audible-only rule, the pre-mute snapshot)
+    // all live THERE now, so the desktop mpv adapter composes the identical
+    // chassis instead of hand-copying it and the two can no longer drift.
+    // What genuinely diverges per engine stays on this class — the three
+    // engines' seam implementations are exactly where they were — bridged to
+    // the chassis through [volumeCommands]:
+    //  - the dispatch shell — [dispatchVolumeCommand] (ExoPlayer's
+    //    player-thread routing + no-player abort, mpv/libVLC's swallow-all
+    //    try/catch),
     //  - the native write mechanism (player.volume / setPropertyDouble /
     //    int-percent) — [applyNativeVolume],
     //  - the native current-level read (the delta base) — [readNativeVolume],
@@ -89,20 +95,9 @@ abstract class ReloadablePlayerEngine(
     //  - the mute-restore vocabulary — [nativeVolumeRestore],
     //  - the native mute FLAG (mpv only) — [applyNativeMuteFlag],
     //  - the mute-template gate — [muteTemplateEnabled],
-    //  - the system music-stream sync — the surface's syncSystemStream.
-    // Dispatch containment/threading stays here — [dispatchVolumeCommand].
-
-    @Volatile
-    protected var lastUnmuteVolume: Float = 1f
-
-    protected fun rememberUnmuteVolumeIfAudible(volume01: Float) {
-        if (volume01 > 0f) lastUnmuteVolume = volume01
-    }
-
-    protected fun snapshotSystemVolumeForMute() {
-        val sys = MediaStreamVolume.getNormalized(appContext)
-        if (sys > 0f) lastUnmuteVolume = sys
-    }
+    //  - the pre-mute snapshot source (the system music stream) — the seam's
+    //    preMuteSnapshotLevel,
+    //  - the system music-stream sync — the seam's syncSystemStream.
 
     /** Normalized boost ceiling for [PlaybackVolumePolicy.planLevel]. */
     protected open val volumeBoostCeiling: Float
@@ -160,45 +155,47 @@ abstract class ReloadablePlayerEngine(
         command()
     }
 
-    final override fun setVolume(value: Float, isUserChange: Boolean) = dispatchVolumeCommand {
-        VolumeCommandTemplates.setVolume(volumeCommands, value, isUserChange)
-    }
+    final override fun setVolume(value: Float, isUserChange: Boolean) = volumeChassis.setVolume(value, isUserChange)
 
-    final override fun increaseVolume(delta: Float) = dispatchVolumeCommand {
-        VolumeCommandTemplates.increaseVolume(volumeCommands, delta)
-    }
+    final override fun increaseVolume(delta: Float) = volumeChassis.increaseVolume(delta)
 
-    final override fun decreaseVolume(delta: Float) = dispatchVolumeCommand {
-        VolumeCommandTemplates.decreaseVolume(volumeCommands, delta)
-    }
+    final override fun decreaseVolume(delta: Float) = volumeChassis.decreaseVolume(delta)
 
-    final override fun setMuted(muted: Boolean) = dispatchVolumeCommand {
-        VolumeCommandTemplates.setMuted(volumeCommands, muted)
-    }
+    final override fun setMuted(muted: Boolean) = volumeChassis.setMuted(muted)
 
     /**
      * Bridges the protected adapter seams (kept exactly as they were — see the
-     * member KDocs above) to the shared template surface. The system
-     * music-stream sync is the Android-only surface here; the user-change
-     * capture stays a no-op — Android video deliberately stays on the system
-     * STREAM_MUSIC model and never arms the per-content-type memory (see
-     * VideoPlayerViewModel's volume-memory wiring, desktop-only).
+     * member KDocs above) to the chassis. The system music-stream sync is the
+     * Android-only surface here; the user-change capture stays a no-op —
+     * Android video deliberately stays on the system STREAM_MUSIC model and
+     * never arms the per-content-type memory (see VideoPlayerViewModel's
+     * volume-memory wiring, desktop-only).
      */
-    private val volumeCommands = object : VolumeCommandTemplates.NativeVolumeSurface {
+    private val volumeCommands = object : NativeVolumeSeam {
         override val volumeBoostCeiling: Float get() = this@ReloadablePlayerEngine.volumeBoostCeiling
-        override val rememberedUnmuteLevel: Float get() = this@ReloadablePlayerEngine.lastUnmuteVolume
         override val muteTemplateEnabled: Boolean get() = this@ReloadablePlayerEngine.muteTemplateEnabled()
         override fun readNativeVolume(): Float? = this@ReloadablePlayerEngine.readNativeVolume()
         override fun applyNativeVolume(normalized: Float) = this@ReloadablePlayerEngine.applyNativeVolume(normalized)
         override fun applyNativeMuteFlag(muted: Boolean) = this@ReloadablePlayerEngine.applyNativeMuteFlag(muted)
         override fun nativeVolumeRestore(muted: Boolean) = this@ReloadablePlayerEngine.nativeVolumeRestore(muted)
-        override fun rememberUnmuteVolume(level: Float) = rememberUnmuteVolumeIfAudible(level)
-        override fun snapshotVolumeForMute() = snapshotSystemVolumeForMute()
+        override fun preMuteSnapshotLevel(): Float = MediaStreamVolume.getNormalized(appContext)
         override fun syncSystemStream(normalized: Float) {
             MediaStreamVolume.setNormalized(appContext, normalized)
         }
         override fun onUserVolumeChanged(level: Float) {}
     }
+
+    /**
+     * The composed volume chassis: the templates + the dispatch containment +
+     * the unmute memory over [volumeCommands], dispatched through
+     * [dispatchVolumeCommand] so the engines' containment overrides keep
+     * their virtual dispatch. `protected` because ExoPlayer's release resets
+     * the chassis-owned memory ([VolumeCommandChassis.resetUnmuteMemory]).
+     */
+    protected val volumeChassis = VolumeCommandChassis(
+        native = volumeCommands,
+        dispatch = ::dispatchVolumeCommand,
+    )
 
     // ── positionFlow shell ──────────────────────────────────────────────────
 

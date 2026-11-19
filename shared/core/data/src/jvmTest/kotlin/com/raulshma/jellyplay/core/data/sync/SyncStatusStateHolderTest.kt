@@ -12,13 +12,13 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -29,31 +29,30 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 /**
  * Direct [SyncStatusStateHolder] tests — the five behaviors migrated from
  * HomeViewModelTest (sync-now gating, the entries flow, per-id resolution
  * caching) plus direct pins for the drain gate that the VM tests previously
  * exercised only through the offline→online transition. Plain kotlin.test +
- * inline Main dispatcher (the legacy suite's MainDispatcherRule, inlined —
- * jvmTest has no access to :core:testing) + MockK; the holder runs on its own
+ * the shared MainDispatcherRule fixture + MockK; the holder runs on its own
  * scope over the test scheduler, mirroring the production viewModelScope
  * hand-off (HomeRefresherTest pattern).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncStatusStateHolderTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var playbackOutboxRepository: PlaybackOutboxRepository
     private lateinit var playbackSyncScheduler: PlaybackSyncScheduler
@@ -68,7 +67,6 @@ class SyncStatusStateHolderTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         playbackOutboxRepository = mockk(relaxed = true)
         playbackSyncScheduler = mockk(relaxed = true)
         offlineFirstItemResolver = mockk(relaxed = true)
@@ -85,7 +83,6 @@ class SyncStatusStateHolderTest {
     @AfterTest
     fun stopHolder() {
         holderScope?.cancel()
-        Dispatchers.resetMain()
     }
 
     private fun TestScope.buildHolder(): SyncStatusStateHolder {

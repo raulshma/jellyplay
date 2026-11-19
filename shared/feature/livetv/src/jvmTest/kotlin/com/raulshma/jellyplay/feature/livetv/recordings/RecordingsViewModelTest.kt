@@ -4,33 +4,29 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RecordingsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: LiveTvApiClient
     private lateinit var mediaInfoApiClient: MediaInfoApiClient
@@ -39,7 +35,6 @@ class RecordingsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         mediaInfoApiClient = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
@@ -47,19 +42,14 @@ class RecordingsViewModelTest {
         viewModel = RecordingsViewModel(mediaRepository, mediaInfoApiClient, imageUrlProvider)
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun load_fetches_recordings_with_limit() = runTest(mainDispatcher) {
+    fun load_fetches_recordings_with_limit() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         coVerify { mediaRepository.getRecordings(limit = 24, isInProgress = null) }
     }
 
     @Test
-    fun load_populates_state_from_results() = runTest(mainDispatcher) {
+    fun load_populates_state_from_results() = runTest(mainDispatcherRule.testDispatcher) {
         val recordings = listOf(LiveTvRecording(id = "r1", name = "Recording 1"))
         coEvery { mediaRepository.getRecordings(any(), any()) } returns Result.success(recordings)
 
@@ -70,7 +60,7 @@ class RecordingsViewModelTest {
     }
 
     @Test
-    fun load_surfaces_error_when_getRecordings_fails() = runTest(mainDispatcher) {
+    fun load_surfaces_error_when_getRecordings_fails() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getRecordings(any(), any()) } returns Result.failure(RuntimeException("boom"))
         viewModel.load()
         advanceUntilIdle()
@@ -84,7 +74,7 @@ class RecordingsViewModelTest {
         LiveTvRecording(id = id, name = "Recording $id", seriesTimerId = seriesTimerId)
 
     @Test
-    fun showDeleteDialog_and_dismissDeleteDialog_round_trip() = runTest(mainDispatcher) {
+    fun showDeleteDialog_and_dismissDeleteDialog_round_trip() = runTest(mainDispatcherRule.testDispatcher) {
         val rec = recording("r1")
         viewModel.showDeleteDialog(rec)
         assertEquals(rec, viewModel.deleteConfirmation.item)
@@ -95,7 +85,7 @@ class RecordingsViewModelTest {
     }
 
     @Test
-    fun deleteRecording_deletes_then_reloads() = runTest(mainDispatcher) {
+    fun deleteRecording_deletes_then_reloads() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaInfoApiClient.deleteItem("r1") } returns Result.success(Unit)
         viewModel.showDeleteDialog(recording("r1"))
 
@@ -111,7 +101,7 @@ class RecordingsViewModelTest {
     }
 
     @Test
-    fun deleteRecording_cancels_the_series_timer_first_when_one_is_attached() = runTest(mainDispatcher) {
+    fun deleteRecording_cancels_the_series_timer_first_when_one_is_attached() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.cancelSeriesTimer("st-1") } returns Result.success(Unit)
         coEvery { mediaInfoApiClient.deleteItem("r1") } returns Result.success(Unit)
         viewModel.showDeleteDialog(recording("r1", seriesTimerId = "st-1"))
@@ -124,7 +114,7 @@ class RecordingsViewModelTest {
     }
 
     @Test
-    fun deleteRecording_failure_surfaces_the_error_and_keeps_the_dialog_open() = runTest(mainDispatcher) {
+    fun deleteRecording_failure_surfaces_the_error_and_keeps_the_dialog_open() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaInfoApiClient.deleteItem("r1") } returns Result.failure(RuntimeException("locked"))
         val rec = recording("r1")
         viewModel.showDeleteDialog(rec)
@@ -138,7 +128,7 @@ class RecordingsViewModelTest {
     }
 
     @Test
-    fun deleteRecording_without_a_pending_confirmation_is_a_no_op() = runTest(mainDispatcher) {
+    fun deleteRecording_without_a_pending_confirmation_is_a_no_op() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.deleteRecording()
         advanceUntilIdle()
 
@@ -146,7 +136,7 @@ class RecordingsViewModelTest {
     }
 
     @Test
-    fun dismissDeleteDialog_is_blocked_while_a_delete_is_in_flight() = runTest(mainDispatcher) {
+    fun dismissDeleteDialog_is_blocked_while_a_delete_is_in_flight() = runTest(mainDispatcherRule.testDispatcher) {
         // Park the delete inside the repository so isDeleting is observable.
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         coEvery { mediaInfoApiClient.deleteItem("r1") } coAnswers { gate.await(); Result.success(Unit) }

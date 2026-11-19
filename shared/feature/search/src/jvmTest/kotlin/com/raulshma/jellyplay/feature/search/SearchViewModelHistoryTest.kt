@@ -10,22 +10,19 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 /**
  * Pins [SearchViewModel.onSearchResultsShown]'s delegation to
@@ -50,11 +47,10 @@ class SearchViewModelHistoryTest {
             Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
     }
 
-
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module. runTest shares this scheduler so the
-    // viewModelScope work advances with advanceUntilIdle.
-    private val mainDispatcher = StandardTestDispatcher()
+    // runTest shares the rule dispatcher's scheduler so the viewModelScope
+    // work advances with advanceUntilIdle.
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val libraryFeed: LibraryFeed = mockk(relaxed = true)
     private val userDataChanges: UserDataChanges = mockk(relaxed = true)
@@ -70,7 +66,6 @@ class SearchViewModelHistoryTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { mediaSearchEngine.debounceMs } returns 300L
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
@@ -101,13 +96,8 @@ class SearchViewModelHistoryTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun `onSearchResultsShown persists query when it has at least 2 chars`() = runTest(mainDispatcher) {
+    fun `onSearchResultsShown persists query when it has at least 2 chars`() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onEvent(SearchUiEvent.SearchResultsShown("matrix"))
         advanceUntilIdle()
 
@@ -115,7 +105,7 @@ class SearchViewModelHistoryTest {
     }
 
     @Test
-    fun `onSearchResultsShown skips blank queries`() = runTest(mainDispatcher) {
+    fun `onSearchResultsShown skips blank queries`() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onEvent(SearchUiEvent.SearchResultsShown(""))
         advanceUntilIdle()
 

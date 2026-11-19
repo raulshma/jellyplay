@@ -13,12 +13,17 @@ import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.SeriesDownloadPolicyEntity
 import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.TimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -28,10 +33,12 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Pins the gh-181 policy/suggestion surface of [DownloadRepositoryImpl]: the
- * per-series override CRUD, the Ask-mode suggestion dedupe (only NEW ids are
- * upserted and counted), and the dead-state cleanup — a series whose last
- * download row is gone loses its override and its pending prompts.
+ * Pins the gh-181 policy/suggestion surface of [DownloadRepositoryImpl] plus
+ * its ADR-0015 extension: the per-series arm CRUD, the Ask-mode suggestion
+ * dedupe (only NEW ids are upserted and counted), the zero-rows un-arm rule
+ * and its watch-boundary verb split ([DownloadRepository.deleteDownload]'s
+ * keepSeriesArm), and the armed-series reads the check's universe union and
+ * the Downloads screen's armed list consume.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -91,10 +98,25 @@ class DownloadRepositoryImplPolicyTest {
 
     @Test
     fun `setSeriesPolicy upserts the mode name`() = runTest {
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns null
         repository().setSeriesPolicy("s1", AutoDownloadMode.ASK)
 
         coVerify(exactly = 1) {
             downloadPolicyDao.upsertPolicy(SeriesDownloadPolicyEntity(seriesId = "s1", mode = "ASK"))
+        }
+    }
+
+    @Test
+    fun `setSeriesPolicy carries over the cached arm display name`() = runTest {
+        // An upsert replaces the whole row — a sheet re-confirm must not blank
+        // the display name a download backfilled into the arm row.
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns
+            SeriesDownloadPolicyEntity("s1", "INSTANT", "Series One")
+
+        repository().setSeriesPolicy("s1", AutoDownloadMode.NEVER)
+
+        coVerify(exactly = 1) {
+            downloadPolicyDao.upsertPolicy(SeriesDownloadPolicyEntity("s1", "NEVER", "Series One"))
         }
     }
 
@@ -162,27 +184,117 @@ class DownloadRepositoryImplPolicyTest {
         coVerify(exactly = 1) { downloadPolicyDao.dismissSuggestions(listOf("ep-1", "ep-2"), any()) }
     }
 
-    // ── Dead-state cleanup (the delete/sweep paths' hook, tested directly —
-    // the shared deletion choreography it rides is mock-hostile: real Room
-    // transaction machinery over a mocked database) ──────────────────────
+    // ── ADR-0015: the zero-rows un-arm rule (one home on the store) ──────
 
     @Test
-    fun `a series with no downloads left loses its policy and suggestions`() = runTest {
+    fun `clearSeriesArmIfNoDownloads clears arm and prompts at zero rows`() = runTest {
         coEvery { downloadDao.getDownloadsForSeries("s1") } returns emptyList()
 
-        repository().maybeClearSeriesAutoDownloadState("s1")
+        repository().clearSeriesArmIfNoDownloads("s1")
 
         coVerify(exactly = 1) { downloadPolicyDao.deletePolicyBySeriesId("s1") }
         coVerify(exactly = 1) { downloadPolicyDao.deleteSuggestionsBySeriesId("s1") }
     }
 
     @Test
-    fun `a series with downloads remaining keeps its policy state`() = runTest {
+    fun `clearSeriesArmIfNoDownloads is a no-op while download rows remain`() = runTest {
         coEvery { downloadDao.getDownloadsForSeries("s1") } returns listOf(mockk(relaxed = true))
 
-        repository().maybeClearSeriesAutoDownloadState("s1")
+        repository().clearSeriesArmIfNoDownloads("s1")
 
         coVerify(exactly = 0) { downloadPolicyDao.deletePolicyBySeriesId(any()) }
         coVerify(exactly = 0) { downloadPolicyDao.deleteSuggestionsBySeriesId(any()) }
+    }
+
+    // ── ADR-0015: the delete verb's un-arm split ──────────────────────────
+    // The shared deletion choreography runs inline via the module's KMP
+    // withTransaction helper stub (the OfflineRepositoryImplArtworkTest
+    // idiom), so the full deleteDownload path is exercisable over mocks.
+
+    private fun stubTransactionInline() {
+        mockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+        coEvery { database.withTransaction(any<suspend () -> Any?>()) } coAnswers {
+            secondArg<suspend () -> Any?>().invoke()
+        }
+    }
+
+    private fun seriesEpisodeEntity(seriesId: String?) = DownloadEntity(
+        id = "dl-1",
+        mediaItemId = "ep-1",
+        name = "Episode",
+        mediaType = "EPISODE",
+        downloadPath = "",
+        downloadUrl = "https://stream/ep-1",
+        totalSizeBytes = 0L,
+        downloadedBytes = 0L,
+        status = DownloadStatus.PENDING.name,
+        seriesId = seriesId,
+    )
+
+    @Test
+    fun `deleteDownload default un-arms the series when its last row goes`() = runTest {
+        stubTransactionInline()
+        coEvery { downloadDao.getDownloadById("dl-1") } returns seriesEpisodeEntity(seriesId = "s1")
+        coEvery { downloadDao.getDownloadsForSeries("s1") } returns emptyList()
+
+        repository().deleteDownload("dl-1")
+
+        coVerify(exactly = 1) { downloadPolicyDao.deletePolicyBySeriesId("s1") }
+        coVerify(exactly = 1) { downloadPolicyDao.deleteSuggestionsBySeriesId("s1") }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
+
+    @Test
+    fun `deleteDownload keepSeriesArm=true keeps the arm through watch-boundary hygiene`() = runTest {
+        stubTransactionInline()
+        coEvery { downloadDao.getDownloadById("dl-1") } returns seriesEpisodeEntity(seriesId = "s1")
+
+        repository().deleteDownload("dl-1", keepSeriesArm = true)
+
+        // The ADR-0015 watch-boundary contract: the deletion runs (the row's
+        // cascade is the deletionCore's) but the arm + prompts survive so the
+        // series stays in the check's universe at zero rows.
+        coVerify(exactly = 0) { downloadPolicyDao.deletePolicyBySeriesId(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.deleteSuggestionsBySeriesId(any()) }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
+
+    @Test
+    fun `deleteDownload of a series-less row never consults the arm table`() = runTest {
+        stubTransactionInline()
+        coEvery { downloadDao.getDownloadById("dl-1") } returns seriesEpisodeEntity(seriesId = null)
+
+        repository().deleteDownload("dl-1")
+
+        coVerify(exactly = 0) { downloadPolicyDao.deletePolicyBySeriesId(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.deleteSuggestionsBySeriesId(any()) }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
+
+    // ── ADR-0015: the armed-series reads ──────────────────────────────
+
+    @Test
+    fun `armedSeriesIds and observeArmedSeries surface parseable arms with raw modes`() = runTest {
+        every { downloadPolicyDao.observePolicies() } returns flowOf(
+            listOf(
+                SeriesDownloadPolicyEntity("s1", "FOLLOW_GLOBAL", "Series One"),
+                SeriesDownloadPolicyEntity("s2", "NEVER"),
+                // A name this build cannot parse must stay inert: it joins
+                // neither the universe nor the armed list (fail-safe).
+                SeriesDownloadPolicyEntity("s3", "FUTURE_MODE"),
+            ),
+        )
+        val repo = repository()
+
+        assertEquals(listOf("s1", "s2"), repo.armedSeriesIds())
+
+        val arms = repo.observeArmedSeries().first()
+        assertEquals(
+            listOf(
+                SeriesDownloadArm("s1", AutoDownloadMode.FOLLOW_GLOBAL, "Series One"),
+                SeriesDownloadArm("s2", AutoDownloadMode.NEVER, ""),
+            ),
+            arms,
+        )
     }
 }

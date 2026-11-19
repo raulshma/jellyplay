@@ -128,14 +128,18 @@ object DownloadsPreferenceSpecs {
          * auto-download was on, which maps to INSTANT. The write is the
          * cross-key invariant that mirrors the mode onto the
          * [AUTO_DOWNLOAD_NEW_EPISODES] boolean beside it, so encode stays
-         * null (see the object KDoc's opt-outs).
+         * null (see the object KDoc's opt-outs). FOLLOW_GLOBAL (the ADR-0015
+         * series-row sentinel, never a legal global value) decodes to null and
+         * falls through the same boolean-mirror derivation, so a stale byte
+         * under this key cannot surface as the sentinel — the setter clamp
+         * owns the write side.
          */
         PreferenceSpec.derived(
             keyName = "auto_download_mode",
             default = AutoDownloadMode.NEVER,
             resetCategory = PreferenceResetCategory.DOWNLOADS_NETWORK,
             read = { prefs, raw ->
-                raw.toEnumOrNull<AutoDownloadMode>() ?: run {
+                raw.toEnumOrNull<AutoDownloadMode>()?.takeIf { it != AutoDownloadMode.FOLLOW_GLOBAL } ?: run {
                     if (AUTO_DOWNLOAD_NEW_EPISODES.readStored(prefs)) {
                         AutoDownloadMode.INSTANT
                     } else {

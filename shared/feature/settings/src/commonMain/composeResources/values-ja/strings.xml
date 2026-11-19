@@ -422,6 +422,7 @@
     <string name="settings_download_storage_location_subtitle">ダウンロードしたメディアを保存するフォルダパス</string>
     <string name="settings_storage_internal">内部ストレージ</string>
     <string name="settings_storage_external">外部 SD カード</string>
+    <string name="settings_storage_builtin_external">外部ストレージ（内蔵）</string>
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">視聴後に削除</string>

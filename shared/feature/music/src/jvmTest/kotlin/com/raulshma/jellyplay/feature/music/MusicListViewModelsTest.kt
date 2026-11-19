@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.albums.AlbumsViewModel
 import com.raulshma.jellyplay.feature.music.artists.ArtistsViewModel
 import com.raulshma.jellyplay.feature.music.browse.MusicBrowseViewModel
@@ -25,18 +26,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import org.junit.Rule
 
 /**
  * Shared harness for the small music list ViewModels (playlists, browse,
@@ -47,9 +45,8 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaylistsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val playlistRepository: PlaylistRepository = mockk()
 
@@ -62,18 +59,12 @@ class PlaylistsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         coEvery { playlistRepository.getPlaylists(100) } returns Result.success(playlists)
         viewModel = PlaylistsViewModel(playlistRepository)
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun init_loadsPlaylists() = runTest(mainDispatcher) {
+    fun init_loadsPlaylists() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         assertEquals(playlists, viewModel.playlists.value)
@@ -82,7 +73,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun load_failure_setsError() = runTest(mainDispatcher) {
+    fun load_failure_setsError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.getPlaylists(100) } returns Result.failure(RuntimeException("boom"))
 
         viewModel.load()
@@ -93,7 +84,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun openEditDialog_readOnlyPlaylist_setsErrorAndKeepsDialogClosed() = runTest(mainDispatcher) {
+    fun openEditDialog_readOnlyPlaylist_setsErrorAndKeepsDialogClosed() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.openEditDialog(playlists[1])
@@ -103,7 +94,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun openEditDialog_editablePlaylist_opensDialog() = runTest(mainDispatcher) {
+    fun openEditDialog_editablePlaylist_opensDialog() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.openEditDialog(playlists[0])
@@ -112,7 +103,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun createPlaylist_blankName_isIgnored() = runTest(mainDispatcher) {
+    fun createPlaylist_blankName_isIgnored() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.createPlaylist("   ", "overview")
@@ -122,7 +113,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun createPlaylist_success_closesDialogAndReloads() = runTest(mainDispatcher) {
+    fun createPlaylist_success_closesDialogAndReloads() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         coEvery { playlistRepository.createPlaylist("New", null, any(), any()) } returns Result.success("id1")
 
@@ -136,7 +127,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun createPlaylist_failure_setsFallbackErrorAndKeepsDialogOpen() = runTest(mainDispatcher) {
+    fun createPlaylist_failure_setsFallbackErrorAndKeepsDialogOpen() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         coEvery { playlistRepository.createPlaylist("New", null, any(), any()) } returns
             Result.failure(RuntimeException())
@@ -153,7 +144,7 @@ class PlaylistsViewModelTest {
     // ── Delete dialog + mutation ─────────────────────────────────────────────
 
     @Test
-    fun openDeleteDialog_readOnlyPlaylist_setsErrorAndKeepsDialogClosed() = runTest(mainDispatcher) {
+    fun openDeleteDialog_readOnlyPlaylist_setsErrorAndKeepsDialogClosed() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.openDeleteDialog(playlists[1])
@@ -163,7 +154,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun openDeleteDialog_deletablePlaylist_opensDialog() = runTest(mainDispatcher) {
+    fun openDeleteDialog_deletablePlaylist_opensDialog() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.openDeleteDialog(playlists[0])
@@ -172,7 +163,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun dismissDialog_returnsToNone() = runTest(mainDispatcher) {
+    fun dismissDialog_returnsToNone() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         viewModel.openCreateDialog()
 
@@ -182,7 +173,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun deletePlaylist_success_closesDialogAndReloads() = runTest(mainDispatcher) {
+    fun deletePlaylist_success_closesDialogAndReloads() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         coEvery { playlistRepository.deletePlaylist("pl1") } returns Result.success(Unit)
 
@@ -196,7 +187,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun deletePlaylist_failure_setsFallbackError() = runTest(mainDispatcher) {
+    fun deletePlaylist_failure_setsFallbackError() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         coEvery { playlistRepository.deletePlaylist("pl1") } returns Result.failure(RuntimeException("locked"))
 
@@ -210,7 +201,7 @@ class PlaylistsViewModelTest {
     // ── Update (rename) ──────────────────────────────────────────────────────
 
     @Test
-    fun updatePlaylist_blankName_isIgnored() = runTest(mainDispatcher) {
+    fun updatePlaylist_blankName_isIgnored() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.updatePlaylist("pl1", "   ", "overview")
@@ -220,7 +211,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun updatePlaylist_success_trimsWritesClosesDialogAndReloads() = runTest(mainDispatcher) {
+    fun updatePlaylist_success_trimsWritesClosesDialogAndReloads() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         coEvery { playlistRepository.updatePlaylist("pl1", "Renamed", null, any()) } returns Result.success(Unit)
 
@@ -235,7 +226,7 @@ class PlaylistsViewModelTest {
     }
 
     @Test
-    fun updatePlaylist_failure_setsFallbackError() = runTest(mainDispatcher) {
+    fun updatePlaylist_failure_setsFallbackError() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         coEvery { playlistRepository.updatePlaylist(any(), any(), any(), any()) } returns
             Result.failure(RuntimeException())
@@ -250,7 +241,7 @@ class PlaylistsViewModelTest {
     // ── Error lifecycle ──────────────────────────────────────────────────────
 
     @Test
-    fun clearError_resetsTheErrorState() = runTest(mainDispatcher) {
+    fun clearError_resetsTheErrorState() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         viewModel.openEditDialog(playlists[1]) // read-only → error
         assertEquals(PlaylistCommandError.Declared.ReadOnly, viewModel.commandError)
@@ -263,9 +254,8 @@ class PlaylistsViewModelTest {
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MusicBrowseViewModelTest {
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val libraryFeed: LibraryFeed = mockk()
     private val playlistRepository: PlaylistRepository = mockk()
@@ -275,7 +265,6 @@ class MusicBrowseViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
         coEvery { libraryFeed.getGenres(null, false) } returns
@@ -284,27 +273,22 @@ class MusicBrowseViewModelTest {
         viewModel = MusicBrowseViewModel(libraryFeed, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun init_loadsGenres() = runTest(mainDispatcher) {
+    fun init_loadsGenres() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         assertEquals(listOf(Genre(id = "g1", name = "Rock")), viewModel.genres.value)
     }
 
     @Test
-    fun init_loadsPlaylists() = runTest(mainDispatcher) {
+    fun init_loadsPlaylists() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         assertEquals(emptyList(), viewModel.playlists.value)
     }
 
     @Test
-    fun setAlbumSort_updatesSortFlow() = runTest(mainDispatcher) {
+    fun setAlbumSort_updatesSortFlow() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.setAlbumSort(MusicSortOption.DATE_ADDED)
@@ -313,7 +297,7 @@ class MusicBrowseViewModelTest {
     }
 
     @Test
-    fun perTabSorts_stayIndependent() = runTest(mainDispatcher) {
+    fun perTabSorts_stayIndependent() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.setArtistSort(MusicSortOption.YEAR)
@@ -326,7 +310,7 @@ class MusicBrowseViewModelTest {
     }
 
     @Test
-    fun pagedStreams_queryPerMediaTypeWithTheTabSort() = runTest(mainDispatcher) {
+    fun pagedStreams_queryPerMediaTypeWithTheTabSort() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         // Each tab is a distinct flatMapLatest generation over its own media
@@ -371,7 +355,7 @@ class MusicBrowseViewModelTest {
     }
 
     @Test
-    fun setTrackSort_requeriesTheTrackPager() = runTest(mainDispatcher) {
+    fun setTrackSort_requeriesTheTrackPager() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.setTrackSort(MusicSortOption.YEAR)
@@ -400,7 +384,7 @@ class MusicBrowseViewModelTest {
     // ── List-sourced tab ladders (SimpleListCollection; the pages' declared gain) ──
 
     @Test
-    fun genresFailure_surfacesTheFailureAndClearsLoading() = runTest(mainDispatcher) {
+    fun genresFailure_surfacesTheFailureAndClearsLoading() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { libraryFeed.getGenres(null, false) } returns Result.failure(RuntimeException())
         val failing = MusicBrowseViewModel(libraryFeed, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
@@ -414,7 +398,7 @@ class MusicBrowseViewModelTest {
     }
 
     @Test
-    fun playlistsFailure_setsErrorAndClearsLoading() = runTest(mainDispatcher) {
+    fun playlistsFailure_setsErrorAndClearsLoading() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { playlistRepository.getPlaylists() } returns Result.failure(RuntimeException("no pl"))
         val failing = MusicBrowseViewModel(libraryFeed, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
@@ -424,7 +408,7 @@ class MusicBrowseViewModelTest {
     }
 
     @Test
-    fun refreshGenres_forcesTheServerRead() = runTest(mainDispatcher) {
+    fun refreshGenres_forcesTheServerRead() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
         coEvery { libraryFeed.getGenres(null, true) } returns Result.success(emptyList())
 
@@ -437,7 +421,7 @@ class MusicBrowseViewModelTest {
     }
 
     @Test
-    fun refreshPlaylists_requeriesThePlaylistSource() = runTest(mainDispatcher) {
+    fun refreshPlaylists_requeriesThePlaylistSource() = runTest(mainDispatcherRule.testDispatcher) {
         advanceUntilIdle()
 
         viewModel.refreshPlaylists()
@@ -451,9 +435,8 @@ class MusicBrowseViewModelTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlbumsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
@@ -462,15 +445,9 @@ class AlbumsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
         viewModel = AlbumsViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     @Test
@@ -493,9 +470,8 @@ class AlbumsViewModelTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArtistsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
@@ -504,15 +480,9 @@ class ArtistsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
         viewModel = ArtistsViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     @Test
@@ -535,9 +505,8 @@ class ArtistsViewModelTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class GenresViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val libraryFeed: LibraryFeed = mockk()
 
@@ -545,15 +514,6 @@ class GenresViewModelTest {
 
     private val genres = listOf(Genre(id = "g1", name = "Rock"), Genre(id = "g2", name = "Jazz"))
 
-    @BeforeTest
-    fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
 
     /**
      * viewModelScope runs on `Dispatchers.Main.immediate`, which under the test
@@ -566,7 +526,7 @@ class GenresViewModelTest {
     }
 
     @Test
-    fun init_loadsGenresAndClearsLoading() = runTest(mainDispatcher) {
+    fun init_loadsGenresAndClearsLoading() = runTest(mainDispatcherRule.testDispatcher) {
         createViewModel(Result.success(genres))
         advanceUntilIdle()
 
@@ -576,7 +536,7 @@ class GenresViewModelTest {
     }
 
     @Test
-    fun load_failure_surfacesTheThrowable() = runTest(mainDispatcher) {
+    fun load_failure_surfacesTheThrowable() = runTest(mainDispatcherRule.testDispatcher) {
         // Null exception message → the failure itself surfaces; the ladder
         // renders the GENRES kind's declared fallback at render time.
         createViewModel(Result.failure(RuntimeException()))
@@ -589,7 +549,7 @@ class GenresViewModelTest {
     }
 
     @Test
-    fun refresh_forcesReload() = runTest(mainDispatcher) {
+    fun refresh_forcesReload() = runTest(mainDispatcherRule.testDispatcher) {
         createViewModel(Result.success(genres))
         advanceUntilIdle()
         coEvery { libraryFeed.getGenres(null, true) } returns Result.success(genres)

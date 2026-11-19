@@ -4,37 +4,25 @@ import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MediaInfoViewModelTest {
 
-    // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
-    @BeforeTest
-    fun setUpMainDispatcher() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDownMainDispatcher() {
-        Dispatchers.resetMain()
-    }
 
     private lateinit var detailFeed: DetailFeed
     private lateinit var viewModel: MediaInfoViewModel
@@ -51,7 +39,7 @@ class MediaInfoViewModelTest {
     }
 
     @Test
-    fun `load success emits Success with detail`() = runTest(mainDispatcher) {
+    fun `load success emits Success with detail`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val detail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(detail)
@@ -65,7 +53,7 @@ class MediaInfoViewModelTest {
     }
 
     @Test
-    fun `load failure emits Error with message`() = runTest(mainDispatcher) {
+    fun `load failure emits Error with message`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(RuntimeException("boom"))
 
@@ -78,7 +66,7 @@ class MediaInfoViewModelTest {
     }
 
     @Test
-    fun `load failure with null message falls back to generic error`() = runTest(mainDispatcher) {
+    fun `load failure with null message falls back to generic error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(RuntimeException())
 
@@ -90,7 +78,7 @@ class MediaInfoViewModelTest {
     }
 
     @Test
-    fun `load resets prior Success state to Loading then resolves`() = runTest(mainDispatcher) {
+    fun `load resets prior Success state to Loading then resolves`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),

@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_username_required
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_login_failed
@@ -16,19 +17,15 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 
@@ -44,27 +41,22 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var authRepository: AuthRepository
     private lateinit var viewModel: AuthViewModel
 
     @Before
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         authRepository = mockk()
         every { authRepository.servers } returns MutableStateFlow(emptyList())
         every { authRepository.currentServerUsers } returns MutableStateFlow(emptyList())
         viewModel = AuthViewModel(authRepository)
     }
 
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun quickConnect_disabled_returnsError() = runTest(testDispatcher) {
+    fun quickConnect_disabled_returnsError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(false)
 
         viewModel.startQuickConnect("http://server")
@@ -79,7 +71,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun quickConnect_enabledCheckFails_returnsErrorWithRawExceptionMessage() = runTest(testDispatcher) {
+    fun quickConnect_enabledCheckFails_returnsErrorWithRawExceptionMessage() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.failure(RuntimeException("boom"))
 
         viewModel.startQuickConnect("http://server")
@@ -96,7 +88,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun quickConnect_enabledCheckFails_withoutMessage_usesResourceFallback() = runTest(testDispatcher) {
+    fun quickConnect_enabledCheckFails_withoutMessage_usesResourceFallback() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.failure(RuntimeException())
 
         viewModel.startQuickConnect("http://server")
@@ -111,7 +103,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun quickConnect_initiateFails_returnsError() = runTest(testDispatcher) {
+    fun quickConnect_initiateFails_returnsError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.failure(RuntimeException("no auth"))
 
@@ -123,7 +115,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun quickConnect_pollAuthenticated_completesSuccess() = runTest(testDispatcher) {
+    fun quickConnect_pollAuthenticated_completesSuccess() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.success(
             QuickConnectInfo(secret = "secret", code = "CODE")
@@ -144,7 +136,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun quickConnect_pollNeverAuthenticated_timesOut() = runTest(testDispatcher) {
+    fun quickConnect_pollNeverAuthenticated_timesOut() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.success(
             QuickConnectInfo(secret = "secret", code = "CODE")
@@ -165,7 +157,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun quickConnect_pollFails_returnsError() = runTest(testDispatcher) {
+    fun quickConnect_pollFails_returnsError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.success(
             QuickConnectInfo(secret = "secret", code = "CODE")
@@ -179,7 +171,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun quickConnect_loginFails_returnsAuthError() = runTest(testDispatcher) {
+    fun quickConnect_loginFails_returnsAuthError() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.success(
             QuickConnectInfo(secret = "secret", code = "CODE")
@@ -205,7 +197,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun quickConnect_loginThrows_foldsIntoAuthError_insteadOfCrashing() = runTest(testDispatcher) {
+    fun quickConnect_loginThrows_foldsIntoAuthError_insteadOfCrashing() = runTest(mainDispatcherRule.testDispatcher) {
         // The M2 pin (2026-11-17 regression analysis): persistSession throws
         // IllegalStateException through the repo's .onSuccess on a cipher
         // failure (wiped/rotated Keystore) — the network auth visibly
@@ -234,7 +226,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun cancelQuickConnect_resetsToIdle() = runTest(testDispatcher) {
+    fun cancelQuickConnect_resetsToIdle() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
         coEvery { authRepository.initiateQuickConnect() } returns Result.success(
             QuickConnectInfo(secret = "secret", code = "CODE")
@@ -273,7 +265,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun login_failure_parksTypedServerError_andSettlesPhaseToIdle() = runTest(testDispatcher) {
+    fun login_failure_parksTypedServerError_andSettlesPhaseToIdle() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.login("http://server", "u", "p") } returns
             Result.failure(RuntimeException("bad creds"))
         var result: Result<Unit>? = null
@@ -290,7 +282,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun login_failureWithoutMessage_usesLocalizedFallback() = runTest(testDispatcher) {
+    fun login_failureWithoutMessage_usesLocalizedFallback() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.login("http://server", "u", "p") } returns
             Result.failure(IllegalStateException())
 
@@ -304,7 +296,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun login_thrownRepositoryRead_foldsToFailure_andSettlesPhase() = runTest(testDispatcher) {
+    fun login_thrownRepositoryRead_foldsToFailure_andSettlesPhase() = runTest(mainDispatcherRule.testDispatcher) {
         // The getUsersForServer eternal-spinner class: a thrown read must not
         // strand the machine in Submitting forever — it folds into the
         // failure path so the phase settles and the error surfaces.
@@ -323,7 +315,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun login_success_settlesPhaseBeforeCallback() = runTest(testDispatcher) {
+    fun login_success_settlesPhaseBeforeCallback() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { authRepository.login("http://server", "u", "p") } returns Result.success(mockk<UserInfo>())
         var phaseAtCallback: LoginPhase? = null
         var errorAtCallback: LoginError? = null
@@ -341,7 +333,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun login_submitWhileSubmitting_isDropped() = runTest(testDispatcher) {
+    fun login_submitWhileSubmitting_isDropped() = runTest(mainDispatcherRule.testDispatcher) {
         val gate = CompletableDeferred<Unit>()
         coEvery { authRepository.login("http://server", "u", "p") } coAnswers {
             gate.await()
@@ -365,7 +357,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun loginError_setAndClear_byScreenIntents() = runTest(testDispatcher) {
+    fun loginError_setAndClear_byScreenIntents() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.setLoginFieldError(
             LoginFieldError.USERNAME,
             UiMessage.Resource(Res.string.auth_error_username_required),

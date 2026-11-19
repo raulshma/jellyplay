@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.SyncPlayQueueUpdateData
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.Res
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_error_create_group
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_error_join_group
@@ -20,20 +21,15 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,6 +38,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 /**
  * SyncPlay ViewModel coverage (downloads conveyor test style): group loading
@@ -52,10 +49,8 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncPlayViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (downloads/music/livetv conveyor port
-    // pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: SyncPlayRepository
     private lateinit var syncPlaySession: SyncPlaySession
@@ -69,7 +64,6 @@ class SyncPlayViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
         syncPlaySession = mockk()
         syncPlayCastStore = mockk()
@@ -81,11 +75,6 @@ class SyncPlayViewModelTest {
         every { syncPlaySession.lastReconnectMs } returns 0L
         every { syncPlayCastStore.syncPlayCast } returns castPrefs
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun newViewModel() = SyncPlayViewModel(
@@ -155,7 +144,7 @@ class SyncPlayViewModelTest {
     // ── group loading ─────────────────────────────────────────────────────
 
     @Test
-    fun init_loads_groups_and_clears_loading() = runTest(mainDispatcher) {
+    fun init_loads_groups_and_clears_loading() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group("g1")))
 
         val viewModel = newViewModel()
@@ -169,7 +158,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun init_load_failure_without_message_falls_back_to_resource() = runTest(mainDispatcher) {
+    fun init_load_failure_without_message_falls_back_to_resource() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getSyncPlayGroups() } returns
             Result.failure(RuntimeException(null as String?))
 
@@ -184,7 +173,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun init_load_failure_with_message_maps_to_raw() = runTest(mainDispatcher) {
+    fun init_load_failure_with_message_maps_to_raw() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.failure(RuntimeException("boom"))
 
         val viewModel = newViewModel()
@@ -196,7 +185,7 @@ class SyncPlayViewModelTest {
     // ── join behaviour preference fan-out ────────────────────────────────
 
     @Test
-    fun auto_accept_invites_joins_first_group_on_load() = runTest(mainDispatcher) {
+    fun auto_accept_invites_joins_first_group_on_load() = runTest(mainDispatcherRule.testDispatcher) {
         castPrefs.value = SyncPlayCastSlice(syncPlayAutoAcceptInvites = true)
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group("g1"), group("g2")))
         joinActive("g1")
@@ -210,7 +199,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun reopen_while_already_in_a_group_shows_in_group_and_never_auto_joins() = runTest(mainDispatcher) {
+    fun reopen_while_already_in_a_group_shows_in_group_and_never_auto_joins() = runTest(mainDispatcherRule.testDispatcher) {
         // The session is live (joined elsewhere — the player bridge or a
         // previous screen); the screen re-opens on top of it.
         seedActiveGroup("g1", groupName = "Party")
@@ -230,7 +219,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun without_auto_accept_no_group_is_joined_automatically() = runTest(mainDispatcher) {
+    fun without_auto_accept_no_group_is_joined_automatically() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group("g1")))
 
         val viewModel = newViewModel()
@@ -241,7 +230,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun requestJoin_always_join_joins_immediately() = runTest(mainDispatcher) {
+    fun requestJoin_always_join_joins_immediately() = runTest(mainDispatcherRule.testDispatcher) {
         castPrefs.value = SyncPlayCastSlice(syncPlayJoinBehavior = SyncPlayJoinBehavior.ALWAYS_JOIN)
         joinActive("g1")
         val viewModel = newViewModel()
@@ -255,7 +244,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun requestJoin_ask_surfaces_pendingJoin_without_joining() = runTest(mainDispatcher) {
+    fun requestJoin_ask_surfaces_pendingJoin_without_joining() = runTest(mainDispatcherRule.testDispatcher) {
         castPrefs.value = SyncPlayCastSlice(syncPlayJoinBehavior = SyncPlayJoinBehavior.ASK)
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -267,7 +256,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun requestJoin_never_join_emits_disabled_notification() = runTest(mainDispatcher) {
+    fun requestJoin_never_join_emits_disabled_notification() = runTest(mainDispatcherRule.testDispatcher) {
         castPrefs.value = SyncPlayCastSlice(syncPlayJoinBehavior = SyncPlayJoinBehavior.NEVER_JOIN)
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -287,7 +276,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun confirmJoin_clears_pending_and_joins() = runTest(mainDispatcher) {
+    fun confirmJoin_clears_pending_and_joins() = runTest(mainDispatcherRule.testDispatcher) {
         castPrefs.value = SyncPlayCastSlice(syncPlayJoinBehavior = SyncPlayJoinBehavior.ASK)
         joinActive("g1")
         val viewModel = newViewModel()
@@ -303,7 +292,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun cancelJoin_clears_pending_without_joining() = runTest(mainDispatcher) {
+    fun cancelJoin_clears_pending_without_joining() = runTest(mainDispatcherRule.testDispatcher) {
         castPrefs.value = SyncPlayCastSlice(syncPlayJoinBehavior = SyncPlayJoinBehavior.ASK)
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -318,7 +307,7 @@ class SyncPlayViewModelTest {
     // ── join / leave flows ────────────────────────────────────────────────
 
     @Test
-    fun joinGroup_success_sets_in_group_and_loads_current_group() = runTest(mainDispatcher) {
+    fun joinGroup_success_sets_in_group_and_loads_current_group() = runTest(mainDispatcherRule.testDispatcher) {
         joinActive("g1", groupName = "Party")
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -333,7 +322,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun joinGroup_failure_falls_back_to_resource_and_raw_message() = runTest(mainDispatcher) {
+    fun joinGroup_failure_falls_back_to_resource_and_raw_message() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
         coEvery { syncPlaySession.joinGroup("g1") } returns Result.failure(RuntimeException(null as String?))
@@ -353,7 +342,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun leaveGroup_success_resets_state_and_reloads_groups() = runTest(mainDispatcher) {
+    fun leaveGroup_success_resets_state_and_reloads_groups() = runTest(mainDispatcherRule.testDispatcher) {
         joinActive("g1")
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -373,7 +362,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun leaveGroup_failure_maps_error() = runTest(mainDispatcher) {
+    fun leaveGroup_failure_maps_error() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
         coEvery { syncPlaySession.leaveGroup() } returns Result.failure(RuntimeException(null as String?))
@@ -392,7 +381,7 @@ class SyncPlayViewModelTest {
     // old delay(500) + name-match is gone), and the VM only writes state.
 
     @Test
-    fun createGroup_success_applies_membership_state_on_the_deepened_call() = runTest(mainDispatcher) {
+    fun createGroup_success_applies_membership_state_on_the_deepened_call() = runTest(mainDispatcherRule.testDispatcher) {
         seedActiveGroup("g9", groupName = "Party")
         coEvery { mediaRepository.createSyncPlayGroup("Party") } returns
             Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
@@ -411,7 +400,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun createGroup_success_needs_no_artificial_wait_before_the_state_lands() = runTest(mainDispatcher) {
+    fun createGroup_success_needs_no_artificial_wait_before_the_state_lands() = runTest(mainDispatcherRule.testDispatcher) {
         seedActiveGroup("g9", groupName = "Party")
         coEvery { mediaRepository.createSyncPlayGroup("Party") } returns
             Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
@@ -431,7 +420,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun createGroup_failure_falls_back_to_resource() = runTest(mainDispatcher) {
+    fun createGroup_failure_falls_back_to_resource() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { mediaRepository.createSyncPlayGroup("Party") } returns
             Result.failure(RuntimeException(null as String?))
         val viewModel = newViewModel()
@@ -451,7 +440,7 @@ class SyncPlayViewModelTest {
     // ── WebSocket event projection ────────────────────────────────────────
 
     @Test
-    fun playQueueUpdate_synthesizes_group_info_when_absent() = runTest(mainDispatcher) {
+    fun playQueueUpdate_synthesizes_group_info_when_absent() = runTest(mainDispatcherRule.testDispatcher) {
         joinActive("g1")
         // Group info fetch fails → currentGroup stays null until the event.
         coEvery { mediaRepository.getSyncPlayInfo("g1") } returns Result.failure(RuntimeException("offline"))
@@ -471,7 +460,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun stateUpdate_toggles_isPlaying_on_current_group() = runTest(mainDispatcher) {
+    fun stateUpdate_toggles_isPlaying_on_current_group() = runTest(mainDispatcherRule.testDispatcher) {
         joinActive("g1", isPlaying = false)
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -486,7 +475,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun non_empty_groupUpdate_refreshes_current_group() = runTest(mainDispatcher) {
+    fun non_empty_groupUpdate_refreshes_current_group() = runTest(mainDispatcherRule.testDispatcher) {
         joinActive("g1")
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -501,7 +490,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun empty_groupUpdate_after_grace_window_marks_group_left() = runTest(mainDispatcher) {
+    fun empty_groupUpdate_after_grace_window_marks_group_left() = runTest(mainDispatcherRule.testDispatcher) {
         joinActive("g1")
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -517,7 +506,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun empty_groupUpdate_within_reconnect_grace_keeps_group() = runTest(mainDispatcher) {
+    fun empty_groupUpdate_within_reconnect_grace_keeps_group() = runTest(mainDispatcherRule.testDispatcher) {
         joinActive("g1")
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -535,7 +524,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun groupLeft_event_clears_membership_mirror_and_rearms_the_poll() = runTest(mainDispatcher) {
+    fun groupLeft_event_clears_membership_mirror_and_rearms_the_poll() = runTest(mainDispatcherRule.testDispatcher) {
         joinActive("g1")
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -556,16 +545,16 @@ class SyncPlayViewModelTest {
         // re-arming the group-list poll from the base gap (the leaveGroup path's
         // restart semantics — the poll start/stop pattern above).
         viewModel.startGroupAutoRefresh()
-        mainDispatcher.scheduler.advanceTimeBy(5_000)
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_000)
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
         coVerify(exactly = 2) { mediaRepository.getSyncPlayGroups() }
         viewModel.stopGroupAutoRefresh()
-        mainDispatcher.scheduler.advanceUntilIdle()
+        mainDispatcherRule.testDispatcher.scheduler.advanceUntilIdle()
         coVerify(exactly = 2) { mediaRepository.getSyncPlayGroups() } // nothing further
     }
 
     @Test
-    fun notification_event_emits_raw_message() = runTest(mainDispatcher) {
+    fun notification_event_emits_raw_message() = runTest(mainDispatcherRule.testDispatcher) {
         joinActive("g1")
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -588,7 +577,7 @@ class SyncPlayViewModelTest {
     // delegates to SyncPlayController.safe()).
 
     @Test
-    fun togglePlayback_pauses_when_playing_unpauses_when_paused() = runTest(mainDispatcher) {
+    fun togglePlayback_pauses_when_playing_unpauses_when_paused() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { syncPlaySession.pause() } returns Unit
         coEvery { syncPlaySession.unpause() } returns Unit
         joinActive("g1", isPlaying = true)
@@ -610,7 +599,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun togglePlayback_without_current_group_is_a_noop() = runTest(mainDispatcher) {
+    fun togglePlayback_without_current_group_is_a_noop() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -622,7 +611,7 @@ class SyncPlayViewModelTest {
     }
 
     @Test
-    fun transport_actions_delegate_to_session() = runTest(mainDispatcher) {
+    fun transport_actions_delegate_to_session() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { syncPlaySession.seek(123L) } returns Unit
         coEvery { syncPlaySession.stop() } returns Unit
         coEvery { syncPlaySession.setRepeatMode(SyncPlayRepeatMode.REPEAT_ALL) } returns Unit
@@ -648,7 +637,7 @@ class SyncPlayViewModelTest {
     // ── misc state ────────────────────────────────────────────────────────
 
     @Test
-    fun refreshGroups_updates_list_and_surfaces_failure_as_error() = runTest(mainDispatcher) {
+    fun refreshGroups_updates_list_and_surfaces_failure_as_error() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -669,7 +658,7 @@ class SyncPlayViewModelTest {
     // ── group-list backoff poll (the refresh cycle module) ────────────────
 
     @Test
-    fun groupAutoRefresh_polls_on_the_5s_to_30s_backoff_and_stops() = runTest(mainDispatcher) {
+    fun groupAutoRefresh_polls_on_the_5s_to_30s_backoff_and_stops() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
         coVerify(exactly = 1) { mediaRepository.getSyncPlayGroups() } // the init load
@@ -677,37 +666,37 @@ class SyncPlayViewModelTest {
         // NOTE: no advanceUntilIdle until the stop — the cycle is a
         // self-rescheduling loop, which would spin the idle-advance forever.
         viewModel.startGroupAutoRefresh()
-        mainDispatcher.scheduler.advanceTimeBy(5_000)
-        mainDispatcher.scheduler.runCurrent() // poll 1 — the base gap
-        mainDispatcher.scheduler.advanceTimeBy(7_500) // 5s * 1.5
-        mainDispatcher.scheduler.runCurrent() // poll 2
-        mainDispatcher.scheduler.advanceTimeBy(11_250) // 7.5s * 1.5
-        mainDispatcher.scheduler.runCurrent() // poll 3
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_000)
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent() // poll 1 — the base gap
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(7_500) // 5s * 1.5
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent() // poll 2
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(11_250) // 7.5s * 1.5
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent() // poll 3
         coVerify(exactly = 4) { mediaRepository.getSyncPlayGroups() }
 
         viewModel.stopGroupAutoRefresh()
-        mainDispatcher.scheduler.advanceTimeBy(60_000)
-        mainDispatcher.scheduler.advanceUntilIdle()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(60_000)
+        mainDispatcherRule.testDispatcher.scheduler.advanceUntilIdle()
         coVerify(exactly = 4) { mediaRepository.getSyncPlayGroups() } // nothing further
     }
 
     @Test
-    fun a_repeated_startGroupAutoRefresh_does_not_stack_a_second_loop() = runTest(mainDispatcher) {
+    fun a_repeated_startGroupAutoRefresh_does_not_stack_a_second_loop() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
         viewModel.startGroupAutoRefresh()
         viewModel.startGroupAutoRefresh() // replaces, never stacks
-        mainDispatcher.scheduler.advanceTimeBy(5_000)
-        mainDispatcher.scheduler.runCurrent()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_000)
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
         viewModel.stopGroupAutoRefresh()
-        mainDispatcher.scheduler.advanceUntilIdle()
+        mainDispatcherRule.testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 2) { mediaRepository.getSyncPlayGroups() } // init load + exactly one poll tick
     }
 
     @Test
-    fun updateShowCreateDialog_toggles_flag() = runTest(mainDispatcher) {
+    fun updateShowCreateDialog_toggles_flag() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 

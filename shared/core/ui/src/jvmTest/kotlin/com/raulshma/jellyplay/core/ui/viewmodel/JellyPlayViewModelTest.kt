@@ -1,16 +1,14 @@
 package com.raulshma.jellyplay.core.ui.viewmodel
 
-import kotlinx.coroutines.Dispatchers
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,6 +16,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the protected factory surface of the [JellyPlayViewModel] base class
@@ -41,17 +40,9 @@ class JellyPlayViewModelTest {
     // Unconfined: viewModelScope (Main.immediate) then runs sharing/launch
     // coroutines eagerly, without needing scheduler handshakes between the
     // runTest scheduler and the Main dispatcher.
-    private val mainDispatcher = UnconfinedTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
-    @BeforeTest
-    fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
 
     private class TestViewModel : JellyPlayViewModel() {
         val textHolder = composeState("initial")

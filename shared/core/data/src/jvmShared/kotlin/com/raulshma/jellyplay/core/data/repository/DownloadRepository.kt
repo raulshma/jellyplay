@@ -140,7 +140,18 @@ interface DownloadRepository : OfflineDownloadWriter {
      */
     suspend fun resumeDownload(id: String): Result<Unit>
 
-    suspend fun deleteDownload(id: String): Result<Unit>
+    /**
+     * Deletes a download (artifacts + offline rows).
+     *
+     * ADR-0015's un-arm verb split rides [keepSeriesArm]: the default false is
+     * the LIST-MANAGEMENT half (Downloads-screen single/bulk delete,
+     * detail/card remove-download) — a series deleted to zero rows loses its
+     * arm. The WATCH-BOUNDARY callers must pass true (the watching flow keeps
+     * the weekly arming alive): auto-delete-after-watch, smart-downloads
+     * cleanup, the #14 post-playback delete offer. The keep-days retention
+     * sweep un-arms nowhere — it is hygiene by construction.
+     */
+    suspend fun deleteDownload(id: String, keepSeriesArm: Boolean = false): Result<Unit>
 
     /** The composite retry verb — same enqueue-inside shape as [resumeDownload], from byte 0. */
     suspend fun retryDownload(id: String): Result<Unit>

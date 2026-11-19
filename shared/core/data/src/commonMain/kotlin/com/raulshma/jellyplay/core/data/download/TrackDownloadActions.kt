@@ -60,8 +60,21 @@ interface TrackDownloadStatusWindow {
      * delete [Result], which every host deliberately ignores — the same
      * fire-and-forget contract the former `remove` member carried (the hosts'
      * remove paths have no error surface on a failed delete).
+     *
+     * [keepSeriesArm] exists only so this window can share the repository's
+     * single `deleteDownload` override with
+     * [com.raulshma.jellyplay.core.data.repository.DownloadRepository] and
+     * [DownloadQueue]. The parameter is deliberately REQUIRED (no default):
+     * Kotlin forbids one override inheriting defaults from several
+     * supertypes, so only the repository verb carries the default and the
+     * classification is explicit at every call site. Its callers are all ONE
+     * family — music/track removal (the audio player's confirm, the album
+     * row, the album bulk delete) — and music rows carry no `seriesId`, so
+     * the ADR-0015 un-arm rule can never fire for them: every host passes
+     * `keepSeriesArm = false`, documenting that no music delete is
+     * watch-boundary.
      */
-    suspend fun deleteDownload(id: String): Result<Unit>
+    suspend fun deleteDownload(id: String, keepSeriesArm: Boolean): Result<Unit>
 }
 
 /**

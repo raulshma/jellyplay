@@ -964,6 +964,19 @@ internal val HomeDisplayRows: List<SettingsRow> = listOf(
     HomeRows.UnhideCw,
 )
 
+/**
+ * The display group's gated pair — the two rows the screen's total carries
+ * conditionally: the unhide row ([RowAdmission.ContentGated] — the screen
+ * adds the +1 once hidden CW items exist) and the slideshow-interval row
+ * (its declared WhenOn(home_hero_style) gate). Named where the rows are
+ * declared so the contract tests' count arithmetic derives from this list
+ * instead of restating a hand-counted literal.
+ */
+internal val HomeDisplayGatedRows: List<SettingsRow> = listOf(
+    HomeRows.UnhideCw,
+    HomeRows.HomeHeroSlideshowInterval,
+)
+
 internal val HomeNextUpRows: List<SettingsRow> = listOf(
     HomeRows.MergeContinueNextUp,
     HomeRows.NextUpMaxDays,
@@ -994,6 +1007,12 @@ internal val HomeCardsRows: List<SettingsRow> = listOf(
     HomeRows.TrickplayPreview,
     HomeRows.HomeTrickplayPeekMs,
     HomeRows.AntiSpoilerHome,
+)
+
+/** The cards group's TV-only trickplay fork — the preview toggle and the peek hold ([RowAdmission.Tv]). */
+internal val HomeCardsTvOnlyRows: List<SettingsRow> = listOf(
+    HomeRows.TrickplayPreview,
+    HomeRows.HomeTrickplayPeekMs,
 )
 
 /**

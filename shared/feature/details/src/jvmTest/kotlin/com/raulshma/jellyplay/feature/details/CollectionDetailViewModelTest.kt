@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -19,23 +20,19 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
 import org.junit.Assert.assertSame
 import kotlin.test.assertTrue
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CollectionDetailViewModelTest {
 
-    // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var detailFeed: DetailFeed
     private lateinit var collectionOperations: CollectionOperations
@@ -49,7 +46,6 @@ class CollectionDetailViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         detailFeed = mockk(relaxed = true)
         collectionOperations = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
@@ -69,13 +65,8 @@ class CollectionDetailViewModelTest {
         )
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun `loadCollection success emits Success with detail and items`() = runTest(mainDispatcher) {
+    fun `loadCollection success emits Success with detail and items`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val detail = MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION))
         val items = listOf(
@@ -98,7 +89,7 @@ class CollectionDetailViewModelTest {
     }
 
     @Test
-    fun `loadCollection detail failure emits Error`() = runTest(mainDispatcher) {
+    fun `loadCollection detail failure emits Error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("c1", force = false) } returns Result.failure(RuntimeException("boom"))
         coEvery { collectionOperations.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
@@ -114,7 +105,7 @@ class CollectionDetailViewModelTest {
     }
 
     @Test
-    fun `loadCollection items failure surfaces error even if detail succeeded`() = runTest(mainDispatcher) {
+    fun `loadCollection items failure surfaces error even if detail succeeded`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("c1", force = false) } returns Result.success(
             MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)),
@@ -130,7 +121,7 @@ class CollectionDetailViewModelTest {
     }
 
     @Test
-    fun `loadCollection resets to Loading before resolving`() = runTest(mainDispatcher) {
+    fun `loadCollection resets to Loading before resolving`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         // No stubs → relaxed mock returns success(null) which getOrThrow would fail;
         // stub a slow-ish path so we can observe the initial Loading emission.
@@ -147,7 +138,7 @@ class CollectionDetailViewModelTest {
     }
 
     @Test
-    fun `loadCollection on an already-successful collection is a no-op`() = runTest(mainDispatcher) {
+    fun `loadCollection on an already-successful collection is a no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubCollectionFetch()
         viewModel.loadCollection("c1")
@@ -185,7 +176,7 @@ class CollectionDetailViewModelTest {
      * patch — and leaves non-matching items referentially equal.
      */
     @Test
-    fun `markItemPlayed flips only the matching item in the success items`() = runTest(mainDispatcher) {
+    fun `markItemPlayed flips only the matching item in the success items`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val withProgress = MediaItem(
             id = "m1",
@@ -214,7 +205,7 @@ class CollectionDetailViewModelTest {
     }
 
     @Test
-    fun `failure with null message falls back to generic error`() = runTest(mainDispatcher) {
+    fun `failure with null message falls back to generic error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("c1", force = false) } returns Result.failure(RuntimeException())
         coEvery { collectionOperations.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
@@ -229,7 +220,7 @@ class CollectionDetailViewModelTest {
     }
 
     @Test
-    fun `a thrown repo failure on the loud load surfaces Error instead of stranding Loading`() = runTest(mainDispatcher) {
+    fun `a thrown repo failure on the loud load surfaces Error instead of stranding Loading`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { detailFeed.getMediaDetail("c1", force = false) } throws IllegalStateException("engine blew up")
         coEvery { collectionOperations.getCollectionItems("c1", any(), any(), any()) } returns Result.success(

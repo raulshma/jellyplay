@@ -61,6 +61,7 @@ class DesktopAutoDownloadSchedulerTest {
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-old"))
         coEvery { policyStore.seriesPolicies(any()) } returns emptyMap()
+        coEvery { policyStore.armedSeriesIds() } returns emptyList()
         coEvery { policyStore.recordAutoDownloadSuggestions(any()) } returns 0
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
         coEvery { downloadIntake.startSeries(any(), any()) } returns Result.success(emptyList())

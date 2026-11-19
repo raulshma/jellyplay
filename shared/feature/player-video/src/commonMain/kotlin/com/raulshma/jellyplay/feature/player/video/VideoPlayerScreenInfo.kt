@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -43,6 +47,7 @@ import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
+import com.raulshma.jellyplay.feature.player.video.state.ResumeChipPolicy
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_ab_repeat_badge_a_set
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_ab_repeat_badge_active
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_ab_repeat_badge_cleared
@@ -354,5 +359,63 @@ private fun BoxScope.AbRepeatBadge(events: SharedFlow<AbRepeatEvent>) {
             text = text,
             topPadding = 60.dp,
         )
+    }
+}
+
+// ── Resume-chip reminder wiring (the cluster the screen root carried) ─────
+
+/**
+ * The resume chip's snackbar dance — the wiring half of the cluster
+ * `VideoPlayerScreen`'s root carried inline beside its state declarations
+ * (hoisted beside the tier that renders the chip's TopCenter host, the
+ * [rememberTrickplayFeeds] placement precedent). The reminder collector
+ * shows the "Resumed — Restart" chip Indefinite, arms the pref-window
+ * auto-dismiss alongside it, and joins the show job — so exactly one chip is
+ * ever up and the collection stays serialized. Everything the dance DECIDES
+ * (the off arm, the window math, the tap semantics) lives in the state
+ * module's [ResumeChipPolicy]; this holder owns only the registration.
+ *
+ * The gate read arrives as a getter lambda (the trickplay-feeds convention):
+ * the collector invokes it per emission, so a pref change applies to the
+ * NEXT reminder without restarting this effect. Keyed on the reminder flow —
+ * one VM, one collector, exactly the former `LaunchedEffect(viewModel)`.
+ */
+@Composable
+internal fun rememberResumeChipEffect(
+    reminder: SharedFlow<Long>,
+    resumeChipHostState: SnackbarHostState,
+    message: String,
+    actionLabel: String,
+    resumeChipMs: () -> Long,
+    onRestartRequested: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(reminder) {
+        reminder.collect {
+            // One read per emission — the captured window feeds BOTH the
+            // gate and the auto-dismiss job, exactly the former
+            // `val chipDisplayMs = uiState.uiPrefs.resumeChipMs`.
+            val chipDisplayMs = resumeChipMs()
+            // 0 = never show the chip (the pref's documented off arm).
+            if (!ResumeChipPolicy.shouldShow(chipDisplayMs)) return@collect
+            // SnackbarDuration has no 3s preset (Short ≈ 1.5s), so show it
+            // Indefinite and auto-dismiss after the pref's window unless the
+            // user taps "Restart" first.
+            val snackbarJob = scope.launch {
+                val result = resumeChipHostState.showSnackbar(
+                    message = message,
+                    actionLabel = actionLabel,
+                    duration = SnackbarDuration.Indefinite,
+                )
+                if (ResumeChipPolicy.restartRequested(result == SnackbarResult.ActionPerformed)) {
+                    onRestartRequested()
+                }
+            }
+            scope.launch {
+                delay(ResumeChipPolicy.autoDismissWindowMs(chipDisplayMs))
+                resumeChipHostState.currentSnackbarData?.dismiss()
+            }
+            snackbarJob.join()
+        }
     }
 }

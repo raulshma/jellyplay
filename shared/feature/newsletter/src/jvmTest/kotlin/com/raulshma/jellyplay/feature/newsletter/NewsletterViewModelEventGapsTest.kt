@@ -7,31 +7,29 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.NewsletterData
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Newsletter ViewModel event-surface gaps NOT pinned by
@@ -52,9 +50,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewsletterViewModelEventGapsTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module (NewsletterViewModelTest pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: NewsletterApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -64,7 +61,6 @@ class NewsletterViewModelEventGapsTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
         imageUrlProvider = mockk()
         notificationStore = mockk()
@@ -77,11 +73,6 @@ class NewsletterViewModelEventGapsTest {
         every { imageUrlProvider.getBackdropUrl(any()) } returns "https://img/backdrop"
         coEvery { mediaRepository.getNewsletterData(any()) } returns
             Result.success(NewsletterData(serverName = "TestServer"))
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun createViewModel(): NewsletterViewModel = NewsletterViewModel(
@@ -113,7 +104,7 @@ class NewsletterViewModelEventGapsTest {
     }
 
     @Test
-    fun `refresh drives isLoading while pull-to-refresh drives isRefreshing`() = runTest(mainDispatcher) {
+    fun `refresh drives isLoading while pull-to-refresh drives isRefreshing`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = createViewModel()
         advanceUntilIdle()
 
@@ -133,7 +124,7 @@ class NewsletterViewModelEventGapsTest {
     }
 
     @Test
-    fun `pull-to-refresh never shows the full-screen loader`() = runTest(mainDispatcher) {
+    fun `pull-to-refresh never shows the full-screen loader`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = createViewModel()
         advanceUntilIdle()
         coEvery { mediaRepository.getNewsletterData(any()) } coAnswers {
@@ -148,7 +139,7 @@ class NewsletterViewModelEventGapsTest {
     }
 
     @Test
-    fun `dismiss writes the viewed timestamp without reloading`() = runTest(mainDispatcher) {
+    fun `dismiss writes the viewed timestamp without reloading`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = createViewModel()
         advanceUntilIdle()
         coEvery { mediaRepository.getNewsletterData(any()) } answers {
@@ -163,7 +154,7 @@ class NewsletterViewModelEventGapsTest {
     }
 
     @Test
-    fun `confirm send without a pending action is a guarded no-op`() = runTest(mainDispatcher) {
+    fun `confirm send without a pending action is a guarded no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = createViewModel()
         val received = mutableListOf<NewsletterMessage>()
         collectSendResults(vm, received)
@@ -182,7 +173,7 @@ class NewsletterViewModelEventGapsTest {
     }
 
     @Test
-    fun `dismiss send dialog cancels the pending action without sending`() = runTest(mainDispatcher) {
+    fun `dismiss send dialog cancels the pending action without sending`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = createViewModel()
         advanceUntilIdle()
         vm.onEvent(NewsletterUiEvent.SendNow)
@@ -197,7 +188,7 @@ class NewsletterViewModelEventGapsTest {
     }
 
     @Test
-    fun `load window is seven days back at start of day`() = runTest(mainDispatcher) {
+    fun `load window is seven days back at start of day`() = runTest(mainDispatcherRule.testDispatcher) {
         val since = slot<String>()
         coEvery { mediaRepository.getNewsletterData(capture(since)) } returns
             Result.success(NewsletterData(serverName = "S"))

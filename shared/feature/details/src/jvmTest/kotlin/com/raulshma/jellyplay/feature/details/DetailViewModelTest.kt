@@ -54,6 +54,7 @@ import com.raulshma.jellyplay.core.model.RemoteConnectivity
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -72,17 +73,13 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -91,22 +88,14 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_u
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_instant_mix_empty
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_instant_mix_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_couldnt_update_favorite
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModelTest {
 
-    // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
-    @BeforeTest
-    fun setUpMainDispatcher() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDownMainDispatcher() {
-        Dispatchers.resetMain()
-    }
 
     private val strings = fakeDetailStrings()
 
@@ -294,7 +283,7 @@ class DetailViewModelTest {
             // Default-dispatcher launch races `advanceUntilIdle` (the flake in
             // smartPlay_resumeTakesPrecedenceOverNextUp), the injected
             // dispatcher makes the post-load uiState read deterministic.
-            smartPlayDispatcher = mainDispatcher,
+            smartPlayDispatcher = mainDispatcherRule.testDispatcher,
         )
     }
 
@@ -444,7 +433,7 @@ class DetailViewModelTest {
     // ── Load state ───────────────────────────────────────────────────────
 
     @Test
-    fun loadItem_failure_setsErrorMessage() = runTest(mainDispatcher) {
+    fun loadItem_failure_setsErrorMessage() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val flow = stubProvider("m1", DetailLoadState.Error(DetailLoadError("boom")))
 
@@ -461,7 +450,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun loadItem_unavailableOffline_setsUnavailableMessage() = runTest(mainDispatcher) {
+    fun loadItem_unavailableOffline_setsUnavailableMessage() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubProvider("m1", DetailLoadState.Error(DetailLoadError("x", isUnavailableOffline = true)))
 
@@ -475,7 +464,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun loadItem_accessDenied_setsAccessDeniedFlag() = runTest(mainDispatcher) {
+    fun loadItem_accessDenied_setsAccessDeniedFlag() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubProvider(
             "m1",
@@ -492,7 +481,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun loadItem_movie_clearsSmartPlayTarget() = runTest(mainDispatcher) {
+    fun loadItem_movie_clearsSmartPlayTarget() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubProvider(
             "m1",
@@ -513,7 +502,7 @@ class DetailViewModelTest {
     // smart-play resolution for the next item).
 
     @Test
-    fun navigation_clearsSortedEpisodesFromPreviousItem() = runTest(mainDispatcher) {
+    fun navigation_clearsSortedEpisodesFromPreviousItem() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep1 = episode("e1", 1, 1, isPlayed = false)
@@ -540,7 +529,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun forceRefresh_clearsSortedEpisodesButKeepsDetailVisible() = runTest(mainDispatcher) {
+    fun forceRefresh_clearsSortedEpisodesButKeepsDetailVisible() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep1 = episode("e1", 1, 1, isPlayed = false)
@@ -577,7 +566,7 @@ class DetailViewModelTest {
     // delegation, content-visibility, and error-surfacing behaviour.
 
     @Test
-    fun forceRefresh_withoutLoadedDetail_isNoOp() = runTest(mainDispatcher) {
+    fun forceRefresh_withoutLoadedDetail_isNoOp() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
 
         viewModel.onEvent(DetailUiEvent.ForceRefresh)
@@ -588,7 +577,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun forceRefresh_keepsContentVisibleWhileRefetching() = runTest(mainDispatcher) {
+    fun forceRefresh_keepsContentVisibleWhileRefetching() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val flow = stubProvider("m1")
         flow.value = remoteSnapshot(
@@ -618,7 +607,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun forceRefresh_delegatesToProviderRefresh() = runTest(mainDispatcher) {
+    fun forceRefresh_delegatesToProviderRefresh() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val flow = stubProvider("m1")
         flow.value = remoteSnapshot(
@@ -637,7 +626,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun forceRefresh_series_dropsCatalogueSnapshotForReEntry() = runTest(mainDispatcher) {
+    fun forceRefresh_series_dropsCatalogueSnapshotForReEntry() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         stubSeries("s1", season, listOf(episode("e1", 1, 1, isPlayed = false)))
@@ -655,7 +644,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun forceRefresh_refetchFailure_surfacesErrorAndClearsIndicator() = runTest(mainDispatcher) {
+    fun forceRefresh_refetchFailure_surfacesErrorAndClearsIndicator() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val flow = stubProvider("m1")
         flow.value = remoteSnapshot(
@@ -675,7 +664,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun smartPlay_seriesWithUnplayedFirstEpisode_showsPlayLabel() = runTest(mainDispatcher) {
+    fun smartPlay_seriesWithUnplayedFirstEpisode_showsPlayLabel() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep1 = episode("e1", 1, 1, isPlayed = false)
@@ -693,7 +682,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun smartPlay_seriesWithResumeProgress_showsResumeLabel() = runTest(mainDispatcher) {
+    fun smartPlay_seriesWithResumeProgress_showsResumeLabel() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep1 = episode("e1", 1, 1, isPlayed = false)
@@ -710,7 +699,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun smartPlay_seriesWhereEarlierEpisodePlayed_showsNextUpLabel() = runTest(mainDispatcher) {
+    fun smartPlay_seriesWhereEarlierEpisodePlayed_showsNextUpLabel() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep1 = episode("e1", 1, 1, isPlayed = true)
@@ -725,7 +714,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun smartPlay_allPlayed_showsReplayLabel() = runTest(mainDispatcher) {
+    fun smartPlay_allPlayed_showsReplayLabel() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep1 = episode("e1", 1, 1, isPlayed = true)
@@ -741,7 +730,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun smartPlay_resumeTakesPrecedenceOverNextUp() = runTest(mainDispatcher) {
+    fun smartPlay_resumeTakesPrecedenceOverNextUp() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep1 = episode("e1", 1, 1, isPlayed = false, positionTicks = 10_000_000L)
@@ -756,7 +745,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun smartPlay_episodesUnsortedInResponse_areSortedBeforeSelection() = runTest(mainDispatcher) {
+    fun smartPlay_episodesUnsortedInResponse_areSortedBeforeSelection() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep2 = episode("e2", 1, 2, isPlayed = false)
@@ -771,7 +760,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun smartPlay_seriesWithPendingOrEmptySeason_stillResolvesSmartPlayTarget() = runTest(mainDispatcher) {
+    fun smartPlay_seriesWithPendingOrEmptySeason_stillResolvesSmartPlayTarget() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val s0 = MediaItem(id = "season0", name = "Specials", mediaType = MediaType.SEASON, indexNumber = 0)
         val s1 = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
@@ -861,7 +850,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun smartPlay_seasonEntry_resolvesWithinThatSeason() = runTest(mainDispatcher) {
+    fun smartPlay_seasonEntry_resolvesWithinThatSeason() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         // S1 has an unplayed episode; S2 has a resume candidate. The entry is
         // S2 — S1's unplayed episode must not win the target.
@@ -884,7 +873,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun smartPlay_seasonEntryWithNoPlayableEpisodes_clearsTarget() = runTest(mainDispatcher) {
+    fun smartPlay_seasonEntryWithNoPlayableEpisodes_clearsTarget() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         // The entry season has only a virtual (unaired) episode — nothing the
         // resolver may pick; the other season's playable episode must not leak
@@ -907,7 +896,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun markSeasonPlayed_onSeasonEntry_routesThroughParentSeries() = runTest(mainDispatcher) {
+    fun markSeasonPlayed_onSeasonEntry_routesThroughParentSeries() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val entryEpisodes = listOf(
             episodeIn("s1", "season2", "s2e1", 2, 1),
@@ -941,7 +930,7 @@ class DetailViewModelTest {
     // ---- Item-level mark played / unplayed ----------------------------------
 
     @Test
-    fun markPlayed_clearsResumePositionInDetailUi() = runTest(mainDispatcher) {
+    fun markPlayed_clearsResumePositionInDetailUi() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val item = MediaItem(
             id = "movie-1",
@@ -962,7 +951,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun markUnplayed_clearsResumePositionInDetailUi() = runTest(mainDispatcher) {
+    fun markUnplayed_clearsResumePositionInDetailUi() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val item = MediaItem(
             id = "movie-1",
@@ -984,7 +973,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun toggleFavorite_reentryKeepsTheNewFavoriteState() = runTest(mainDispatcher) {
+    fun toggleFavorite_reentryKeepsTheNewFavoriteState() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val item = MediaItem(
             id = "movie-1",
@@ -1013,7 +1002,7 @@ class DetailViewModelTest {
 
     @Test
     fun toggleFavorite_rapidTapsApplyAuthoritativeTargetsInOrder() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val item = MediaItem(
                 id = "movie-1",
@@ -1046,7 +1035,7 @@ class DetailViewModelTest {
     // projection untouched (no flip without a successful write).
     @Test
     fun toggleFavorite_failure_emitsMessageAndLeavesStateIntact() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val item = MediaItem(
                 id = "movie-1",
@@ -1073,7 +1062,7 @@ class DetailViewModelTest {
         }
 
     @Test
-    fun markPlayed_reentryKeepsTheNewWatchedState() = runTest(mainDispatcher) {
+    fun markPlayed_reentryKeepsTheNewWatchedState() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val item = MediaItem(id = "movie-1", name = "Movie", mediaType = MediaType.MOVIE)
         val flow = stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
@@ -1093,7 +1082,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun markUnplayed_reentryKeepsTheNewUnwatchedState() = runTest(mainDispatcher) {
+    fun markUnplayed_reentryKeepsTheNewUnwatchedState() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val item = MediaItem(
             id = "movie-1",
@@ -1118,7 +1107,7 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun markRowItemPlayed_reentryKeepsTheNewWatchedState() = runTest(mainDispatcher) {
+    fun markRowItemPlayed_reentryKeepsTheNewWatchedState() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season-1", name = "Season", mediaType = MediaType.SEASON)
         val item = episode("episode-1", 1, 1, isPlayed = false)
@@ -1159,7 +1148,7 @@ class DetailViewModelTest {
 
     @Test
     fun markSeasonPlayed_flipsAllEpisodesAndRecomputesSmartPlay() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
             val ep1 = episode("e1", 1, 1, isPlayed = false)
@@ -1196,7 +1185,7 @@ class DetailViewModelTest {
     // call forces re-entry to miss the cache and re-hit the server.
     @Test
     fun markSeasonUnplayed_doesNotRefetchSoReEntryNeverServesStaleWatchedState() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
             val ep1 = episode("e1", 1, 1, isPlayed = true)
@@ -1221,7 +1210,7 @@ class DetailViewModelTest {
     // fetches must actually run. The VM now fires this internally on a REMOTE resolution.
     @Test
     fun loadSeerrData_whenConnectedAndEnabled_fetchesSeerrRecommendations() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             // Flip the connection-flag stubs BEFORE constructing the ViewModel:
             // the uiState combine captures the preferences flow at construction
             // time, so a stub flipped after construction has no effect.
@@ -1265,7 +1254,7 @@ class DetailViewModelTest {
     // path is not gated on the Seerr connection or recommendations preference.
     @Test
     fun loadSeerrData_fetchesTmdbReviews() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
             every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
             buildViewModel()
@@ -1302,7 +1291,7 @@ class DetailViewModelTest {
 
     @Test
     fun loadSeerrData_inFlightFetchLandingAfterNavigation_isDiscarded() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
 
             stubProvider(
@@ -1355,7 +1344,7 @@ class DetailViewModelTest {
 
     @Test
     fun userDataChange_forCurrentItem_refreshesDetail() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             stubProvider(
                 "m1",
@@ -1372,7 +1361,7 @@ class DetailViewModelTest {
 
     @Test
     fun userDataChange_forOtherItems_doesNotRefreshDetail() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             stubProvider(
                 "m1",
@@ -1393,7 +1382,7 @@ class DetailViewModelTest {
     // refresh must still fire.
     @Test
     fun userDataChange_burstKeepsEarlierItemIdAfterWindowRestart() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             stubProvider(
                 "m1",
@@ -1416,7 +1405,7 @@ class DetailViewModelTest {
     // pinned empty. The per-season refetch must still fire and populate it.
     @Test
     fun episodes_batchReturnsMismatchedSeasonKey_leavesSeasonUnfetchedForRefetch() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
             val eps = listOf(episode("e1", 1, 1), episode("e2", 1, 2))
@@ -1461,7 +1450,7 @@ class DetailViewModelTest {
 
     @Test
     fun episodes_emptySeason_updatesFetchedSeasonIdsAndEmptyList() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
             val flow = stubProvider(
@@ -1500,7 +1489,7 @@ class DetailViewModelTest {
     // ── LOCAL-origin snapshot computes smart-play but suppresses remote discovery ──
 
     @Test
-    fun localSnapshot_computesSmartPlayButSuppressesRemoteDiscovery() = runTest(mainDispatcher) {
+    fun localSnapshot_computesSmartPlayButSuppressesRemoteDiscovery() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep1 = episode("e1", 1, 1, isPlayed = false)
@@ -1539,7 +1528,7 @@ class DetailViewModelTest {
 
     @Test
     fun loadItem_remote_fetchesMediaSegmentsAndSurfacesAvailability() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             stubProvider(
                 "m1",
@@ -1566,7 +1555,7 @@ class DetailViewModelTest {
 
     @Test
     fun loadItem_local_doesNotFetchMediaSegments() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
             val ep1 = episode("e1", 1, 1, isPlayed = false)
@@ -1599,7 +1588,7 @@ class DetailViewModelTest {
 
     @Test
     fun loadItem_local_surfacesLocalRelatedFromGenresOrStudios() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val detail = MediaDetail(
                 item = MediaItem(
@@ -1645,7 +1634,7 @@ class DetailViewModelTest {
 
     @Test
     fun loadItem_localWithoutGenresOrStudios_skipsLocalRelatedFetch() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             // No genres or studios: triggerLocalSideEffects early-returns, so the
             // on-device mining never fires and the row stays empty.
@@ -1663,7 +1652,7 @@ class DetailViewModelTest {
 
     @Test
     fun loadItem_remoteThenLocal_clearsSegmentAvailabilityOnNavigation() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             // First: a REMOTE item whose intro segment sets the chip booleans.
             stubProvider(
@@ -1711,7 +1700,7 @@ class DetailViewModelTest {
 
     @Test
     fun loadItem_remote_fetchesSpecialFeaturesAndSurfacesExtras() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             stubProvider(
                 "m1",
@@ -1734,7 +1723,7 @@ class DetailViewModelTest {
 
     @Test
     fun loadItem_remoteThenLocal_clearsSpecialFeaturesOnNavigation() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             // First: a REMOTE item whose special features populate the row.
             stubProvider(
@@ -1778,7 +1767,7 @@ class DetailViewModelTest {
 
     @Test
     fun startInstantMix_success_delegatesToFacadeWithSeedAndFallback() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val album = MediaItem(
                 id = "album1",
@@ -1801,7 +1790,7 @@ class DetailViewModelTest {
 
     @Test
     fun startInstantMix_success_fallsBackToItemNameWhenAlbumMissing() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val track = MediaItem(id = "t1", name = "Track", mediaType = MediaType.AUDIO)
             stubProvider("t1", remoteSnapshot(MediaDetail(item = track)))
@@ -1819,7 +1808,7 @@ class DetailViewModelTest {
 
     @Test
     fun startInstantMix_emptyMix_emitsEmptyMessageAndDoesNotPlay() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val album = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)
             stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
@@ -1828,7 +1817,7 @@ class DetailViewModelTest {
             // Unconfined so the collector subscribes immediately (replay = 0 — an
             // emission before subscription is dropped); backgroundScope so the
             // never-completing collector is cancelled when the test body ends.
-            backgroundScope.launch(UnconfinedTestDispatcher(mainDispatcher.scheduler)) {
+            backgroundScope.launch(UnconfinedTestDispatcher(mainDispatcherRule.testDispatcher.scheduler)) {
                 viewModel.messages.collect { firstMessage.complete(it) }
             }
 
@@ -1847,7 +1836,7 @@ class DetailViewModelTest {
 
     @Test
     fun startInstantMix_failure_emitsFailureMessageAndDoesNotPlay() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val album = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)
             stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
@@ -1856,7 +1845,7 @@ class DetailViewModelTest {
             val firstMessage = CompletableDeferred<DetailMessage>()
             // Unconfined so the collector subscribes immediately (replay = 0); see
             // the empty-mix test above for the pattern rationale.
-            backgroundScope.launch(UnconfinedTestDispatcher(mainDispatcher.scheduler)) {
+            backgroundScope.launch(UnconfinedTestDispatcher(mainDispatcherRule.testDispatcher.scheduler)) {
                 viewModel.messages.collect { firstMessage.complete(it) }
             }
 
@@ -1875,7 +1864,7 @@ class DetailViewModelTest {
 
     @Test
     fun startInstantMix_suppressedByGuard_emitsNoMessage() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val album = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)
             stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
@@ -1883,7 +1872,7 @@ class DetailViewModelTest {
             val firstMessage = CompletableDeferred<DetailMessage>()
             // Unconfined so the collector subscribes immediately (replay = 0); see
             // the empty-mix test above for the pattern rationale.
-            backgroundScope.launch(UnconfinedTestDispatcher(mainDispatcher.scheduler)) {
+            backgroundScope.launch(UnconfinedTestDispatcher(mainDispatcherRule.testDispatcher.scheduler)) {
                 viewModel.messages.collect { firstMessage.complete(it) }
             }
 
@@ -1899,7 +1888,7 @@ class DetailViewModelTest {
 
     @Test
     fun startInstantMix_nonAudioItem_isNoOp() =
-        runTest(mainDispatcher) {
+        runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             stubProvider(
                 "m1",
@@ -1980,7 +1969,7 @@ class DetailViewModelTest {
     )
 
     @Test
-    fun setShowDetailUpNext_delegatesToLibraryStore() = runTest(mainDispatcher) {
+    fun setShowDetailUpNext_delegatesToLibraryStore() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.onEvent(DetailUiEvent.SetShowDetailUpNext(false))
         advanceUntilIdle()
         coVerify { libraryStore.setShowDetailUpNext(false) }

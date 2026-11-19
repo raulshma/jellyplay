@@ -63,12 +63,17 @@ open class DownloadIntakeBody(
         episodeIds: Map<String, List<String>>?,
         policyChoice: SeriesPolicyChoice,
     ): Result<List<String>> {
-        // The override is written before the batch: a failed series lookup
+        // The policy row is written before the batch: a failed series lookup
         // must not swallow the user's policy choice (the downloads they
-        // picked may already exist — the override is about future episodes).
+        // picked may already exist — the policy is about future episodes).
         when (policyChoice) {
             is SeriesPolicyChoice.Set -> policyStore.setSeriesPolicy(seriesId, policyChoice.mode)
-            SeriesPolicyChoice.Inherit -> policyStore.setSeriesPolicy(seriesId, null)
+            // ADR-0015: the sheet's "Default" ARMS the series as
+            // follow-global (the row survives watched-deletion hygiene and
+            // keeps the series in the check's universe at zero rows); only
+            // the Downloads screen's un-arm action writes the disarm verb
+            // (a null row).
+            SeriesPolicyChoice.Inherit -> policyStore.setSeriesPolicy(seriesId, AutoDownloadMode.FOLLOW_GLOBAL)
             SeriesPolicyChoice.LeaveUnchanged -> Unit
         }
         return downloadRepository.downloadSeries(seriesId, episodeIds)

@@ -8,7 +8,9 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * engine's mute controller — all of which delegate here so the
  * plan → remember → capture → native write ordering cannot drift again (the
  * desktop formerly hand-rolled this ordering in parallel with the Android
- * templates).
+ * templates). The two VOD hosts reach these through [VolumeCommandChassis]
+ * (same package), which owns their dispatch containment + unmute memory over
+ * a [NativeVolumeSeam]; the live controller still calls them directly.
  *
  * Home (volume-policy conveyor): moved wholesale from player-video to
  * player-contract — the recorded home for engine-shared machinery — so the

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.music.collection
 
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.repository.LibraryFeed
@@ -15,19 +16,15 @@ import com.raulshma.jellyplay.feature.music.tracks.TracksViewModel
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.Rule
 
 /**
  * Per-collection adapter wiring: each standalone ViewModel binds its
@@ -39,9 +36,8 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class MusicCollectionAdapterWiringTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
@@ -49,18 +45,12 @@ class MusicCollectionAdapterWiringTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
     }
 
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun artistsAdapter_queriesArtistsWithTheKindAndDefaultNameSort() = runTest(mainDispatcher) {
+    fun artistsAdapter_queriesArtistsWithTheKindAndDefaultNameSort() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = ArtistsViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
@@ -77,7 +67,7 @@ class MusicCollectionAdapterWiringTest {
     }
 
     @Test
-    fun albumsAdapter_setSortRequeriesWithTheMappedJellyfinSort() = runTest(mainDispatcher) {
+    fun albumsAdapter_setSortRequeriesWithTheMappedJellyfinSort() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = AlbumsViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
@@ -95,7 +85,7 @@ class MusicCollectionAdapterWiringTest {
     }
 
     @Test
-    fun tracksAdapter_queriesAudioWithTheKindAndDefaultNameSort() = runTest(mainDispatcher) {
+    fun tracksAdapter_queriesAudioWithTheKindAndDefaultNameSort() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = TracksViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY, audioQueueFacade)
         advanceUntilIdle()
 

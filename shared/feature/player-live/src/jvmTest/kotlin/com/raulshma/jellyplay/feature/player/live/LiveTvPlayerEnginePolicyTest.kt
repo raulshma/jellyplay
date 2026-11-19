@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
@@ -28,16 +29,12 @@ import com.raulshma.jellyplay.feature.player.live.generated.resources.live_error
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -46,6 +43,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.junit.Rule
 
 /**
  * Proves the SHARED engine-event policy core (player-contract's
@@ -78,6 +76,9 @@ class LiveTvPlayerEnginePolicyTest {
      */
     private val scheduler = TestCoroutineScheduler()
 
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher(scheduler))
+
     private lateinit var liveTvRepo: LiveTvApiClient
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var playbackIdentity: PlaybackIdentity
@@ -100,7 +101,6 @@ class LiveTvPlayerEnginePolicyTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(UnconfinedTestDispatcher(scheduler))
         liveTvRepo = mockk(relaxed = true)
         playbackRepo = mockk(relaxed = true)
         playbackIdentity = mockk(relaxed = true)
@@ -142,11 +142,6 @@ class LiveTvPlayerEnginePolicyTest {
                 ),
             )
         }
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun channels(count: Int) = (0 until count).map {

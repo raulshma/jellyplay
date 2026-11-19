@@ -8,25 +8,22 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
+import org.junit.Rule
 
 /**
  * Pins the Language/subtitle preference-mirror wiring (LibraryLayout jvmTest
@@ -41,7 +38,8 @@ import kotlin.test.assertSame
 @OptIn(ExperimentalCoroutinesApi::class)
 class LanguageSettingsViewModelTest {
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var appLocaleSetter: AppLocaleSetter
     private lateinit var projections: PreferenceProjections
@@ -56,7 +54,6 @@ class LanguageSettingsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         appLocaleSetter = mockk(relaxed = true)
         projections = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
@@ -72,11 +69,6 @@ class LanguageSettingsViewModelTest {
         // List capture: blocks append across calls (the per-test slot in
         // [captureEdit] re-stubs over this when a suite wants a single block).
         every { editor.edit(capture(editBlocks)) } returns mockk<Job>()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** Captures the `edit { }` block so the test can run it against the stub scope. */

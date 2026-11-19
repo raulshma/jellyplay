@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -12,25 +13,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OfflineLibraryViewModelTest {
 
-    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
-    // that module.
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var userDataMutator: UserDataMutator
@@ -41,17 +38,11 @@ class OfflineLibraryViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         offlineRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         libraryFlow = MutableStateFlow(emptyList())
         every { offlineRepository.getOfflineLibrary() } returns libraryFlow
         viewModel = OfflineLibraryViewModel(offlineRepository, userDataMutator)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /**
@@ -89,7 +80,7 @@ class OfflineLibraryViewModelTest {
     // ── Filter tabs ───────────────────────────────────────────────────────
 
     @Test
-    fun movies_tab_keeps_movies_only() = runTest(mainDispatcher) {
+    fun movies_tab_keeps_movies_only() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("ser", mediaType = MediaType.SERIES),
             offline("mov", mediaType = MediaType.MOVIE),
@@ -104,7 +95,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun series_tab_keeps_series_only() = runTest(mainDispatcher) {
+    fun series_tab_keeps_series_only() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("ser", mediaType = MediaType.SERIES),
             offline("mov", mediaType = MediaType.MOVIE),
@@ -118,7 +109,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun music_tab_keeps_audio_music_and_album() = runTest(mainDispatcher) {
+    fun music_tab_keeps_audio_music_and_album() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("aud", mediaType = MediaType.AUDIO),
             offline("mus", mediaType = MediaType.MUSIC),
@@ -133,7 +124,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun all_tab_keeps_everything() = runTest(mainDispatcher) {
+    fun all_tab_keeps_everything() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("ser", mediaType = MediaType.SERIES),
             offline("aud", mediaType = MediaType.AUDIO),
@@ -147,7 +138,7 @@ class OfflineLibraryViewModelTest {
     // ── Search query ──────────────────────────────────────────────────────
 
     @Test
-    fun query_under_two_chars_does_not_filter() = runTest(mainDispatcher) {
+    fun query_under_two_chars_does_not_filter() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(offline("a", name = "Alpha"))
         val job = collectAndSettle()
         viewModel.setQuery("A")
@@ -157,7 +148,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun query_matches_name_series_and_season_case_insensitively() = runTest(mainDispatcher) {
+    fun query_matches_name_series_and_season_case_insensitively() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("n1", name = "Dune"),
             offline("n2", name = "Unrelated", seriesName = "DUNE Saga"),
@@ -174,7 +165,7 @@ class OfflineLibraryViewModelTest {
     // ── Sort ──────────────────────────────────────────────────────────────
 
     @Test
-    fun sort_recent_orders_by_created_at_descending() = runTest(mainDispatcher) {
+    fun sort_recent_orders_by_created_at_descending() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("old", createdAt = 100L),
             offline("new", createdAt = 300L),
@@ -188,7 +179,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun sort_name_is_case_insensitive_ascending() = runTest(mainDispatcher) {
+    fun sort_name_is_case_insensitive_ascending() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("b", name = "banana"),
             offline("a", name = "Apple"),
@@ -202,7 +193,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun sort_rating_descends_with_null_rated_last() = runTest(mainDispatcher) {
+    fun sort_rating_descends_with_null_rated_last() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("low", rating = 5.5f),
             offline("null", rating = null),
@@ -216,7 +207,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun sort_size_descends_by_total_bytes() = runTest(mainDispatcher) {
+    fun sort_size_descends_by_total_bytes() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("small", totalBytes = 10L),
             offline("big", totalBytes = 900L),
@@ -232,7 +223,7 @@ class OfflineLibraryViewModelTest {
     // ── Storage summary + loading ─────────────────────────────────────────
 
     @Test
-    fun storage_summary_sums_bytes_and_counts_items() = runTest(mainDispatcher) {
+    fun storage_summary_sums_bytes_and_counts_items() = runTest(mainDispatcherRule.testDispatcher) {
         libraryFlow.value = listOf(
             offline("a", totalBytes = 100L),
             offline("b", totalBytes = 250L),
@@ -247,7 +238,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun first_emission_clears_isLoading() = runTest(mainDispatcher) {
+    fun first_emission_clears_isLoading() = runTest(mainDispatcherRule.testDispatcher) {
         assertTrue(viewModel.isLoading)
         libraryFlow.value = listOf(offline("a"))
         val job = collectAndSettle()
@@ -259,7 +250,7 @@ class OfflineLibraryViewModelTest {
     // ── Quick-action routing ──────────────────────────────────────────────
 
     @Test
-    fun markItemPlayed_routes_through_userDataMutator() = runTest(mainDispatcher) {
+    fun markItemPlayed_routes_through_userDataMutator() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.markItemPlayed(mediaItem("i1"), played = true)
         advanceUntilIdle()
         coVerify(exactly = 1) {
@@ -274,7 +265,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun toggleFavorite_routes_through_userDataMutator() = runTest(mainDispatcher) {
+    fun toggleFavorite_routes_through_userDataMutator() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.toggleFavorite(mediaItem("i1"))
         advanceUntilIdle()
 
@@ -284,7 +275,7 @@ class OfflineLibraryViewModelTest {
     }
 
     @Test
-    fun delete_routes_series_to_series_delete_and_items_to_item_delete() = runTest(mainDispatcher) {
+    fun delete_routes_series_to_series_delete_and_items_to_item_delete() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.delete(mediaItem("s1", mediaType = MediaType.SERIES))
         advanceUntilIdle()
         coVerify(exactly = 1) { offlineRepository.deleteOfflineSeries("s1") }

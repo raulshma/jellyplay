@@ -46,3 +46,12 @@ a hypothetical seam, two make it real.
 - The position/report family DID carve out (`SessionPositionLedger`,
   same review, accepted) — that family passed the deletion test
   independently; this one does not.
+
+## Addendum — 2026-11-18
+
+`SessionLifecycleHooks` moved to its own file (`SessionLifecycleHooks.kt`);
+the session now provides the hook bodies privately behind a `sessionHooks`
+delegate instead of implementing the interface on its own type (the eleven
+hook funs dropped off the session root's public surface). The gate/body
+split, the hooks seam, and the recording-double tests are unchanged — this
+addendum records the file location and shape, not a new decision.

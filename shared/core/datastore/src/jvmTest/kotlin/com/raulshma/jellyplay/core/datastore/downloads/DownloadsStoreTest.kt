@@ -90,6 +90,18 @@ class DownloadsStoreTest {
     }
 
     @Test
+    fun `the FOLLOW_GLOBAL sentinel never poisons the global key`() = runTest {
+        // ADR-0015: FOLLOW_GLOBAL is a series-row sentinel, never a legal
+        // global value — the setter clamps it to NEVER (and the legacy
+        // boolean mirror follows the clamped value).
+        store.setAutoDownloadMode(AutoDownloadMode.FOLLOW_GLOBAL)
+        assertEquals(AutoDownloadMode.NEVER, store.downloads.first().autoDownloadMode)
+        val prefs = dataStore.data.first()
+        assertEquals("NEVER", prefs[stringPreferencesKey("auto_download_mode")])
+        assertEquals(false, prefs[booleanPreferencesKey("auto_download_new_episodes")])
+    }
+
+    @Test
     fun `setMaxConcurrentDownloads clamps above the band`() = runTest {
         store.setMaxConcurrentDownloads(99)
         val slice = store.downloads.first()

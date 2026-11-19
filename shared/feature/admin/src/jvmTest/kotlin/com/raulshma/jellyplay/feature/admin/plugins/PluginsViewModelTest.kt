@@ -5,24 +5,21 @@ import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginRepository
 import com.raulshma.jellyplay.core.model.PluginStatus
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * Pins the plugins dashboard flow (`PluginsViewModel`):
@@ -41,9 +38,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class PluginsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var adminRepository: PluginAdminRepository
 
@@ -65,17 +61,11 @@ class PluginsViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         adminRepository = mockk(relaxed = true)
         coEvery { adminRepository.getInstalledPlugins() } returns Result.success(listOf(tv, meta))
         // An empty installation list drains hasActiveInstalls and stops the
         // polling loop, which keeps advanceUntilIdle from spinning forever.
         coEvery { adminRepository.getPackageInstallations() } returns Result.success(emptyList())
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     private fun TestScope.pluginsViewModel(): PluginsViewModel =
@@ -93,7 +83,7 @@ class PluginsViewModelTest {
     // ── tabs: installed / catalog / repositories ──
 
     @Test
-    fun `init loads installed plugins sorted case-insensitively`() = runTest(mainDispatcher) {
+    fun `init loads installed plugins sorted case-insensitively`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = pluginsViewModel()
 
         assertEquals(listOf("Metashark", "TV Head"), viewModel.state.installedPlugins.map { it.name })
@@ -102,7 +92,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `init failure surfaces the error`() = runTest(mainDispatcher) {
+    fun `init failure surfaces the error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getInstalledPlugins() } returns
             Result.failure(RuntimeException("server down"))
 
@@ -113,7 +103,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `catalog tab loads sorted packages and caches them`() = runTest(mainDispatcher) {
+    fun `catalog tab loads sorted packages and caches them`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = catalogViewModel()
 
         assertEquals(1, viewModel.state.selectedTabIndex)
@@ -131,7 +121,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `repositories tab loads and caches`() = runTest(mainDispatcher) {
+    fun `repositories tab loads and caches`() = runTest(mainDispatcherRule.testDispatcher) {
         val official = PluginRepository(name = "Official", url = "https://repo.jellyfin.org/")
         coEvery { adminRepository.getRepositories() } returns Result.success(listOf(official))
 
@@ -149,7 +139,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `refresh re-fetches installed plus the active tab data`() = runTest(mainDispatcher) {
+    fun `refresh re-fetches installed plus the active tab data`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = catalogViewModel() // tab 1 → catalog fetched once
 
         viewModel.refresh()
@@ -163,7 +153,7 @@ class PluginsViewModelTest {
     // ── catalog filters ──
 
     @Test
-    fun `status filter partitions the catalog by installed guids`() = runTest(mainDispatcher) {
+    fun `status filter partitions the catalog by installed guids`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = catalogViewModel()
 
         // jellyfin-web default chip: Installed.
@@ -178,7 +168,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `category filter maps the server taxonomy`() = runTest(mainDispatcher) {
+    fun `category filter maps the server taxonomy`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = catalogViewModel()
         viewModel.updateStatusFilter(PluginStatusFilter.ALL)
 
@@ -193,7 +183,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `search matches name description category and owner case-insensitively`() = runTest(mainDispatcher) {
+    fun `search matches name description category and owner case-insensitively`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = catalogViewModel()
         viewModel.updateStatusFilter(PluginStatusFilter.ALL)
 
@@ -216,7 +206,7 @@ class PluginsViewModelTest {
     // ── install / uninstall / enable / disable routing ──
 
     @Test
-    fun `installPackage routes its arguments and refreshes after draining`() = runTest(mainDispatcher) {
+    fun `installPackage routes its arguments and refreshes after draining`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.installPackage(any(), any(), any(), any()) } returns Result.success(Unit)
         val viewModel = pluginsViewModel()
 
@@ -242,7 +232,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `install failure surfaces the error without polling installations`() = runTest(mainDispatcher) {
+    fun `install failure surfaces the error without polling installations`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.installPackage(any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("repo offline"))
         val viewModel = pluginsViewModel()
@@ -255,7 +245,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `uninstall routes to the repository and refreshes`() = runTest(mainDispatcher) {
+    fun `uninstall routes to the repository and refreshes`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = pluginsViewModel()
 
         viewModel.uninstallPlugin("guid-tv")
@@ -266,7 +256,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `enable and disable route to setPluginEnabled`() = runTest(mainDispatcher) {
+    fun `enable and disable route to setPluginEnabled`() = runTest(mainDispatcherRule.testDispatcher) {
         val viewModel = pluginsViewModel()
 
         viewModel.enablePlugin(tv)
@@ -281,7 +271,7 @@ class PluginsViewModelTest {
     // ── repository management ──
 
     @Test
-    fun `addRepository appends and persists the new list`() = runTest(mainDispatcher) {
+    fun `addRepository appends and persists the new list`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getRepositories() } returns Result.success(emptyList())
         coEvery { adminRepository.setRepositories(any()) } returns Result.success(Unit)
         val viewModel = pluginsViewModel()
@@ -301,7 +291,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `addRepository failure keeps the old list and surfaces the error`() = runTest(mainDispatcher) {
+    fun `addRepository failure keeps the old list and surfaces the error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getRepositories() } returns Result.success(emptyList())
         coEvery { adminRepository.setRepositories(any()) } returns
             Result.failure(RuntimeException("read only"))
@@ -317,7 +307,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `removeRepository drops by index and out-of-range is a no-op`() = runTest(mainDispatcher) {
+    fun `removeRepository drops by index and out-of-range is a no-op`() = runTest(mainDispatcherRule.testDispatcher) {
         val repos = listOf(
             PluginRepository(name = "First", url = "https://one"),
             PluginRepository(name = "Second", url = "https://two"),
@@ -339,7 +329,7 @@ class PluginsViewModelTest {
     }
 
     @Test
-    fun `toggleRepository flips isEnabled and persists`() = runTest(mainDispatcher) {
+    fun `toggleRepository flips isEnabled and persists`() = runTest(mainDispatcherRule.testDispatcher) {
         val official = PluginRepository(name = "Official", url = "https://repo.jellyfin.org/")
         coEvery { adminRepository.getRepositories() } returns Result.success(listOf(official))
         coEvery { adminRepository.setRepositories(any()) } returns Result.success(Unit)
@@ -357,7 +347,7 @@ class PluginsViewModelTest {
     // ── error surface ──
 
     @Test
-    fun `clearError resets the error`() = runTest(mainDispatcher) {
+    fun `clearError resets the error`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { adminRepository.getInstalledPlugins() } returns
             Result.failure(RuntimeException("boom"))
         val viewModel = pluginsViewModel()

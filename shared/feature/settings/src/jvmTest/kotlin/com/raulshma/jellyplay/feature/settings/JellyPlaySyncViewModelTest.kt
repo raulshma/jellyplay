@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryKey
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryKeys
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncNamespaceUsage
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncStatus
+import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -20,21 +21,18 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.Rule
 
 /**
  * The sync screen's per-key diff behavior (the mockk idiom, the
@@ -64,7 +62,8 @@ class JellyPlaySyncViewModelTest {
         }
     }
 
-    private val mainDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var pluginApi: JellyPlaySettingsSyncRoutes
     private lateinit var deviceRegistry: JellyPlayDeviceRegistryRoutes
@@ -81,7 +80,6 @@ class JellyPlaySyncViewModelTest {
 
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
         pluginApi = mockk(relaxed = true)
         deviceRegistry = mockk(relaxed = true)
         statusStore = mockk(relaxed = true)
@@ -109,11 +107,6 @@ class JellyPlaySyncViewModelTest {
         coEvery { deviceRegistry.getDevices() } returns Result.success(emptyList())
         coEvery { pluginApi.adminSyncOverview() } returns Result.success(null)
         coEvery { pluginApi.getSnapshots() } returns Result.success(null)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     /** The probe AVAILABLE + `settings-sync` registry state the gate reads. */

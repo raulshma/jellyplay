@@ -21,6 +21,8 @@ val databaseDaosModule = module {
 
     single { get<JellyPlayDatabase>().downloadDao() }
 
+    single { get<JellyPlayDatabase>().downloadPolicyDao() }
+
     single { get<JellyPlayDatabase>().lyricsCacheDao() }
 
     single { get<JellyPlayDatabase>().offlineMediaDao() }
