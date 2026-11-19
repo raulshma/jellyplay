@@ -79,7 +79,7 @@ Builds:
   # second, or the builds silently swap their ABIs.
   - versionName: 0.11.15
     versionCode: 11151
-    commit: TO-FILL-v0.11.15-tag-commit # git rev-parse v0.11.15
+    commit: 09eea2c67401c17bd8ecd709692af7dd018f82f7 # v0.11.15 tag commit (git rev-parse v0.11.15)
     # `subdir: app` (added during MR review): fdroidserver builds inside
     # app/, so the task fragment below assembles assemblePhoneFdroidRelease
     # and the prebuild sed reaches the root settings file via ../.
@@ -148,7 +148,7 @@ Builds:
 
   - versionName: 0.11.15
     versionCode: 11152
-    commit: TO-FILL-v0.11.15-tag-commit # git rev-parse v0.11.15
+    commit: 09eea2c67401c17bd8ecd709692af7dd018f82f7 # v0.11.15 tag commit (git rev-parse v0.11.15)
     subdir: app
     submodules: true
     gradle:
