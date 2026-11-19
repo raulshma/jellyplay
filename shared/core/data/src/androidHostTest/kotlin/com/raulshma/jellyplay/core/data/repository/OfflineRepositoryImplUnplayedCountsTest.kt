@@ -52,6 +52,7 @@ class OfflineRepositoryImplUnplayedCountsTest {
                 override fun nowElapsedRealtimeMillis(): Long = System.currentTimeMillis()
                 override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.now(zone)
             },
+            downloadPolicyDao = mockk(relaxed = true),
         )
     }
 

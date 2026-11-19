@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -312,6 +313,25 @@ class DownloadLifecycleActionsTest {
             h.state.value.downloadSheetEpisodes,
         )
         assertTrue(h.state.value.downloadSheetLoadingSeasons.isEmpty())
+    }
+    // endregion
+
+    // region seriesPolicy (the download sheet's chip pre-load)
+    @Test
+    fun `seriesPolicy preloads the stored override and reads a follow-global row as Default`() = runTest {
+        val h = makeActions(scope = helperScope(), seriesId = "series-1")
+        coEvery { downloadIntake.seriesPolicy("series-1") } returns AutoDownloadMode.ASK
+        assertEquals(AutoDownloadMode.ASK, h.seriesPolicy())
+
+        // ADR-0015: the implicit arm's FOLLOW_GLOBAL sentinel DISPLAYS as
+        // Default — the sheet has no sentinel chip; toSeriesPolicyChoice
+        // folds the null back to Inherit on confirm, so the mapping is
+        // display-only.
+        coEvery { downloadIntake.seriesPolicy("series-1") } returns AutoDownloadMode.FOLLOW_GLOBAL
+        assertNull(h.seriesPolicy())
+
+        // No session series → nothing to pre-load.
+        assertNull(makeActions(scope = helperScope(), seriesId = null).seriesPolicy())
     }
     // endregion
 

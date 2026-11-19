@@ -232,6 +232,10 @@ class DownloadRepositoryImpl(
         // transfer keeps running until its next 2-second poll tick discovers
         // the row is gone.
         downloadEnqueuer.cancelWork(id)
+        // Cancel is user-initiated list management (the Downloads screen's
+        // "stop and remove"), so it un-arms at zero rows exactly like
+        // deleteDownload (ADR-0015 decision 5) — the default keepSeriesArm
+        // carries that intent.
         cleanupDownloadFiles(entity)
     }
 
@@ -274,10 +278,19 @@ class DownloadRepositoryImpl(
         enqueueDownload(id)
     }
 
-    override suspend fun deleteDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+    // The DownloadRepository KDoc owns the ADR-0015 verb split and is the
+    // ONLY supertype carrying the default (Kotlin forbids one override
+    // inheriting defaults from several supertypes — DownloadQueue and
+    // TrackDownloadStatusWindow declare the param required, pushing the
+    // classification to their call sites). This override never re-declares
+    // it: false (the list-management half the Downloads screen's single/bulk
+    // delete and the offline-library remove scopes ride) is inherited; only
+    // the watch-boundary callers (auto-delete-after-watch, smart downloads,
+    // the #14 post-playback offer) pass `keepSeriesArm = true`.
+    override suspend fun deleteDownload(id: String, keepSeriesArm: Boolean): Result<Unit> = runCatchingRethrowingCancellation {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         downloadEnqueuer.cancelWork(id)
-        cleanupDownloadFiles(entity)
+        cleanupDownloadFiles(entity, keepSeriesArm)
     }
 
     // The mutation sites never re-issue a COUNT query: the summary surface
@@ -672,11 +685,10 @@ class DownloadRepositoryImpl(
                 },
             )
         } ?: return AutoDownloadSweepResult.EMPTY
-        // The sweep can delete a series' last remaining download — drop the
-        // now-dead policy override and any stale Ask-mode prompts with it.
-        deletable.mapNotNull { it.seriesId }.distinct().forEach { seriesId ->
-            runCatchingRethrowingCancellation { maybeClearSeriesAutoDownloadState(seriesId) }
-        }
+        // Deliberately NO un-arm here (ADR-0015 decision 5): the sweep is
+        // retention hygiene — a watch-boundary deletion — so a series swept to
+        // zero rows keeps its arm and stays in the check's universe; its
+        // pending Ask prompts survive too.
         return AutoDownloadSweepResult(deletable.size, bytesReclaimed).also {
             Log.i(TAG, "Retention sweep deleted ${it.deletedCount} downloads (${it.bytesReclaimed} bytes)")
         }
@@ -686,6 +698,28 @@ class DownloadRepositoryImpl(
         downloadPolicyDao.getPolicyBySeriesId(seriesId)?.mode?.toEnumOrNull()
 
     override suspend fun hasSeriesPolicies(): Boolean = downloadPolicyDao.countPolicies() > 0
+
+    override suspend fun armedSeriesIds(): List<String> =
+        // Parseable arms only (see the interface KDoc's fail-safe note): an
+        // unknown mode name is inert by the downloads.status convention, so it
+        // joins neither the universe nor the armed list.
+        observeArmedSeries().first().map(SeriesDownloadArm::seriesId)
+
+    override fun observeArmedSeries(): Flow<List<SeriesDownloadArm>> =
+        downloadPolicyDao.observePolicies().map { rows ->
+            rows.mapNotNull { row ->
+                row.mode.toEnumOrNull<AutoDownloadMode>()?.let { mode ->
+                    SeriesDownloadArm(seriesId = row.seriesId, mode = mode, seriesName = row.seriesName)
+                }
+            }
+        }
+
+    override suspend fun clearSeriesArmIfNoDownloads(seriesId: String) {
+        if (downloadDao.getDownloadsForSeries(seriesId).isEmpty()) {
+            downloadPolicyDao.deletePolicyBySeriesId(seriesId)
+            downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
+        }
+    }
 
     override suspend fun seriesPolicies(seriesIds: List<String>): Map<String, AutoDownloadMode> =
         if (seriesIds.isEmpty()) {
@@ -703,10 +737,19 @@ class DownloadRepositoryImpl(
         if (mode == null) {
             downloadPolicyDao.deletePolicyBySeriesId(seriesId)
         } else {
-            downloadPolicyDao.upsertPolicy(SeriesDownloadPolicyEntity(seriesId = seriesId, mode = mode.name))
+            // An upsert replaces the whole row, so re-confirming a sheet chip
+            // would blank the arm display name a download backfilled — carry
+            // the cached name over (blank for a genuinely new row; the next
+            // download re-backfills either way).
+            val cachedName = downloadPolicyDao.getPolicyBySeriesId(seriesId)?.seriesName.orEmpty()
+            downloadPolicyDao.upsertPolicy(
+                SeriesDownloadPolicyEntity(seriesId = seriesId, mode = mode.name, seriesName = cachedName),
+            )
         }
-        // NEVER and inherit both invalidate the series' pending prompts —
-        // they were recorded under an override that no longer wants them.
+        // NEVER and disarm both invalidate the series' pending prompts — they
+        // were recorded under a policy that no longer wants them. FOLLOW_GLOBAL
+        // keeps them (ADR-0015): it is an ARM — the sheet's "Default" — whose
+        // prompts stay answerable at zero rows.
         if (mode == null || mode == AutoDownloadMode.NEVER) {
             downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
         }
@@ -738,20 +781,6 @@ class DownloadRepositoryImpl(
         }
     }
 
-    /**
-     * When a series' last download row is gone, its policy override and any
-     * pending Ask-mode prompts are dead state — an override on a series with
-     * nothing downloaded never joins the check's coverage universe, and a
-     * prompt for a removed series has nothing to anchor to. Internal for the
-     * host test (the deletion choreography it rides is mock-hostile).
-     */
-    internal suspend fun maybeClearSeriesAutoDownloadState(seriesId: String) {
-        if (downloadDao.getDownloadsForSeries(seriesId).isEmpty()) {
-            downloadPolicyDao.deletePolicyBySeriesId(seriesId)
-            downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
-        }
-    }
-
     // The entity/domain mappers (MediaItem/MediaDetail to OfflineMediaEntity,
     // MediaItem to PlaybackStateEntity, DownloadEntity to DownloadItem,
     // DownloadProgressRow to DownloadProgress) live in OfflineMediaMappers.kt -
@@ -764,8 +793,12 @@ class DownloadRepositoryImpl(
      * the cast-image prune runs too - its reference scan only deletes files no
      * surviving offline row references, so it never removes a referenced cast
      * image.
+     *
+     * [keepSeriesArm] encodes ADR-0015's un-arm verb split: the default false
+     * (list-management deletion) runs the zero-rows clear; the watch-boundary
+     * callers pass true and leave the arm standing.
      */
-    private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
+    private suspend fun cleanupDownloadFiles(entity: DownloadEntity, keepSeriesArm: Boolean = false) {
         deletionCore.delete(
             downloads = listOf(entity),
             deleteMetadataRows = {
@@ -774,7 +807,7 @@ class DownloadRepositoryImpl(
                 syncBaselineDao.deleteById(entity.mediaItemId)
             },
         )
-        entity.seriesId?.let { maybeClearSeriesAutoDownloadState(it) }
+        if (!keepSeriesArm) entity.seriesId?.let { clearSeriesArmIfNoDownloads(it) }
     }
 
     /**

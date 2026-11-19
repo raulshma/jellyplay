@@ -204,14 +204,19 @@ class PlayedStateSyncImplTest {
     }
 
     @Test
-    fun `auto-delete-after-watch removes a completed download on a confirmed played flip`() = runTest {
+    fun `auto-delete-after-watch removes a completed download and keeps the series arm`() = runTest {
+        // The deleting side of the ADR-0015 un-arm rule: watch-boundary
+        // hygiene deletes the row but must carry keepSeriesArm — a weekly show
+        // keeps auto-downloading after its watched episodes are reclaimed
+        // (gh-225).
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDeleteAfterWatch = true))
         coEvery { userDataApi.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         coEvery { downloadRepository.getDownloadByMediaItemId(ITEM_ID) } returns completedDownload()
 
         sync.flip(ITEM_ID, played = true)
 
-        coVerify(exactly = 1) { downloadRepository.deleteDownload(DOWNLOAD_ID) }
+        coVerify(exactly = 1) { downloadRepository.deleteDownload(DOWNLOAD_ID, keepSeriesArm = true) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(DOWNLOAD_ID, keepSeriesArm = false) }
     }
 
     @Test
@@ -221,7 +226,7 @@ class PlayedStateSyncImplTest {
         sync.flip(ITEM_ID, played = true)
 
         coVerify(exactly = 0) { downloadRepository.getDownloadByMediaItemId(any()) }
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
     }
 
     @Test
@@ -233,7 +238,7 @@ class PlayedStateSyncImplTest {
 
         sync.flip(ITEM_ID, played = true)
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
     }
 
     @Test
@@ -245,7 +250,7 @@ class PlayedStateSyncImplTest {
 
         sync.flip(ITEM_ID, played = true)
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
     }
 
     @Test
@@ -260,7 +265,7 @@ class PlayedStateSyncImplTest {
         val result = sync.flip(ITEM_ID, played = true)
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { downloadRepository.deleteDownload(DOWNLOAD_ID) }
+        coVerify(exactly = 1) { downloadRepository.deleteDownload(DOWNLOAD_ID, keepSeriesArm = true) }
         coVerify(exactly = 1) { outboxRepository.enqueuePlayedState(ITEM_ID, true) }
     }
 
@@ -272,7 +277,7 @@ class PlayedStateSyncImplTest {
         sync.flip(ITEM_ID, played = false)
 
         coVerify(exactly = 0) { downloadRepository.getDownloadByMediaItemId(any()) }
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
     }
 
     // ── toggleFavorite ───────────────────────────────────────────────────────

@@ -82,8 +82,12 @@ internal class SeriesDownloadStateHolder(
                 val downloadedIds = seriesDownloads.episodeIdsForSeries(series.id)
                 // Pre-load the stored policy so the sheet's chips open on it
                 // instead of always on Default (a re-confirm of the stored
-                // value re-stores it harmlessly).
+                // value re-stores it harmlessly). A FOLLOW_GLOBAL row (the
+                // ADR-0015 implicit arm) DISPLAYS as Default — the sentinel is
+                // never a chip; toSeriesPolicyChoice folds it back to Inherit
+                // on confirm.
                 val storedPolicy = downloadIntake.seriesPolicy(series.id)
+                    ?.takeIf { it != AutoDownloadMode.FOLLOW_GLOBAL }
                 if (_state.value?.seriesId != series.id) return@launch
                 _state.value = HomeSeriesDownloadState(
                     seriesId = series.id,

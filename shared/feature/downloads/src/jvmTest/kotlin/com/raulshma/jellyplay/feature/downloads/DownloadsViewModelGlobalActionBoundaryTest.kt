@@ -150,7 +150,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
         // The stale selection is kept (only a successful bulk delete clears it).
         assertEquals(setOf("vanished"), viewModel.uiState.value.selectedIds)
     }

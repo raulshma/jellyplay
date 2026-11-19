@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.DownloadPolicyDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
@@ -72,6 +73,20 @@ class OfflineRepositoryImpl constructor(
     private val database: JellyPlayDatabase,
     /** Clock seam for the `lastPlayedDate` stamps (updatePlaybackProgress / applyPlayedState). */
     private val timeSource: TimeSource,
+    /**
+     * The ADR-0015 un-arm edge: the three delete scopes below are
+     * LIST-MANAGEMENT deletions (offline-library item/series/season remove —
+     * the OfflineDeleteActions fan-in), so they clear the series arm at zero
+     * rows, unlike the watch-boundary deletion funnels which never do.
+     * Deliberately the leaf [DownloadPolicyDao], NOT the
+     * [SeriesDownloadPolicyStore] single: that binding resolves
+     * DownloadRepositoryImpl, whose construction graph reaches back into this
+     * repository through EpisodeCatalogueImpl — a store edge here recursed
+     * Koin single resolution to stack overflow. The DAO write body duplicates
+     * [SeriesDownloadPolicyStore.clearSeriesArmIfNoDownloads] (the
+     * interface-facing home); keep the two in sync or fold them together.
+     */
+    private val downloadPolicyDao: DownloadPolicyDao,
 ) : OfflineRepository, SeriesArtReads {
 
     /**
@@ -371,6 +386,9 @@ class OfflineRepositoryImpl constructor(
             },
             evictArtworkMemo = { artworkResolver.evictMemo() },
         )
+        // List-management scope (ADR-0015 decision 5): an episode remove that
+        // empties its series un-arms it.
+        download?.seriesId?.let { clearSeriesArmIfNoDownloads(it) }
     }
 
     override suspend fun deleteOfflineSeries(seriesId: String) {
@@ -395,6 +413,11 @@ class OfflineRepositoryImpl constructor(
             // that no row references the series anymore.
             cleanupSeriesArtwork = { dirs -> dirs.forEach { DownloadArtifacts.cleanupSeriesArtwork(it, seriesId) } },
         )
+        // List-management scope (ADR-0015 decision 5): removing a series from
+        // the offline library is the user revoking the whole series' intent —
+        // the zero-rows check inside the clear is trivially true here, the
+        // call just keeps every delete scope on the one un-arm rule.
+        clearSeriesArmIfNoDownloads(seriesId)
     }
 
     override suspend fun deleteOfflineSeason(seasonId: String) {
@@ -412,6 +435,30 @@ class OfflineRepositoryImpl constructor(
             },
             evictArtworkMemo = { artworkResolver.evictMemo() },
         )
+        // List-management scope (ADR-0015 decision 5): the season's series stay
+        // armed only if other seasons still have rows.
+        downloads.mapNotNull { it.seriesId }.distinct().forEach { seriesId ->
+            clearSeriesArmIfNoDownloads(seriesId)
+        }
+    }
+
+    /**
+     * The zero-rows un-arm rule (ADR-0015 decision 5), folded locally: when
+     * [seriesId] has no `downloads` rows left, its arm row and pending Ask
+     * prompts are deleted. The rule's interface-facing home is
+     * [SeriesDownloadPolicyStore.clearSeriesArmIfNoDownloads] — this private
+     * twin exists ONLY because the store single's construction graph reaches
+     * back into this repository (DownloadRepositoryImpl → EpisodeCatalogueImpl
+     * → OfflineRepository), so the delete scopes resolve the leaf
+     * [DownloadPolicyDao] directly instead of recursing Koin single
+     * resolution into a cycle. Keep this body in sync with the store member
+     * (watch-boundary deletions never reach either).
+     */
+    private suspend fun clearSeriesArmIfNoDownloads(seriesId: String) {
+        if (downloadDao.getDownloadsForSeries(seriesId).isEmpty()) {
+            downloadPolicyDao.deletePolicyBySeriesId(seriesId)
+            downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
+        }
     }
 
     override suspend fun cleanupOrphans() = deletionCore.pruneOrphans()

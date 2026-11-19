@@ -85,6 +85,7 @@ class DownloadRepositoryImplSubtitlesTest {
         offlineMediaDao = offlineMediaDao,
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
+        downloadPolicyDao = mockk(relaxed = true),
         database = database,
         downloadsStore = preferencesStore,
         storagePolicy = mockk(relaxed = true),

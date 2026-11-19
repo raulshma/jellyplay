@@ -71,6 +71,13 @@
     <string name="downloads_suggestions_dismiss">Dismiss</string>
     <string name="downloads_suggestions_download_all">Download all</string>
 
+    <!-- Armed series (ADR-0015): series kept in the auto-download check even
+         with nothing downloaded -->
+    <string name="downloads_armed_series_title">Armed series</string>
+    <string name="downloads_armed_series_subtitle">Auto-download keeps watching these series for new episodes, even with nothing downloaded.</string>
+    <string name="downloads_armed_series_mode_follow_global">Follows global</string>
+    <string name="downloads_armed_series_unarm">Stop auto-download</string>
+
     <!-- Download statuses -->
     <string name="downloads_status_queued">Queued</string>
     <string name="downloads_status_waiting">Waiting…</string>

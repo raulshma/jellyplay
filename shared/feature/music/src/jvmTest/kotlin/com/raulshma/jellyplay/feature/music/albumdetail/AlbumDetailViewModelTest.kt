@@ -540,12 +540,12 @@ class AlbumDetailViewModelTest {
             flowOf(listOf(download("d1", "t1", DownloadStatus.COMPLETED)))
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coEvery { trackDownloads.deleteDownload(any()) } returns Result.success(Unit)
+        coEvery { trackDownloads.deleteDownload(any(), keepSeriesArm = false) } returns Result.success(Unit)
 
         viewModel.downloadTrack(albumTracks[0])
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { trackDownloads.deleteDownload("d1") }
+        coVerify(exactly = 1) { trackDownloads.deleteDownload("d1", keepSeriesArm = false) }
         coVerify(exactly = 0) { downloadIntake.start(any()) }
     }
 
@@ -563,7 +563,7 @@ class AlbumDetailViewModelTest {
         // The resolve-detail leg lives inside DownloadIntake.flipTrack (pinned
         // in core:data); at this seam the VM only routes the track id through.
         coVerify(exactly = 1) { downloadIntake.flipTrack("t1") }
-        coVerify(exactly = 0) { trackDownloads.deleteDownload(any()) }
+        coVerify(exactly = 0) { trackDownloads.deleteDownload(any(), any()) }
     }
 
     @Test
@@ -579,7 +579,7 @@ class AlbumDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { downloadIntake.start(any()) }
-        coVerify(exactly = 0) { trackDownloads.deleteDownload(any()) }
+        coVerify(exactly = 0) { trackDownloads.deleteDownload(any(), any()) }
     }
 
     @Test
@@ -598,7 +598,7 @@ class AlbumDetailViewModelTest {
         // flipped through the intake seam (detail resolution pinned in core:data).
         coVerify(exactly = 0) { downloadIntake.flipTrack("t1") }
         coVerify(exactly = 1) { downloadIntake.flipTrack("t2") }
-        coVerify(exactly = 0) { trackDownloads.deleteDownload(any()) }
+        coVerify(exactly = 0) { trackDownloads.deleteDownload(any(), any()) }
     }
 
     @Test
@@ -618,12 +618,12 @@ class AlbumDetailViewModelTest {
             flowOf(listOf(download("d1", "t1", DownloadStatus.PAUSED)))
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coEvery { trackDownloads.deleteDownload(any()) } returns Result.success(Unit)
+        coEvery { trackDownloads.deleteDownload(any(), keepSeriesArm = false) } returns Result.success(Unit)
 
         viewModel.deleteAlbumDownloads()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { trackDownloads.deleteDownload("d1") }
-        coVerify(exactly = 1) { trackDownloads.deleteDownload(any()) } // only t1's row
+        coVerify(exactly = 1) { trackDownloads.deleteDownload("d1", keepSeriesArm = false) }
+        coVerify(exactly = 1) { trackDownloads.deleteDownload(any(), keepSeriesArm = false) } // only t1's row
     }
 }

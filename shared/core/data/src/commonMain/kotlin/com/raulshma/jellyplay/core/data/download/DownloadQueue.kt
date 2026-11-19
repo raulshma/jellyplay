@@ -61,8 +61,20 @@ interface DownloadQueue {
     /** The composite retry verb — same enqueue-inside shape as [resumeDownload], from byte 0. */
     suspend fun retryDownload(id: String): Result<Unit>
 
-    /** Deletes a download (artifacts + offline rows). */
-    suspend fun deleteDownload(id: String): Result<Unit>
+    /**
+     * Deletes a download (artifacts + offline rows).
+     *
+     * ADR-0015's un-arm verb split rides [keepSeriesArm]: this screen's
+     * single/bulk delete is the LIST-MANAGEMENT half — a series deleted to
+     * zero rows loses its arm (the policy row that keeps it in the
+     * auto-download check's universe) — so callers pass `keepSeriesArm =
+     * false` explicitly. The classification is explicit HERE rather than
+     * defaulted because [com.raulshma.jellyplay.core.data.repository.DownloadRepository]
+     * is the only supertype allowed to carry the default (Kotlin forbids one
+     * override inheriting defaults from several supertypes); only
+     * watch-boundary callers route around this seam via the repository verb.
+     */
+    suspend fun deleteDownload(id: String, keepSeriesArm: Boolean): Result<Unit>
 
     /** Moves a row's queue priority (bulk move-up/move-down ordering). */
     suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit>

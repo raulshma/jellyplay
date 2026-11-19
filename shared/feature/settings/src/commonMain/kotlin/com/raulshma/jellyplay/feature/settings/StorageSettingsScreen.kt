@@ -589,6 +589,10 @@ fun StorageSettingsScreen(
                         trailingText = modeLabels.getValue(preferences.autoDownloadMode),
                         highlighted = highlightSettingId == StorageRows.AutoDownloadMode.id,
                         onClick = {
+                            // Deliberately an explicit three-value list, never
+                            // `AutoDownloadMode.entries`: FOLLOW_GLOBAL is the
+                            // series-row sentinel (ADR-0015), never a legal
+                            // global mode, and must not leak into this picker.
                             val modes = listOf(AutoDownloadMode.INSTANT, AutoDownloadMode.ASK, AutoDownloadMode.NEVER)
                             activePicker.value = PickerState.List(
                                 title = autoDownloadModeTitle,

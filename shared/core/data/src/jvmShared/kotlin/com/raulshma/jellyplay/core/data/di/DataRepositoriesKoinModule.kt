@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.data.worker.SettingsSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.DownloadPolicyDao
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -187,7 +188,7 @@ internal val dataRepositoriesModule: Module = module {
     single { WatchHistoryRepositoryImpl(get(), get(), get(), get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }
 
-    single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get()) }
+    single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get(), downloadPolicyDao = get<DownloadPolicyDao>()) }
     single<OfflineRepository> { get<OfflineRepositoryImpl>() }
     single<SeriesArtReads> { get<OfflineRepositoryImpl>() }
 

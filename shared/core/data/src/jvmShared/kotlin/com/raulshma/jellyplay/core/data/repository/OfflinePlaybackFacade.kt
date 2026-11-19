@@ -69,10 +69,17 @@ class OfflinePlaybackFacade(
     /**
      * Deletes the download for [itemId], if any. Returns `true` when a download
      * was found and deleted, `false` when nothing was downloaded (no-op).
+     *
+     * Every caller of this facade verb is watch-boundary (ADR-0015 decision 5)
+     * — the player's #14 post-playback delete offer and UpNextController's
+     * smart-downloads cleanup — so it keeps the series arm: a user who
+     * habitually confirms the delete offer after each episode is doing the
+     * same hygiene act as auto-delete-after-watch, and both must keep the
+     * weekly arming alive.
      */
     suspend fun deleteDownload(itemId: String): Boolean {
         val download = downloadRepository.getDownloadByMediaItemId(itemId) ?: return false
-        downloadRepository.deleteDownload(download.id)
+        downloadRepository.deleteDownload(download.id, keepSeriesArm = true)
         return true
     }
 

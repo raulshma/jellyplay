@@ -198,8 +198,12 @@ class PlayedStateSyncImpl(
             if (!downloadsStore.value.downloads.first().autoDeleteAfterWatch) return
             val download = downloadRepository.value.getDownloadByMediaItemId(itemId) ?: return
             if (download.status != DownloadStatus.COMPLETED) return
-            runCatchingRethrowingCancellation { downloadRepository.value.deleteDownload(download.id) }
-                .onFailure { Log.w(TAG, "Auto-delete-after-watch failed for $itemId", it) }
+            // Watch-boundary hygiene keeps the series arm (ADR-0015): this is
+            // the deletion that must NOT un-arm, or a weekly show stops
+            // auto-downloading once its watched episodes are reclaimed.
+            runCatchingRethrowingCancellation {
+                downloadRepository.value.deleteDownload(download.id, keepSeriesArm = true)
+            }.onFailure { Log.w(TAG, "Auto-delete-after-watch failed for $itemId", it) }
         } catch (ce: kotlinx.coroutines.CancellationException) {
             // Never swallow cancellation — breaks structured concurrency.
             throw ce

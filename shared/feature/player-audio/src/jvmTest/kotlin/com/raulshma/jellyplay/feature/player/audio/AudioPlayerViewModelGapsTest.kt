@@ -462,7 +462,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 1) { downloads.deleteDownload("dl-1") }
+        coVerify(exactly = 1) { downloads.deleteDownload("dl-1", keepSeriesArm = false) }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 
@@ -473,7 +473,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 0) { downloads.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloads.deleteDownload(any(), any()) }
         coVerify(exactly = 1) { trackDownloadActions.flip("track-1") }
     }
 
@@ -483,7 +483,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 0) { downloads.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloads.deleteDownload(any(), any()) }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 

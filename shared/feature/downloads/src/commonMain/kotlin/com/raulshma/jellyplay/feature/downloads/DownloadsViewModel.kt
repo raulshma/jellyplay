@@ -10,7 +10,6 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SeriesArtReads
 import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.toMediaItem
@@ -101,9 +100,9 @@ class DownloadsViewModel(
     val pendingCancelAll = ConfirmationHost<List<String>>()
 
     /**
-     * One-shot delete feedback, screen-forward seam. Buffered, single
-     * collector, never replayed — [DownloadsScreen] resolves the
-     * resource text and posts it to the shared UserMessageBus.
+     * One-shot delete/suggestion feedback, screen-forward seam. Buffered,
+     * single collector, never replayed — [DownloadsScreen] resolves the text
+     * and posts it to the shared UserMessageBus ([seriesPolicyActions]' sink).
      */
     private val messageChannel = Channel<DownloadsUserMessage>(Channel.BUFFERED)
     val messages: Flow<DownloadsUserMessage> = messageChannel.receiveAsFlow()
@@ -128,63 +127,17 @@ class DownloadsViewModel(
     )
 
     /**
-     * The pending Ask-mode prompts (gh-181), newest first — the suggestion
-     * card's content. Empty when the user has nothing to answer.
+     * The series download-policy family — the gh-181 suggestion card AND the
+     * ADR-0015 armed-series list (the store's two Downloads-screen consumers) —
+     * one constructed module (resync-actions seam shape; feedback via [messageChannel]).
      */
-    val suggestions: StateFlow<List<AutoDownloadSuggestion>> =
-        policyStore.observeAutoDownloadSuggestions()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /**
-     * Confirms suggestions: groups the prompts by series → season (episodes
-     * in numeric order), enqueues each season's batch through the normal
-     * series download path, then clears the answered rows. [episodeIds] is
-     * the confirmed selection — a per-row Download passes one id, the card's
-     * Download all passes every id. A failed batch is surfaced (Raw message)
-     * instead of silently reporting success; its prompts stay pending so the
-     * user can retry.
-     */
-    fun downloadSuggestions(episodeIds: List<String>) {
-        if (episodeIds.isEmpty()) return
-        launch {
-            val rows = policyStore.autoDownloadSuggestionsByIds(episodeIds)
-            if (rows.isEmpty()) return@launch
-            val confirmed = mutableListOf<AutoDownloadSuggestion>()
-            rows.groupBy { it.seriesId }
-                .forEach { (_, seriesEpisodes) ->
-                    seriesEpisodes.groupBy { it.seasonId }
-                        .forEach { (seasonId, seasonEpisodes) ->
-                            val result = intake.startSeries(
-                                seriesId = seriesEpisodes.first().seriesId,
-                                episodeIds = mapOf(
-                                    seasonId to seasonEpisodes
-                                        .sortedBy { it.episodeNumber }
-                                        .map { it.episodeId },
-                                ),
-                            )
-                            if (result.isSuccess) {
-                                confirmed += seasonEpisodes
-                            } else {
-                                messageChannel.trySend(
-                                    DownloadsUserMessage.Raw(
-                                        result.exceptionOrNull()?.message ?: "Download failed",
-                                    ),
-                                )
-                            }
-                        }
-                }
-            if (confirmed.isNotEmpty()) {
-                policyStore.dismissAutoDownloadSuggestions(confirmed.map { it.episodeId })
-                messageChannel.trySend(DownloadsUserMessage.SuggestionsQueued)
-            }
-        }
-    }
-
-    /** Dismisses suggestions without downloading. */
-    fun dismissSuggestions(episodeIds: List<String>) {
-        if (episodeIds.isEmpty()) return
-        launch { policyStore.dismissAutoDownloadSuggestions(episodeIds) }
-    }
+    internal val seriesPolicyActions = DownloadsSeriesPolicyActions(
+        scope = scope,
+        policyStore = policyStore,
+        intake = intake,
+        downloadsStore = downloadsStore,
+        postMessage = { messageChannel.trySend(it) },
+    )
 
     /**
      * Structural (status-change-only) projection of the list, shared between
@@ -493,7 +446,10 @@ class DownloadsViewModel(
                     DownloadBulkAction.RESUME -> queue.resumeDownload(item.id)
                     DownloadBulkAction.CANCEL -> queue.cancelDownload(item.id)
                     DownloadBulkAction.RETRY_FAILED -> queue.retryDownload(item.id)
-                    DownloadBulkAction.DELETE -> queue.deleteDownload(item.id)
+                    // List-management delete: explicit false is the ADR-0015
+                    // un-arm half (a bulk delete that empties a series removes
+                    // its auto-download arm).
+                    DownloadBulkAction.DELETE -> queue.deleteDownload(item.id, keepSeriesArm = false)
                 }
             }
             onDone()
@@ -502,7 +458,9 @@ class DownloadsViewModel(
 
     fun deleteDownload(item: DownloadItem) {
         launch {
-            queue.deleteDownload(item.id)
+            // List-management delete (ADR-0015): explicit false un-arms the
+            // series when this row was its last.
+            queue.deleteDownload(item.id, keepSeriesArm = false)
             if (queue.isSupported) messageChannel.trySend(DownloadsUserMessage.Deleted)
         }
     }

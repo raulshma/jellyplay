@@ -5,10 +5,13 @@ import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.DownloadPolicyDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
+import com.raulshma.jellyplay.core.database.entity.SeriesDownloadPolicyEntity
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -33,6 +36,10 @@ import kotlin.test.assertTrue
  * [com.raulshma.jellyplay.core.model.DownloadItem]. The write bodies were
  * moved verbatim out of [DownloadRepositoryImpl]; this suite pins them on the
  * new home, over narrow DAO/seam mocks — no repository construction needed.
+ *
+ * The ADR-0015 implicit-arm funnel is pinned here too: a series-shaped start
+ * ensures a FOLLOW_GLOBAL arm row (insert-if-absent — an explicit sheet
+ * override is never clobbered) and backfills a blank arm display name.
  */
 class OfflineDownloadWriterCoreTest {
 
@@ -40,6 +47,7 @@ class OfflineDownloadWriterCoreTest {
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
     private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
     private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
+    private val downloadPolicyDao: DownloadPolicyDao = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
     private val downloadsStore: DownloadsStore = mockk(relaxed = true)
     private val storagePolicy: StoragePolicy = mockk(relaxed = true)
@@ -56,6 +64,7 @@ class OfflineDownloadWriterCoreTest {
         offlineMediaDao = offlineMediaDao,
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
+        downloadPolicyDao = downloadPolicyDao,
         database = database,
         downloadsStore = downloadsStore,
         storagePolicy = storagePolicy,
@@ -182,5 +191,94 @@ class OfflineDownloadWriterCoreTest {
     fun `enqueueDownload hands the row to the platform coordinator`() {
         writer().enqueueDownload("dl-9")
         verify(exactly = 1) { downloadEnqueuer.enqueue("dl-9") }
+    }
+
+    // ── ADR-0015 implicit arm ────────────────────────────────────────────
+
+    @Test
+    fun `an episode start arms its series FOLLOW_GLOBAL with the request's series name`() = runTest {
+        coEvery { downloadDao.getDownloadByMediaItemId("ep-1") } returns null
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("series-1") } returns null
+        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
+        stubLayout(filePath = "/downloads/Season 1/Episode_p8x1.mkv")
+
+        writer().startDownload(
+            DownloadStartRequest(
+                mediaItemId = "ep-1",
+                name = "Episode",
+                mediaType = "EPISODE",
+                mediaSourceId = "src-1",
+                downloadUrl = "https://stream/ep-1",
+                imageUrl = null,
+                seriesId = "series-1",
+                seasonId = "season-1",
+                seriesName = "Series One",
+                seasonName = "Season 1",
+                episodeNumber = 3,
+                seasonNumber = 1,
+            ),
+        )
+
+        coVerify(exactly = 1) {
+            downloadPolicyDao.insertPolicyIfAbsent(
+                SeriesDownloadPolicyEntity(
+                    seriesId = "series-1",
+                    mode = AutoDownloadMode.FOLLOW_GLOBAL.name,
+                    seriesName = "Series One",
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `a movie start never arms`() = runTest {
+        coEvery { downloadDao.getDownloadByMediaItemId("movie-1") } returns null
+        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
+        stubLayout(filePath = "/downloads/Movie_p8x1.mkv")
+
+        writer().startDownload(
+            DownloadStartRequest(
+                mediaItemId = "movie-1",
+                name = "Movie",
+                mediaType = "MOVIE",
+                mediaSourceId = "src-1",
+                downloadUrl = "https://stream/movie-1",
+                imageUrl = null,
+            ),
+        )
+
+        coVerify(exactly = 0) { downloadPolicyDao.getPolicyBySeriesId(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.insertPolicyIfAbsent(any()) }
+    }
+
+    @Test
+    fun `a pre-existing explicit override is preserved and a blank arm name is backfilled`() = runTest {
+        coEvery { downloadDao.getDownloadByMediaItemId("ep-1") } returns null
+        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
+        stubLayout(filePath = "/downloads/Season 1/Episode_p8x1.mkv")
+        // An explicit sheet override predating the arm column: the arm hook
+        // must NOT touch its mode, only fill the blank display name.
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("series-1") } returns
+            SeriesDownloadPolicyEntity(seriesId = "series-1", mode = "ASK", seriesName = "")
+
+        writer().startDownload(
+            DownloadStartRequest(
+                mediaItemId = "ep-1",
+                name = "Episode",
+                mediaType = "EPISODE",
+                mediaSourceId = "src-1",
+                downloadUrl = "https://stream/ep-1",
+                imageUrl = null,
+                seriesId = "series-1",
+                seasonId = "season-1",
+                seriesName = "Series One",
+                seasonName = "Season 1",
+                episodeNumber = 3,
+                seasonNumber = 1,
+            ),
+        )
+
+        coVerify(exactly = 0) { downloadPolicyDao.insertPolicyIfAbsent(any()) }
+        coVerify(exactly = 1) { downloadPolicyDao.updatePolicySeriesName("series-1", "Series One") }
     }
 }

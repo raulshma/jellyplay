@@ -42,11 +42,21 @@ import kotlin.test.assertTrue
  * — resync is a read/refresh family, so the holder is fine, but post-action
  * UI effects do not move). This is a member RELOCATION, not accretion; the
  * ceiling stays 34 unless another relocation removes it.
+ *
+ * 2026-11-19, ceiling 34 → 32 (documented, one-time): the series
+ * download-policy family — the gh-181 Ask-suggestion trio (the `suggestions`
+ * flow, `downloadSuggestions` / `dismissSuggestions`) and the NEW ADR-0015
+ * armed-series list + un-arm verb — moved OUT of the VM into
+ * [DownloadsSeriesPolicyActions] (the resync seam shape again): the three
+ * suggestion members left and the armed family landed in the holder in one
+ * relocation (net −2), with ONE VM accessor (`seriesPolicyActions`)
+ * replacing them. The one-shot suggestion feedback still flows through the
+ * VM's channel, now via the holder's `postMessage` sink.
  */
 class DownloadsViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 34
+    private val maxPublicInternalMembers = 32
 
     /**
      * A class-body declaration line at the ViewModel's single level of
@@ -151,7 +161,12 @@ class DownloadsViewModelOwnershipTest {
         // DECLARED filter-write selection clear (the requests runBulk twin):
         // the two value guards plus their declared-fix KDoc — a pinned
         // behavior fix, not accretion; lower again when a slice moves out.
-        val maxDownloadsViewModelLines = 615
+        // Lowered to 573 (2026-11-19) when the series download-policy family
+        // (the gh-181 suggestion trio + the new ADR-0015 armed-series list
+        // and un-arm verb) moved into DownloadsSeriesPolicyActions behind the
+        // one `seriesPolicyActions` accessor — current 572 lines plus one
+        // line of slack, per the baseline convention.
+        val maxDownloadsViewModelLines = 573
         val lines = viewModelSource().readText(Charsets.UTF_8).lineSequence().count()
         assertTrue(
             lines <= maxDownloadsViewModelLines,

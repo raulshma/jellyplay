@@ -243,7 +243,7 @@ class DownloadsViewModelTest {
         viewModel.deleteDownload(item("d9", status = DownloadStatus.COMPLETED))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.deleteDownload("d9") }
+        coVerify(exactly = 1) { downloadRepository.deleteDownload("d9", keepSeriesArm = false) }
         assertEquals(DownloadsUserMessage.Deleted, viewModel.messages.first())
     }
 
@@ -707,8 +707,8 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.deleteDownload("a") }
-        coVerify(exactly = 1) { downloadRepository.deleteDownload("b") }
+        coVerify(exactly = 1) { downloadRepository.deleteDownload("a", keepSeriesArm = false) }
+        coVerify(exactly = 1) { downloadRepository.deleteDownload("b", keepSeriesArm = false) }
         assertEquals(emptySet(), viewModel.uiState.value.selectedIds)
         assertEquals(DownloadsUserMessage.Deleted, viewModel.messages.first())
     }
@@ -718,7 +718,7 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
         val message = kotlinx.coroutines.withTimeoutOrNull(50) { viewModel.messages.first() }
         assertNull(message)
     }

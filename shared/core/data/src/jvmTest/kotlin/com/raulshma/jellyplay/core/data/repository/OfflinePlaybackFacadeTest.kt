@@ -64,10 +64,12 @@ class OfflinePlaybackFacadeTest {
     @Test
     fun `deleteDownload returns true and deletes only when a row exists`() = runTest {
         coEvery { downloadRepository.getDownloadByMediaItemId(ITEM) } returns downloadRow(DownloadStatus.COMPLETED)
-        coEvery { downloadRepository.deleteDownload(DOWNLOAD_ID) } returns Result.success(Unit)
+        coEvery { downloadRepository.deleteDownload(DOWNLOAD_ID, keepSeriesArm = true) } returns Result.success(Unit)
 
         assertTrue(facade.deleteDownload(ITEM))
-        coVerify(exactly = 1) { downloadRepository.deleteDownload(DOWNLOAD_ID) }
+        // Watch-boundary (the #14 offer / smart-downloads cleanup): the arm
+        // must survive (ADR-0015 decision 5).
+        coVerify(exactly = 1) { downloadRepository.deleteDownload(DOWNLOAD_ID, keepSeriesArm = true) }
     }
 
     @Test
@@ -75,7 +77,7 @@ class OfflinePlaybackFacadeTest {
         coEvery { downloadRepository.getDownloadByMediaItemId(ITEM) } returns null
 
         assertFalse(facade.deleteDownload(ITEM))
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any(), any()) }
     }
 
     @Test

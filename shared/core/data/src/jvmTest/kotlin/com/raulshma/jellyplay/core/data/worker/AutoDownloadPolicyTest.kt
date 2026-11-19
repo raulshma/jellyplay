@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.datastore.identity.PersistedIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.resolveAgainst
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,10 +30,13 @@ import kotlin.test.assertTrue
 /**
  * The retention-policy suites for [AutoDownloadCheck.checkOnce]: the lookahead
  * window (boundary cases — gapped episode numbering, a mid-season start, the
- * watched-episode anchor, the 0 = legacy escape), the global max-per-pass
- * budget, the per-server allow-list gate, and the leading retention-sweep
- * step. The scheduling shells (Android worker / desktop loop) are pinned by
- * their own suites; everything here drives the shared check directly.
+ * watched-episode anchor, the 0 = legacy escape), the ADR-0015 candidate
+ * hygiene (played/virtual episodes are never candidates in any mode, and
+ * [resolveAgainst] folds FOLLOW_GLOBAL arms and missing rows into the global
+ * mode), the global max-per-pass budget, the per-server allow-list gate, and
+ * the leading retention-sweep step. The scheduling shells (Android worker /
+ * desktop loop) are pinned by their own suites; everything here drives the
+ * shared check directly.
  */
 class AutoDownloadPolicyTest {
 
@@ -54,6 +58,7 @@ class AutoDownloadPolicyTest {
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
         coEvery { policyStore.seriesPolicies(any()) } returns emptyMap()
+        coEvery { policyStore.armedSeriesIds() } returns emptyList()
         coEvery { policyStore.recordAutoDownloadSuggestions(any()) } returns 0
         coEvery { downloadIntake.startSeries(any(), any(), any()) } returns Result.success(emptyList())
         coEvery { serverIdentityStore.readIdentity() } returns PersistedIdentity.ServerSelected("srv-1")
@@ -74,6 +79,7 @@ class AutoDownloadPolicyTest {
         number: Int?,
         watched: Boolean = false,
         seriesId: String = "s1",
+        virtual: Boolean = false,
     ) = MediaItem(
         id = id,
         name = "Episode $number",
@@ -83,6 +89,7 @@ class AutoDownloadPolicyTest {
         seasonNumber = 1,
         episodeNumber = number,
         isPlayed = watched,
+        isVirtual = virtual,
     )
 
     private fun givenSnapshot(vararg episodes: MediaItem) {
@@ -225,6 +232,79 @@ class AutoDownloadPolicyTest {
         check().checkOnce(attempt = 0)
 
         coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
+    }
+
+    // ── Candidate hygiene (ADR-0015 decision 6) ───────────────────────
+
+    @Test
+    fun `legacy take-all never picks played episodes`() = runTest {
+        // An armed, fully-watched, fully-deleted series must not re-download
+        // its history: the legacy take-all arm now filters played episodes
+        // exactly like the lookahead ladder always did.
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0)
+        givenSnapshot(
+            episodeInSeason("ep-1", "season-1", 1, watched = true),
+            episodeInSeason("ep-2", "season-1", 2, watched = true),
+            episodeInSeason("ep-3", "season-1", 3),
+        )
+
+        check().checkOnce(attempt = 0)
+
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-3")))
+        }
+    }
+
+    @Test
+    fun `legacy take-all never picks virtual or unaired episodes`() = runTest {
+        // The client-side guard decouples download behavior from the
+        // show_missing_episodes display pref (the gh-225 resource complaint).
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0)
+        givenSnapshot(
+            episodeInSeason("ep-1", "season-1", 1),
+            episodeInSeason("ep-missing", "season-1", 2, virtual = true),
+            episodeInSeason("ep-3", "season-1", 3),
+        )
+
+        check().checkOnce(attempt = 0)
+
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-1", "ep-3")))
+        }
+    }
+
+    @Test
+    fun `lookahead skips played and virtual episodes without spending the window on them`() = runTest {
+        // The anchor still counts played episodes (ep-2 watched), but the
+        // window AFTER it is filled by real candidates only: the played ep-2
+        // would be the anchor anyway and the virtual ep-3 is skipped, so the
+        // 2-episode window lands on ep-4 and ep-5.
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 2)
+        givenSnapshot(
+            episodeInSeason("ep-1", "season-1", 1),
+            episodeInSeason("ep-2", "season-1", 2, watched = true),
+            episodeInSeason("ep-3", "season-1", 3, virtual = true),
+            episodeInSeason("ep-4", "season-1", 4),
+            episodeInSeason("ep-5", "season-1", 5),
+        )
+
+        check().checkOnce(attempt = 0)
+
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-4", "ep-5")))
+        }
+    }
+
+    // ── Policy resolution (ADR-0015's resolveAgainst) ─────────────────
+
+    @Test
+    fun `resolveAgainst folds the sentinel and missing rows into the global mode`() {
+        assertEquals(AutoDownloadMode.INSTANT, null.resolveAgainst(AutoDownloadMode.INSTANT))
+        assertEquals(AutoDownloadMode.ASK, AutoDownloadMode.FOLLOW_GLOBAL.resolveAgainst(AutoDownloadMode.ASK))
+        // An explicit row wins over any global mode — the sentinel folds, the
+        // override does not.
+        assertEquals(AutoDownloadMode.NEVER, AutoDownloadMode.NEVER.resolveAgainst(AutoDownloadMode.ASK))
+        assertEquals(AutoDownloadMode.INSTANT, AutoDownloadMode.INSTANT.resolveAgainst(AutoDownloadMode.NEVER))
     }
 
     // ── Max-per-pass ──────────────────────────────────────────────────

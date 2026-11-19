@@ -3,10 +3,10 @@ package com.raulshma.jellyplay.feature.downloads
 import androidx.compose.runtime.Immutable
 
 /**
- * One-shot delete feedback emitted by [DownloadsViewModel] and rendered by
- * [DownloadsScreen], which posts the resolved text to the shared UserMessageBus.
- * The screen resolves the resource text (compose-resources), so no R class or
- * UiText machinery leaks into shared code.
+ * One-shot delete/suggestion feedback emitted by [DownloadsViewModel] and
+ * rendered by [DownloadsScreen], which posts the resolved text to the shared
+ * UserMessageBus. The screen resolves the resource text (compose-resources),
+ * so no R class or UiText machinery leaks into shared code.
  */
 @Immutable
 sealed interface DownloadsUserMessage {
