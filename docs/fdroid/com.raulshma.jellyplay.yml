@@ -49,7 +49,7 @@ Binaries:
 # Reproducible builds via developer-signed reference binaries
 # (docs/adr/0014-fdroid-reproducible-binaries.md). fdroidserver expands this
 # single template PER BUILD (%v → versionName, %c → the build's versionCode:
-# 11131 arm64-v8a / 11132 x86_64), downloads the APK from the release, and
+# 11151 arm64-v8a / 11152 x86_64), downloads the APK from the release, and
 # byte-compares it against the buildserver's own unsigned build
 # (apksigcopier + apksigner validate) — mismatch marks the build FAILED, so
 # the release blocks instead of silently diverging. The binaries are cut by
@@ -77,9 +77,9 @@ Builds:
   # len(VercodeOperation) Builds entries and zips the SORTED computed codes
   # onto them — the pair must ALWAYS be arm64 (+1) first, x86_64 (+2)
   # second, or the builds silently swap their ABIs.
-  - versionName: 0.11.13
-    versionCode: 11131
-    commit: TO-FILL-v0.11.13-tag-commit # git rev-parse v0.11.13
+  - versionName: 0.11.15
+    versionCode: 11151
+    commit: 09eea2c67401c17bd8ecd709692af7dd018f82f7 # v0.11.15 tag commit (git rev-parse v0.11.15)
     # `subdir: app` (added during MR review): fdroidserver builds inside
     # app/, so the task fragment below assembles assemblePhoneFdroidRelease
     # and the prebuild sed reaches the root settings file via ../.
@@ -146,9 +146,9 @@ Builds:
     # used. Verified on the live MR: fdroid build finds the outputs with no
     # explicit output:.
 
-  - versionName: 0.11.13
-    versionCode: 11132
-    commit: TO-FILL-v0.11.13-tag-commit # git rev-parse v0.11.13
+  - versionName: 0.11.15
+    versionCode: 11152
+    commit: 09eea2c67401c17bd8ecd709692af7dd018f82f7 # v0.11.15 tag commit (git rev-parse v0.11.15)
     subdir: app
     submodules: true
     gradle:
@@ -171,7 +171,7 @@ AutoUpdateMode: Version
 # Desktop pre-releases are tagged vX.Y.Z-alpha.N; the inline regex keeps only
 # semver tags as releases.
 UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
-# Committed version.properties carries the base code (0.11.13 → 11130; scheme
+# Committed version.properties carries the base code (0.11.15 → 11150; scheme
 # major*100000 + minor*1000 + patch*10). Each tag yields TWO builds: base+1
 # (arm64-v8a) and base+2 (x86_64).
 VercodeOperation:
@@ -185,5 +185,5 @@ UpdateCheckData:
 # Auto-update reads the committed version.properties (code + name) via the
 # expression above, so a release that forgets the version.properties bump is
 # never detected by the bot.
-CurrentVersion: 0.11.13
-CurrentVersionCode: 11132
+CurrentVersion: 0.11.15
+CurrentVersionCode: 11152
