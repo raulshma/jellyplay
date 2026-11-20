@@ -270,11 +270,12 @@ class AutoDownloadCheck(
         }
 
         if (!hadTransientFailure) return Outcome.Complete(newSuggestions)
-        return if (attempt < MAX_RETRIES) {
-            Outcome.RetriesPending
-        } else {
-            Log.w(TAG, "AutoDownload exhausted $MAX_RETRIES retries")
-            Outcome.Exhausted
+        return when (WorkerRetryVerdict.of(attempt, MAX_RETRIES)) {
+            WorkerRetryVerdict.Retry -> Outcome.RetriesPending
+            WorkerRetryVerdict.Exhausted -> {
+                Log.w(TAG, "AutoDownload exhausted $MAX_RETRIES retries")
+                Outcome.Exhausted
+            }
         }
     }
 

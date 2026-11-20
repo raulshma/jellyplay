@@ -28,6 +28,10 @@ Shared vocabulary for the client codebase: terms, idioms, and defect rules. Each
 
 **Media freshness ledger** — the media repo's freshness/cache chassis as one ctor-injected collaborator (`MediaFreshnessLedger`); `MediaFreshnessLedgerTest` pins the ladder. → CONTEXT.md "Core data repositories".
 
+**Fetch failure cause classifier** — why a detail fetch at the offline freshness seam failed as one fold `Throwable?.fetchFailureCause()` → `FetchFailureCause` (AUTH/NETWORK/SERVER/PARSE/OTHER, null → OTHER); both `OfflineSyncManager` fold sites (the freshness check + `resyncItem`) call it on the failure arm — **a second hand-fold of the exception→cause mapping is a defect**. `OfflineSyncManagerResyncTest` pins the arms. Cancellation never reaches the fold (rethrown before a `Result.failure` can carry it).
+
+**Worker retry verdict** — the attempt-cap ladder of every retrying worker/check as one pure fold `WorkerRetryVerdict.of(attempt, max)` (Retry/Exhausted + `shouldRetry`); budgets stay at their owners, only the attempt-vs-cap mapping folds, and the platform arms (`Result.retry()`/`failure()`, the desktop give-up) stay at callers — **a site re-spelling the attempt `<`/`>=` comparison by hand is the defect**. `WorkerRetryVerdictTest` pins the ladder.
+
 ## Home
 
 **Home row module** — everything one `HomeSectionType` knows behind one registry interface; the CW rule (played-row exclusion, hidden ids, NextUp merge) belongs to the CW module alone. → CONTEXT.md "Home feature".

@@ -84,9 +84,10 @@ interface SeriesDownloadPolicyStore {
     /**
      * The zero-rows un-arm rule's seam (ADR-0015 decision 5): when [seriesId]
      * has no `downloads` rows left, its arm row and pending Ask prompts are
-     * deleted. (OfflineRepositoryImpl carries a byte-identical private twin —
-     * cycle-justified leaf injection, recorded on its ctor — so this seam and
-     * that twin are the rule's two bodies; a third would be a defect.)
+     * deleted. THE one body of the rule — OfflineRepositoryImpl's three delete
+     * scopes call this member through its lazy ctor store edge (the
+     * DesktopDownloadManager cycle-break precedent), so no second body exists
+     * anywhere; a hand-folded copy would be a defect.
      *
      * The rule's verb split — WATCH-BOUNDARY deletions NEVER call this
      * (auto-delete-after-watch, smart-downloads cleanup, the #14 post-playback

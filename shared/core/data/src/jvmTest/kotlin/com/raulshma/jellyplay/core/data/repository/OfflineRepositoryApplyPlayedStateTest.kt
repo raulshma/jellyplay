@@ -48,7 +48,7 @@ class OfflineRepositoryApplyPlayedStateTest {
                 override fun nowElapsedRealtimeMillis(): Long = fakeNowMillis
                 override fun today(zone: ZoneId): java.time.LocalDate = java.time.LocalDate.of(2026, 2, 1)
             },
-            downloadPolicyDao = mockk(relaxed = true),
+            policyStore = lazy { mockk<SeriesDownloadPolicyStore>(relaxed = true) },
         )
     }
 

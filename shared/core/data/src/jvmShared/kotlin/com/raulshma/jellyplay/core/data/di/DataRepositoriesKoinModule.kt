@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SeriesArtReads
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
@@ -38,7 +39,6 @@ import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.data.worker.SettingsSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
-import com.raulshma.jellyplay.core.database.dao.DownloadPolicyDao
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -188,7 +188,12 @@ internal val dataRepositoriesModule: Module = module {
     single { WatchHistoryRepositoryImpl(get(), get(), get(), get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }
 
-    single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get(), downloadPolicyDao = get<DownloadPolicyDao>()) }
+    // The un-arm edge is a LAZY store resolution (the DesktopDownloadManager's
+    // Lazy<DownloadRepository> cycle-break precedent): the store single IS
+    // DownloadRepositoryImpl, whose graph reaches OfflineRepositoryImpl through
+    // EpisodeCatalogueImpl — eager, the two definitions recurse to stack
+    // overflow; deferred to the first delete, both singles are constructed.
+    single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get(), policyStore = lazy { get<SeriesDownloadPolicyStore>() }) }
     single<OfflineRepository> { get<OfflineRepositoryImpl>() }
     single<SeriesArtReads> { get<OfflineRepositoryImpl>() }
 
