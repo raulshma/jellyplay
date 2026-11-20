@@ -55,6 +55,7 @@ class DownloadsSpecDerivationTest {
         "auto_download_max_per_pass" to Int::class,
         "auto_download_keep_days" to Int::class,
         "auto_download_servers" to String::class,
+        "auto_arm_from_arr" to Boolean::class,
         "max_download_storage_gb" to Int::class,
         "downloads_list_filter" to String::class,
         "downloads_list_sort" to String::class,
@@ -213,6 +214,7 @@ class DownloadsSpecDerivationTest {
         assertEquals(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MAX_PER_PASS.default, slice.autoDownloadMaxPerPass)
         assertEquals(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.default, slice.autoDownloadKeepDays)
         assertEquals(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_SERVERS.default, slice.autoDownloadServers)
+        assertEquals(DownloadsPreferenceSpecs.AUTO_ARM_FROM_ARR.default, slice.autoArmFromArr)
         assertEquals(DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.default, slice.maxDownloadStorageGb)
         assertEquals(DownloadsPreferenceSpecs.DOWNLOADS_LIST_FILTER.default, slice.downloadsListFilter)
         assertEquals(DownloadsPreferenceSpecs.DOWNLOADS_LIST_SORT.default, slice.downloadsListSort)
@@ -230,7 +232,7 @@ class DownloadsSpecDerivationTest {
             ),
             slice.downloadScheduleWindow,
         )
-        // Totality: the 20 pinned properties are ALL the slice's fields (23
+        // Totality: the 21 pinned properties are ALL the slice's fields (24
         // rows - the legacy-only auto_download_new_episodes with no slice
         // property - the two extra schedule-window rows folded into one
         // field). A field added without a spec-default pin above (and without
@@ -238,7 +240,7 @@ class DownloadsSpecDerivationTest {
         // Companion, Compose's $stable) don't count.
         val instanceFields = DownloadsSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(20, instanceFields)
+        assertEquals(21, instanceFields)
     }
 
     /** Writes [spec]'s default through its derived write (the default IS the row's T). */

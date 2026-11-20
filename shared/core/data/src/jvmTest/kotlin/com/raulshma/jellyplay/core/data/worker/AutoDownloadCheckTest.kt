@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
+import com.raulshma.jellyplay.core.data.download.ArrAutoArmSync
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
@@ -16,7 +17,9 @@ import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -42,15 +45,20 @@ class AutoDownloadCheckTest {
     private val downloadIntake: DownloadIntake = mockk()
     private val downloadsStore: DownloadsStore = mockk()
     private val serverIdentityStore: ServerIdentityStore = mockk()
+    /** The arr auto-arm stage mock — the setup no-ops it (gates off in the suite's slices). */
+    private val arrAutoArmSync: ArrAutoArmSync = mockk()
 
     @BeforeTest
     fun setup() {
         // The legacy-behavior slice (lookahead 0 = take every missing episode)
         // — the retention-policy bounds have their own suites.
-        every { downloadsStore.downloads } returns MutableStateFlow(
+        givenPrefs(
             DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0),
         )
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
+        // The stage mock no-ops by default (its own suite pins the gates); the
+        // arr-stage tests below override it.
+        coEvery { arrAutoArmSync.sync(any()) } just runs
         coEvery { downloadRepository.downloadCoverage() } returns
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
@@ -59,6 +67,16 @@ class AutoDownloadCheckTest {
         coEvery { policyStore.recordAutoDownloadSuggestions(any()) } returns 0
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
         coEvery { downloadIntake.startSeries(any(), any(), any()) } returns Result.success(emptyList())
+    }
+
+    /**
+     * Stubs BOTH surfaces the check touches off one slice: the pass reads
+     * disk truth via [DownloadsStore.readDownloadsOrNull] (the eagerly-shared
+     * projection is the observer surface only — see checkOnce's comment).
+     */
+    private fun givenPrefs(slice: DownloadsSlice) {
+        every { downloadsStore.downloads } returns MutableStateFlow(slice)
+        coEvery { downloadsStore.readDownloadsOrNull() } returns slice
     }
 
     private fun snapshot() = EpisodeCatalogueSnapshot(
@@ -79,6 +97,7 @@ class AutoDownloadCheckTest {
         policyStore = policyStore,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
+        arrAutoArmSync = arrAutoArmSync,
         serverIdentityStore = serverIdentityStore,
         isStopped = isStopped,
     )
@@ -103,6 +122,22 @@ class AutoDownloadCheckTest {
         val outcome = check().checkOnce(attempt = AutoDownloadCheck.MAX_RETRIES)
 
         assertEquals(Outcome.Exhausted, outcome)
+    }
+
+    @Test
+    fun `a failed prefs read fails closed instead of lifting the server restriction`() = runTest {
+        // The check's read is the failure-surfacing [DownloadsStore.readDownloadsOrNull]:
+        // a null there must fail the pass (retry budget), not fall through to a
+        // defaults-shaped slice — the defaults' EMPTY autoDownloadServers
+        // allow-list reads as "every server allowed", so the sweep and the
+        // per-series intake would run for a server the user excluded.
+        coEvery { downloadsStore.readDownloadsOrNull() } returns null
+
+        val outcome = check().checkOnce(attempt = 0)
+
+        assertEquals(Outcome.RetriesPending, outcome)
+        coVerify(exactly = 0) { downloadRepository.sweepExpiredAutoDownloads() }
+        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any(), any()) }
     }
 
     @Test
@@ -150,9 +185,7 @@ class AutoDownloadCheckTest {
 
     @Test
     fun `a series with an INSTANT override enqueues even when the global mode is NEVER`() = runTest {
-        every { downloadsStore.downloads } returns MutableStateFlow(
-            DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER, autoDownloadLookahead = 0),
-        )
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER, autoDownloadLookahead = 0))
         coEvery { policyStore.seriesPolicies(listOf("s1")) } returns mapOf("s1" to AutoDownloadMode.INSTANT)
 
         val outcome = check().checkOnce(attempt = 0)
@@ -168,9 +201,7 @@ class AutoDownloadCheckTest {
 
     @Test
     fun `ASK mode records suggestions instead of enqueueing`() = runTest {
-        every { downloadsStore.downloads } returns MutableStateFlow(
-            DownloadsSlice(autoDownloadMode = AutoDownloadMode.ASK, autoDownloadLookahead = 0),
-        )
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.ASK, autoDownloadLookahead = 0))
         var recorded: List<AutoDownloadSuggestion> = emptyList()
         coEvery { policyStore.recordAutoDownloadSuggestions(any()) } coAnswers {
             @Suppress("UNCHECKED_CAST")
@@ -249,9 +280,7 @@ class AutoDownloadCheckTest {
 
     @Test
     fun `a FOLLOW_GLOBAL arm under a global NEVER is visited but skipped`() = runTest {
-        every { downloadsStore.downloads } returns MutableStateFlow(
-            DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER, autoDownloadLookahead = 0),
-        )
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER, autoDownloadLookahead = 0))
         coEvery { policyStore.seriesPolicies(listOf("s1")) } returns
             mapOf("s1" to AutoDownloadMode.FOLLOW_GLOBAL)
 
@@ -286,9 +315,7 @@ class AutoDownloadCheckTest {
         // positional anchor comes from the snapshot's played flag alone — the
         // watched ep-1 anchors the window and the next aired episode (ep-2)
         // is enqueued (lookahead 1).
-        every { downloadsStore.downloads } returns MutableStateFlow(
-            DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 1),
-        )
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 1))
         coEvery { downloadRepository.downloadCoverage() } returns
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = emptySet()))
         coEvery { policyStore.armedSeriesIds() } returns listOf("s1")
@@ -312,6 +339,102 @@ class AutoDownloadCheckTest {
 
         coVerify(exactly = 1) {
             downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-2")))
+        }
+    }
+
+    // ── arr auto-arm stage (gh-225 follow-up) ─────────────────────────
+
+    @Test
+    fun `an arr auto-arm failure skips the stage but the pass still completes and downloads`() = runTest {
+        // Sonarr is down: the stage throws, the pass's runCatching swallows
+        // it, and the normal choreography (universe → catalogue → intake)
+        // continues untouched.
+        coEvery { arrAutoArmSync.sync(any()) } throws RuntimeException("sonarr unreachable")
+
+        val outcome = check().checkOnce(attempt = 0)
+
+        assertEquals(Outcome.Complete(), outcome)
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-new-1")))
+        }
+    }
+
+    @Test
+    fun `a series the arr stage armed joins the same pass's universe`() = runTest {
+        // The stage runs BEFORE the universe derivation, so a row it arms is
+        // visible to this pass's armedSeriesIds() read — the pass visits the
+        // freshly armed series right away (no waiting a full period).
+        coEvery { arrAutoArmSync.sync(any()) } coAnswers {
+            coEvery { policyStore.armedSeriesIds() } returns listOf("s1", "arr-armed")
+            coEvery { policyStore.seriesPolicies(listOf("s1", "arr-armed")) } returns
+                mapOf("s1" to AutoDownloadMode.INSTANT, "arr-armed" to AutoDownloadMode.FOLLOW_GLOBAL)
+            coEvery { episodeCatalogue.loadSeriesEpisodes("arr-armed", any()) } returns Result.success(
+                EpisodeCatalogueSnapshot(
+                    seriesId = "arr-armed",
+                    seasons = listOf(season("arr-season-1")),
+                    episodesBySeason = mapOf(
+                        "arr-season-1" to listOf(episode("arr-ep-1", "arr-season-1", seriesId = "arr-armed")),
+                    ),
+                    fetchedSeasonIds = setOf("arr-season-1"),
+                    sortedEpisodes = listOf(episode("arr-ep-1", "arr-season-1", seriesId = "arr-armed")),
+                    epoch = 0L,
+                ),
+            )
+        }
+
+        val outcome = check().checkOnce(attempt = 0)
+
+        assertEquals(Outcome.Complete(), outcome)
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("arr-armed", episodeIds = mapOf("arr-season-1" to listOf("arr-ep-1")))
+        }
+    }
+
+    @Test
+    fun `an arr-armed series the user never engaged with starts at episode 1 the same pass`() = runTest {
+        // The gh-225 core ask under the DEFAULT lookahead (3): a monitored
+        // series with zero downloads and zero watched episodes has no anchor,
+        // so the season-head fallback enqueues its first 3 real episodes in
+        // the very pass that armed it — not nothing until a hand-download.
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 3))
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = emptySet()))
+        coEvery { arrAutoArmSync.sync(any()) } coAnswers {
+            coEvery { policyStore.armedSeriesIds() } returns listOf("arr-armed")
+            coEvery { policyStore.seriesPolicies(listOf("arr-armed")) } returns
+                mapOf("arr-armed" to AutoDownloadMode.FOLLOW_GLOBAL)
+            coEvery { episodeCatalogue.loadSeriesEpisodes("arr-armed", any()) } returns Result.success(
+                EpisodeCatalogueSnapshot(
+                    seriesId = "arr-armed",
+                    seasons = listOf(season("arr-season-1")),
+                    episodesBySeason = mapOf(
+                        "arr-season-1" to listOf(
+                            episode("arr-ep-1", "arr-season-1", seriesId = "arr-armed"),
+                            episode("arr-ep-2", "arr-season-1", seriesId = "arr-armed"),
+                            episode("arr-ep-3", "arr-season-1", seriesId = "arr-armed"),
+                            episode("arr-ep-4", "arr-season-1", seriesId = "arr-armed"),
+                        ),
+                    ),
+                    fetchedSeasonIds = setOf("arr-season-1"),
+                    sortedEpisodes = listOf(
+                        episode("arr-ep-1", "arr-season-1", seriesId = "arr-armed"),
+                        episode("arr-ep-2", "arr-season-1", seriesId = "arr-armed"),
+                        episode("arr-ep-3", "arr-season-1", seriesId = "arr-armed"),
+                        episode("arr-ep-4", "arr-season-1", seriesId = "arr-armed"),
+                    ),
+                    epoch = 0L,
+                ),
+            )
+        }
+
+        val outcome = check().checkOnce(attempt = 0)
+
+        assertEquals(Outcome.Complete(), outcome)
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries(
+                "arr-armed",
+                episodeIds = mapOf("arr-season-1" to listOf("arr-ep-1", "arr-ep-2", "arr-ep-3")),
+            )
         }
     }
 }

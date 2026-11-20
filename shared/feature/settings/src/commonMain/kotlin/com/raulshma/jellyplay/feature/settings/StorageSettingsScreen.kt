@@ -539,7 +539,13 @@ fun StorageSettingsScreen(
                     // carries — the emission `if`s below read it too).
                     SettingsItemList(
                         total = rowTotalFor(SettingsScreenGroups.storageDownloads, rowFlags) +
-                            if (showLiveUpdatesRow) 1 else 0,
+                            (if (showLiveUpdatesRow) 1 else 0) +
+                            // The auto-arm row's ContentGated term: its
+                            // admission rides the experimental Direct *arr
+                            // flag (viewModel.directArrEnabled), not a
+                            // flags-vocabulary gate — the +1 is explicit,
+                            // like the Live Updates row's.
+                            (if (viewModel.directArrEnabled) 1 else 0),
                     ) {
 
                     // Shared picker labels — resolved in the composable body so
@@ -718,6 +724,21 @@ fun StorageSettingsScreen(
                                     },
                                 )
                             }
+                        )
+                    }
+
+                    // The gh-225 opt-in rides the experimental Direct *arr
+                    // Integration flag: [RowAdmission.ContentGated] on the
+                    // row (the screen owns the gate AND the +1 count term
+                    // above — rowAdmitted would admit it unconditionally).
+                    if (viewModel.directArrEnabled) {
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Rss,
+                            title = rowTitle(StorageRows.AutoArmFromArr),
+                            subtitle = rowSubtitle(StorageRows.AutoArmFromArr),
+                            checked = preferences.autoArmFromArr,
+                            highlighted = highlightSettingId == StorageRows.AutoArmFromArr.id,
+                            onCheckedChange = { viewModel.setAutoArmFromArr(it) }
                         )
                     }
 

@@ -180,7 +180,12 @@ class SettingsCatalogScreenContractTest {
             "language.trackSelection" to emptySet(),
             "language.subtitles" to emptySet(),
             "storage.cache" to emptySet(),
-            "storage.downloads" to emptySet(),
+            // The auto-arm row is DECLARED RowAdmission.ContentGated (its
+            // emission rides the experimental Direct *arr flag the screen
+            // reads through the VM), so the derived admissions carry no entry
+            // for it — the pin list must be the literal rows, and the screen
+            // adds the count term explicitly.
+            "storage.downloads" to setOf(StorageRows.AutoArmFromArr.id),
             // The count quirks: pin_for_player_lock renders behind the pin
             // toggle but is not admitted into the count, and the quick-connect /
             // remote-control / remote-display rows render in their own
@@ -884,11 +889,15 @@ class SettingsCatalogScreenContractTest {
         // retention rows (check-now included) only when the policy mode is
         // not NEVER; clean-up-now only when the keep-days window is set;
         // every other record renders unconditionally (its non-advanced base).
+        // The auto-arm row is ContentGated (the experimental Direct *arr
+        // flag) — counted by no total, so every pin below subtracts its
+        // exception list too.
         assertEquals(
             SettingsScreenGroups.storageDownloads.items.size -
                 StorageDownloadScheduleWindowRows.size -
                 StorageAutoDownloadRetentionRows.size -
-                StorageAutoDownloadCleanUpNowRows.size,
+                StorageAutoDownloadCleanUpNowRows.size -
+                StorageAutoArmContentGatedRows.size,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to false)),
@@ -897,7 +906,8 @@ class SettingsCatalogScreenContractTest {
         assertEquals(
             SettingsScreenGroups.storageDownloads.items.size -
                 StorageAutoDownloadRetentionRows.size -
-                StorageAutoDownloadCleanUpNowRows.size,
+                StorageAutoDownloadCleanUpNowRows.size -
+                StorageAutoArmContentGatedRows.size,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true)),
@@ -907,29 +917,35 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.storageDownloads.items.size - // minus every parent-gated row:
                 StorageDownloadScheduleWindowRows.size - // the schedule windows
                 StorageAutoDownloadRetentionRows.size - // the auto-download retention rows
-                StorageAutoDownloadCleanUpNowRows.size, // the clean-up action
+                StorageAutoDownloadCleanUpNowRows.size - // the clean-up action
+                StorageAutoArmContentGatedRows.size, // the ContentGated auto-arm row
             rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to false))),
         )
         assertEquals(
             SettingsScreenGroups.storageDownloads.items.size - // minus the retention rows and the clean-up action:
                 StorageAutoDownloadRetentionRows.size -
-                StorageAutoDownloadCleanUpNowRows.size,
+                StorageAutoDownloadCleanUpNowRows.size -
+                StorageAutoArmContentGatedRows.size,
             rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true))),
         )
         // The auto-download retention cluster: the retention rows ride the
         // mode picker, and clean-up-now additionally rides the
         // keep-days picker being non-zero — with the schedule and
         // auto-download windows on, only the clean-up action stays gated
-        // off; turning the keep-days window on admits every declared row.
+        // off (and the ContentGated auto-arm row is counted by no total
+        // under every evaluation); turning the keep-days window on admits
+        // every counted row.
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - StorageAutoDownloadCleanUpNowRows.size, // minus the clean-up action (the keep-days window is still off)
+            SettingsScreenGroups.storageDownloads.items.size -
+                StorageAutoDownloadCleanUpNowRows.size -
+                StorageAutoArmContentGatedRows.size, // minus the clean-up action (the keep-days window is still off)
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true, StorageRows.AutoDownloadMode.id to true)),
             ),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size, // every declared row admits
+            SettingsScreenGroups.storageDownloads.items.size - StorageAutoArmContentGatedRows.size, // every counted row admits; the ContentGated auto-arm row never does
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(

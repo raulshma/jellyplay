@@ -303,6 +303,26 @@ class ArrWireMapperTest {
     }
 
     @Test
+    fun `sonarr series row maps into the SonarrSeriesInfo contract with tvdbId`() {
+        val rows = json.decodeFromString<List<SonarrSeriesResource>>(
+            """
+            [{"id":2,"title":"Right Show","tvdbId":81189,"monitored":true,"path":"/tv/right",
+              "images":[],"UnknownFutureField":1},
+             {"id":3,"title":"Paused Show","monitored":false}]
+            """.trimIndent(),
+        )
+        assertEquals(
+            SonarrSeriesInfo(id = 2, title = "Right Show", tvdbId = 81189, monitored = true, path = "/tv/right"),
+            rows[0].toSonarrSeriesInfo(),
+        )
+        val unmonitored = rows[1].toSonarrSeriesInfo()
+        assertEquals(3, unmonitored.id)
+        assertEquals(false, unmonitored.monitored)
+        assertNull(unmonitored.path)
+        assertEquals(0, unmonitored.tvdbId, "absent wire tvdbId degrades to the 0 sentinel, not a decode failure")
+    }
+
+    @Test
     fun `sonarr command maps with the same queued-first date preference`() {
         val cmd = json.decodeFromString<ArrCommandResource>(
             """{"id":7,"name":"EpisodeSearch","status":"completed",

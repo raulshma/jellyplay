@@ -1316,4 +1316,8 @@
     <string name="ss_exo_target_buffer_mb_subtitle">전방 버퍼 총량(MB)(0 = 엔진 파생 자동, 5–512 명시)</string>
     <string name="ss_exo_retain_back_buffer_title">백 버퍼 유지</string>
     <string name="ss_exo_retain_back_buffer_subtitle">키프레임 경계와 관계없이 백 버퍼를 유지합니다(즉시 되감기, 메모리 증가)</string>
+    <string name="settings_auto_arm_from_arr">Sonarr 시리즈 자동 추가</string>
+    <string name="settings_auto_arm_from_arr_subtitle">다운로드한 에피소드가 없어도 Sonarr에서 관리 중인 시리즈를 자동 다운로드 대상으로 지정합니다(실험적 기능)</string>
+    <string name="ss_auto_arm_from_arr_title">Sonarr 시리즈 자동 추가</string>
+    <string name="ss_auto_arm_from_arr_subtitle">다운로드한 에피소드가 없어도 Sonarr에서 관리 중인 시리즈를 자동 다운로드 대상으로 지정합니다</string>
 </resources>

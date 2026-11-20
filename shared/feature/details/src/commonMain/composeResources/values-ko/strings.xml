@@ -209,6 +209,7 @@
     <string name="detail_error_download_failed">다운로드 실패</string>
     <string name="detail_error_not_a_series">시리즈가 아닙니다</string>
     <string name="detail_error_queue_failed">다운로드 대기열 추가 실패</string>
+    <string name="detail_error_arm_failed">시리즈를 자동 다운로드 대상으로 지정하지 못했습니다</string>
     <string name="detail_error_unavailable_offline">이 항목은 오프라인에서 사용할 수 없습니다.</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
@@ -513,4 +514,8 @@
     <string name="detail_option_stop_notify_new_episodes">새 에피소드 알림 중지</string>
     <string name="detail_msg_series_notifications_on">새 에피소드 알림이 켜졌습니다</string>
     <string name="detail_msg_series_notifications_off">새 에피소드 알림이 꺼졌습니다</string>
+    <string name="detail_download_series_arm">자동 다운로드</string>
+    <string name="detail_download_series_arm_hint">에피소드를 다운로드하지 않고 이 시리즈를 자동 다운로드 대상으로 지정합니다. 새 에피소드는 자동 다운로드 설정을 따릅니다.</string>
+    <string name="detail_download_series_arm_action">추가</string>
+    <string name="detail_download_series_armed">시리즈가 자동 다운로드 대상으로 지정되었습니다. 새 에피소드는 자동 다운로드 설정을 따릅니다.</string>
 </resources>

@@ -1320,4 +1320,8 @@
     <string name="ss_exo_target_buffer_mb_subtitle">Buffer totale in avanti in MB (0 = auto derivato dal motore, 5–512 esplicito)</string>
     <string name="ss_exo_retain_back_buffer_title">Mantieni il back buffer</string>
     <string name="ss_exo_retain_back_buffer_subtitle">Mantiene il back buffer indipendentemente dai limiti dei keyframe (riavvolgimento istantaneo, più memoria)</string>
+    <string name="settings_auto_arm_from_arr">Attiva automaticamente le serie monitorate in Sonarr</string>
+    <string name="settings_auto_arm_from_arr_subtitle">Attiva per il download automatico le serie monitorate in Sonarr anche senza episodi scaricati (sperimentale)</string>
+    <string name="ss_auto_arm_from_arr_title">Attiva automaticamente le serie monitorate in Sonarr</string>
+    <string name="ss_auto_arm_from_arr_subtitle">Attiva per il download automatico le serie monitorate in Sonarr anche senza episodi scaricati</string>
 </resources>

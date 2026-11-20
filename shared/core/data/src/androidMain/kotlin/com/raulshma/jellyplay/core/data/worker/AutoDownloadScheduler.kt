@@ -7,7 +7,6 @@ import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.isEnabled
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Duration
 
@@ -17,10 +16,11 @@ import java.time.Duration
  * and app consumers reference it; the TvWatchNextSchedulerImpl precedent):
  * schedules the periodic background auto-download worker that fetches new
  * episodes of series the user has already downloaded. The schedule stays
- * active while the `autoDownloadMode` preference is enabled **or** any series
- * carries a per-series override (gh-181) — a global NEVER with one INSTANT
- * series must not cancel the pass that series rides; only when both are dead
- * is the periodic work cancelled.
+ * active while the `autoDownloadMode` preference is enabled, any series
+ * carries a per-series override (gh-181), **or** the `autoArmFromArr` pref is
+ * on (gh-225 follow-up) — a global NEVER with one INSTANT series, or with
+ * zero arms but arr auto-arm opted in, must not cancel the pass those ride;
+ * only when all three are dead is the periodic work cancelled.
  */
 class AutoDownloadSchedulerImpl(
     private val context: Context,
@@ -29,11 +29,33 @@ class AutoDownloadSchedulerImpl(
     private val applicationScope: CoroutineScope,
 ) : AutoDownloadScheduler {
     /**
-     * The keep-alive predicate both triggers share: the global mode, or any
-     * per-series override, keeps the machinery alive.
+     * The keep-alive predicate both triggers share: the global mode, any
+     * per-series override, or the arr auto-arm opt-in keeps the machinery
+     * alive. The pref rides the store's disk-backed one-shot read
+     * ([DownloadsStore.readDownloadsOrNull] — the readIdentity precedent),
+     * not the shared `downloads` StateFlow projection: this gate runs inside
+     * the launch a `sync()` right after a preference write performs, and the
+     * eagerly-shared projection has no happens-before edge against it — a
+     * just-enabled `autoArmFromArr` under a global NEVER with zero arms could
+     * read the pre-write slice and CANCEL the pass it must schedule.
+     *
+     * The read fails OPEN: a null answer is a transient DataStore read
+     * failure, not "everything off" — a wrong cancel here is persisted
+     * WorkManager state with no automatic later re-scheduling trigger (the
+     * gate's pokes are all user actions), so the schedule survives and the
+     * next gate re-reads disk.
      */
     private suspend fun shouldStayScheduled(): Boolean {
-        if (downloadsStore.downloads.first().autoDownloadMode.isEnabled) return true
+        // The wrap is the gate's own defense (the hasSeriesPolicies idiom
+        // below): readDownloadsOrNull's contract is null-on-failure, and this
+        // folds any contract-violating throw into the same fail-open arm.
+        val prefs = runCatchingRethrowingCancellation { downloadsStore.readDownloadsOrNull() }
+            .getOrNull() ?: return true
+        if (prefs.autoDownloadMode.isEnabled) return true
+        // gh-225 follow-up: with arr auto-arm opted in the next pass may arm
+        // rows from nothing (global NEVER + zero policy rows included), so
+        // the pass must stay scheduled to run that stage at all.
+        if (prefs.autoArmFromArr) return true
         return runCatchingRethrowingCancellation { policyStore.hasSeriesPolicies() }.getOrDefault(false)
     }
     companion object {

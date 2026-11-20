@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.StoragePreferences
@@ -50,6 +51,7 @@ class StorageSettingsViewModel(
     private val storageAreas: StorageAreas,
     private val storageMountsProvider: StorageMountsProvider,
     authRepository: AuthRepository,
+    private val experimentalGate: ExperimentalFeatureGate,
 ) : SettingsSectionViewModel(advancedSettings, editor) {
 
     val preferences: StateFlow<StoragePreferences> = projections.storagePreferences
@@ -58,11 +60,25 @@ class StorageSettingsViewModel(
     var servers by composeState<List<ServerInfo>>(emptyList())
         private set
 
+    /**
+     * The experimental Direct *arr Integration flag — the auto-arm row's
+     * admission gate ([StorageRows.AutoArmFromArr], [RowAdmission.ContentGated]):
+     * the screen owns the emission `if` and the explicit count term off this
+     * mirror, exactly the way it reads every other runtime-gated value.
+     */
+    var directArrEnabled by composeState(false)
+        private set
+
     init {
         launch {
             authRepository.servers.collect { serverList ->
                 servers = serverList
             }
+        }
+        launch {
+            // The gate's StateFlow is shared Eagerly upstream — this collector
+            // only mirrors it into compose state for the screen's admission `if`.
+            experimentalGate.directArrEnabled.collect { directArrEnabled = it }
         }
         refreshStorageMounts()
     }
@@ -161,6 +177,19 @@ class StorageSettingsViewModel(
     fun setAutoDownloadMode(mode: AutoDownloadMode) {
         editor.edit {
             downloads.setAutoDownloadMode(mode)
+            autoDownloadSync.sync()
+        }
+    }
+
+    /**
+     * The arr auto-arm toggle's write + scheduler poke (the
+     * [setAutoDownloadMode] shape): `shouldStayScheduled` is true on the pref
+     * alone, so turning it on must schedule the pass even with global mode
+     * NEVER and zero arms — and turning it off re-evaluates the gate.
+     */
+    fun setAutoArmFromArr(enabled: Boolean) {
+        editor.edit {
+            downloads.setAutoArmFromArr(enabled)
             autoDownloadSync.sync()
         }
     }

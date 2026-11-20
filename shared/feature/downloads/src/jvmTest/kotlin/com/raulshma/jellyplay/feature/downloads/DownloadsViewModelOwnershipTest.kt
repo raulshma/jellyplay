@@ -166,7 +166,20 @@ class DownloadsViewModelOwnershipTest {
         // and un-arm verb) moved into DownloadsSeriesPolicyActions behind the
         // one `seriesPolicyActions` accessor — current 572 lines plus one
         // line of slack, per the baseline convention.
-        val maxDownloadsViewModelLines = 573
+        // Raised to 577 (2026-11-20) admitting the gh-225 follow-up's
+        // arm-picker series-search seam: ONE forwarded primary-constructor
+        // param (`libraryFeed`, excluded from the member ceiling by the
+        // param rule) plus its one forwarding line in the
+        // `seriesPolicyActions` construction — the search lives in the
+        // extracted holder (searchArmCandidates), never in the VM body.
+        // Raised to 585 (2026-11-20) admitting the manual arm's schedule
+        // reconcile: the same one-forwarded-param shape
+        // (`autoDownloadScheduler`, param rule again) plus its forwarding
+        // line — the first-arm keep-alive poke lives in the extracted
+        // holder's armSeries, never in the VM body. 586 by the suite's
+        // lineSequence count (no trailing-newline off-by-one vs wc -l).
+        // Lower again when a slice moves out.
+        val maxDownloadsViewModelLines = 586
         val lines = viewModelSource().readText(Charsets.UTF_8).lineSequence().count()
         assertTrue(
             lines <= maxDownloadsViewModelLines,

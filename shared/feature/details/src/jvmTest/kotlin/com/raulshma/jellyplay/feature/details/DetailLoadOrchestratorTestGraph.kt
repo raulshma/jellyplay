@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -151,6 +152,8 @@ internal class DetailLoadOrchestratorTestGraph(testScope: TestScope) {
             downloadsStore = mockk<DownloadsStore>(relaxed = true),
             adaptiveBitrateManager = mockk<AdaptiveBitrateManager>(relaxed = true),
             downloadRepository = mockk<DownloadRepository>(relaxed = true),
+            policyStore = mockk<SeriesDownloadPolicyStore>(relaxed = true),
+            autoDownloadScheduler = mockk(relaxed = true),
         ).create(
             scope = scope,
             session = session,

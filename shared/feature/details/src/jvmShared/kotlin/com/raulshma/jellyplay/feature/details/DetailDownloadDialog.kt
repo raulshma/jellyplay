@@ -43,6 +43,7 @@ import com.composables.icons.tabler.outline.AdjustmentsHorizontal
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.ChevronRight
+import com.composables.icons.tabler.outline.Radar
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -62,6 +63,10 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_downloa
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_advanced_hint_quality_subtitles
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_dialog_title
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_quality
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_series_arm
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_series_arm_action
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_series_arm_hint
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_series_armed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_subtitles_all
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_subtitles_none
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_estimated_size
@@ -307,6 +312,85 @@ internal fun DownloadPickerSheet(
                 Button(onClick = onConfirm, enabled = enoughSpace) {
                     Text(stringResource(Res.string.detail_download_dialog_title))
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The series download sheet's "Auto-download" arm row (gh-225 follow-up):
+ * the explicit arm-without-enqueueing action rendered above the shared
+ * [com.raulshma.jellyplay.core.ui.components.downloads.SeriesDownloadSheet]
+ * at the detail screen's host — the sheet itself is core:ui and stays
+ * untouched; this row is the details feature's addition. Arming rides the
+ * DownloadCallbacks bundle's [onArm] (→ [DownloadLifecycleActions.armSeries],
+ * the policy store's manualArmSeries write — insert-if-absent arm, or a
+ * tombstone re-arm); [armed] tracks that store reactively
+ * ([DownloadLifecycleActions.seriesArmed], raw NEVER excluded). Un-armed, the
+ * row is the interactive arm affordance; once armed it renders as a plain,
+ * NON-INTERACTIVE confirmation surface — the hint swaps to
+ * `detail_download_series_armed` and the action button drops — so a repeat
+ * click can never re-post the armed toast. Disarm is deliberately not
+ * duplicated here: it lives on the sheet's policy chips (NEVER) and the
+ * Downloads armed card, the homes the arm rule already gives the disarm
+ * verb. The sheet's episode picker + policy chips below are unaffected.
+ */
+@Composable
+internal fun SeriesArmActionRow(
+    onArm: () -> Unit,
+    armed: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.02f)
+    // Armed = confirmation state: the chain stops before the focus
+    // affordances + clickable, leaving a plain non-focusable surface.
+    val rowModifier = modifier
+        .fillMaxWidth()
+        .padding(horizontal = 20.dp)
+        .clip(ShapeCache.smooth12)
+        .background(MaterialTheme.colorScheme.surfaceContainer)
+        .then(
+            if (armed) {
+                Modifier
+            } else {
+                Modifier
+                    .then(focusState.focusModifier)
+                    .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smooth12))
+                    .clickable { onArm() }
+            },
+        )
+        .padding(horizontal = 14.dp, vertical = 12.dp)
+    Row(
+        modifier = rowModifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Tabler.Outline.Radar,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(Res.string.detail_download_series_arm),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(
+                    if (armed) Res.string.detail_download_series_armed
+                    else Res.string.detail_download_series_arm_hint,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!armed) {
+            Spacer(Modifier.width(8.dp))
+            TextButton(onClick = onArm) {
+                Text(stringResource(Res.string.detail_download_series_arm_action))
             }
         }
     }

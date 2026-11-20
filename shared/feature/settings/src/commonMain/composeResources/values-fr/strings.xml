@@ -1318,4 +1318,8 @@
     <string name="ss_exo_target_buffer_mb_subtitle">Tampon aval total en Mo (0 = auto dérivé du moteur, 5–512 explicite)</string>
     <string name="ss_exo_retain_back_buffer_title">Conserver le tampon arrière</string>
     <string name="ss_exo_retain_back_buffer_subtitle">Conserve le tampon arrière indépendamment des limites d’images clés (rembobinage instantané, mémoire plus élevée)</string>
+    <string name="settings_auto_arm_from_arr">Surveiller automatiquement les séries suivies dans Sonarr</string>
+    <string name="settings_auto_arm_from_arr_subtitle">Active automatiquement le téléchargement pour les séries suivies dans Sonarr, même sans épisodes téléchargés (expérimental)</string>
+    <string name="ss_auto_arm_from_arr_title">Surveiller automatiquement les séries suivies dans Sonarr</string>
+    <string name="ss_auto_arm_from_arr_subtitle">Active automatiquement le téléchargement pour les séries suivies dans Sonarr, même sans épisodes téléchargés</string>
 </resources>

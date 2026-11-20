@@ -254,6 +254,7 @@ class PreferenceProjections constructor(
                 autoDownloadMaxPerPass = downloads.autoDownloadMaxPerPass,
                 autoDownloadKeepDays = downloads.autoDownloadKeepDays,
                 autoDownloadServers = downloads.autoDownloadServers,
+                autoArmFromArr = downloads.autoArmFromArr,
                 maxDownloadStorageGb = downloads.maxDownloadStorageGb,
                 downloadStorageLocation = downloads.downloadStorageLocation,
                 autoDeleteAfterWatch = downloads.autoDeleteAfterWatch,

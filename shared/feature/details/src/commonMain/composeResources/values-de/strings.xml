@@ -213,6 +213,7 @@
     <string name="detail_error_download_failed">Download fehlgeschlagen</string>
     <string name="detail_error_not_a_series">Dies ist keine Serie</string>
     <string name="detail_error_queue_failed">Downloads konnten nicht in die Warteschlange aufgenommen werden</string>
+    <string name="detail_error_arm_failed">Serie konnte nicht aktiviert werden</string>
     <string name="detail_error_unavailable_offline">Dieser Eintrag ist offline nicht verfügbar.</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
@@ -524,4 +525,8 @@
     <string name="detail_option_stop_notify_new_episodes">Benachrichtigungen zu neuen Episoden stoppen</string>
     <string name="detail_msg_series_notifications_on">Benachrichtigungen zu neuen Episoden aktiviert</string>
     <string name="detail_msg_series_notifications_off">Benachrichtigungen zu neuen Episoden deaktiviert</string>
+    <string name="detail_download_series_arm">Auto-Download</string>
+    <string name="detail_download_series_arm_hint">Aktiviert diese Serie, ohne Episoden herunterzuladen. Neue Episoden folgen der Auto-Download-Einstellung.</string>
+    <string name="detail_download_series_arm_action">Aktivieren</string>
+    <string name="detail_download_series_armed">Serie aktiviert — neue Episoden folgen der Auto-Download-Einstellung.</string>
 </resources>

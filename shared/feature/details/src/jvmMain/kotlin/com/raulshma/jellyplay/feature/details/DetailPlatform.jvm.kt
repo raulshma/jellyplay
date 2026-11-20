@@ -60,7 +60,16 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
     // OfflineSyncManager, SyncPlayManager) moved here out of commonMain's
     // detailsModule. Desktop registers BOTH modules; these defs resolve exactly
     // as before (same Koin defs, different module home).
-    single { DownloadLifecycleActions.Factory(get(), get(), get(), get()) }
+    single {
+        DownloadLifecycleActions.Factory(
+            downloadIntake = get(),
+            downloadsStore = get(),
+            adaptiveBitrateManager = get(),
+            downloadRepository = get(),
+            policyStore = get(),
+            autoDownloadScheduler = get(),
+        )
+    }
     single { ResyncActions.Factory(get(), get()) }
     single { WatchPartyActions.Factory(get(), get()) }
     single { MetadataAdminActions.Factory(get(), get(), get()) }

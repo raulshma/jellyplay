@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.download.ArrAutoArmSync
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
@@ -45,6 +46,14 @@ import kotlin.random.Random
  * from 0 like the Android `runAttemptCount`, same [AutoDownloadCheck.MAX_RETRIES]
  * budget, give-up (not crash) at the cap, the ladder then waiting for the
  * next periodic tick.
+ *
+ * Keep-alive note (gh-225 follow-up): Android's
+ * [AutoDownloadSchedulerImpl.shouldStayScheduled] keeps the periodic work
+ * alive ALSO while the `autoArmFromArr` pref is on (global NEVER + zero arms
+ * included). The desktop loop has no cancel path — `start()` is unconditional
+ * at shell startup and `sync()` re-arms it — so that keep-alive condition
+ * holds by construction here: the arr auto-arm stage rides the always-on
+ * loop's passes.
  */
 class DesktopAutoDownloadScheduler(
     downloadsStore: DownloadsStore,
@@ -52,6 +61,8 @@ class DesktopAutoDownloadScheduler(
     policyStore: SeriesDownloadPolicyStore,
     downloadIntake: DownloadIntake,
     episodeCatalogue: EpisodeCatalogue,
+    /** The arr auto-arm stage (gh-225 follow-up) the shared check runs mid-pass. */
+    arrAutoArmSync: ArrAutoArmSync,
     /** Active-server identity for the check's per-user allow-list gate. */
     serverIdentityStore: ServerIdentityStore,
     /** The process-wide application scope (DatastoreQualifiers.applicationScope in Koin). */
@@ -63,6 +74,7 @@ class DesktopAutoDownloadScheduler(
         policyStore = policyStore,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
+        arrAutoArmSync = arrAutoArmSync,
         serverIdentityStore = serverIdentityStore,
         // The worker's `isStopped` twin: the pass reads the liveness of the
         // job that spawned it ([activePass] — the loop job for periodic

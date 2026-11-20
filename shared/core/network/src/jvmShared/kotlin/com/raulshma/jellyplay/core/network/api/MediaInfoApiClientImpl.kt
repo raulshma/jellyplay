@@ -237,7 +237,15 @@ class MediaInfoApiClientImpl(
             limit = limit,
             recursive = true,
             enableTotalRecordCount = true,
-            fields = LIST_ITEM_FIELDS,
+            // One-off composition on the shared list minimum (the
+            // `+ ItemFields.PEOPLE` precedent at LibraryApiClientImpl's
+            // filmography rows): the with-user-data read also projects
+            // ProviderIds so the arr auto-arm's tvdb match index builds
+            // straight from the enumerated rows (MediaItem.providerIds) —
+            // the same read's consumers that never look at ids only pay a
+            // small per-row map. NOT a LIST_PROJECTION_FIELDS change: every
+            // other list call keeps the two-field minimum.
+            fields = LIST_ITEM_FIELDS + ItemFields.PROVIDER_IDS,
         ).content
         val total = response?.totalRecordCount ?: 0
         val items = (response?.items ?: emptyList()).map { it.toMediaItem() }

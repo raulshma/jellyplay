@@ -1317,4 +1317,8 @@
     <string name="ss_exo_target_buffer_mb_subtitle">Gesamter Vorwärts-Puffer in MB (0 = automatisch aus der Engine abgeleitet, 5–512 explizit)</string>
     <string name="ss_exo_retain_back_buffer_title">Back-Buffer behalten</string>
     <string name="ss_exo_retain_back_buffer_subtitle">Back-Buffer unabhängig von Keyframe-Grenzen behalten (sofortiges Zurückspulen, höherer Speicherbedarf)</string>
+    <string name="settings_auto_arm_from_arr">In Sonarr verwaltete Serien automatisch aktivieren</string>
+    <string name="settings_auto_arm_from_arr_subtitle">Aktiviert von Sonarr verwaltete Serien für den Auto-Download, auch wenn keine Episoden heruntergeladen sind (experimentell)</string>
+    <string name="ss_auto_arm_from_arr_title">In Sonarr verwaltete Serien automatisch aktivieren</string>
+    <string name="ss_auto_arm_from_arr_subtitle">Aktiviert von Sonarr verwaltete Serien für den Auto-Download, auch wenn keine Episoden heruntergeladen sind</string>
 </resources>

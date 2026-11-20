@@ -251,6 +251,16 @@ interface SonarrApiClient {
     suspend fun getSeriesInfo(server: ArrServerConfig, tvdbId: Int): Result<SonarrSeriesInfo?>
 
     /**
+     * `GET /api/v3/series` — every series the server tracks, monitored and
+     * unmonitored alike. No `?tvdbId=` param is sent, so the untrusted-param
+     * client-side filter [findSeriesByTvdb] / [getSeriesInfo] need doesn't
+     * apply here; the rows decode straight through the same
+     * [SonarrSeriesInfo] projection (id/title/tvdbId/monitored/path).
+     * Used by the auto-download arm to enumerate the full series universe.
+     */
+    suspend fun getSeriesList(server: ArrServerConfig): Result<List<SonarrSeriesInfo>>
+
+    /**
      * `GET /api/v3/episode?seriesId=...` — the rich projection used by the
      * "Manage Series" screen: every episode in the series with its season /
      * episode numbers, title, air date, overview, monitored flag, and (when a
@@ -275,6 +285,11 @@ interface SonarrApiClient {
 data class SonarrSeriesInfo(
     val id: Int,
     val title: String,
+    /**
+     * The series' TheTVDB id — the join key to Jellyfin, the same field
+     * [findSeriesByTvdb] and [getSeriesInfo] key their lookups off.
+     */
+    val tvdbId: Int,
     val monitored: Boolean,
     /** On-disk root folder for the series (Sonarr `path`). Null when absent. */
     val path: String? = null,

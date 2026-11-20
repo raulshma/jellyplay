@@ -11,6 +11,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.downloads_aut
 import com.raulshma.jellyplay.feature.settings.generated.resources.downloads_auto_delete_after_watch_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adaptive_bitrate
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adaptive_bitrate_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_arm_from_arr
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_arm_from_arr_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_cache
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_clean_up_now
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days
@@ -90,6 +92,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_downl
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_servers_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_offline_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_offline_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_arm_from_arr_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_arm_from_arr_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_bandwidth_cap_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_bandwidth_cap_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_cellular_download_warning_subtitle
@@ -368,7 +372,7 @@ internal object StorageRows {
         route = Route.StorageSettings(),
     )
 
-    // -- The "Downloads" group's fifteen rows, in catalog order. --
+    // -- The "Downloads" group's sixteen rows, in catalog order. --
 
     val DownloadQuality = SettingsRow(
         id = "download_quality",
@@ -455,6 +459,27 @@ internal object StorageRows {
         keywords = listOf("auto download", "servers", "allow list", "restrict", "which server"),
         route = Route.StorageSettings(),
         gate = RowAdmission.WhenOn(StorageRows.AutoDownloadMode.id),
+    )
+
+    /**
+     * The gh-225 follow-up opt-in: the auto-download pass arms Sonarr-monitored
+     * series even with zero downloaded episodes. Its admission rides the
+     * experimental Direct *arr Integration flag ([RowAdmission.ContentGated] —
+     * the screen reads the flag through the VM's
+     * [com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate]
+     * and owns both the emission `if` and the explicit count term), not a
+     * [RowAdmissionFlags]-expressible gate.
+     */
+    val AutoArmFromArr = SettingsRow(
+        id = "auto_arm_from_arr",
+        icon = Tabler.Outline.Rss,
+        titleRes = Res.string.settings_auto_arm_from_arr,
+        subtitleRes = Res.string.settings_auto_arm_from_arr_subtitle,
+        searchTitleRes = Res.string.ss_auto_arm_from_arr_title,
+        searchSubtitleRes = Res.string.ss_auto_arm_from_arr_subtitle,
+        keywords = listOf("auto arm", "sonarr", "arr", "auto download", "arm series", "tracked", "monitor"),
+        route = Route.StorageSettings(),
+        gate = RowAdmission.ContentGated,
     )
 
     val AutoDownloadCleanUpNow = SettingsRow(
@@ -600,6 +625,7 @@ internal val StorageDownloadsRows: List<SettingsRow> = listOf(
     StorageRows.AutoDownloadMaxPerPass,
     StorageRows.AutoDownloadKeepDays,
     StorageRows.AutoDownloadServers,
+    StorageRows.AutoArmFromArr,
     StorageRows.AutoDownloadCleanUpNow,
     StorageRows.AutoDeleteAfterWatch,
     StorageRows.DownloadSchedule,
@@ -634,6 +660,11 @@ internal val StorageAutoDownloadRetentionRows: List<SettingsRow> = listOf(
 /** The clean-up action riding [StorageRows.AutoDownloadKeepDays] (the non-zero keep-days window the screen feeds). */
 internal val StorageAutoDownloadCleanUpNowRows: List<SettingsRow> = listOf(
     StorageRows.AutoDownloadCleanUpNow,
+)
+
+/** The auto-arm row's [RowAdmission.ContentGated] exception — counted by no total (the strict derivation); the screen adds its term off the experimental Direct *arr flag. */
+internal val StorageAutoArmContentGatedRows: List<SettingsRow> = listOf(
+    StorageRows.AutoArmFromArr,
 )
 
 /**

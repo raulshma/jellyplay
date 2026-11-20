@@ -50,6 +50,14 @@ class WorkerRetryVerdictTest {
     }
 
     @Test
+    fun `a non-positive budget exhausts every attempt`() {
+        // The disabled-budget rule is unconditional: a negative attempt against
+        // a non-positive cap must not slip past it into Retry.
+        assertEquals(WorkerRetryVerdict.Exhausted, WorkerRetryVerdict.of(attempt = -1, max = 0))
+        assertEquals(WorkerRetryVerdict.Exhausted, WorkerRetryVerdict.of(attempt = -1, max = -1))
+    }
+
+    @Test
     fun `shouldRetry mirrors the verdict arms`() {
         assertTrue(WorkerRetryVerdict.of(attempt = 0, max = 3).shouldRetry)
         assertFalse(WorkerRetryVerdict.of(attempt = 3, max = 3).shouldRetry)

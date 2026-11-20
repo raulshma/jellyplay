@@ -11,12 +11,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,8 +49,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.floatingNavClearanceDp
@@ -80,6 +84,9 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_clear_selection
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_suggestions_queued
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_select_all
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_arm_series_armed
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_arm_series_title
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_armed_series_title
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_close
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_delete
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_deleted_message
@@ -194,11 +201,13 @@ fun DownloadsScreen(
     val bus = LocalUserMessageBus.current
     val deletedText = stringResource(Res.string.downloads_deleted_message)
     val suggestionsQueuedText = stringResource(Res.string.downloads_suggestions_queued)
+    val seriesArmedText = stringResource(Res.string.downloads_arm_series_armed)
     LaunchedEffect(bus) {
         viewModel.messages.collect { message ->
             when (message) {
                 DownloadsUserMessage.Deleted -> bus.info(deletedText)
                 DownloadsUserMessage.SuggestionsQueued -> bus.info(suggestionsQueuedText)
+                DownloadsUserMessage.SeriesArmed -> bus.info(seriesArmedText)
                 is DownloadsUserMessage.Raw -> bus.error(message.text)
             }
         }
@@ -214,6 +223,9 @@ fun DownloadsScreen(
     // Which resync sheet is open (Resync / ForceResync) — ONE slot
     // ([ResyncSheet]; newest write replaces, see its KDoc).
     var activeResyncSheet by remember { mutableStateOf<ResyncSheet?>(null) }
+    // The "Arm a series" picker (gh-225 follow-up): open from the entry beside
+    // the armed-series section at both render sites; dialog-local query state.
+    var showArmSeriesPicker by remember { mutableStateOf(false) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -366,20 +378,20 @@ fun DownloadsScreen(
         )
 
         if (downloads.isEmpty()) {
-            // Armed series survive the empty list (that is the point of
-            // ADR-0015): a series whose files were all deleted but whose arm
-            // row lives on still needs its un-arm escape hatch here, above the
-            // empty state.
-            val armedRows by viewModel.seriesPolicyActions.armedSeries.collectAsStateWithLifecycle()
-            if (armedRows.isNotEmpty()) {
-                ArmedSeriesCard(
-                    rows = armedRows,
-                    onUnArm = viewModel.seriesPolicyActions::unArmSeries,
-                    modifier = Modifier
-                        .padding(horizontal = adaptiveInfo.contentPadding(isTv))
-                        .padding(bottom = 12.dp),
-                )
-            }
+            // The section rides ABOVE the empty state: with the list empty,
+            // a series whose files were all deleted but whose arm row lives
+            // on still needs its un-arm escape hatch (the picker entry rides
+            // unconditionally — arming a zero-download series is exactly the
+            // flow this screen exists for).
+            ArmedSeriesSection(
+                armedSeries = viewModel.seriesPolicyActions.armedSeries,
+                onOpenPicker = { showArmSeriesPicker = true },
+                onUnArm = viewModel.seriesPolicyActions::unArmSeries,
+                onReArm = viewModel.seriesPolicyActions::reArmSeries,
+                modifier = Modifier
+                    .padding(horizontal = adaptiveInfo.contentPadding(isTv))
+                    .padding(bottom = 12.dp),
+            )
             ScreenEmptyState(
                 icon = Tabler.Outline.Download,
                 title = stringResource(Res.string.downloads_empty_title),
@@ -451,339 +463,369 @@ fun DownloadsScreen(
             // (empty -> non-empty) gets a fresh 0f, matching how newly
             // composed rows animated before.
             val entrance = rememberDetailEntrance()
-            Box(modifier = Modifier.fillMaxSize()) {
-                val rows = currentRows
-                if (rows == null) {
-                    // First (off-Main) rows derivation still in flight. Render
-                    // nothing here: an initial emptyList would flash the
-                    // category-empty state below while downloads exist.
-                } else if (rows.isEmpty()) {
-                    // A filter with nothing matching it (e.g. Series while only
-                    // movies are downloaded) — category-empty, not the blank list.
-                    Box(modifier = Modifier.fillMaxSize()) {
+            // One shared body for the armed-series section, rendered ONCE above
+            // the Box that switches between the rows list and the category-empty
+            // state: "Arm a series" stays reachable while the download list
+            // scrolls AND when the active filter matches no rows (the armed list
+            // is policy state, not filterable downloads). It also spans the
+            // brief first-rows-derivation window — its content is policy state,
+            // not download-dependent.
+            val armedSection: @Composable (Modifier) -> Unit = { sectionModifier ->
+                ArmedSeriesSection(
+                    armedSeries = viewModel.seriesPolicyActions.armedSeries,
+                    onOpenPicker = { showArmSeriesPicker = true },
+                    onUnArm = viewModel.seriesPolicyActions::unArmSeries,
+                    onReArm = viewModel.seriesPolicyActions::reArmSeries,
+                    modifier = sectionModifier,
+                )
+            }
+            // The armed section and the download list compete for one
+            // (non-scrolling) viewport: a section measured against the full
+            // incoming height — the armed card alone claims up to its 320 dp
+            // cap — starts the list past a short window's bottom edge
+            // entirely (a 240 dp-high desktop window renders zero list rows,
+            // with nothing to scroll into view). The layout below reserves
+            // the list's floor FIRST: the section is measured against the
+            // height left after the floor, and the list takes everything the
+            // section didn't use, never less than the floor. Windows at or
+            // below the two floors' sum can't fund both — there the list's
+            // floor yields to the section's own (MinArmedSectionHeight), so
+            // the compact armed-rows entry stays tappable.
+            SectionAboveReservedList(
+                section = {
+                    armedSection(
+                        Modifier
+                            .padding(horizontal = adaptiveInfo.contentPadding(isTv))
+                            .padding(bottom = 4.dp),
+                    )
+                },
+                listMinHeight = 120.dp,
+                sectionMinHeight = MinArmedSectionHeight,
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val rows = currentRows
+                    if (rows == null) {
+                        // First (off-Main) rows derivation still in flight. Render
+                        // nothing here: an initial emptyList would flash the
+                        // category-empty state below while downloads exist.
+                    } else if (rows.isEmpty()) {
+                        // A filter with nothing matching it (e.g. Series while only
+                        // movies are downloaded) — category-empty, not the blank
+                        // list; the armed section above carries "Arm a series", so
+                        // it survives every filter (its armed card still self-hides
+                        // at zero rows).
                         ScreenEmptyState(
                             icon = Tabler.Outline.Download,
                             title = stringResource(Res.string.downloads_no_items_in_category),
                         )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .tvFocusGroupRestorer()
-                            .focusRequester(listFocusRequester),
-                        contentPadding = PaddingValues(
-                            start = adaptiveInfo.contentPadding(isTv),
-                            end = adaptiveInfo.contentPadding(isTv),
-                            top = 8.dp,
-                            // Grow bottom padding while selecting so the action bar
-                            // clears the floating nav and doesn't cover the last row.
-                            bottom = if (selectionMode) floatingNavClearanceDp + 72.dp else adaptiveInfo.bottomPadding(isTv),
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                    ) {
-                        // Long-press hint: shown until the user enters selection
-                        // mode for the first time (persisted, so it never
-                        // returns) AND never while selecting — the affordance is
-                        // discoverable without lingering on every session.
-                        item(key = "selection_hint", contentType = "selectionHint") {
-                            if (!selectionMode && !selectionHintSeen) {
-                                SelectionHintRow()
-                            }
-                        }
-                        // Ask-mode suggestions (gh-181): the pending
-                        // "ask before download" prompts, above every list state
-                        // (empty included — answering them is the screen's most
-                        // urgent action).
-                        item(key = "auto_download_suggestions", contentType = "suggestions") {
-                            val suggestionList by viewModel.seriesPolicyActions.suggestions.collectAsStateWithLifecycle()
-                            if (suggestionList.isNotEmpty()) {
-                                AutoDownloadSuggestionsCard(
-                                    suggestions = suggestionList,
-                                    onDownloadAll = {
-                                        viewModel.seriesPolicyActions.downloadSuggestions(suggestionList.map { it.episodeId })
-                                    },
-                                    onDownload = { viewModel.seriesPolicyActions.downloadSuggestions(listOf(it)) },
-                                    onDismiss = { viewModel.seriesPolicyActions.dismissSuggestions(listOf(it)) },
-                                    modifier = Modifier.padding(bottom = 4.dp),
-                                )
-                            }
-                        }
-                        // Armed series (ADR-0015): every arm row — zero-download
-                        // series included — with its resolved mode and the un-arm
-                        // verb, right below the prompts it shares the policy store
-                        // with (one "auto-download state" block above the list).
-                        item(key = "armed_series", contentType = "armedSeries") {
-                            val armedRows by viewModel.seriesPolicyActions.armedSeries.collectAsStateWithLifecycle()
-                            if (armedRows.isNotEmpty()) {
-                                ArmedSeriesCard(
-                                    rows = armedRows,
-                                    onUnArm = viewModel.seriesPolicyActions::unArmSeries,
-                                    modifier = Modifier.padding(bottom = 4.dp),
-                                )
-                            }
-                        }
-                        items(
-                            items = rows,
-                            key = { it.key },
-                            contentType = { row ->
-                                when (row) {
-                                    is DownloadListRow.SeriesHeader -> "seriesHeader"
-                                    is DownloadListRow.SeasonHeader -> "seasonHeader"
-                                    is DownloadListRow.Item -> "downloadItem"
-                                }
-                            },
-                        ) { row ->
-                            // Placement/enter/exit animation for the expand-collapse
-                            // reflow: the header slides to its new slot and disclosed
-                            // episodes fade in (animateItem's defaults) instead of
-                            // snapping. Composition-safe: this runs inside the items
-                            // block's LazyItemScope.
-                            val entranceModifier = Modifier
-                                .animateItem()
-                                .detailEntrance(
-                                    progress = { entrance.value },
-                                    slideDivisor = 10f,
-                                )
-                            // Group-transfer wiring shared by both header kinds
-                            // (gh-178): the header's ids resolved to live items,
-                            // then the admission table decides whether pause /
-                            // cancel exist for the group (null = never offer a
-                            // no-op). Item rows leave all three unset.
-                            val header = row as? DownloadListRow.GroupHeader
-                            val groupItems = remember(row.key, itemById) {
-                                header?.episodeIds?.mapNotNull(itemById::get).orEmpty()
-                            }
-                            val onPauseGroup = header?.let {
-                                groupTransferAction(DownloadBulkAction.PAUSE, groupItems, it.episodeIds, viewModel)
-                            }
-                            val onCancelGroup = header?.let {
-                                groupTransferAction(DownloadBulkAction.CANCEL, groupItems, it.episodeIds, viewModel)
-                            }
-                            // Collapsed-group aggregate bar: only groups with an
-                            // episode in the Active set read the live progress
-                            // map here — the same deferred hot-read gate the
-                            // in-flight item rows apply — so idle headers never
-                            // subscribe and a progress tick re-executes just the
-                            // live groups' row scopes. Queued/paused-only groups
-                            // light the bar at their (possibly 0%) fraction; the
-                            // function itself gates the same way.
-                            val groupProgress = header?.let {
-                                if (groupItems.any { item -> item.status in DownloadStatusFilter.ACTIVE_STATUSES }) {
-                                    downloadGroupProgressFraction(groupItems, progressById.value)
-                                } else {
-                                    null
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .tvFocusGroupRestorer()
+                                .focusRequester(listFocusRequester),
+                            contentPadding = PaddingValues(
+                                start = adaptiveInfo.contentPadding(isTv),
+                                end = adaptiveInfo.contentPadding(isTv),
+                                top = 8.dp,
+                                // Grow bottom padding while selecting so the action bar
+                                // clears the floating nav and doesn't cover the last row.
+                                bottom = if (selectionMode) floatingNavClearanceDp + 72.dp else adaptiveInfo.bottomPadding(isTv),
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                        ) {
+                            // Long-press hint: shown until the user enters selection
+                            // mode for the first time (persisted, so it never
+                            // returns) AND never while selecting — the affordance is
+                            // discoverable without lingering on every session.
+                            item(key = "selection_hint", contentType = "selectionHint") {
+                                if (!selectionMode && !selectionHintSeen) {
+                                    SelectionHintRow()
                                 }
                             }
-                            when (row) {
-                                is DownloadListRow.SeriesHeader -> {
-                                    DownloadListHeaderRow(
-                                        title = row.name,
-                                        episodeCount = row.episodeCount,
-                                        episodeIds = row.episodeIds,
-                                        completedCount = row.completedCount,
-                                        totalBytes = row.totalBytes,
-                                        groupProgress = groupProgress,
-                                        imageUrl = row.imageUrl,
-                                        imageBlurHash = row.imageBlurHash,
-                                        updateCount = headerUpdateCount(row.episodeIds),
-                                        expanded = row.key in expandedKeys,
-                                        selectionMode = selectionMode,
-                                        selection = groupSelectionState(row.episodeIds, selectedIds),
-                                        onToggleExpanded = { viewModel.toggleExpanded(row.key) },
-                                        onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
-                                        onPauseGroup = onPauseGroup,
-                                        onCancelGroup = onCancelGroup,
-                                        onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
-                                        onPlayOffline = onPlayOffline,
-                                        modifier = entranceModifier,
+                            // Ask-mode suggestions (gh-181): the pending
+                            // "ask before download" prompts, above every list state
+                            // (empty included — answering them is the screen's most
+                            // urgent action).
+                            item(key = "auto_download_suggestions", contentType = "suggestions") {
+                                val suggestionList by viewModel.seriesPolicyActions.suggestions.collectAsStateWithLifecycle()
+                                if (suggestionList.isNotEmpty()) {
+                                    AutoDownloadSuggestionsCard(
+                                        suggestions = suggestionList,
+                                        onDownloadAll = {
+                                            viewModel.seriesPolicyActions.downloadSuggestions(suggestionList.map { it.episodeId })
+                                        },
+                                        onDownload = { viewModel.seriesPolicyActions.downloadSuggestions(listOf(it)) },
+                                        onDismiss = { viewModel.seriesPolicyActions.dismissSuggestions(listOf(it)) },
+                                        modifier = Modifier.padding(bottom = 4.dp),
                                     )
                                 }
-                                is DownloadListRow.SeasonHeader -> {
-                                    DownloadListHeaderRow(
-                                        title = row.name?.takeIf(String::isNotBlank)
-                                            ?: row.number?.let { stringResource(Res.string.downloads_season_n, it) },
-                                        episodeCount = row.episodeCount,
-                                        episodeIds = row.episodeIds,
-                                        completedCount = row.completedCount,
-                                        totalBytes = row.totalBytes,
-                                        groupProgress = groupProgress,
-                                        updateCount = headerUpdateCount(row.episodeIds),
-                                        expanded = row.key in expandedKeys,
-                                        selectionMode = selectionMode,
-                                        selection = groupSelectionState(row.episodeIds, selectedIds),
-                                        onToggleExpanded = { viewModel.toggleExpanded(row.key) },
-                                        onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
-                                        onPauseGroup = onPauseGroup,
-                                        onCancelGroup = onCancelGroup,
-                                        onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
-                                        onPlayOffline = onPlayOffline,
-                                        modifier = entranceModifier.padding(start = 28.dp),
+                            }
+                            // The armed-series section rides OUTSIDE this list
+                            // (pinned above it) so the "Arm a series" entry stays
+                            // reachable while the rows scroll.
+                            items(
+                                items = rows,
+                                key = { it.key },
+                                contentType = { row ->
+                                    when (row) {
+                                        is DownloadListRow.SeriesHeader -> "seriesHeader"
+                                        is DownloadListRow.SeasonHeader -> "seasonHeader"
+                                        is DownloadListRow.Item -> "downloadItem"
+                                    }
+                                },
+                            ) { row ->
+                                // Placement/enter/exit animation for the expand-collapse
+                                // reflow: the header slides to its new slot and disclosed
+                                // episodes fade in (animateItem's defaults) instead of
+                                // snapping. Composition-safe: this runs inside the items
+                                // block's LazyItemScope.
+                                val entranceModifier = Modifier
+                                    .animateItem()
+                                    .detailEntrance(
+                                        progress = { entrance.value },
+                                        slideDivisor = 10f,
                                     )
+                                // Group-transfer wiring shared by both header kinds
+                                // (gh-178): the header's ids resolved to live items,
+                                // then the admission table decides whether pause /
+                                // cancel exist for the group (null = never offer a
+                                // no-op). Item rows leave all three unset.
+                                val header = row as? DownloadListRow.GroupHeader
+                                val groupItems = remember(row.key, itemById) {
+                                    header?.episodeIds?.mapNotNull(itemById::get).orEmpty()
                                 }
-                                is DownloadListRow.Item -> {
-                                    val download = row.download
-                                    // Hot read scoped to the only rows that move: just the
-                                    // DOWNLOADING rows' lambdas subscribe to the live
-                                    // progress map, so a tick re-executes those item
-                                    // lambdas only — never the enclosing screen body.
-                                    val liveProgress = if (download.status == DownloadStatus.DOWNLOADING) {
-                                        progressById.value[download.id]
+                                val onPauseGroup = header?.let {
+                                    groupTransferAction(DownloadBulkAction.PAUSE, groupItems, it.episodeIds, viewModel)
+                                }
+                                val onCancelGroup = header?.let {
+                                    groupTransferAction(DownloadBulkAction.CANCEL, groupItems, it.episodeIds, viewModel)
+                                }
+                                // Collapsed-group aggregate bar: only groups with an
+                                // episode in the Active set read the live progress
+                                // map here — the same deferred hot-read gate the
+                                // in-flight item rows apply — so idle headers never
+                                // subscribe and a progress tick re-executes just the
+                                // live groups' row scopes. Queued/paused-only groups
+                                // light the bar at their (possibly 0%) fraction; the
+                                // function itself gates the same way.
+                                val groupProgress = header?.let {
+                                    if (groupItems.any { item -> item.status in DownloadStatusFilter.ACTIVE_STATUSES }) {
+                                        downloadGroupProgressFraction(groupItems, progressById.value)
                                     } else {
                                         null
                                     }
-                                    val itemRow: @Composable (Modifier) -> Unit = { rowModifier ->
-                                        DownloadItemRow(
-                                            // Deferred draw-phase read of the shared entrance
-                                            // progress: alpha + a slide of 1/10 of the row
-                                            // height reproduce the fadeIn +
-                                            // slideInVertically(it / 10) entrance with zero
-                                            // per-row state, coroutine, or animation node.
-                                            modifier = rowModifier,
-                                            item = download,
-                                            liveProgress = liveProgress,
-                                            formatBytes = formatBytes,
-                                            formatSpeed = formatSpeed,
-                                            formatEta = formatEta,
-                                            selected = download.id in selectedIds,
+                                }
+                                when (row) {
+                                    is DownloadListRow.SeriesHeader -> {
+                                        DownloadListHeaderRow(
+                                            title = row.name,
+                                            episodeCount = row.episodeCount,
+                                            episodeIds = row.episodeIds,
+                                            completedCount = row.completedCount,
+                                            totalBytes = row.totalBytes,
+                                            groupProgress = groupProgress,
+                                            imageUrl = row.imageUrl,
+                                            imageBlurHash = row.imageBlurHash,
+                                            updateCount = headerUpdateCount(row.episodeIds),
+                                            expanded = row.key in expandedKeys,
                                             selectionMode = selectionMode,
-                                            hasUpdate = download.status == DownloadStatus.COMPLETED &&
-                                                download.mediaItemId in updateIds,
-                                            // Completed downloads open their detail page on tap
-                                            // (matching the online experience) rather than auto-playing.
-                                            // A distinct Play action is still available in the row.
-                                            // Both gates read the module's COMPLETED-is-playable
-                                            // fold instead of restating the status check.
-                                            onOpenDetail = {
-                                                if (DownloadActions.isPlayable(download)) {
-                                                    onItemClick(download.mediaItemId)
-                                                }
-                                            },
-                                            onPlay = {
-                                                if (DownloadActions.isPlayable(download)) {
-                                                    onPlayOffline(download.mediaItemId, download.mediaType)
-                                                }
-                                            },
-                                            // Stream-instead: offered for completed downloads
-                                            // while online — plays the server copy when the
-                                            // local file is unwanted (data roaming, a broken
-                                            // transfer, preferring the transcoded ladder). The
-                                            // COMPLETED half is the module's playable fold; the
-                                            // connectivity half stays a call-site (presentation)
-                                            // gate.
-                                            onStream = if (DownloadActions.isPlayable(download) && networkStatus.hasNetwork) {
-                                                { onStreamOffline(download.mediaItemId) }
-                                            } else {
-                                                null
-                                            },
-                                            // One sink per row: the row dispatches a bare action
-                                            // and the screen owns the per-verb policy — DELETE
-                                            // confirms through the same dialog the swipe gesture
-                                            // uses, everything else dispatches at Item scope.
-                                            onAction = { action ->
-                                                when (action) {
-                                                    DownloadBulkAction.DELETE -> viewModel.pendingDelete.show(download)
-                                                    else -> viewModel.applyBulkAction(action, DownloadActionScope.Item(download.id))
-                                                }
-                                            },
-                                            onMoveToFront = { viewModel.moveToFront(download) },
-                                            onLowerPriority = { viewModel.lowerPriority(download) },
-                                            onToggleSelection = { viewModel.toggleSelection(download) },
+                                            selection = groupSelectionState(row.episodeIds, selectedIds),
+                                            onToggleExpanded = { viewModel.toggleExpanded(row.key) },
+                                            onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
+                                            onPauseGroup = onPauseGroup,
+                                            onCancelGroup = onCancelGroup,
+                                            onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
+                                            onPlayOffline = onPlayOffline,
+                                            modifier = entranceModifier,
                                         )
                                     }
-                                    // Swipe-to-delete shortcut (touch, outside selection
-                                    // mode): reveals the trash background and opens the
-                                    // SAME confirm dialog the row's delete action uses —
-                                    // the destructive step keeps its confirmation. TV rows
-                                    // skip the wrapper (D-pad focus, no touch).
-                                    // Disclosed group members sit one indent level in —
-                                    // half the season sub-header's 28dp slot, a visible
-                                    // nesting cue that doesn't crowd the row — so an
-                                    // expanded series reads as a tree, not a flat run of
-                                    // lookalike cards.
-                                    val rowPlacement = entranceModifier.then(
-                                        if (row.insideGroup) Modifier.padding(start = 14.dp) else Modifier,
-                                    )
-                                    if (!selectionMode && !isTv) {
-                                        SwipeActionBox(
-                                            onAction = { viewModel.pendingDelete.show(download) },
-                                            actionContentDescription = stringResource(Res.string.downloads_delete),
-                                            modifier = rowPlacement,
-                                            shape = ShapeCache.smooth12,
-                                        ) {
-                                            itemRow(Modifier)
+                                    is DownloadListRow.SeasonHeader -> {
+                                        DownloadListHeaderRow(
+                                            title = row.name?.takeIf(String::isNotBlank)
+                                                ?: row.number?.let { stringResource(Res.string.downloads_season_n, it) },
+                                            episodeCount = row.episodeCount,
+                                            episodeIds = row.episodeIds,
+                                            completedCount = row.completedCount,
+                                            totalBytes = row.totalBytes,
+                                            groupProgress = groupProgress,
+                                            updateCount = headerUpdateCount(row.episodeIds),
+                                            expanded = row.key in expandedKeys,
+                                            selectionMode = selectionMode,
+                                            selection = groupSelectionState(row.episodeIds, selectedIds),
+                                            onToggleExpanded = { viewModel.toggleExpanded(row.key) },
+                                            onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
+                                            onPauseGroup = onPauseGroup,
+                                            onCancelGroup = onCancelGroup,
+                                            onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
+                                            onPlayOffline = onPlayOffline,
+                                            modifier = entranceModifier.padding(start = 28.dp),
+                                        )
+                                    }
+                                    is DownloadListRow.Item -> {
+                                        val download = row.download
+                                        // Hot read scoped to the only rows that move: just the
+                                        // DOWNLOADING rows' lambdas subscribe to the live
+                                        // progress map, so a tick re-executes those item
+                                        // lambdas only — never the enclosing screen body.
+                                        val liveProgress = if (download.status == DownloadStatus.DOWNLOADING) {
+                                            progressById.value[download.id]
+                                        } else {
+                                            null
                                         }
-                                    } else {
-                                        itemRow(rowPlacement)
+                                        val itemRow: @Composable (Modifier) -> Unit = { rowModifier ->
+                                            DownloadItemRow(
+                                                // Deferred draw-phase read of the shared entrance
+                                                // progress: alpha + a slide of 1/10 of the row
+                                                // height reproduce the fadeIn +
+                                                // slideInVertically(it / 10) entrance with zero
+                                                // per-row state, coroutine, or animation node.
+                                                modifier = rowModifier,
+                                                item = download,
+                                                liveProgress = liveProgress,
+                                                formatBytes = formatBytes,
+                                                formatSpeed = formatSpeed,
+                                                formatEta = formatEta,
+                                                selected = download.id in selectedIds,
+                                                selectionMode = selectionMode,
+                                                hasUpdate = download.status == DownloadStatus.COMPLETED &&
+                                                    download.mediaItemId in updateIds,
+                                                // Completed downloads open their detail page on tap
+                                                // (matching the online experience) rather than auto-playing.
+                                                // A distinct Play action is still available in the row.
+                                                // Both gates read the module's COMPLETED-is-playable
+                                                // fold instead of restating the status check.
+                                                onOpenDetail = {
+                                                    if (DownloadActions.isPlayable(download)) {
+                                                        onItemClick(download.mediaItemId)
+                                                    }
+                                                },
+                                                onPlay = {
+                                                    if (DownloadActions.isPlayable(download)) {
+                                                        onPlayOffline(download.mediaItemId, download.mediaType)
+                                                    }
+                                                },
+                                                // Stream-instead: offered for completed downloads
+                                                // while online — plays the server copy when the
+                                                // local file is unwanted (data roaming, a broken
+                                                // transfer, preferring the transcoded ladder). The
+                                                // COMPLETED half is the module's playable fold; the
+                                                // connectivity half stays a call-site (presentation)
+                                                // gate.
+                                                onStream = if (DownloadActions.isPlayable(download) && networkStatus.hasNetwork) {
+                                                    { onStreamOffline(download.mediaItemId) }
+                                                } else {
+                                                    null
+                                                },
+                                                // One sink per row: the row dispatches a bare action
+                                                // and the screen owns the per-verb policy — DELETE
+                                                // confirms through the same dialog the swipe gesture
+                                                // uses, everything else dispatches at Item scope.
+                                                onAction = { action ->
+                                                    when (action) {
+                                                        DownloadBulkAction.DELETE -> viewModel.pendingDelete.show(download)
+                                                        else -> viewModel.applyBulkAction(action, DownloadActionScope.Item(download.id))
+                                                    }
+                                                },
+                                                onMoveToFront = { viewModel.moveToFront(download) },
+                                                onLowerPriority = { viewModel.lowerPriority(download) },
+                                                onToggleSelection = { viewModel.toggleSelection(download) },
+                                            )
+                                        }
+                                        // Swipe-to-delete shortcut (touch, outside selection
+                                        // mode): reveals the trash background and opens the
+                                        // SAME confirm dialog the row's delete action uses —
+                                        // the destructive step keeps its confirmation. TV rows
+                                        // skip the wrapper (D-pad focus, no touch).
+                                        // Disclosed group members sit one indent level in —
+                                        // half the season sub-header's 28dp slot, a visible
+                                        // nesting cue that doesn't crowd the row — so an
+                                        // expanded series reads as a tree, not a flat run of
+                                        // lookalike cards.
+                                        val rowPlacement = entranceModifier.then(
+                                            if (row.insideGroup) Modifier.padding(start = 14.dp) else Modifier,
+                                        )
+                                        if (!selectionMode && !isTv) {
+                                            SwipeActionBox(
+                                                onAction = { viewModel.pendingDelete.show(download) },
+                                                actionContentDescription = stringResource(Res.string.downloads_delete),
+                                                modifier = rowPlacement,
+                                                shape = ShapeCache.smooth12,
+                                            ) {
+                                                itemRow(Modifier)
+                                            }
+                                        } else {
+                                            itemRow(rowPlacement)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                // Selection-mode bottom action bar. The shared core/ui shell
-                // (smooth12 / surfaceContainerHigh / shadow 8) with the
-                // downloads-specific cluster slotted in: pause / resume /
-                // cancel lead (each gated on its own membership read off
-                // [selectedBulkActions], the slot contract explicitly allows
-                // ignoring the folded boolean) and the destructive bulk delete
-                // trails. The cluster keeps the bar's plain IconButton chrome —
-                // its own select-all/clear buttons carry no TV focus ring
-                // either, so the faces come from the table while the chrome
-                // stays the bar's.
-                if (selectionMode) {
-                    SelectionActionBar(
-                        countLabel = stringResource(Res.string.downloads_selected_count, selectedIds.size),
-                        selectedCount = selectedIds.size,
-                        selectAllLabel = stringResource(Res.string.downloads_action_select_all),
-                        clearLabel = stringResource(Res.string.downloads_action_clear_selection),
-                        onSelectAll = { viewModel.selectAll() },
-                        onClear = { viewModel.clearSelection() },
-                        leadingActions = { _ ->
-                            CompactIconButton(
-                                onClick = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
-                                enabled = DownloadBulkAction.PAUSE in selectedBulkActions,
-                            ) {
-                                SelectionBarActionIcon(DownloadBulkAction.PAUSE)
-                            }
-                            CompactIconButton(
-                                onClick = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
-                                enabled = DownloadBulkAction.RESUME in selectedBulkActions,
-                            ) {
-                                SelectionBarActionIcon(DownloadBulkAction.RESUME)
-                            }
-                            CompactIconButton(
-                                onClick = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
-                                enabled = DownloadBulkAction.CANCEL in selectedBulkActions,
-                            ) {
-                                SelectionBarActionIcon(DownloadBulkAction.CANCEL)
-                            }
-                        },
-                        actions = { actionsEnabled ->
-                            FilledTonalButton(
-                                onClick = { viewModel.pendingBulkDelete.show(Unit) },
-                                enabled = actionsEnabled,
-                                shape = ShapeCache.smooth12,
-                                contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error,
-                                ),
-                            ) {
-                                Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(Res.string.downloads_delete))
-                            }
-                        },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            // Sit above the floating nav (presence-aware
-                            // clearance) and slide up in lockstep when the nav
-                            // hides itself.
-                            .clearFloatingNav(extraBottom = 0.dp),
-                    )
+                    // Selection-mode bottom action bar. The shared core/ui shell
+                    // (smooth12 / surfaceContainerHigh / shadow 8) with the
+                    // downloads-specific cluster slotted in: pause / resume /
+                    // cancel lead (each gated on its own membership read off
+                    // [selectedBulkActions], the slot contract explicitly allows
+                    // ignoring the folded boolean) and the destructive bulk delete
+                    // trails. The cluster keeps the bar's plain IconButton chrome —
+                    // its own select-all/clear buttons carry no TV focus ring
+                    // either, so the faces come from the table while the chrome
+                    // stays the bar's.
+                    if (selectionMode) {
+                        SelectionActionBar(
+                            countLabel = stringResource(Res.string.downloads_selected_count, selectedIds.size),
+                            selectedCount = selectedIds.size,
+                            selectAllLabel = stringResource(Res.string.downloads_action_select_all),
+                            clearLabel = stringResource(Res.string.downloads_action_clear_selection),
+                            onSelectAll = { viewModel.selectAll() },
+                            onClear = { viewModel.clearSelection() },
+                            leadingActions = { _ ->
+                                CompactIconButton(
+                                    onClick = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
+                                    enabled = DownloadBulkAction.PAUSE in selectedBulkActions,
+                                ) {
+                                    SelectionBarActionIcon(DownloadBulkAction.PAUSE)
+                                }
+                                CompactIconButton(
+                                    onClick = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
+                                    enabled = DownloadBulkAction.RESUME in selectedBulkActions,
+                                ) {
+                                    SelectionBarActionIcon(DownloadBulkAction.RESUME)
+                                }
+                                CompactIconButton(
+                                    onClick = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
+                                    enabled = DownloadBulkAction.CANCEL in selectedBulkActions,
+                                ) {
+                                    SelectionBarActionIcon(DownloadBulkAction.CANCEL)
+                                }
+                            },
+                            actions = { actionsEnabled ->
+                                FilledTonalButton(
+                                    onClick = { viewModel.pendingBulkDelete.show(Unit) },
+                                    enabled = actionsEnabled,
+                                    shape = ShapeCache.smooth12,
+                                    contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error,
+                                    ),
+                                ) {
+                                    Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(Res.string.downloads_delete))
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                // Sit above the floating nav (presence-aware
+                                // clearance) and slide up in lockstep when the nav
+                                // hides itself.
+                                .clearFloatingNav(extraBottom = 0.dp),
+                        )
+                    }
                 }
             }
         }
@@ -837,6 +879,235 @@ fun DownloadsScreen(
                 viewModel.resyncActions.clearResyncProgress()
             },
         )
+    }
+
+    // The manual arm (gh-225 follow-up): search dialog over the library's
+    // SERIES items; a pick arms without enqueueing anything. The suspend
+    // search rides the policy holder's LibraryFeed seam; query/results are
+    // dialog-local state (the sheet's own KDoc).
+    if (showArmSeriesPicker) {
+        ArmSeriesPickerSheet(
+            onSearch = viewModel.seriesPolicyActions::searchArmCandidates,
+            onArm = viewModel.seriesPolicyActions::armSeries,
+            onDismiss = { showArmSeriesPicker = false },
+        )
+    }
+}
+
+/**
+ * The armed-series section (ADR-0015): the [ArmSeriesEntry] picker affordance
+ * stacked above — when arm rows exist — the [ArmedSeriesCard]. Armed series
+ * survive the empty list (that is the point of ADR-0015): a series whose
+ * files were all deleted but whose arm row lives on stays listed with its
+ * resolved mode, the un-arm verb and — for a NEVER tombstone row — the
+ * re-arm affordance, beside the always-present picker entry (arming a
+ * zero-download series is exactly the flow this screen exists for): one
+ * "auto-download state" block above the list. Both placements wire
+ * [onUnArm]/[onReArm] straight from the policy holder; per-site outer
+ * spacing (horizontal content padding, the gap below the section) rides
+ * [modifier] — the 4 dp entry→card gap is intrinsic to the section.
+ *
+ * The placement the section got from [SectionAboveReservedList] is the
+ * viewport minus the list's reserved floor, and below
+ * [MinUsableArmedRowsHeight] that budget fits the entry and the card's
+ * chrome but not one usable row — the pinned card would render its rows
+ * region at zero height with the un-arm/re-arm verbs unreachable. There the
+ * card swaps for the compact [ArmedRowsSheetEntry], which opens a
+ * [TvSafeSheet] hosting the SAME card at sheet height: the rows and their
+ * actions stay reachable however little screen the section was granted. At
+ * or below the list's floor the layout reserves this fallback footprint
+ * ([MinArmedSectionHeight], see [SectionAboveReservedList]) so that grant
+ * never collapses to zero. Sufficient budgets keep the card pinned in place,
+ * unchanged.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun ArmedSeriesSection(
+    armedSeries: StateFlow<List<ArmedSeriesRow>>,
+    onOpenPicker: () -> Unit,
+    onUnArm: (String) -> Unit,
+    onReArm: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val armedRows by armedSeries.collectAsStateWithLifecycle()
+    var showRowsSheet by remember { mutableStateOf(false) }
+    BoxWithConstraints(modifier = modifier) {
+        // Resolved in the BoxWithConstraints scope itself: the implicit
+        // receiver doesn't carry into the nested Column lambda.
+        val fitsPinnedCard = maxHeight >= MinUsableArmedRowsHeight
+        Column {
+            ArmSeriesEntry(onOpen = onOpenPicker)
+            if (armedRows.isNotEmpty()) {
+                if (fitsPinnedCard) {
+                    ArmedSeriesCard(
+                        rows = armedRows,
+                        onUnArm = onUnArm,
+                        onReArm = onReArm,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                } else {
+                    ArmedRowsSheetEntry(
+                        onOpen = { showRowsSheet = true },
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        }
+        if (showRowsSheet) {
+            // The short-viewport escape hatch: the SAME card (rows, verbs,
+            // wiring) at sheet height. It stays open across an action — the
+            // rows update in place (a stopped row flips to its re-arm verb).
+            TvSafeSheet(
+                onDismissRequest = { showRowsSheet = false },
+                title = stringResource(Res.string.downloads_armed_series_title),
+            ) {
+                ArmedSeriesCard(
+                    rows = armedRows,
+                    onUnArm = onUnArm,
+                    onReArm = onReArm,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The armed-series section pinned above the download list, with the list's
+ * height floor RESERVED: the section is measured against the viewport minus
+ * [listMinHeight] (so the armed card can never push past the reserved zone —
+ * its heightIn cap and weighted rows region let it fit any finite budget),
+ * and the list is measured against everything the section didn't use, never
+ * less than [listMinHeight] — unless the viewport itself is shorter, where
+ * the floor yields to [sectionMinHeight] first (the section's escape-hatch
+ * entry must stay reachable however short the window — see
+ * [ArmedSeriesSection] and [MinArmedSectionHeight]) and then to the window,
+ * so neither half ever measures past the incoming height (the rows'
+ * short-budget escape lives in the section, see [ArmedSeriesSection]). A
+ * plain Column cannot express this split — an unweighted section is measured
+ * against the full incoming height (the card overflows the viewport and
+ * pushes the list off-screen in short desktop windows), and weighted
+ * children carve fixed shares (a short armed list would strand the list's
+ * share as a blank band). Both halves stay pinned; the list scrolls within
+ * its slice.
+ */
+@Composable
+private fun SectionAboveReservedList(
+    section: @Composable () -> Unit,
+    listMinHeight: Dp,
+    sectionMinHeight: Dp,
+    list: @Composable () -> Unit,
+) = Layout(content = { section(); list() }) { measurables, constraints ->
+    // The section's floor, clamped to the viewport itself: a window shorter
+    // than [sectionMinHeight] would otherwise coerce the section's content
+    // ABOVE the incoming maxHeight — the child overflows this layout and its
+    // bottom clips past the viewport — so there the floor yields to the
+    // window.
+    val sectionFloor = sectionMinHeight.roundToPx().coerceAtMost(constraints.maxHeight)
+    // The list's reserved floor, assigned AFTER the section's floor is set
+    // aside: at or below [listMinHeight] the viewport cannot fund both, and
+    // the section's compact entry (its short-budget escape hatch) must stay
+    // tappable, so the list's floor yields first and the section never
+    // measures at zero height.
+    val listFloor = listMinHeight.roundToPx()
+        .coerceAtMost((constraints.maxHeight - sectionFloor).coerceAtLeast(0))
+    val sectionPlaceable = measurables[0].measure(
+        Constraints(
+            minWidth = constraints.minWidth,
+            maxWidth = constraints.maxWidth,
+            minHeight = 0,
+            // The section's budget: the viewport minus the list's reserved
+            // floor — never below the section's own floor (the subtraction
+            // above already yielded to it).
+            maxHeight = constraints.maxHeight - listFloor,
+        ),
+    )
+    // The list takes the remainder, floored — a short window shrinks the
+    // list's floor (the armed section's fallback entry stays tappable)
+    // before the section collapses, never the other way around.
+    val listHeight = (constraints.maxHeight - sectionPlaceable.height).coerceAtLeast(listFloor)
+    val listPlaceable = measurables[1].measure(
+        Constraints(
+            minWidth = constraints.minWidth,
+            maxWidth = constraints.maxWidth,
+            minHeight = 0,
+            maxHeight = listHeight,
+        ),
+    )
+    layout(constraints.maxWidth, constraints.maxHeight) {
+        sectionPlaceable.placeRelative(0, 0)
+        listPlaceable.placeRelative(0, sectionPlaceable.height)
+    }
+}
+
+/**
+ * The section budget below which the pinned armed card's weighted rows
+ * region collapses under one usable row: the entry button (~40 dp) + the
+ * 4 dp gap + the card's chrome (its 12/12 dp padding, header row, spacer)
+ * leave nothing for the rows, so past it [ArmedSeriesSection] swaps the
+ * card for the sheet entry — the verbs stay reachable through the sheet.
+ */
+private val MinUsableArmedRowsHeight = 176.dp
+
+/**
+ * The armed section's floor in [SectionAboveReservedList] — the fallback
+ * footprint the list's floor yields to when the viewport cannot fund both
+ * (at or below the 120 dp list floor the pre-reserve math handed the section
+ * zero height, measuring [ArmedRowsSheetEntry] untappable): the picker entry
+ * (~40 dp) + the 4 dp gap + the compact armed-rows entry (~40 dp) + the
+ * section's 4 dp bottom clearance. Above the two floors' sum the yield never
+ * bites — the list funds its floor first, unchanged.
+ */
+private val MinArmedSectionHeight = 88.dp
+
+/**
+ * The armed rows' short-viewport entry — the compact affordance that opens
+ * the armed-rows sheet, rendered inside [ArmedSeriesSection] in place of the
+ * pinned card when the section's budget cannot fit usable rows. The pinned
+ * card's idiom: the same TextButton chrome and family icon, the card title
+ * as the label.
+ */
+@Composable
+private fun ArmedRowsSheetEntry(
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    TextButton(
+        onClick = onOpen,
+        modifier = modifier,
+    ) {
+        Icon(
+            Tabler.Outline.Radar,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(Res.string.downloads_armed_series_title))
+    }
+}
+
+/**
+ * The armed-series section's "Arm a series" entry (gh-225 follow-up) — the
+ * small affordance that opens the picker, rendered inside
+ * [ArmedSeriesSection] above the armed card. A compact text button in the
+ * suggestion-card's idiom: the same pill-ish chrome, no per-site re-styling.
+ */
+@Composable
+private fun ArmSeriesEntry(
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    TextButton(
+        onClick = onOpen,
+        modifier = modifier,
+    ) {
+        Icon(
+            Tabler.Outline.Radar,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(Res.string.downloads_arm_series_title))
     }
 }
 

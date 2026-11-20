@@ -70,6 +70,8 @@ data class StoragePreferences(
     val autoDownloadMaxPerPass: Int = 0,
     val autoDownloadKeepDays: Int = 0,
     val autoDownloadServers: Set<String> = emptySet(),
+    /** The gh-225 follow-up opt-in: the auto-download pass arms Sonarr-monitored series even with zero downloaded episodes. */
+    val autoArmFromArr: Boolean = false,
     val maxDownloadStorageGb: Int = 0,
     val downloadStorageLocation: String = "INTERNAL",
     val autoDeleteAfterWatch: Boolean = false,

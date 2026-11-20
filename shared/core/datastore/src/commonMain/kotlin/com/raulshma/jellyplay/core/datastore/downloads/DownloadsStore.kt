@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
@@ -19,6 +21,7 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.isEnabled
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -124,6 +127,7 @@ class DownloadsStore constructor(
         val AUTO_DOWNLOAD_MAX_PER_PASS = intPreferencesKey(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MAX_PER_PASS.keyName)
         val AUTO_DOWNLOAD_KEEP_DAYS = intPreferencesKey(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.keyName)
         val AUTO_DOWNLOAD_SERVERS = stringPreferencesKey(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_SERVERS.keyName)
+        val AUTO_ARM_FROM_ARR = booleanPreferencesKey(DownloadsPreferenceSpecs.AUTO_ARM_FROM_ARR.keyName)
         val DOWNLOADS_LIST_FILTER = stringPreferencesKey(DownloadsPreferenceSpecs.DOWNLOADS_LIST_FILTER.keyName)
         val DOWNLOADS_LIST_SORT = stringPreferencesKey(DownloadsPreferenceSpecs.DOWNLOADS_LIST_SORT.keyName)
         val DOWNLOADS_LIST_STATUS_FILTER = stringPreferencesKey(DownloadsPreferenceSpecs.DOWNLOADS_LIST_STATUS_FILTER.keyName)
@@ -132,6 +136,34 @@ class DownloadsStore constructor(
 
     val downloads: StateFlow<DownloadsSlice> =
         dataStore.sliceStateFlow(scope, seed = DownloadsSlice(), read = ::read)
+
+    /**
+     * Disk-backed one-shot read of the slice (the [ServerIdentityStore]
+     * `readIdentity()` precedent): not a plain `downloads.first()` — the
+     * stateIn(Eagerly) projection collects on the application scope's
+     * dispatcher with no happens-before edge against a caller launched right
+     * after a write, so the auto-download scheduler's keep-alive gate could
+     * read the pre-write slice (a just-enabled `autoArmFromArr` under a
+     * global NEVER with zero arms would cancel instead of enqueue). This
+     * read collects the RAW cold `data` flow instead, suspending until the
+     * persisted snapshot arrives, so it always answers disk truth.
+     * [downloads] stays the observer surface.
+     */
+    suspend fun readDownloads(): DownloadsSlice =
+        dataStore.dataDegradingToDefaults().first().let(::read)
+
+    /**
+     * The one-shot read with read FAILURE surfaced instead of degraded: a
+     * thrown DataStore read (transient IO) returns null rather than the
+     * defaults slice. The scheduler keep-alive gate is the caller — a
+     * defaults-shaped answer there CANCELS the persisted periodic discovery,
+     * and nothing re-runs the gate automatically after a cancel (the pokes
+     * are user actions), so a transient read failure must not read as "the
+     * user turned every keep-alive leg off". Fail-open callers check null;
+     * observers use [readDownloads].
+     */
+    suspend fun readDownloadsOrNull(): DownloadsSlice? =
+        runCatchingRethrowingCancellation { dataStore.data.first().let(::read) }.getOrNull()
 
     /**
      * Pure read of the downloads fields from a raw [Preferences] snapshot,
@@ -156,6 +188,7 @@ class DownloadsStore constructor(
         autoDownloadKeepDays = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.readFrom(prefs)
             .coerceAtLeast(0),
         autoDownloadServers = readAutoDownloadServers(prefs),
+        autoArmFromArr = DownloadsPreferenceSpecs.AUTO_ARM_FROM_ARR.readFrom(prefs),
         maxDownloadStorageGb = DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.readFrom(prefs),
         downloadsListFilter = DownloadsPreferenceSpecs.DOWNLOADS_LIST_FILTER.readStored(prefs),
         downloadsListSort = DownloadsPreferenceSpecs.DOWNLOADS_LIST_SORT.readStored(prefs),
@@ -275,6 +308,15 @@ class DownloadsStore constructor(
         }
     }
 
+    /**
+     * The gh-225 follow-up opt-in: when on, the auto-download pass arms
+     * Sonarr-monitored series even with zero downloaded episodes (see
+     * [DownloadsPreferenceSpecs.AUTO_ARM_FROM_ARR]).
+     */
+    suspend fun setAutoArmFromArr(enabled: Boolean) {
+        dataStore.edit { DownloadsPreferenceSpecs.AUTO_ARM_FROM_ARR.writeTo(it, enabled) }
+    }
+
     suspend fun setMaxDownloadStorageGb(gb: Int) {
         dataStore.edit { DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.writeTo(it, gb) }
     }
@@ -387,6 +429,7 @@ class DownloadsStore constructor(
             DownloadsPreferenceSpecs.AUTO_DOWNLOAD_LOOKAHEAD.writeTo(prefs, slice.autoDownloadLookahead)
             DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MAX_PER_PASS.writeTo(prefs, slice.autoDownloadMaxPerPass)
             DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.writeTo(prefs, slice.autoDownloadKeepDays)
+            DownloadsPreferenceSpecs.AUTO_ARM_FROM_ARR.writeTo(prefs, slice.autoArmFromArr)
             DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.writeTo(prefs, slice.maxDownloadStorageGb)
             prefs[Keys.DOWNLOAD_STORAGE_LOCATION] = slice.downloadStorageLocation
             prefs[Keys.DOWNLOADS_LIST_FILTER] = slice.downloadsListFilter
@@ -451,6 +494,11 @@ data class DownloadsSlice(
     val autoDownloadKeepDays: Int = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.default,
     /** Active user's auto-download server allow-list (empty = all servers). */
     val autoDownloadServers: Set<String> = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_SERVERS.default,
+    /**
+     * The gh-225 follow-up opt-in: the auto-download pass arms Sonarr-monitored
+     * series even with zero downloaded episodes (the accessor wave consumes it).
+     */
+    val autoArmFromArr: Boolean = DownloadsPreferenceSpecs.AUTO_ARM_FROM_ARR.default,
     val maxDownloadStorageGb: Int = DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.default,
     /** Downloads-list filter as an enum name string ("" = feature default). */
     val downloadsListFilter: String = DownloadsPreferenceSpecs.DOWNLOADS_LIST_FILTER.default,

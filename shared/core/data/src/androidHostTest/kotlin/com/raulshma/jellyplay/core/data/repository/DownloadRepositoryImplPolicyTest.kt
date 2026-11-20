@@ -37,8 +37,11 @@ import org.robolectric.annotation.Config
  * its ADR-0015 extension: the per-series arm CRUD, the Ask-mode suggestion
  * dedupe (only NEW ids are upserted and counted), the zero-rows un-arm rule
  * and its watch-boundary verb split ([DownloadRepository.deleteDownload]'s
- * keepSeriesArm), and the armed-series reads the check's universe union and
- * the Downloads screen's armed list consume.
+ * keepSeriesArm), the armed-series reads the check's universe union and
+ * the Downloads screen's armed list consume, the arm verbs
+ * ([SeriesDownloadPolicyStore.armSeries] and the manual entries'
+ * [SeriesDownloadPolicyStore.manualArmSeries]), and the NEVER tombstone's
+ * survival of the zero-rows clear (gh-225 follow-up).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -186,24 +189,196 @@ class DownloadRepositoryImplPolicyTest {
 
     // ── ADR-0015: the zero-rows un-arm rule (one home on the store) ──────
 
+    // The zero-rows clear runs inside one withTransaction (atomic against a
+    // concurrent NEVER write), so these tests execute it through the module's
+    // inline transaction stub like the deleteDownload suite below.
+
     @Test
     fun `clearSeriesArmIfNoDownloads clears arm and prompts at zero rows`() = runTest {
+        stubTransactionInline()
         coEvery { downloadDao.getDownloadsForSeries("s1") } returns emptyList()
 
         repository().clearSeriesArmIfNoDownloads("s1")
 
         coVerify(exactly = 1) { downloadPolicyDao.deletePolicyBySeriesId("s1") }
         coVerify(exactly = 1) { downloadPolicyDao.deleteSuggestionsBySeriesId("s1") }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
     }
 
     @Test
     fun `clearSeriesArmIfNoDownloads is a no-op while download rows remain`() = runTest {
+        stubTransactionInline()
         coEvery { downloadDao.getDownloadsForSeries("s1") } returns listOf(mockk(relaxed = true))
 
         repository().clearSeriesArmIfNoDownloads("s1")
 
         coVerify(exactly = 0) { downloadPolicyDao.deletePolicyBySeriesId(any()) }
         coVerify(exactly = 0) { downloadPolicyDao.deleteSuggestionsBySeriesId(any()) }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
+
+    @Test
+    fun `clearSeriesArmIfNoDownloads keeps a NEVER tombstone at zero rows`() = runTest {
+        stubTransactionInline()
+        coEvery { downloadDao.getDownloadsForSeries("s1") } returns emptyList()
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns
+            SeriesDownloadPolicyEntity("s1", "NEVER", "Series One")
+
+        repository().clearSeriesArmIfNoDownloads("s1")
+
+        // The tombstone ROW survives hygiene: the follow-up arr auto-arm sync
+        // re-arms any series with NO policy row, so an erased NEVER would be
+        // resurrected. Its pending prompts do not — the same setSeriesPolicy
+        // (NEVER) invariant: prompts recorded under a policy that no longer
+        // wants them are dead.
+        coVerify(exactly = 0) { downloadPolicyDao.deletePolicyBySeriesId(any()) }
+        coVerify(exactly = 1) { downloadPolicyDao.deleteSuggestionsBySeriesId("s1") }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
+
+    @Test
+    fun `clearSeriesArmIfNoDownloads still clears FOLLOW_GLOBAL and override rows at zero rows`() = runTest {
+        stubTransactionInline()
+        coEvery { downloadDao.getDownloadsForSeries(any()) } returns emptyList()
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns
+            SeriesDownloadPolicyEntity("s1", "FOLLOW_GLOBAL", "Series One")
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s2") } returns
+            SeriesDownloadPolicyEntity("s2", "INSTANT", "Series Two")
+
+        val repo = repository()
+        repo.clearSeriesArmIfNoDownloads("s1")
+        repo.clearSeriesArmIfNoDownloads("s2")
+
+        coVerify(exactly = 1) { downloadPolicyDao.deletePolicyBySeriesId("s1") }
+        coVerify(exactly = 1) { downloadPolicyDao.deletePolicyBySeriesId("s2") }
+        coVerify(exactly = 2) { downloadPolicyDao.deleteSuggestionsBySeriesId(any()) }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
+
+    // ── gh-225 follow-up: the manual arm verb ─────────────────────────────
+
+    @Test
+    fun `armSeries inserts a FOLLOW_GLOBAL arm when no row exists`() = runTest {
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns null
+
+        repository().armSeries("s1", "Series One")
+
+        coVerify(exactly = 1) {
+            downloadPolicyDao.insertPolicyIfAbsent(
+                SeriesDownloadPolicyEntity("s1", "FOLLOW_GLOBAL", "Series One"),
+            )
+        }
+        coVerify(exactly = 0) { downloadPolicyDao.upsertPolicy(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.updatePolicySeriesName(any(), any()) }
+    }
+
+    @Test
+    fun `armSeries never clobbers an existing override or changes its mode`() = runTest {
+        for (mode in listOf(AutoDownloadMode.INSTANT, AutoDownloadMode.ASK, AutoDownloadMode.NEVER)) {
+            coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns
+                SeriesDownloadPolicyEntity("s1", mode.name, "Series One")
+
+            repository().armSeries("s1", "Series One")
+        }
+
+        // Insert-if-absent + name backfill only — an explicit sheet choice
+        // (incl. the NEVER tombstone) is never demoted to a plain arm.
+        coVerify(exactly = 0) { downloadPolicyDao.insertPolicyIfAbsent(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.upsertPolicy(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.updatePolicySeriesName(any(), any()) }
+    }
+
+    @Test
+    fun `armSeries backfills a blank arm display name`() = runTest {
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns
+            SeriesDownloadPolicyEntity("s1", "FOLLOW_GLOBAL", "")
+
+        repository().armSeries("s1", "Series One")
+
+        coVerify(exactly = 0) { downloadPolicyDao.insertPolicyIfAbsent(any()) }
+        coVerify(exactly = 1) { downloadPolicyDao.updatePolicySeriesName("s1", "Series One") }
+    }
+
+    @Test
+    fun `armSeries does not overwrite a set arm display name`() = runTest {
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns
+            SeriesDownloadPolicyEntity("s1", "FOLLOW_GLOBAL", "Series One")
+
+        repository().armSeries("s1", "Renamed")
+
+        coVerify(exactly = 0) { downloadPolicyDao.insertPolicyIfAbsent(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.updatePolicySeriesName(any(), any()) }
+    }
+
+    // manualArmSeries runs its read + flip + insert inside one withTransaction
+    // (atomic against a concurrent sweep/pass), so these tests ride the module's
+    // inline transaction stub like the deleteDownload suite below — without it
+    // the relaxed database mock never executes the transaction body.
+
+    @Test
+    fun `manualArmSeries inserts a FOLLOW_GLOBAL arm when no row exists`() = runTest {
+        stubTransactionInline()
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns null
+
+        repository().manualArmSeries("s1", "Series One")
+
+        coVerify(exactly = 1) {
+            downloadPolicyDao.insertPolicyIfAbsent(
+                SeriesDownloadPolicyEntity("s1", "FOLLOW_GLOBAL", "Series One"),
+            )
+        }
+        coVerify(exactly = 0) { downloadPolicyDao.upsertPolicy(any()) }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
+
+    @Test
+    fun `manualArmSeries flips a raw NEVER tombstone back to FOLLOW_GLOBAL`() = runTest {
+        stubTransactionInline()
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns
+            SeriesDownloadPolicyEntity("s1", "NEVER", "Series One")
+
+        repository().manualArmSeries("s1", "Series One")
+
+        // The re-arm rides the one upsert body, carrying the cached name;
+        // FOLLOW_GLOBAL keeps prompts (no suggestion delete), and the
+        // insert-if-absent arm no-ops on the now-existing row.
+        coVerify(exactly = 1) {
+            downloadPolicyDao.upsertPolicy(SeriesDownloadPolicyEntity("s1", "FOLLOW_GLOBAL", "Series One"))
+        }
+        coVerify(exactly = 0) { downloadPolicyDao.insertPolicyIfAbsent(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.deleteSuggestionsBySeriesId(any()) }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
+
+    @Test
+    fun `manualArmSeries backfills a blank name when flipping a tombstone`() = runTest {
+        stubTransactionInline()
+        coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns
+            SeriesDownloadPolicyEntity("s1", "NEVER", "")
+
+        repository().manualArmSeries("s1", "Series One")
+
+        coVerify(exactly = 1) {
+            downloadPolicyDao.upsertPolicy(SeriesDownloadPolicyEntity("s1", "FOLLOW_GLOBAL", ""))
+        }
+        coVerify(exactly = 1) { downloadPolicyDao.updatePolicySeriesName("s1", "Series One") }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
+
+    @Test
+    fun `manualArmSeries never demotes an explicit INSTANT or ASK override`() = runTest {
+        stubTransactionInline()
+        for (mode in listOf(AutoDownloadMode.INSTANT, AutoDownloadMode.ASK)) {
+            coEvery { downloadPolicyDao.getPolicyBySeriesId("s1") } returns
+                SeriesDownloadPolicyEntity("s1", mode.name, "Series One")
+
+            repository().manualArmSeries("s1", "Series One")
+        }
+
+        coVerify(exactly = 0) { downloadPolicyDao.insertPolicyIfAbsent(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.upsertPolicy(any()) }
+        coVerify(exactly = 0) { downloadPolicyDao.updatePolicySeriesName(any(), any()) }
+        unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
     }
 
     // ── ADR-0015: the delete verb's un-arm split ──────────────────────────

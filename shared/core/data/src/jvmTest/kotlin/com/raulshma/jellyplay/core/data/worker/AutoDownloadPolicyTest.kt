@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
+import com.raulshma.jellyplay.core.data.download.ArrAutoArmSync
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
 import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
@@ -18,7 +19,9 @@ import com.raulshma.jellyplay.core.model.resolveAgainst
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -46,14 +49,21 @@ class AutoDownloadPolicyTest {
     private val downloadIntake: DownloadIntake = mockk()
     private val downloadsStore: DownloadsStore = mockk()
     private val serverIdentityStore: ServerIdentityStore = mockk()
+    /** The arr auto-arm stage mock — no-op (its gates are pinned by its own suite). */
+    private val arrAutoArmSync: ArrAutoArmSync = mockk()
 
     /** Slice override per test — defaults to the gate-on legacy shape. */
     private var slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0)
 
     @BeforeTest
     fun setup() {
+        // The pass reads disk truth via readDownloadsOrNull (the eagerly-shared
+        // projection is the observer surface only — see checkOnce's comment);
+        // both surfaces answer the per-test slice field.
         every { downloadsStore.downloads } answers { MutableStateFlow(slice) }
+        coEvery { downloadsStore.readDownloadsOrNull() } answers { slice }
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
+        coEvery { arrAutoArmSync.sync(any()) } just runs
         coEvery { downloadRepository.downloadCoverage() } returns
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
@@ -70,6 +80,7 @@ class AutoDownloadPolicyTest {
         policyStore = policyStore,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
+        arrAutoArmSync = arrAutoArmSync,
         serverIdentityStore = serverIdentityStore,
     )
 
@@ -192,16 +203,45 @@ class AutoDownloadPolicyTest {
     }
 
     @Test
-    fun `a season with no downloaded and no watched episode enqueues nothing`() = runTest {
+    fun `a season with no downloaded and no watched episode falls back to the season head`() = runTest {
+        // ADR-0016's lookahead amendment: an arr- or picker-armed series the
+        // user never engaged with must start at episode 1 — the window opens
+        // at the season head instead of enqueuing nothing.
         slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 3)
         givenSnapshot(
             episodeInSeason("ep-1", "season-1", 1),
             episodeInSeason("ep-2", "season-1", 2),
+            episodeInSeason("ep-3", "season-1", 3),
+            episodeInSeason("ep-4", "season-1", 4),
+            episodeInSeason("ep-5", "season-1", 5),
         )
 
         check().checkOnce(attempt = 0)
 
-        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-1", "ep-2", "ep-3")))
+        }
+    }
+
+    @Test
+    fun `the season-head fallback skips virtual episodes at the head`() = runTest {
+        // The no-anchor fallback applies the same decision-6 hygiene filter:
+        // virtual head episodes never spend the window (a watched head
+        // episode would be an anchor, not a fallback).
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 2)
+        givenSnapshot(
+            episodeInSeason("ep-1", "season-1", 1, virtual = true),
+            episodeInSeason("ep-2", "season-1", 2, virtual = true),
+            episodeInSeason("ep-3", "season-1", 3),
+            episodeInSeason("ep-4", "season-1", 4),
+            episodeInSeason("ep-5", "season-1", 5),
+        )
+
+        check().checkOnce(attempt = 0)
+
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-3", "ep-4")))
+        }
     }
 
     @Test

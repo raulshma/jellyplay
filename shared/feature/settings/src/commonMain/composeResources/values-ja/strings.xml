@@ -1316,4 +1316,8 @@
     <string name="ss_exo_target_buffer_mb_subtitle">前方バッファの合計 MB（0 = エンジン由来のオート、5–512 で明示）</string>
     <string name="ss_exo_retain_back_buffer_title">バックバッファを保持</string>
     <string name="ss_exo_retain_back_buffer_subtitle">キーフレーム境界に関係なくバックバッファを保持します（即時巻き戻し、メモリ増）</string>
+    <string name="settings_auto_arm_from_arr">Sonarrのシリーズを自動で追加</string>
+    <string name="settings_auto_arm_from_arr_subtitle">ダウンロード済みエピソードがなくても、Sonarrで管理中のシリーズを自動ダウンロードの対象にします（実験的機能）</string>
+    <string name="ss_auto_arm_from_arr_title">Sonarrのシリーズを自動で追加</string>
+    <string name="ss_auto_arm_from_arr_subtitle">ダウンロード済みエピソードがなくても、Sonarrで管理中のシリーズを自動ダウンロードの対象にします</string>
 </resources>

@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
@@ -255,6 +256,8 @@ class DetailViewModelEnrichmentsTest {
                 downloadsStore = mockk<DownloadsStore>(relaxed = true),
                 adaptiveBitrateManager = mockk(relaxed = true),
                 downloadRepository = mockk(relaxed = true),
+                policyStore = mockk<SeriesDownloadPolicyStore>(relaxed = true),
+                autoDownloadScheduler = mockk(relaxed = true),
             ),
             resync = ResyncActions.Factory(
                 offlineSyncManager = mockk<OfflineSyncManager>(relaxed = true),

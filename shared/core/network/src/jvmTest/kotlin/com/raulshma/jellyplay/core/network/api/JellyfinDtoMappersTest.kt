@@ -159,6 +159,56 @@ class JellyfinDtoMappersTest {
         assertTrue(mapped.people.isEmpty())
     }
 
+    // ── providerIds (the ProviderIds projection) ──────────────────────────
+
+    @Test
+    fun `toMediaItem carries the provider ids with lowercase keys and drops null entries`() {
+        val mapped = BaseItemDto(
+            id = UUID.fromString("88888888-8888-4888-8888-888888888888"),
+            name = "Matched Series",
+            type = BaseItemKind.SERIES,
+            providerIds = mapOf(
+                "Tvdb" to "121361",
+                "tmdb" to "42",
+                "imdb" to null,
+            ),
+        ).toMediaItem()
+
+        // Keys normalize lowercase to match toMediaDetail's map (the
+        // ["tvdb"] lookup grammar); a null-valued entry is not an id.
+        assertEquals(
+            mapOf("tvdb" to "121361", "tmdb" to "42"),
+            mapped.providerIds,
+        )
+    }
+
+    @Test
+    fun `toMediaItem leaves providerIds null without a projected map`() {
+        val mapped = BaseItemDto(
+            id = UUID.fromString("99999999-9999-4999-8999-999999999999"),
+            name = "Unprojected Series",
+            type = BaseItemKind.SERIES,
+        ).toMediaItem()
+
+        // null means "not projected", never "no ids" — the listings that
+        // don't request ProviderIds must not read as match-less.
+        assertNull(mapped.providerIds)
+    }
+
+    @Test
+    fun `toMediaItem keeps a projected-but-empty providerIds map empty, not null`() {
+        val mapped = BaseItemDto(
+            id = UUID.fromString("77777777-7777-4777-8777-777777777777"),
+            name = "Id-less Series",
+            type = BaseItemKind.SERIES,
+            providerIds = emptyMap(),
+        ).toMediaItem()
+
+        // A projected map with no ids is "no ids", never "not projected"
+        // (the MediaItem.providerIds contract).
+        assertEquals(emptyMap<String, String>(), mapped.providerIds)
+    }
+
     // ── image-tag threading (the stale-artwork cache busters) ────────────
 
     @Test

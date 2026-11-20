@@ -50,6 +50,10 @@ class DownloadsViewModelTest {
     private lateinit var seriesArt: com.raulshma.jellyplay.core.data.repository.SeriesArtReads
     private lateinit var syncManager: OfflineResync
     private lateinit var downloadsStore: DownloadsStore
+    /** The arm picker's series-search seam (forwarded to the policy holder; unused here). */
+    private lateinit var libraryFeed: com.raulshma.jellyplay.core.data.repository.LibraryFeed
+    /** The manual arm's schedule reconcile (forwarded to the policy holder; unused here). */
+    private lateinit var autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
     private lateinit var viewModel: DownloadsViewModel
 
     /** Backing flow behind getAllDownloads so tests can push list changes. */
@@ -72,6 +76,8 @@ class DownloadsViewModelTest {
         offlineRepository = mockk(relaxed = true)
         seriesArt = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
+        autoDownloadScheduler = mockk(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         progressFlow = MutableStateFlow(emptyMap())
         storeSliceFlow = MutableStateFlow(DownloadsSlice())
@@ -92,7 +98,7 @@ class DownloadsViewModelTest {
         every { offlineRepository.getOfflineEpisodes() } returns offlineEpisodesFlow
         downloadsStore = mockk(relaxed = true)
         every { downloadsStore.downloads } returns storeSliceFlow
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake, libraryFeed, autoDownloadScheduler)
     }
 
     /** Pushes [items] into the repository flow and settles the init collector. */
@@ -174,7 +180,7 @@ class DownloadsViewModelTest {
         every { downloadRepository.getAllDownloads() } returns kotlinx.coroutines.flow.flow {
             throw RuntimeException(null as String?)
         }
-        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
+        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake, libraryFeed, autoDownloadScheduler)
         advanceUntilIdle()
 
         // Throwable.message == null must hit the fallback literal.
@@ -525,7 +531,7 @@ class DownloadsViewModelTest {
     @Test
     fun persisted_slice_seeds_the_initial_filter_and_sort() = runTest(mainDispatcherRule.testDispatcher) {
         storeSliceFlow.value = DownloadsSlice(downloadsListFilter = "SERIES", downloadsListSort = "SIZE")
-        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake, libraryFeed, autoDownloadScheduler)
         advanceUntilIdle()
 
         assertEquals(DownloadListFilter.SERIES, seeded.filter.value)
@@ -578,7 +584,7 @@ class DownloadsViewModelTest {
     @Test
     fun persisted_hint_seen_seeds_the_vm_and_is_not_rewritten() = runTest(mainDispatcherRule.testDispatcher) {
         storeSliceFlow.value = DownloadsSlice(selectionHintSeen = true)
-        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake, libraryFeed, autoDownloadScheduler)
         advanceUntilIdle()
         assertTrue(seeded.selectionHintSeen.value)
 

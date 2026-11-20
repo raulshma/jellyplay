@@ -151,4 +151,12 @@
     <string name="downloads_armed_series_subtitle">다운로드된 항목이 없어도 자동 다운로드는 이 시리즈의 새 에피소드를 계속 확인합니다.</string>
     <string name="downloads_armed_series_mode_follow_global">전역 설정 따름</string>
     <string name="downloads_armed_series_unarm">자동 다운로드 중지</string>
+    <string name="downloads_arm_series_title">시리즈 추가</string>
+    <string name="downloads_arm_series_subtitle">지금 다운로드하지 않고 새 에피소드를 자동 다운로드할 시리즈를 추가합니다. 새 에피소드는 자동 다운로드 설정을 따릅니다.</string>
+    <string name="downloads_arm_series_query_label">시리즈 검색</string>
+    <string name="downloads_arm_series_empty">시리즈를 찾을 수 없습니다</string>
+    <string name="downloads_arm_series_search_error">검색에 실패했습니다. 연결을 확인하고 다시 시도해 주세요.</string>
+    <string name="downloads_arm_series_action">추가</string>
+    <string name="downloads_arm_series_armed">시리즈가 자동 다운로드 대상으로 지정되었습니다. 새 에피소드는 자동 다운로드 설정을 따릅니다.</string>
+    <string name="downloads_armed_series_rearm">자동 다운로드 재개</string>
 </resources>

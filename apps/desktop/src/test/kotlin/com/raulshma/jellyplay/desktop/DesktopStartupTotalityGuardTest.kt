@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.desktop
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -193,23 +195,39 @@ class DesktopStartupTotalityGuardTest {
         error("could not locate repo root (no settings.gradle.kts walking up from ${System.getProperty("user.dir")})")
     }
 
-    /** `koinApp.koin.get<X>().start()` — the launchDesktopStartup arm keys. */
-    private val startupArms = Regex("""get<(\w+)>\(\)[ \t]*\.[ \t]*start[ \t]*\(""")
+    /**
+     * `koinApp.koin.get<X>().start()` — the launchDesktopStartup arm keys.
+     * The gaps admit any whitespace including newlines: a chain formatted
+     * across lines (`get<X>()` closing one line, `.start()` opening the
+     * next) is the same arm, and an unrecognized layout would report its
+     * startable unlaunched and fail the guard on valid source.
+     */
+    private val startupArms = Regex("""get<(\w+)>\(\)\s*\.\s*start\s*\(""")
 
     /**
      * A zero-arg member `fun start()` (the app-lifetime kickoff idiom),
-     * crossing visibility/suspend/override modifiers; group 1 is the indent.
-     * The leading-whitespace requirement keeps top-level functions out — a
-     * start() that belongs to no class cannot be a Koin-startable arm.
+     * crossing visibility/suspend/override modifiers AND the expect/actual
+     * pair (an `actual fun start()` implementation without `override`, or an
+     * `expect fun start()` face, is as much a startable as a plain one);
+     * group 1 is the indent. The leading-whitespace requirement keeps
+     * top-level functions out — a start() that belongs to no class cannot be
+     * a Koin-startable arm.
      */
     private val startDeclaration = Regex(
-        """(?m)^([ \t]+)(?:(?:public|internal|private|override|open|suspend)[ \t]+)*fun[ \t]+start[ \t]*\([ \t]*\)""",
+        """(?m)^([ \t]+)(?:(?:public|internal|private|override|open|suspend|expect|actual)[ \t]+)*fun[ \t]+start[ \t]*\([ \t]*\)""",
     )
 
-    /** `class X` / `interface X` / `object X`; group 1 is the indent, 2 the name. */
+    /**
+     * `class X` / `interface X` / `object X`, including their `expect`/`actual`
+     * declarations (an `expect object`'s members belong to the same holder as
+     * its `actual object`); group 1 is the indent, 2 the name.
+     */
     private val typeDeclaration = Regex(
-        """(?m)^([ \t]*)(?:(?:public|internal|private|open|abstract|sealed|data|enum|value|inner)[ \t]+)*(?:class|interface|object)[ \t]+(\w+)""",
+        """(?m)^([ \t]*)(?:(?:public|internal|private|open|abstract|sealed|data|enum|value|inner|expect|actual)[ \t]+)*(?:class|interface|object)[ \t]+(\w+)""",
     )
+
+    /** The declaring file's `package …` clause — the merge's qualifier source. */
+    private val packageDeclaration = Regex("""(?m)^package[ \t]+([\w.]+)""")
 
     /**
      * Every zero-arg start() holder under [scanRoots], mapped to its declaring
@@ -222,7 +240,13 @@ class DesktopStartupTotalityGuardTest {
      * when they textually precede a start() in the same file — the idiom's
      * accepted cheapness.
      */
-    private fun discoverStartables(root: File): Map<String, File> = buildMap {
+    private fun discoverStartables(root: File): Map<String, File> {
+        // simple name → (qualified type id → declaring file). The qualified
+        // key (package + simple name — the textual identity closest to the
+        // compiler's) dedups the expect/actual pair, which is ONE type with
+        // the same id across two source roots; [mergeBySimpleName] rejects
+        // distinct ids collapsing onto one launch name.
+        val qualifiedByName = mutableMapOf<String, MutableMap<String, File>>()
         for (rootName in scanRoots) {
             val dir = root.resolve(rootName)
             assertTrue(dir.isDirectory, "missing $rootName — repo layout changed?")
@@ -231,18 +255,58 @@ class DesktopStartupTotalityGuardTest {
                 .filter { File.separator + "build" + File.separator !in it.absolutePath }
                 .forEach { file ->
                     val text = stripComments(file.readText())
-                    val types = typeDeclaration.findAll(text)
-                        .map { TypeMark(it.range.first, indentWidth(it.groupValues[1]), it.groupValues[2]) }
-                        .toList()
-                    startDeclaration.findAll(text).forEach { match ->
-                        val startIndent = indentWidth(match.groupValues[1])
-                        types.lastOrNull {
-                            it.position < match.range.first && it.indent < startIndent
-                        }?.let { (_, _, owner) ->
-                            put(owner, file)
-                        }
+                    val pkg = packageDeclaration.find(text)?.groupValues?.get(1).orEmpty()
+                    discoverInText(text).forEach { name ->
+                        qualifiedByName.getOrPut(name) { mutableMapOf() }[
+                            if (pkg.isEmpty()) name else "$pkg.$name"
+                        ] = file
                     }
                 }
+        }
+        return mergeBySimpleName(qualifiedByName)
+    }
+
+    /**
+     * Collapses qualified type identities onto the simple launch-arm names —
+     * `get<X>()` keys the arms by X's simple name (imports resolve the rest),
+     * so the discovered map must too. ONE qualified id per simple name merges
+     * (the expect/actual pair is the same type); TWO distinct ids
+     * (`com.a.Reporter` + `com.b.Reporter`) mean the arm names only the
+     * imported type and this scan cannot tell which — silently merging would
+     * let the unlaunched same-named type pass the totality check, so fail
+     * with both identities named instead.
+     */
+    private fun mergeBySimpleName(qualifiedByName: Map<String, Map<String, File>>): Map<String, File> = buildMap {
+        qualifiedByName.forEach { (name, qualified) ->
+            if (qualified.size > 1) {
+                error(
+                    "two distinct types share the start() holder name '$name' — " +
+                        qualified.entries.joinToString(" vs ") { (id, file) -> "$id ($file)" } +
+                        ". get<$name>() names only the imported one, so the totality scan cannot " +
+                        "tell which type an arm launches. Rename one of them, or teach the scan " +
+                        "qualified matching.",
+                )
+            }
+            put(name, qualified.values.single())
+        }
+    }
+
+    /**
+     * One stripped source text's zero-arg start() holders (simple names) —
+     * the per-file body of [discoverStartables], split out so the scanner's
+     * own discovery patterns have a direct fixture surface.
+     */
+    private fun discoverInText(text: String): Set<String> = buildSet {
+        val types = typeDeclaration.findAll(text)
+            .map { TypeMark(it.range.first, indentWidth(it.groupValues[1]), it.groupValues[2]) }
+            .toList()
+        startDeclaration.findAll(text).forEach { match ->
+            val startIndent = indentWidth(match.groupValues[1])
+            types.lastOrNull {
+                it.position < match.range.first && it.indent < startIndent
+            }?.let { (_, _, owner) ->
+                add(owner)
+            }
         }
     }
 
@@ -253,17 +317,407 @@ class DesktopStartupTotalityGuardTest {
     private fun indentWidth(whitespace: String): Int =
         whitespace.sumOf { if (it == '\t') 4 else 1 }
 
-    /** Drops comments (Kotlin block comments NEST — loop until stable). */
+    /**
+     * Drops comments. Kotlin block comments NEST, so a non-greedy
+     * `/*…*/` removal stops at the FIRST closer and would resurrect the
+     * disabled code between an inner closer and the outer one as "live"
+     * source; this scan tracks depth instead, removing each complete OUTER
+     * comment (nested ones included). Line comments whitespace-fill with the
+     * newline kept (an opener inside one cannot open a block) — eating the
+     * newline would fuse a trailing comment's line into the next one, and the
+     * (?m)^-anchored [startDeclaration] would miss the fun start() that
+     * followed it; and string/char literals are copied
+     * verbatim so executable code carrying an opener (a DLNA MIME wildcard,
+     * a regex) never opens a comment — everything outside comments is
+     * preserved.
+     */
     private fun stripComments(text: String): String {
-        var stripped = text
-        while (true) {
-            val next = stripped.replace(
-                Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL),
-                "",
-            )
-            if (next == stripped) break
-            stripped = next
+        val out = StringBuilder()
+        var i = 0
+        while (i < text.length) {
+            when {
+                text.startsWith("//", i) -> {
+                    val newline = text.indexOf('\n', i)
+                    val commentEnd = if (newline == -1) text.length else newline
+                    repeat(commentEnd - i) { out.append(' ') }
+                    if (newline != -1) out.append('\n')
+                    i = if (newline == -1) text.length else newline + 1
+                }
+                text.startsWith("/*", i) -> {
+                    var depth = 1
+                    i += 2
+                    while (i < text.length && depth > 0) {
+                        when {
+                            text.startsWith("/*", i) -> {
+                                depth++
+                                i += 2
+                            }
+                            text.startsWith("*/", i) -> {
+                                depth--
+                                i += 2
+                            }
+                            else -> i++
+                        }
+                    }
+                }
+                text[i] == '"' -> {
+                    val end = stringLiteralEnd(text, i)
+                    out.append(text, i, end)
+                    i = end
+                }
+                text[i] == '\'' -> {
+                    val end = charLiteralEnd(text, i)
+                    out.append(text, i, end)
+                    i = end
+                }
+                else -> {
+                    out.append(text[i])
+                    i++
+                }
+            }
         }
-        return stripped.replace(Regex("//[^\n]*"), "")
+        return out.toString()
+    }
+
+    /**
+     * The index past the quoted literal opened at [start] (raw or escaped).
+     * A `${…}` template expression is tracked to its balancing `}` (inner
+     * braces count — a lambda body inside the expression is common), and
+     * string/char literals INSIDE the expression recurse, so quotes in a
+     * fallback branch (`"${if (ok) "a" else "b"}"`) do not terminate the
+     * outer string and spill its tail — including any comment marker it
+     * carries — into the code path. The escape branch consumes BOTH the
+     * backslash and the escaped character (a `\"` must not read as the
+     * literal's terminator; the loop guard absorbs an input-final backslash).
+     * COMMENTS inside the expression are skipped before quotes/braces are
+     * interpreted — line comments to (not past) the newline, block comments
+     * to their depth-matched closer (Kotlin nests them) — so a quoted or
+     * braced comment body can neither open a fake string nor alter the
+     * template depth.
+     */
+    private fun stringLiteralEnd(text: String, start: Int): Int {
+        if (text.startsWith("\"\"\"", start)) {
+            val close = text.indexOf("\"\"\"", start + 3)
+            return if (close == -1) text.length else close + 3
+        }
+        var i = start + 1
+        var templateDepth = 0
+        while (i < text.length) {
+            when {
+                text[i] == '\\' -> i += 2
+                templateDepth == 0 && text[i] == '"' -> return i + 1
+                templateDepth == 0 && text[i] == '\n' -> return i // unterminated line string — bail at EOL
+                text[i] == '$' && text.startsWith("{", i + 1) -> {
+                    templateDepth++
+                    i += 2
+                }
+                templateDepth > 0 && text.startsWith("//", i) -> {
+                    val newline = text.indexOf('\n', i)
+                    i = if (newline == -1) text.length else newline
+                }
+                templateDepth > 0 && text.startsWith("/*", i) -> {
+                    var commentDepth = 1
+                    i += 2
+                    while (i < text.length && commentDepth > 0) {
+                        when {
+                            text.startsWith("/*", i) -> {
+                                commentDepth++
+                                i += 2
+                            }
+                            text.startsWith("*/", i) -> {
+                                commentDepth--
+                                i += 2
+                            }
+                            else -> i++
+                        }
+                    }
+                }
+                templateDepth > 0 && text[i] == '{' -> {
+                    templateDepth++
+                    i++
+                }
+                templateDepth > 0 && text[i] == '}' -> {
+                    templateDepth--
+                    i++
+                }
+                templateDepth > 0 && text[i] == '"' -> i = stringLiteralEnd(text, i)
+                templateDepth > 0 && text[i] == '\'' -> i = charLiteralEnd(text, i)
+                else -> i++
+            }
+        }
+        return text.length
+    }
+
+    /** The index past the char literal opened at [start]. */
+    private fun charLiteralEnd(text: String, start: Int): Int {
+        var i = start + 1
+        while (i < text.length) {
+            when (text[i]) {
+                '\\' -> i++
+                '\'' -> return i + 1
+                '\n' -> return i // not a literal after all — bail at EOL
+            }
+            i++
+        }
+        return text.length
+    }
+
+    // ------------------------------------------------------------ scanner fixtures
+
+    /**
+     * Discovery recognizes the expect/actual pair: an `expect class` face, its
+     * `actual class` implementation, and an `actual fun start()` without
+     * `override` are all startable shapes — a regex that stops at the plain
+     * modifier list would exclude them and rot the totality set silently.
+     * Each form is scanned SEPARATELY: one combined fixture would collapse
+     * both into a single set entry, and a regex that lost one half would
+     * still pass off the other.
+     */
+    @Test
+    fun scanner_discoversExpectAndActualStartHolders() {
+        val expectFace = discoverInText(
+            stripComments(
+                """
+                expect class SessionProbe {
+                    fun start()
+                }
+                """.trimIndent(),
+            ),
+        )
+        assertTrue(
+            "SessionProbe" in expectFace,
+            "expected the expect class face to be discovered, got: $expectFace",
+        )
+        val actualFace = discoverInText(
+            stripComments(
+                """
+                actual class SessionProbe {
+                    actual fun start() {
+                        probe()
+                    }
+                }
+                """.trimIndent(),
+            ),
+        )
+        assertTrue(
+            "SessionProbe" in actualFace,
+            "expected the actual class implementation to be discovered, got: $actualFace",
+        )
+    }
+
+    /**
+     * The line-comment half of [stripComments]: a TRAILING comment must not
+     * eat its newline — the fused line would hide the following `fun start()`
+     * from the (?m)^-anchored [startDeclaration] (a silently lost startable,
+     * the discovery-rot shape the ratchet floor guards against only
+     * in aggregate).
+     */
+    @Test
+    fun scanner_keepsTheLineStartPastATrailingLineComment() {
+        val holders = discoverInText(
+            stripComments(
+                """
+                class TrailingCommentHolder {
+                    val probe = 1 // kickoff note
+                    fun start() {
+                    }
+                }
+                """.trimIndent(),
+            ),
+        )
+        assertTrue(
+            "TrailingCommentHolder" in holders,
+            "a fun start() below a trailing line comment must still be discovered, got: $holders",
+        )
+    }
+
+    /**
+     * The nested-comment half of [stripComments]: disabled code between an
+     * inner closer and the outer comment's own closer must NOT surface as a
+     * live declaration (the non-greedy removal shape this scan replaced).
+     */
+    @Test
+    fun scanner_ignoresDisabledCodeInsideNestedBlockComments() {
+        val holders = discoverInText(
+            stripComments(
+                """
+                class LiveHolder {
+                    fun start() {
+                    }
+                }
+
+                /* disabled experiment:
+                /* phase one */
+                class DeadHolder {
+                    fun start() {
+                    }
+                }
+                */
+                """.trimIndent(),
+            ),
+        )
+        assertTrue("LiveHolder" in holders)
+        assertTrue(
+            "DeadHolder" !in holders,
+            "a class inside a nested block comment must not count as a startable, got: $holders",
+        )
+    }
+
+    /**
+     * The arm chain split across lines (`get<X>()` closing one, `.start()`
+     * opening the next) is the same launch arm — a whitespace gap that only
+     * admitted spaces/tabs would report the startable unlaunched and fail
+     * the guard on valid source.
+     */
+    @Test
+    fun scanner_recognizesAStartupArmSplitAcrossLines() {
+        val arms = startupArms.findAll(
+            """
+            private fun launchDesktopStartup() {
+                koinApp.koin
+                    .get<DesktopDownloadManager>()
+                    .start()
+            }
+            """.trimIndent(),
+        ).map { it.groupValues[1] }.toList()
+        assertEquals(
+            listOf("DesktopDownloadManager"),
+            arms,
+            "an arm chain formatted across lines must still be recognized",
+        )
+    }
+
+    /**
+     * The string-template half of [stripComments]: quotes INSIDE a `${…}`
+     * expression (the fallback-string shape) must not terminate the outer
+     * string — the spilled tail would hand its comment marker to the
+     * stripper, which would eat everything past it (the declaration below
+     * included). The nested literal's comment opener is deliberately
+     * unterminated on its line so the mis-parse cannot recover.
+     */
+    @Test
+    fun scanner_keepsDeclarationsVisiblePastATemplateCarryingQuotedCommentMarkers() {
+        val holders = discoverInText(
+            stripComments(
+                """
+                class TemplateHolder {
+                    val fallback = "pick ${'$'}{if (ok) "open /* marker" else "closed"}"
+                    fun start() {
+                    }
+                }
+                """.trimIndent(),
+            ),
+        )
+        assertTrue(
+            "TemplateHolder" in holders,
+            "a fun start() below a string template with nested quoted literals must still be " +
+                "discovered — the template's quotes must not expose its content to comment " +
+                "stripping, got: $holders",
+        )
+    }
+
+    /**
+     * The escape half of [stringLiteralEnd]: the branch must consume BOTH the
+     * backslash and the escaped character. A single-char advance re-examines
+     * the escaped character as if unescaped — an escaped `\"` would terminate
+     * the literal early and spill its tail (the comment-like markers below)
+     * into the code path, where the block-comment opener among them eats the
+     * live declaration after it.
+     */
+    @Test
+    fun scanner_keepsDeclarationsVisiblePastAnEscapedQuoteCarryingCommentMarkers() {
+        val holders = discoverInText(
+            stripComments(
+                """
+                class EscapedQuoteHolder {
+                    val shout = "say \"open /* marker\" loudly"
+                    fun start() {
+                    }
+                }
+                """.trimIndent(),
+            ),
+        )
+        assertTrue(
+            "EscapedQuoteHolder" in holders,
+            "a fun start() below a string with an escaped quote followed by comment-like " +
+                "markers must still be discovered — the escape must consume the escaped " +
+                "character, got: $holders",
+        )
+    }
+
+    /**
+     * Comments inside a `${…}` expression are prose: a quote in one must not
+     * open a fake string (which would swallow the template's real closer and,
+     * with it, the rest of the file as "string" text — resurrecting the
+     * commented-out startable below), and a brace in one must not alter the
+     * template depth.
+     */
+    @Test
+    fun scanner_ignoresACommentedStartablePastAQuoteInsideATemplateExpressionComment() {
+        val holders = discoverInText(
+            stripComments(
+                """
+                class TemplateCommentHolder {
+                    val probe = "${'$'}{ /* " } */ 0 }"
+                    fun start() {
+                    }
+                }
+
+                /* disabled experiment:
+                class GhostHolder {
+                    fun start() {
+                    }
+                }
+                */
+                """.trimIndent(),
+            ),
+        )
+        assertTrue("TemplateCommentHolder" in holders)
+        assertTrue(
+            "GhostHolder" !in holders,
+            "a quote inside a template-expression comment must not expose the text after " +
+                "the template to discovery — the commented-out startable below must stay " +
+                "dead, got: $holders",
+        )
+    }
+
+    /**
+     * The discovery merge: two DISTINCT qualified types sharing a simple
+     * launch name (`com.a.Reporter` vs `com.b.Reporter`) must fail the merge
+     * — the arm keys are simple names, so a silent merge would let the
+     * unlaunched same-named type pass totality — while the expect/actual
+     * pair (the SAME qualified identity across two source roots) still
+     * dedups to one entry.
+     */
+    @Test
+    fun scanner_rejectsDistinctQualifiedTypesSharingALaunchName() {
+        val collision = assertFailsWith<IllegalStateException> {
+            mergeBySimpleName(
+                mapOf(
+                    "Reporter" to mapOf(
+                        "com.a.Reporter" to File("shared/core/data/src/jvmMain/kotlin/com/a/Reporter.kt"),
+                        "com.b.Reporter" to File("shared/core/data/src/jvmMain/kotlin/com/b/Reporter.kt"),
+                    ),
+                ),
+            )
+        }
+        assertTrue(
+            "com.a.Reporter" in collision.message!! && "com.b.Reporter" in collision.message!!,
+            "the collision must name both identities, got: ${collision.message}",
+        )
+        val deduped = mergeBySimpleName(
+            mapOf(
+                "SessionProbe" to mapOf(
+                    "com.raulshma.jellyplay.core.data.SessionProbe" to
+                        File("shared/core/data/src/commonMain/kotlin/com/raulshma/jellyplay/core/data/SessionProbe.kt"),
+                    "com.raulshma.jellyplay.core.data.SessionProbe" to
+                        File("shared/core/data/src/jvmMain/kotlin/com/raulshma/jellyplay/core/data/SessionProbe.kt"),
+                ),
+            ),
+        )
+        assertTrue(
+            "SessionProbe" in deduped,
+            "the expect/actual pair is one qualified type — it must merge to one launch name",
+        )
     }
 }

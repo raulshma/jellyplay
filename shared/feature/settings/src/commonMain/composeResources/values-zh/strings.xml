@@ -1318,4 +1318,8 @@
     <string name="ss_exo_target_buffer_mb_subtitle">前向缓冲总量，单位 MB（0 = 引擎推导自动，5–512 为显式值）</string>
     <string name="ss_exo_retain_back_buffer_title">保留后缓冲</string>
     <string name="ss_exo_retain_back_buffer_subtitle">无论关键帧边界如何都保留后缓冲（即时回退，内存占用更高）</string>
+    <string name="settings_auto_arm_from_arr">自动添加Sonarr关注的剧集</string>
+    <string name="settings_auto_arm_from_arr_subtitle">将Sonarr关注的剧集加入自动下载，即使尚未下载任何剧集（实验性功能）</string>
+    <string name="ss_auto_arm_from_arr_title">自动添加Sonarr关注的剧集</string>
+    <string name="ss_auto_arm_from_arr_subtitle">将Sonarr关注的剧集加入自动下载，即使尚未下载任何剧集</string>
 </resources>

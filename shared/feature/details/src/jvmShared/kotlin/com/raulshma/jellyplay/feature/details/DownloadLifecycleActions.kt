@@ -7,6 +7,8 @@ import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
@@ -16,6 +18,7 @@ import com.raulshma.jellyplay.core.model.maxBitrate
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,12 +26,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_series_armed
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_arm_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_details_not_loaded
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_download_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_no_source
@@ -113,6 +119,23 @@ internal class DownloadLifecycleActions(
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val downloadRepository: DownloadRepository,
     private val mediaDetailProvider: MediaDetailProvider,
+    /**
+     * The manual arm's write seam (gh-225 follow-up): the policy store's
+     * insert-if-absent arm ([SeriesDownloadPolicyStore.armSeries]) behind the
+     * sheet's arm-without-enqueueing action. The sheet's POLICY-CHIP flow
+     * deliberately keeps riding [downloadIntake]'s [DownloadIntake.seriesPolicy]
+     * + [startSeries] — this store is only the arm toggle's write, never a
+     * second home for the chip path.
+     */
+    private val policyStore: SeriesDownloadPolicyStore,
+    /**
+     * The manual arm's schedule reconcile: the first arm row is itself a
+     * keep-alive term (`hasSeriesPolicies`), so with the global mode off and
+     * `autoArmFromArr` off the periodic pass that this arm exists for is NOT
+     * scheduled until [AutoDownloadScheduler.sync] runs — the arm write pokes
+     * it in the same launch.
+     */
+    private val autoDownloadScheduler: AutoDownloadScheduler,
 ) {
     /**
      * Hilt factory bundling this helper's exclusive collaborators so they
@@ -124,6 +147,8 @@ internal class DownloadLifecycleActions(
         private val downloadsStore: DownloadsStore,
         private val adaptiveBitrateManager: AdaptiveBitrateManager,
         private val downloadRepository: DownloadRepository,
+        private val policyStore: SeriesDownloadPolicyStore,
+        private val autoDownloadScheduler: AutoDownloadScheduler,
     ) {
         fun create(
             scope: CoroutineScope,
@@ -141,6 +166,8 @@ internal class DownloadLifecycleActions(
             adaptiveBitrateManager = adaptiveBitrateManager,
             downloadRepository = downloadRepository,
             mediaDetailProvider = mediaDetailProvider,
+            policyStore = policyStore,
+            autoDownloadScheduler = autoDownloadScheduler,
         )
     }
 
@@ -167,6 +194,26 @@ internal class DownloadLifecycleActions(
         }
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.Eagerly, DownloadRootState())
+
+    /**
+     * Whether the session series currently carries a live arm row — the
+     * download sheet's "Auto-download" row state ([SeriesArmActionRow]'s
+     * `armed`). Reactive over the policy store's
+     * [SeriesDownloadPolicyStore.observeArmedSeries], so the row flips the
+     * moment the [armSeries] write lands — no manual refresh. A raw NEVER
+     * tombstone reads NOT armed: the series is deliberately stopped, and the
+     * row offers the arm action again (the sheet's Never chip below says the
+     * same thing). Keys on the RAW row mode, never the resolved mode — a
+     * FOLLOW_GLOBAL arm under a global NEVER is still armed. The series-type
+     * guard mirrors [armSeries]'s: only a SERIES session can be armed, so a
+     * movie session reads false even with arm rows present.
+     */
+    val seriesArmed: StateFlow<Boolean> =
+        combine(session, policyStore.observeArmedSeries()) { session, arms ->
+            val item = session?.detail?.item
+            item != null && item.mediaType == MediaType.SERIES &&
+                arms.any { it.seriesId == item.id && it.mode != AutoDownloadMode.NEVER }
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     init {
         // Live in-flight download progress: one collector for the screen's
@@ -338,6 +385,69 @@ internal class DownloadLifecycleActions(
                     )
                 }
             _state.update { it.copy(isDownloadingSeries = false) }
+        }
+    }
+
+    /**
+     * The series download sheet's "Auto-download" arm action (gh-225
+     * follow-up): arms the session series WITHOUT enqueueing anything — the
+     * policy store's [SeriesDownloadPolicyStore.manualArmSeries] with the
+     * detail screen's series name (the armed list's display cache). An
+     * absent row gets the insert-if-absent follow-global arm; a raw NEVER
+     * tombstone flips back to the arm (the sheet doubles as a re-arm entry
+     * for a stopped series); an explicit INSTANT/ASK override is never
+     * demoted. The sheet's policy-chip flow ([downloadSeries] with the
+     * confirmed [DownloadIntake.SeriesPolicyChoice]) is untouched — this
+     * action never sends a policy choice with a batch.
+     *
+     * [onArmed] runs in the same launch once the write has landed — the
+     * sheet host re-seeds its policy chips from the stored row so a
+     * confirm-after-arm rides the refreshed selection (a tombstone the arm
+     * just flipped must not confirm its dead NEVER). Default no-op keeps
+     * non-sheet callers unchanged.
+     */
+    fun armSeries(onArmed: suspend () -> Unit = {}) {
+        val detail = session.value?.detail ?: run {
+            scope.launch { messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_error_details_not_loaded))) }
+            return
+        }
+        val item = detail.item
+        if (item.mediaType != MediaType.SERIES) {
+            scope.launch { messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_error_not_a_series))) }
+            return
+        }
+        scope.launch {
+            try {
+                policyStore.manualArmSeries(item.id, item.name)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The arm write failed — report it the way the queue path
+                // reports its failures and stop before onArmed(): the sheet
+                // host must not re-seed its policy chips from a write that
+                // never landed.
+                messages.tryEmit(
+                    DetailMessage.Text(
+                        UserErrorMessages.resolve(e, strings.get(Res.string.detail_error_arm_failed)),
+                    ),
+                )
+                return@launch
+            }
+            // The FIRST arm row is a keep-alive term on its own: with the
+            // global mode off and autoArmFromArr off, the periodic pass this
+            // arm exists for is unscheduled until this reconcile runs.
+            // Guarded separately from the write: a reconcile failure must not
+            // eat onArmed() or the armed confirmation — the arm has landed.
+            try {
+                autoDownloadScheduler.sync()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The pass may stay unscheduled until the next sync poke; the
+                // arm itself is safe and must still be reported.
+            }
+            onArmed()
+            messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_download_series_armed)))
         }
     }
 

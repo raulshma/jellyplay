@@ -652,6 +652,8 @@
     <string name="settings_auto_download_servers_subtitle">Auto-download only from these servers; none selected means all</string>
     <string name="settings_auto_download_all_servers">All servers</string>
     <string name="settings_auto_download_server_count">%1$d of %2$d servers</string>
+    <string name="settings_auto_arm_from_arr">Auto-Arm Series Tracked in Sonarr</string>
+    <string name="settings_auto_arm_from_arr_subtitle">Arm Sonarr-monitored series for auto-download even with no downloaded episodes (experimental)</string>
     <string name="settings_auto_download_clean_up_now">Clean Up Downloads Now</string>
     <string name="settings_auto_download_clean_up_now_subtitle">Run the keep-downloads-for sweep immediately</string>
     <string name="settings_auto_download_cleaned_up">%1$d downloads removed (%2$s freed)</string>

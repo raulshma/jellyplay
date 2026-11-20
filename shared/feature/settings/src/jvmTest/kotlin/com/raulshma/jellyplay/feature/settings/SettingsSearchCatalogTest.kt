@@ -109,7 +109,7 @@ class SettingsSearchCatalogTest {
         assertEquals(14, SettingsScreenGroups.notifications.items.size)
         assertEquals(7, SettingsScreenGroups.storageCache.items.size)
         assertEquals(11, SettingsScreenGroups.storageNetwork.items.size)
-        assertEquals(16, SettingsScreenGroups.storageDownloads.items.size)
+        assertEquals(17, SettingsScreenGroups.storageDownloads.items.size)
         assertEquals(7, SettingsScreenGroups.security.items.size)
         assertEquals(4, SettingsScreenGroups.backup.items.size)
         assertEquals(1, SettingsScreenGroups.about.items.size)

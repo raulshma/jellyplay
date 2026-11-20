@@ -33,6 +33,6 @@ sealed interface WorkerRetryVerdict {
          * disabled budget: every attempt (including the first) is exhausted.
          */
         fun of(attempt: Int, max: Int): WorkerRetryVerdict =
-            if (attempt < max) Retry else Exhausted
+            if (max > 0 && attempt < max) Retry else Exhausted
     }
 }

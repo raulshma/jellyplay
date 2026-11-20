@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -31,6 +34,7 @@ import com.raulshma.jellyplay.core.ui.generated.resources.download_sheet_policy_
 import com.raulshma.jellyplay.core.ui.generated.resources.download_sheet_policy_never
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_armed_series_mode_follow_global
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_armed_series_rearm
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_armed_series_subtitle
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_armed_series_title
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_armed_series_unarm
@@ -43,18 +47,31 @@ import org.jetbrains.compose.resources.stringResource
  * show them). Each row shows the series name and its EFFECTIVE mode (the
  * follows-global arm reads the global preference's label; explicit overrides
  * — NEVER included, the check visits-and-skips those — read their own), plus
- * the un-arm action (the disarm verb's only UI home). The host gates the card
- * on the rows being non-empty, so it never renders hollow.
+ * the row action: an armed row shows the un-arm verb (the disarm verb's only
+ * UI home — it writes the NEVER tombstone), a tombstoned row
+ * ([ArmedSeriesRow.reArmable]) shows the re-arm verb instead — which is why
+ * the "stopped" series stay listed at all. The host gates the card on the
+ * rows being non-empty, so it never renders hollow.
  */
 @Composable
 internal fun ArmedSeriesCard(
     rows: List<ArmedSeriesRow>,
     onUnArm: (seriesId: String) -> Unit,
+    onReArm: (seriesId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
+            // The CARD is the bounded surface (the picker sheet's 320 dp cap,
+            // header included) and the rows claim the card's leftover space
+            // (weight, fill = false) — together they make the card fit ANY
+            // finite budget, so a 240 dp-high desktop window shrinks the
+            // scroll region instead of the card pushing everything below it
+            // off-screen. The section rides OUTSIDE the download list (pinned
+            // above it, both placements) in a non-scrolling column, where an
+            // unbounded card would overflow the viewport entirely.
+            .heightIn(max = 320.dp)
             .clip(ShapeCache.smooth4)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -83,11 +100,20 @@ internal fun ArmedSeriesCard(
 
         Spacer(Modifier.height(8.dp))
 
-        rows.forEach { row ->
-            ArmedSeriesRowView(
-                row = row,
-                onUnArm = { onUnArm(row.seriesId) },
-            )
+        // The rows region is the card's scroll owner: it takes what the
+        // header leaves of the card's bounded height and never more (weight,
+        // fill = false — a short arm list keeps the card compact), so only
+        // the rows scroll and the header stays put.
+        Column(
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+        ) {
+            rows.forEach { row ->
+                ArmedSeriesRowView(
+                    row = row,
+                    onUnArm = { onUnArm(row.seriesId) },
+                    onReArm = { onReArm(row.seriesId) },
+                )
+            }
         }
     }
 }
@@ -96,6 +122,7 @@ internal fun ArmedSeriesCard(
 private fun ArmedSeriesRowView(
     row: ArmedSeriesRow,
     onUnArm: () -> Unit,
+    onReArm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -119,11 +146,20 @@ private fun ArmedSeriesRowView(
             )
         }
         OutlinedButton(
-            onClick = onUnArm,
+            // The row action flips on the RAW tombstone flag, never the
+            // resolved mode: a NEVER row is the disarm tombstone (re-arm
+            // back to FOLLOW_GLOBAL), everything else — a FOLLOW_GLOBAL row
+            // under a global NEVER included — is armed and offers the stop.
+            onClick = if (row.reArmable) onReArm else onUnArm,
             shape = ShapeCache.smoothPill,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         ) {
-            Text(stringResource(Res.string.downloads_armed_series_unarm))
+            Text(
+                stringResource(
+                    if (row.reArmable) Res.string.downloads_armed_series_rearm
+                    else Res.string.downloads_armed_series_unarm,
+                ),
+            )
         }
     }
 }
