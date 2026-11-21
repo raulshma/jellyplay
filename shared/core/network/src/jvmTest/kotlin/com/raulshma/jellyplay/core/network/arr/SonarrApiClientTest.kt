@@ -149,6 +149,66 @@ class SonarrApiClientTest {
     }
 
     @Test
+    fun `getSeriesList parses the full series array with monitored and tvdbId`() = runBlocking {
+        val json = """
+            [
+                { "id": 4, "title": "Monitored Show", "tvdbId": 81189, "monitored": true, "path": "/tv/m" },
+                { "id": 5, "title": "Paused Show", "tvdbId": 121361, "monitored": false }
+            ]
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))
+
+        val result = apiClient.getSeriesList(conn)
+        assertTrue(result.isSuccess)
+        val series = result.getOrThrow()
+        assertEquals(2, series.size)
+        assertEquals(
+            SonarrSeriesInfo(id = 4, title = "Monitored Show", tvdbId = 81189, monitored = true, path = "/tv/m"),
+            series[0],
+        )
+        assertEquals(
+            SonarrSeriesInfo(id = 5, title = "Paused Show", tvdbId = 121361, monitored = false, path = null),
+            series[1],
+        )
+
+        val recorded = mockWebServer.takeRequest()
+        assertEquals("/api/v3/series", recorded.path, "the full list sends no query params")
+        assertEquals("k", recorded.getHeader("X-Api-Key"))
+    }
+
+    @Test
+    fun `getSeriesInfo keeps its client-side tvdbId filter and maps SonarrSeriesInfo`() = runBlocking {
+        val json = """
+            [
+                { "id": 1, "title": "Wrong Show", "tvdbId": 999, "monitored": true, "path": "/tv/wrong" },
+                { "id": 2, "title": "Right Show", "tvdbId": 81189, "monitored": false, "path": "/tv/right" }
+            ]
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))
+
+        val result = apiClient.getSeriesInfo(conn, 81189)
+        assertTrue(result.isSuccess)
+        assertEquals(
+            SonarrSeriesInfo(id = 2, title = "Right Show", tvdbId = 81189, monitored = false, path = "/tv/right"),
+            result.getOrThrow(),
+        )
+
+        val recorded = mockWebServer.takeRequest()
+        assertTrue(recorded.path!!.startsWith("/api/v3/series"))
+        assertTrue(recorded.path!!.contains("tvdbId=81189"))
+    }
+
+    @Test
+    fun `getSeriesList maps an untracked server to an empty list`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("[]").setResponseCode(200))
+
+        val result = apiClient.getSeriesList(conn)
+
+        assertTrue(result.isSuccess)
+        assertEquals(0, result.getOrThrow().size)
+    }
+
+    @Test
     fun `getQueue maps 500 to failure`() = runBlocking {
         // 500 is retryable and retry now lives in the request funnel: fill the
         // budget so the mapped failure is the 500 itself, not a queue stall.

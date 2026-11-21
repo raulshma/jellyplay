@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.worker.WorkerRetryVerdict
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
 import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
@@ -102,14 +103,18 @@ class NewMediaCheckWorker(
      * so a permanently-failing episode check dies instead of backing off
      * forever.
      */
-    private fun retryOrFail(): Result =
-        if (workerParams.tags.contains(NotificationScheduler.SERIES_CHECK_WORK_TAG) &&
-            runAttemptCount >= MAX_ONE_SHOT_RETRIES
-        ) {
-            Result.failure()
-        } else {
-            Result.retry()
+    private fun retryOrFail(): Result {
+        // The periodic run's unbounded retry is the no-cap case — it never
+        // walks the ladder; only the tagged one-shots consult the budget.
+        if (!workerParams.tags.contains(NotificationScheduler.SERIES_CHECK_WORK_TAG)) {
+            return Result.retry()
         }
+        return if (WorkerRetryVerdict.of(runAttemptCount, MAX_ONE_SHOT_RETRIES).shouldRetry) {
+            Result.retry()
+        } else {
+            Result.failure()
+        }
+    }
 
     private suspend fun checkForNewMedia(prefs: NotificationPreferences) {
         val foldersResult = libraryFeed.getLibraryFolders(force = false)

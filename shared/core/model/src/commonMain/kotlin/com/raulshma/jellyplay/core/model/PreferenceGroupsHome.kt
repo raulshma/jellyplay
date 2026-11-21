@@ -4,7 +4,8 @@ import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 /**
- * Fields read by `HomeSettingsScreen` — the home-screen config hub (display
+ * Fields read by the home settings screens (the hub + its display/rows/cards
+ * leaves, ADR-0017) — display
  * rows, Continue Watching / Next Up behavior, the home layout editor, and the
  * card-display toggles: unwatched badge, watched checkmark, hide watched,
  * external ratings). Everything here projects from the single

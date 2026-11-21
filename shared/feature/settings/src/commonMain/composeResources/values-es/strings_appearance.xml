@@ -5,12 +5,23 @@
     <!-- care and the newsletter groups. -->
     <string name="settings_newsletter_cd">Boletín</string>
     <string name="settings_appearance_title">Apariencia</string>
+    <string name="settings_appearance_sections">Secciones de apariencia</string>
+    <string name="settings_appearance_entry_theme">Tema y pantalla</string>
+    <string name="settings_appearance_entry_theme_subtitle">Colores, fuentes, modo de vista de la biblioteca, accesibilidad y cuidado ocular</string>
+    <string name="settings_appearance_entry_library_views">Vistas de la biblioteca</string>
+    <string name="settings_appearance_entry_library_views_subtitle">Insignias, listas de episodios y visualización de navegación</string>
+    <string name="settings_appearance_entry_detail">Pantalla de detalles</string>
+    <string name="settings_appearance_entry_detail_subtitle">Carriles de reparto, chips, secciones y límites</string>
+    <string name="settings_appearance_detail_tuning">Densidad y límites</string>
+    <string name="settings_appearance_entry_navigation">Navegación y respuesta háptica</string>
+    <string name="settings_appearance_entry_navigation_subtitle">Barra inferior, densidad y respuesta táctil</string>
     <string name="settings_theme">Tema</string>
     <string name="settings_artwork_dynamic">Arte dinámico</string>
     <string name="settings_theme_mode">Modo del tema</string>
     <string name="settings_theme_follow_system">Seguir el ajuste del sistema</string>
     <string name="settings_theme_always_light">Siempre claro</string>
     <string name="settings_theme_always_dark">Siempre oscuro</string>
+    <string name="settings_theme_scheduled_label">Programado</string>
     <string name="settings_theme_scheduled">Día/noche automático (%1$d:00\u2013%2$d:00)</string>
     <string name="settings_dynamic_theming">Tematización dinámica</string>
     <string name="settings_dynamic_theming_subtitle">Colores extraídos del arte</string>
@@ -23,6 +34,7 @@
     <string name="settings_oled_token">OLED</string>
     <string name="settings_performance_token">Rendimiento</string>
     <string name="settings_contrast_suffix">Contraste %1$s</string>
+    <string name="settings_accent_suffix">Acento %1$s</string>
     <string name="settings_library_view_mode">Modo de vista de la biblioteca</string>
     <string name="settings_layout_mode">Diseño</string>
     <string name="settings_layout_mode_subtitle">Elegir diseño automático, de teléfono o de tablet</string>

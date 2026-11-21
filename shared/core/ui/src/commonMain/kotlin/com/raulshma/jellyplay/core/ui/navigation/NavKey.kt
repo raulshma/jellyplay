@@ -277,13 +277,123 @@ sealed class Route : NavKey {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
 
+    /**
+     * The appearance settings HUB (ADR-0017's domain hub split): the domain's
+     * four entrance rows (Theme & display / Library views / Detail screen /
+     * Navigation & haptics), each navigating a leaf screen, with the
+     * advanced-gated Newsletter group rendered below them — the glossary's
+     * declared hub exception. The domain's settings rows themselves deep-link
+     * the leaf routes below (their specs carry the per-leaf route kinds); this
+     * route stays the domain's root destination (the settings root's
+     * Appearance entrance, the search pane's quick category) and its
+     * domain-wide reset action. A stale deep-link into a moved row id
+     * resolves to -1 here (no highlight) and lands on the owning leaf through
+     * the catalog instead.
+     */
     @Serializable data class AppearanceSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
 
-    /** Home screen config hub — display rows, Next Up behavior and the home layout editor. */
+    /**
+     * Theme & display — the appearance theme leaf (ADR-0017): the theme
+     * mode/style/accent cluster, display & accessibility knobs, the TV
+     * overscan pair, and the advanced Performance (Reduce Motion) and Eye
+     * care groups. Deep-linked by the rows whose specs carry the
+     * `theme_settings` route kind ([Route.AppearanceSettings] is the hub).
+     */
+    @Serializable data class ThemeSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Library views — the library/card browsing leaf (ADR-0017): the
+     * library-content display toggles (episode lists, badges, logos,
+     * trailers, haptics, the search-history toggle) and the screen-local
+     * confirm-library-reset row. Deep-linked by the rows whose specs carry
+     * the `library_display_settings` route kind.
+     */
+    @Serializable data class LibraryDisplaySettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Detail screen — the media-detail presentation leaf (ADR-0017): every
+     * `detail_*` row (chips, rails, limits, section order + its reorderable
+     * editor) plus the filmography pair. Deep-linked by the rows whose specs
+     * carry the `detail_display_settings` route kind.
+     */
+    @Serializable data class DetailDisplaySettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Navigation & haptics — the app-chrome leaf (ADR-0017): the floating
+     * navigation-bar customization group with its global interface rows
+     * (start tab, 24h clock, press/haptics/density/overscroll). Deep-linked
+     * by the rows whose specs carry the `navigation_display_settings` route
+     * kind.
+     */
+    @Serializable data class NavigationDisplaySettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * The home settings HUB (ADR-0017's domain hub split): the domain's three
+     * entrance rows (Home display / Rows & layout / Cards & badges), each
+     * navigating a leaf screen, with the advanced-gated Fine-tuning group
+     * rendered below them — the glossary's declared hub exception (the
+     * appearance hub's newsletter precedent). The domain's settings rows
+     * themselves deep-link the leaf routes below (their specs carry the
+     * per-leaf route kinds; the fine-tuning rows keep the hub kind); this
+     * route stays the domain's root destination (the settings root's Home
+     * entrance, the search pane's quick category) and its domain-wide reset
+     * action (the HOME_DISCOVERY reset spans every leaf, so it stays HERE).
+     * A stale deep-link into a moved row id resolves to -1 here (no
+     * highlight) and lands on the owning leaf through the catalog instead.
+     */
     @Serializable data class HomeSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Home display — the mainstream home-presentation leaf (ADR-0017's home
+     * split): home mode, the hero/backdrop cluster (with its gates), the
+     * clock/dock/chrome toggles, the stats-card and genre-rail features and
+     * their presentation picks. Deep-linked by the rows whose specs carry the
+     * `home_display_settings` route kind ([Route.HomeSettings] is the hub).
+     */
+    @Serializable data class HomeDisplaySettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Rows & layout — the home-rows curation leaf (ADR-0017's home split):
+     * the Next Up behavior group, the Home Screen Layout group (the four
+     * drill-ins, the header-shortcuts editor, the layout sync/upload/restore
+     * actions and the reorderable section toggles) and the hidden/restore
+     * curation quartet. Deep-linked by the rows whose specs carry the
+     * `home_rows_settings` route kind; the drill-in rows deep-link their own
+     * dedicated editors ([Route.PinnedHomeSections] et al.).
+     */
+    @Serializable data class HomeRowsSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Cards & badges — the card-display leaf (ADR-0017's home split): the
+     * badge/ratings/spoiler toggles, the TV-gated trickplay pair and the
+     * card-chrome trio (scale, corner radius, row animations). Deep-linked by
+     * the rows whose specs carry the `home_cards_settings` route kind.
+     */
+    @Serializable data class HomeCardsSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
@@ -328,7 +438,107 @@ sealed class Route : NavKey {
      */
     @Serializable data object MyMediaHidden : Route()
 
+    /**
+     * The playback settings HUB (ADR-0017's domain hub split): the playback
+     * domain's eight entrance rows (Basics / Controls & gestures / Player
+     * chrome / Video & transcoding / Player engines / Skipping & segments /
+     * SyncPlay & casting / Live TV & DVR), each navigating a leaf screen. The
+     * domain's settings rows themselves deep-link the leaf routes below
+     * (their specs carry the per-leaf route kinds); this route stays the
+     * domain's root destination (the settings root's Playback entrance, the
+     * search pane's quick category) and its domain-wide reset action.
+     */
     @Serializable data class PlaybackSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Playback Basics — the mainstream playback-behavior leaf (ADR-0017):
+     * engine choice, transport defaults, the autoplay/resume family, session
+     * restore, the pause-screen experience and the streaming/privacy
+     * toggles. Deep-linked by the rows whose specs carry the
+     * `playback_basics` route kind ([Route.PlaybackSettings] is the hub).
+     */
+    @Serializable data class PlaybackBasics(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Playback Controls & gestures — the input-surface leaf (ADR-0017):
+     * screen orientation, the touch-gesture set, the input-binding editor
+     * drill-in and the keyboard/hold-seek cadence presets. Deep-linked by
+     * the rows whose specs carry the `playback_controls` route kind.
+     */
+    @Serializable data class PlaybackControls(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Player chrome — the player-HUD customization leaf (ADR-0017): the
+     * video_* overlay/transport/gesture-curve/seek-bar presentation cluster
+     * plus the bitmap-subtitle scale and the TV zoom. Every row is
+     * advanced-gated. Deep-linked by the rows whose specs carry the
+     * `player_chrome_settings` route kind.
+     */
+    @Serializable data class PlayerChromeSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Video & transcoding — the whole Advanced Video group as one
+     * advanced-only leaf (ADR-0017): decoder, passthrough + per-codec set,
+     * streaming quality, the performance profile + Re-detect, HDR, the
+     * transcode caps and the custom device profile. Deep-linked by the rows
+     * whose specs carry the `playback_video_quality` route kind.
+     */
+    @Serializable data class PlaybackVideoQuality(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Player engines — all four engine-config branches as ONE advanced-only
+     * leaf (ADR-0017): the MPV/VLC/ExoPlayer/external branch admission rides
+     * the preferred player exactly as on the former combined screen.
+     * Deep-linked by the rows whose specs carry the `player_engine_settings`
+     * route kind.
+     */
+    @Serializable data class PlayerEngineSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Skipping & segments — the media-segment leaf (ADR-0017): the six
+     * per-type skip behaviors, the skip-on-seek toggle, the skip-prompt
+     * duration and the Next Up preroll. Deep-linked by the rows whose specs
+     * carry the `media_segment_settings` route kind.
+     */
+    @Serializable data class MediaSegmentSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * SyncPlay & casting — the watch-party pair of groups as one leaf
+     * (ADR-0017): the SyncPlay trio and the casting trio. Deep-linked by the
+     * rows whose specs carry the `syncplay_casting_settings` route kind.
+     */
+    @Serializable data class SyncPlayCastingSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Live TV & DVR — the DVR group as one leaf (ADR-0017): recording
+     * pre/post padding and quality. Deep-linked by the rows whose specs
+     * carry the `live_tv_dvr_settings` route kind.
+     */
+    @Serializable data class LiveTvDvrSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
@@ -367,7 +577,28 @@ sealed class Route : NavKey {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
 
+    /**
+     * Storage & network — the cache and network halves of the former combined
+     * storage screen (ADR-0017's storage split): the Storage/cache group
+     * (clear actions + the advanced tuning rows + the screen-local cache-used
+     * info row) and the Network & Offline group. The Downloads group moved to
+     * the sibling [Route.DownloadsSettings] screen; the settings root's
+     * entrance row carries this route (relabeled "Storage & network", the row
+     * id unchanged).
+     */
     @Serializable data class StorageSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * Downloads — the download-behavior sibling screen (ADR-0017's storage
+     * split): the whole Downloads group (quality, smart/auto-downloads with
+     * their retention clusters, the schedule window and the storage caps)
+     * moved here intact from the former combined screen; the settings root's
+     * Downloads entrance row (static subtitle) carries this route.
+     */
+    @Serializable data class DownloadsSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
@@ -477,6 +708,33 @@ sealed class Route : NavKey {
      * user toggle exists for meta keys), so no in-screen gate chrome.
      */
     @Serializable data object JellyPlaySync : Route()
+
+    /**
+     * Ambient settings — the TV dream/screensaver group and the desktop
+     * idle-ambient group as ONE capability-gated screen (ADR-0017: the root's
+     * inline tuning groups moved behind one Look & feel entrance; the TV
+     * screensaver rows render only in TV mode, the idle-ambient rows only
+     * where the platform backs the idle screen). Reached from the settings
+     * root's Ambient entrance; the search rows whose specs carry the
+     * `ambient_settings` route kind deep-link here.
+     */
+    @Serializable data class AmbientSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /**
+     * The JellyPlay companion-plugin's settings screen (ADR-0017): the root
+     * screen's former inline plugin section (the four plugin-surface entries
+     * — sync / messages / my ratings / your watching — plus the per-feature
+     * switches) as ONE screen behind one Integrations entrance. The screen
+     * stays gated on the plugin probe exactly as the inline section was
+     * (unavailable = graceful-absent), so it carries no extra gate chrome.
+     */
+    @Serializable data class JellyPlayPluginSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
 
     /**
      * The JellyPlay companion-plugin's "My ratings" screen (ADR 0010) — the

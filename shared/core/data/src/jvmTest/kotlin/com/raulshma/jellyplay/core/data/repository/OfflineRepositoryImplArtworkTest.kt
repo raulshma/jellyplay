@@ -538,7 +538,7 @@ class OfflineRepositoryImplArtworkTest {
             downloadDao,
             database,
             timeSource = SystemTimeSource(),
-            downloadPolicyDao = mockk(relaxed = true),
+            policyStore = lazy { mockk<SeriesDownloadPolicyStore>(relaxed = true) },
         )
     }
 

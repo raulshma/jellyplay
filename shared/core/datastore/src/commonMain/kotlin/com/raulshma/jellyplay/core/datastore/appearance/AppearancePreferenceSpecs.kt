@@ -67,21 +67,41 @@ import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
 object AppearancePreferenceSpecs {
 
     /**
-     * Route kind shared by every settings-search row that deep-links into the
-     * appearance settings screen — the plain id the feature layer maps to
-     * `Route.AppearanceSettings()`.
+     * Route kind of the theme & display rows (ADR-0017's appearance split):
+     * the plain id the feature layer maps to `Route.ThemeSettings()` — the
+     * theme mode/style/accent cluster, the display & accessibility knobs, the
+     * TV overscan pair, Reduce Motion and the Eye care pair
+     * ([Route.AppearanceSettings] is the domain hub).
      */
-    const val ROUTE_APPEARANCE_SETTINGS = "appearance_settings"
+    const val ROUTE_THEME_SETTINGS = "theme_settings"
+
+    /**
+     * Route kind of the library/card browsing rows (ADR-0017): the plain id
+     * the feature layer maps to `Route.LibraryDisplaySettings()`.
+     */
+    const val ROUTE_LIBRARY_DISPLAY_SETTINGS = "library_display_settings"
+
+    /**
+     * Route kind of the media-detail presentation rows (ADR-0017): the plain
+     * id the feature layer maps to `Route.DetailDisplaySettings()`.
+     */
+    const val ROUTE_DETAIL_DISPLAY_SETTINGS = "detail_display_settings"
+
+    /**
+     * Route kind of the navigation/global-chrome rows (ADR-0017): the plain
+     * id the feature layer maps to `Route.NavigationDisplaySettings()`.
+     */
+    const val ROUTE_NAVIGATION_DISPLAY_SETTINGS = "navigation_display_settings"
 
     /**
      * Route kind shared by every settings-search row that deep-links into the
      * Performance hub (the master level dial + the granular effect/buffer
      * overrides) — the plain id the feature layer maps to
-     * `Route.PerformanceSettings()`. Declared beside [ROUTE_APPEARANCE_SETTINGS]
-     * because the hub's appearance-side rows are declared in this object; the
-     * playback domain's buffer rows cross-reference the same constant (the
-     * `ss_cat_playback` rows carry it too), so both domains' catalogs map one
-     * route kind to one hub route.
+     * `Route.PerformanceSettings()`. Declared beside the appearance leaf
+     * kinds because the hub's appearance-side rows are declared in this
+     * object; the playback domain's buffer rows cross-reference the same
+     * constant (the `ss_cat_playback` rows carry it too), so both domains'
+     * catalogs map one route kind to one hub route.
      */
     const val ROUTE_PERFORMANCE_SETTINGS = "performance_settings"
 
@@ -99,7 +119,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_theme_mode_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("theme", "mode", "light", "dark", "system", "black"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
         ),
     )
 
@@ -113,7 +133,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_contrast_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("contrast", "accessibility", "legibility", "readability"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -128,7 +148,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_dynamic_theming_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("dynamic", "artwork", "colors", "theme", "wallpaper"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
         ),
     )
 
@@ -142,7 +162,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_oled_mode_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("oled", "black", "amoled", "pure black", "battery"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
         ),
     )
 
@@ -432,7 +452,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "core_ui_accent_color_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("accent", "color", "theme", "swatch", "palette", "customize"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
         ),
     )
 
@@ -448,7 +468,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "core_ui_color_style_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("color style", "palette", "vibe", "generated", "mood", "theme"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
         ),
     )
 
@@ -488,7 +508,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_theme_style_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("theme", "style", "variant", "synthwave", "soothing", "monochrome", "vivid", "aurora", "sakura", "vector", "pop", "pastel", "neon", "retro", "look"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
         ),
     )
 
@@ -582,7 +602,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_reduce_motion_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("motion", "reduce", "animations", "parallax", "effects"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -597,7 +617,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_blue_light_filter_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("blue light", "amber", "eye care", "night", "filter", "tint"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -612,7 +632,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_blue_light_strength_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("blue light", "strength", "amber", "intensity", "overlay"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -627,7 +647,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_theme_music_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("theme", "music", "backdrop", "ambience", "song", "score"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -646,7 +666,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_awards_badges_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("awards", "omdb", "oscars", "ratings", "badge"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_LIBRARY_DISPLAY_SETTINGS,
         ),
     )
 
@@ -665,7 +685,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_haptics_enabled_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("haptic", "vibration", "feedback", "vibrate", "touch"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_LIBRARY_DISPLAY_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -698,7 +718,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_date_format_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("date", "format", "time", "calendar", "day", "month", "year", "display"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -713,7 +733,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_font_scale_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("font", "size", "text", "scale", "accessibility", "readability", "large", "small"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -728,7 +748,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_scheduled_start_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("theme", "schedule", "start", "hour", "day", "auto"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -743,7 +763,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_scheduled_end_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("theme", "schedule", "end", "hour", "night", "auto"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -758,7 +778,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_color_blind_mode_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("color", "blind", "daltonize", "accessibility", "protanopia", "deuteranopia", "tritanopia", "vision"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -773,7 +793,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_hand_mode_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("hand", "left", "right", "handed", "accessibility", "mirror", "one-handed"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -789,7 +809,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_layout_mode_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("layout", "tablet", "phone", "adaptive", "two pane", "window", "compact", "expanded"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -812,7 +832,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_screen_fit_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("screen fit", "overscan", "safe area", "tv", "edge", "cut off", "calibration", "display", "border"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             platformRule = PreferencePlatformRule.ANDROID_ONLY,
         ),
     )
@@ -837,7 +857,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_tv_ui_scale_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("ui scale", "density", "size", "tv", "too big", "zoom", "compact", "smaller", "display"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_THEME_SETTINGS,
             platformRule = PreferencePlatformRule.ANDROID_ONLY,
         ),
     )
@@ -857,7 +877,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_time_use_24h_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("24 hour", "24h", "clock", "time", "format", "am", "pm"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -872,7 +892,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_card_press_animations_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("press", "animation", "scale", "cards", "touch", "effect"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -887,7 +907,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_pull_to_refresh_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("pull", "refresh", "swipe", "gesture", "edge"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -902,7 +922,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_app_backdrop_dim_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("backdrop", "dim", "scrim", "darken", "brightness", "overlay"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -917,7 +937,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_haptics_intensity_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("haptic", "vibration", "intensity", "feedback", "strength", "buzz"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -932,7 +952,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_image_quality_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("image", "quality", "poster", "resolution", "bandwidth", "compression", "jpeg"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -947,7 +967,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_app_list_density_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("list", "density", "compact", "roomy", "spacing", "row", "padding"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -962,7 +982,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_app_press_effect_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("ripple", "press", "effect", "touch", "feedback", "indication", "click"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -977,7 +997,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_app_flat_cards_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("flat", "cards", "elevation", "shadow", "depth", "borderless"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -992,7 +1012,7 @@ object AppearancePreferenceSpecs {
             subtitleKey = "ss_app_overscroll_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("overscroll", "scroll", "glow", "stretch", "bounce", "edge"),
-            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            routeKind = ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 
@@ -1012,7 +1032,7 @@ object AppearancePreferenceSpecs {
         subtitleKey = "ss_theme_scheduler_subtitle",
         categoryKey = "ss_cat_appearance",
         keywords = listOf("theme", "scheduler", "day", "night", "auto", "time", "scheduled", "dark", "light"),
-        routeKind = ROUTE_APPEARANCE_SETTINGS,
+        routeKind = ROUTE_THEME_SETTINGS,
         isAdvanced = true,
     )
 
@@ -1028,7 +1048,7 @@ object AppearancePreferenceSpecs {
         subtitleKey = "ss_style_accent_subtitle",
         categoryKey = "ss_cat_appearance",
         keywords = listOf("accent", "color", "swatch", "synthwave", "soothing", "vivid", "aurora", "sakura", "vector", "neon", "theme"),
-        routeKind = ROUTE_APPEARANCE_SETTINGS,
+        routeKind = ROUTE_THEME_SETTINGS,
         isAdvanced = true,
     )
 

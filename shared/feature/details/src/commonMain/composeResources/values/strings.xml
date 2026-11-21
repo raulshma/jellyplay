@@ -109,6 +109,14 @@
     <string name="detail_option_download">Download</string>
     <string name="detail_option_downloading_series">Downloading Series…</string>
     <string name="detail_option_download_series">Download Series</string>
+
+    <!-- Series download sheet: the arm-without-enqueueing action (gh-225
+         follow-up). The policy-chip labels reuse core:ui's
+         download_sheet_policy_* copy. -->
+    <string name="detail_download_series_arm">Auto-download</string>
+    <string name="detail_download_series_arm_hint">Arm this series without downloading episodes. New episodes follow your auto-download setting.</string>
+    <string name="detail_download_series_arm_action">Arm</string>
+    <string name="detail_download_series_armed">Series armed — new episodes will follow your auto-download setting.</string>
     <string name="detail_option_hide_from_next_up">Hide from Next Up</string>
     <string name="detail_option_hide_from_continue_watching">Hide from Continue Watching</string>
     <string name="detail_option_show_in_next_up">Show in Next Up</string>
@@ -269,6 +277,7 @@
     <string name="detail_error_download_failed">Download failed</string>
     <string name="detail_error_not_a_series">This is not a series</string>
     <string name="detail_error_queue_failed">Failed to queue downloads</string>
+    <string name="detail_error_arm_failed">Couldn't arm this series</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
     <string name="detail_option_manage_series">Manage Series</string>

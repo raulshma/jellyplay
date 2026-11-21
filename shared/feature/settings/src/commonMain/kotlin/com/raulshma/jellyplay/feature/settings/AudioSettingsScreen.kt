@@ -67,6 +67,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cros
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_crossfade_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed_value
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_default_speed_value
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_fine_tuning
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost_strength
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_equalizer
@@ -181,8 +182,8 @@ fun AudioSettingsScreen(
     var showEqualizerEditor by remember { mutableStateOf(false) }
 
     // The screen's ONE group declaration, in LazyColumn order — the shell
-    // derives the hidden-settings hint count from it (this screen takes no
-    // deep-link highlight scroll). The cache slot exists only where the
+    // derives the hidden-settings hint count AND the deep-link highlight
+    // scroll from it. The cache slot exists only where the
     // audio-cache capability holds — the ONE conditional the emission used to
     // repeat beside the hint's group list. Slots stop at GROUP grain: the row
     // emission inside each slot is the hand-written body, unchanged
@@ -274,64 +275,6 @@ fun AudioSettingsScreen(
                         onCheckedChange = { viewModel.edit { scope -> scope.subtitle.setPreferAudioDescription(it) } },
                     )
                     if (showAdvanced) {
-                        val nightModeVolumeTitle = rowTitle(AudioRows.NightModeVolume)
-                        SettingListItem(
-                            icon = Tabler.Outline.Music,
-                            title = rowTitle(AudioRows.NightModeVolume),
-                            subtitle = rowSubtitle(AudioRows.NightModeVolume),
-                            trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
-                            highlighted = highlightSettingId == AudioRows.NightModeVolume.id,
-                            onClick = {
-                                activePicker.value = PickerState.Slider(
-                                    title = nightModeVolumeTitle,
-                                    value = preferences.audioNightModeVolume,
-                                    valueRange = 0.1f..0.8f,
-                                    steps = 6,
-                                    valueLabel = { "${(it * 100).toInt()}%" },
-                                    rangeStartLabel = "10%",
-                                    rangeEndLabel = "80%",
-                                    onConfirm = { viewModel.edit { scope -> scope.audio.setAudioNightModeVolume(it) } },
-                                )
-                            },
-                        )
-                        val nightModeGainTitle = rowTitle(AudioRows.NightModeGain)
-                        SettingListItem(
-                            icon = Tabler.Outline.Adjustments,
-                            title = rowTitle(AudioRows.NightModeGain),
-                            subtitle = rowSubtitle(AudioRows.NightModeGain),
-                            trailingText = "${preferences.audioNightModeGain}",
-                            highlighted = highlightSettingId == AudioRows.NightModeGain.id,
-                            onClick = {
-                                activePicker.value = PickerState.Slider(
-                                    title = nightModeGainTitle,
-                                    value = preferences.audioNightModeGain.toFloat(),
-                                    valueRange = 0f..3000f,
-                                    steps = 29,
-                                    valueLabel = { "${it.toInt()}" },
-                                    rangeStartLabel = "0",
-                                    rangeEndLabel = "3000",
-                                    onConfirm = { viewModel.edit { scope -> scope.audio.setAudioNightModeGain(it.toInt()) } },
-                                )
-                            },
-                        )
-                        val skipPrevThresholdTitle = rowTitle(AudioRows.AudioSkipPrevThreshold)
-                        SettingListItem(
-                            icon = Tabler.Outline.PlayerSkipForward,
-                            title = rowTitle(AudioRows.AudioSkipPrevThreshold),
-                            subtitle = rowSubtitle(AudioRows.AudioSkipPrevThreshold),
-                            trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
-                            highlighted = highlightSettingId == AudioRows.AudioSkipPrevThreshold.id,
-                            onClick = {
-                                val thresholds = listOf(1_000L, 2_000L, 3_000L, 5_000L, 7_000L, 10_000L)
-                                activePicker.value = pickerChip(
-                                    title = skipPrevThresholdTitle,
-                                    values = thresholds,
-                                    current = preferences.audioSkipPreviousThresholdMs,
-                                    label = { "${it / 1000}s" },
-                                    onSelect = { ms -> viewModel.edit { it.audio.setAudioSkipPreviousThresholdMs(ms) } },
-                                )
-                            },
-                        )
                         SettingToggleItem(
                             icon = Tabler.Outline.PlaylistAdd,
                             title = rowTitle(AudioRows.GaplessPlayback),
@@ -356,24 +299,6 @@ fun AudioSettingsScreen(
                                     current = preferences.audioCrossfadeDurationMs,
                                     label = { if (it == 0L) crossfadeOffLabel else "${it / 1000}s" },
                                     onSelect = { ms -> viewModel.edit { it.audio.setAudioCrossfadeDurationMs(ms) } },
-                                )
-                            },
-                        )
-                        val preloadBufferTitle = rowTitle(AudioRows.AudioPreloadBuffer)
-                        SettingListItem(
-                            icon = Tabler.Outline.Refresh,
-                            title = rowTitle(AudioRows.AudioPreloadBuffer),
-                            subtitle = rowSubtitle(AudioRows.AudioPreloadBuffer),
-                            trailingText = preferences.audioPreloadBufferSize.displayName,
-                            highlighted = highlightSettingId == AudioRows.AudioPreloadBuffer.id,
-                            onClick = {
-                                activePicker.value = PickerState.List(
-                                    title = preloadBufferTitle,
-                                    items = PreloadBufferSize.entries,
-                                    label = { it.displayName },
-                                    subtitle = { "Min: ${it.minBufferMs / 1000}s · Max: ${it.maxBufferMs / 1000}s" },
-                                    isSelected = { it == preferences.audioPreloadBufferSize },
-                                    onSelect = { viewModel.edit { scope -> scope.audio.setAudioPreloadBufferSize(it) } },
                                 )
                             },
                         )
@@ -405,28 +330,6 @@ fun AudioSettingsScreen(
                                 )
                             },
                         )
-                        if (SettingsScreenGroups.audio.rowAdmitted(AudioRows.ReplaygainPreamp.id, rowFlags)) {
-                            val replayGainPreAmpTitle = rowTitle(AudioRows.ReplaygainPreamp)
-                            SettingListItem(
-                                icon = Tabler.Outline.Adjustments,
-                                title = rowTitle(AudioRows.ReplaygainPreamp),
-                                subtitle = rowSubtitle(AudioRows.ReplaygainPreamp),
-                                trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${formatOneDecimal(preferences.replayGainPreAmpDb.toDouble())} dB",
-                                highlighted = highlightSettingId == AudioRows.ReplaygainPreamp.id,
-                                onClick = {
-                                    activePicker.value = PickerState.Slider(
-                                        title = replayGainPreAmpTitle,
-                                        value = preferences.replayGainPreAmpDb,
-                                        valueRange = -15f..15f,
-                                        steps = 59,
-                                        valueLabel = { "${if (it >= 0) "+" else ""}${formatOneDecimal(it.toDouble())} dB" },
-                                        rangeStartLabel = "-15 dB",
-                                        rangeEndLabel = "+15 dB",
-                                        onConfirm = { viewModel.edit { scope -> scope.audio.setReplayGainPreAmpDb(it) } },
-                                    )
-                                },
-                            )
-                        }
                         SettingToggleItem(
                             icon = Tabler.Outline.Adjustments,
                             title = rowTitle(AudioRows.Equalizer),
@@ -576,28 +479,6 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == AudioRows.VolumeBoost.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setVolumeBoostEnabled(it) } },
                         )
-                        if (SettingsScreenGroups.audio.rowAdmitted(AudioRows.VolumeBoostGain.id, rowFlags)) {
-                                val volumeBoostGainTitle = rowTitle(AudioRows.VolumeBoostGain)
-                            SettingListItem(
-                                icon = Tabler.Outline.Speakerphone,
-                                title = rowTitle(AudioRows.VolumeBoostGain),
-                                subtitle = rowSubtitle(AudioRows.VolumeBoostGain),
-                                trailingText = "+${formatOneDecimal(preferences.volumeBoostGain / 100.0)} dB",
-                                highlighted = highlightSettingId == AudioRows.VolumeBoostGain.id,
-                                onClick = {
-                                    activePicker.value = PickerState.Slider(
-                                        title = volumeBoostGainTitle,
-                                        value = preferences.volumeBoostGain.toFloat(),
-                                        valueRange = 0f..3000f,
-                                        steps = 30,
-                                        valueLabel = { "+${it.toInt() / 100} dB" },
-                                        rangeStartLabel = "0 dB",
-                                        rangeEndLabel = "+30 dB",
-                                        onConfirm = { viewModel.edit { scope -> scope.audioEffects.setVolumeBoostGain(it.toInt()) } },
-                                    )
-                                },
-                            )
-                        }
                         val reverbTitle = rowTitle(AudioRows.Reverb)
                         SettingListItem(
                             icon = Tabler.Outline.WaveSine,
@@ -671,27 +552,6 @@ fun AudioSettingsScreen(
                                     rangeStartLabel = balanceLeft,
                                     rangeEndLabel = balanceRight,
                                     onConfirm = { viewModel.edit { scope -> scope.audioEffects.setLrBalance(it) } },
-                                )
-                            },
-                        )
-                        val normalPitch = stringResource(Res.string.settings_pitch_normal)
-                        val pitchShiftTitle = rowTitle(AudioRows.PitchShift)
-                        SettingListItem(
-                            icon = Tabler.Outline.WaveSine,
-                            title = rowTitle(AudioRows.PitchShift),
-                            subtitle = if (preferences.pitchSemitones == 0f) normalPitch else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones} semitones",
-                            trailingText = if (preferences.pitchSemitones == 0f) "0" else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones}",
-                            highlighted = highlightSettingId == AudioRows.PitchShift.id,
-                            onClick = {
-                                activePicker.value = PickerState.Slider(
-                                    title = pitchShiftTitle,
-                                    value = preferences.pitchSemitones,
-                                    valueRange = -12.0f..12.0f,
-                                    steps = 24,
-                                    valueLabel = { if (it == 0f) normalPitch else "${if (it > 0) "+" else ""}${it.toInt()} semitones" },
-                                    rangeStartLabel = "-12 semitones",
-                                    rangeEndLabel = "+12 semitones",
-                                    onConfirm = { viewModel.edit { scope -> scope.audioEffects.setPitchSemitones(it) } },
                                 )
                             },
                         )
@@ -811,12 +671,186 @@ fun AudioSettingsScreen(
                 }
             add(cacheSlot)
         }
+        // The advanced "Fine-tuning" group (the phase-5 reclassification):
+        // the gain/buffer fine-tune rows moved off the audio group's
+        // interleaved advanced block whole — the shell only composes the slot
+        // behind the advanced toggle. The replaygain pre-amp and the
+        // volume-boost gain keep their All(Advanced, WhenOn) parent gates
+        // (the effect toggles stay in the main group; the flags read the
+        // preferences, not the layout), so their emission `if`s and the
+        // derived total both read THIS group's declared admissions.
+        val fineTuningSlot = SettingsScreenGroups.audioFineTuning.asScreenGroup(
+            advancedOnly = true,
+        ) { activePicker ->
+            SettingsGroup(
+                icon = Tabler.Outline.Adjustments,
+                title = stringResource(Res.string.settings_audio_fine_tuning),
+                modifier = Modifier.padding(vertical = 8.dp),
+                initiallyExpanded = highlightSettingId in SettingsScreenGroups.audioFineTuning.itemIdSet,
+            ) {
+                SettingsItemList(total = rowTotalFor(SettingsScreenGroups.audioFineTuning, rowFlags)) {
+                    val nightModeVolumeTitle = rowTitle(AudioRows.NightModeVolume)
+                    SettingListItem(
+                        icon = Tabler.Outline.Music,
+                        title = rowTitle(AudioRows.NightModeVolume),
+                        subtitle = rowSubtitle(AudioRows.NightModeVolume),
+                        trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
+                        highlighted = highlightSettingId == AudioRows.NightModeVolume.id,
+                        onClick = {
+                            activePicker.value = PickerState.Slider(
+                                title = nightModeVolumeTitle,
+                                value = preferences.audioNightModeVolume,
+                                valueRange = 0.1f..0.8f,
+                                steps = 6,
+                                valueLabel = { "${(it * 100).toInt()}%" },
+                                rangeStartLabel = "10%",
+                                rangeEndLabel = "80%",
+                                onConfirm = { viewModel.edit { scope -> scope.audio.setAudioNightModeVolume(it) } },
+                            )
+                        },
+                    )
+                    val nightModeGainTitle = rowTitle(AudioRows.NightModeGain)
+                    SettingListItem(
+                        icon = Tabler.Outline.Adjustments,
+                        title = rowTitle(AudioRows.NightModeGain),
+                        subtitle = rowSubtitle(AudioRows.NightModeGain),
+                        trailingText = "${preferences.audioNightModeGain}",
+                        highlighted = highlightSettingId == AudioRows.NightModeGain.id,
+                        onClick = {
+                            activePicker.value = PickerState.Slider(
+                                title = nightModeGainTitle,
+                                value = preferences.audioNightModeGain.toFloat(),
+                                valueRange = 0f..3000f,
+                                steps = 29,
+                                valueLabel = { "${it.toInt()}" },
+                                rangeStartLabel = "0",
+                                rangeEndLabel = "3000",
+                                onConfirm = { viewModel.edit { scope -> scope.audio.setAudioNightModeGain(it.toInt()) } },
+                            )
+                        },
+                    )
+                    val skipPrevThresholdTitle = rowTitle(AudioRows.AudioSkipPrevThreshold)
+                    SettingListItem(
+                        icon = Tabler.Outline.PlayerSkipForward,
+                        title = rowTitle(AudioRows.AudioSkipPrevThreshold),
+                        subtitle = rowSubtitle(AudioRows.AudioSkipPrevThreshold),
+                        trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
+                        highlighted = highlightSettingId == AudioRows.AudioSkipPrevThreshold.id,
+                        onClick = {
+                            val thresholds = listOf(1_000L, 2_000L, 3_000L, 5_000L, 7_000L, 10_000L)
+                            activePicker.value = pickerChip(
+                                title = skipPrevThresholdTitle,
+                                values = thresholds,
+                                current = preferences.audioSkipPreviousThresholdMs,
+                                label = { "${it / 1000}s" },
+                                onSelect = { ms -> viewModel.edit { it.audio.setAudioSkipPreviousThresholdMs(ms) } },
+                            )
+                        },
+                    )
+                    val preloadBufferTitle = rowTitle(AudioRows.AudioPreloadBuffer)
+                    SettingListItem(
+                        icon = Tabler.Outline.Refresh,
+                        title = rowTitle(AudioRows.AudioPreloadBuffer),
+                        subtitle = rowSubtitle(AudioRows.AudioPreloadBuffer),
+                        trailingText = preferences.audioPreloadBufferSize.displayName,
+                        highlighted = highlightSettingId == AudioRows.AudioPreloadBuffer.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = preloadBufferTitle,
+                                items = PreloadBufferSize.entries,
+                                label = { it.displayName },
+                                subtitle = { "Min: ${it.minBufferMs / 1000}s · Max: ${it.maxBufferMs / 1000}s" },
+                                isSelected = { it == preferences.audioPreloadBufferSize },
+                                onSelect = { viewModel.edit { scope -> scope.audio.setAudioPreloadBufferSize(it) } },
+                            )
+                        },
+                    )
+                    if (SettingsScreenGroups.audioFineTuning.rowAdmitted(AudioRows.ReplaygainPreamp.id, rowFlags)) {
+                        val replayGainPreAmpTitle = rowTitle(AudioRows.ReplaygainPreamp)
+                        SettingListItem(
+                            icon = Tabler.Outline.Adjustments,
+                            title = rowTitle(AudioRows.ReplaygainPreamp),
+                            subtitle = rowSubtitle(AudioRows.ReplaygainPreamp),
+                            trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${formatOneDecimal(preferences.replayGainPreAmpDb.toDouble())} dB",
+                            highlighted = highlightSettingId == AudioRows.ReplaygainPreamp.id,
+                            onClick = {
+                                activePicker.value = PickerState.Slider(
+                                    title = replayGainPreAmpTitle,
+                                    value = preferences.replayGainPreAmpDb,
+                                    valueRange = -15f..15f,
+                                    steps = 59,
+                                    valueLabel = { "${if (it >= 0) "+" else ""}${formatOneDecimal(it.toDouble())} dB" },
+                                    rangeStartLabel = "-15 dB",
+                                    rangeEndLabel = "+15 dB",
+                                    onConfirm = { viewModel.edit { scope -> scope.audio.setReplayGainPreAmpDb(it) } },
+                                )
+                            },
+                        )
+                    }
+                    if (SettingsScreenGroups.audioFineTuning.rowAdmitted(AudioRows.VolumeBoostGain.id, rowFlags)) {
+                        val volumeBoostGainTitle = rowTitle(AudioRows.VolumeBoostGain)
+                        SettingListItem(
+                            icon = Tabler.Outline.Speakerphone,
+                            title = rowTitle(AudioRows.VolumeBoostGain),
+                            subtitle = rowSubtitle(AudioRows.VolumeBoostGain),
+                            trailingText = "+${formatOneDecimal(preferences.volumeBoostGain / 100.0)} dB",
+                            highlighted = highlightSettingId == AudioRows.VolumeBoostGain.id,
+                            onClick = {
+                                activePicker.value = PickerState.Slider(
+                                    title = volumeBoostGainTitle,
+                                    value = preferences.volumeBoostGain.toFloat(),
+                                    valueRange = 0f..3000f,
+                                    steps = 30,
+                                    valueLabel = { "+${it.toInt() / 100} dB" },
+                                    rangeStartLabel = "0 dB",
+                                    rangeEndLabel = "+30 dB",
+                                    onConfirm = { viewModel.edit { scope -> scope.audioEffects.setVolumeBoostGain(it.toInt()) } },
+                                )
+                            },
+                        )
+                    }
+                    val normalPitch = stringResource(Res.string.settings_pitch_normal)
+                    val pitchShiftTitle = rowTitle(AudioRows.PitchShift)
+                    SettingListItem(
+                        icon = Tabler.Outline.WaveSine,
+                        title = rowTitle(AudioRows.PitchShift),
+                        subtitle = if (preferences.pitchSemitones == 0f) normalPitch else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones} semitones",
+                        trailingText = if (preferences.pitchSemitones == 0f) "0" else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones}",
+                        highlighted = highlightSettingId == AudioRows.PitchShift.id,
+                        onClick = {
+                            activePicker.value = PickerState.Slider(
+                                title = pitchShiftTitle,
+                                value = preferences.pitchSemitones,
+                                valueRange = -12.0f..12.0f,
+                                steps = 24,
+                                valueLabel = { if (it == 0f) normalPitch else "${if (it > 0) "+" else ""}${it.toInt()} semitones" },
+                                rangeStartLabel = "-12 semitones",
+                                rangeEndLabel = "+12 semitones",
+                                onConfirm = { viewModel.edit { scope -> scope.audioEffects.setPitchSemitones(it) } },
+                            )
+                        },
+                    )
+                }
+            }
+        }
+        add(fineTuningSlot)
     }
 
     PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_audio_player_title),
         onBack = onBack,
         focusTag = "audio_init",
+        // The deep-link highlight id MUST reach the shell beside the
+        // declaration: the slot bodies read it (expand + glow), but the
+        // shell's scroll derivation reads its OWN argument — omitting it
+        // here was the group-card landing regression (the Fine-tuning card
+        // expanded the group while the list never scrolled).
+        highlightSettingId = highlightSettingId,
+        // The deep-link highlight id MUST reach the shell beside the
+        // declaration: the slot bodies read it (expand + glow), but the
+        // shell's scroll derivation reads its OWN argument — omitting it
+        // here was the group-card landing regression (the Fine-tuning card
+        // expanded the group while the list never scrolled).
         // The screen's ONE ordered declaration — built above (the audio group
         // plus the capability-gated cache slot). Omitting this argument is the
         // v0.11.6 regression the wiring guard pins: the declaration rendered
@@ -828,9 +862,10 @@ fun AudioSettingsScreen(
         ),
         hiddenHint = PreferenceHiddenHint(
             // Derived in the shell from the declaration above: the audio
-            // slot's 17 plain-advanced rows plus the parent-gated effect rows
-            // whose toggle is on, and the cache slot's three advanced rows
-            // where that slot composes.
+            // slot's plain-advanced rows plus the parent-gated effect rows
+            // whose toggle is on, the cache slot's three advanced rows where
+            // that slot composes, and the Fine-tuning slot's rows (the two
+            // parent-gated ones only while their effect toggle is on).
             rowFlags = rowFlags,
             onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
         ),

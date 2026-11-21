@@ -154,7 +154,21 @@ internal fun BaseItemDto.toMediaItem(now: DateTime = DateTime.now()) = MediaItem
         ?.flatMap { it.values }
         ?.maxByOrNull { it.width ?: 0 }
         ?.toTrickplayInfo(),
+    // The external-provider-id map, carried only where the fetch projected
+    // `ProviderIds` (the detail projection; the getItemsWithUserData read the
+    // arr auto-arm's match index pages). Every other listing maps to null —
+    // null means "not projected", never "no ids".
+    providerIds = providerIds.normalizedProviderIds(),
 )
+
+/**
+ * The one ProviderIds normalization shared by [toMediaItem] and
+ * [toMediaDetail]: keys lowercase (the `["tvdb"]` lookup grammar),
+ * null-valued entries dropped. null in → null out ("not projected"); a
+ * projected map that normalizes to empty stays empty ("no ids").
+ */
+private fun Map<String, String?>?.normalizedProviderIds(): Map<String, String>? =
+    this?.mapNotNull { (k, v) -> v?.let { k.lowercase() to it } }?.toMap()
 
 /**
  * Derives the episode rows' compact stream summary ([EpisodeStreamInfo])
@@ -365,7 +379,7 @@ internal fun BaseItemDto.toMediaDetail() = MediaDetail(
             url = url.url ?: "",
         )
     } ?: emptyList(),
-    providerIds = providerIds?.mapNotNull { (k, v) -> v?.let { k.lowercase() to it } }?.toMap() ?: emptyMap(),
+    providerIds = providerIds.normalizedProviderIds() ?: emptyMap(),
     // Books have no MediaSources — path is their only format carrier;
     // progress is denested from UserData for detail-only surfaces.
     path = path,

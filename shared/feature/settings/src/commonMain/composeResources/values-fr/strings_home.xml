@@ -92,6 +92,14 @@
     <string name="settings_home_screen_layout">Disposition de l'écran d'accueil</string>
     <string name="settings_home_sections_visible">%1$d sur %2$d sections visibles</string>
     <string name="settings_home_title">Écran d'accueil</string>
+    <string name="settings_home_entry_display">Écran d'accueil</string>
+    <string name="settings_home_entry_display_subtitle">Hero, horloge, dock &amp; présentation de l'écran principal</string>
+    <string name="settings_home_entry_rows">Rangées &amp; disposition</string>
+    <string name="settings_home_entry_rows_subtitle">À suivre, disposition des sections &amp; éléments masqués</string>
+    <string name="settings_home_entry_cards">Cartes &amp; badges</string>
+    <string name="settings_home_entry_cards_subtitle">Badges, notes, spoilers &amp; style des cartes</string>
+    <string name="settings_home_tuning">Réglages fins</string>
+    <string name="settings_home_curation">Masqués &amp; restauration</string>
     <string name="settings_home_cards">Cartes</string>
     <string name="settings_home_display">Affichage de l'accueil</string>
     <string name="settings_continue_next_up">Reprendre et À suivre</string>

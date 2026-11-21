@@ -218,9 +218,9 @@ internal data class SonarrQueueResource(
 
 /**
  * Sonarr's series resource — shared by the queue / calendar / wanted /
- * blocklist / history sub-objects and the `/series?tvdbId=` lookups. The
- * Radarr counterpart is [RadarrMovieResource] (different fields), which is
- * why the two stay separate.
+ * blocklist / history sub-objects and the `/series` list + `?tvdbId=`
+ * lookups. The Radarr counterpart is [RadarrMovieResource] (different
+ * fields), which is why the two stay separate.
  */
 @Serializable
 internal data class SonarrSeriesResource(

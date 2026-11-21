@@ -10,6 +10,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
+import com.raulshma.jellyplay.core.data.download.ArrAutoArmSync
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
@@ -24,7 +25,9 @@ import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -60,6 +63,7 @@ class AutoDownloadWorkerTest {
     private val downloadsStore: DownloadsStore = mockk()
     private val serverIdentityStore: ServerIdentityStore = mockk()
     private val suggestionNotifier: AutoDownloadSuggestionNotifier = mockk()
+    private val arrAutoArmSync: ArrAutoArmSync = mockk()
 
     @Before
     fun setup() {
@@ -68,10 +72,9 @@ class AutoDownloadWorkerTest {
             context,
             Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
         )
-        every { downloadsStore.downloads } returns MutableStateFlow(
-            DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0),
-        )
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0))
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
+        coEvery { arrAutoArmSync.sync(any()) } just runs
         coEvery { downloadRepository.downloadCoverage() } returns
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-old"))
@@ -82,6 +85,16 @@ class AutoDownloadWorkerTest {
     }
 
     private fun season(id: String) = MediaItem(id = id, name = "Season $id", mediaType = MediaType.SEASON)
+
+    /**
+     * Stubs BOTH surfaces the check touches off one slice: the pass reads
+     * disk truth via [DownloadsStore.readDownloadsOrNull] (the eagerly-shared
+     * projection is the observer surface only — see checkOnce's comment).
+     */
+    private fun givenPrefs(slice: DownloadsSlice) {
+        every { downloadsStore.downloads } returns MutableStateFlow(slice)
+        coEvery { downloadsStore.readDownloadsOrNull() } returns slice
+    }
 
     private fun episode(id: String, seasonId: String) = MediaItem(
         id = id,
@@ -123,6 +136,7 @@ class AutoDownloadWorkerTest {
                     downloadsStore,
                     serverIdentityStore,
                     suggestionNotifier,
+                    arrAutoArmSync,
                 )
             })
             .setRunAttemptCount(runAttemptCount)
@@ -132,7 +146,7 @@ class AutoDownloadWorkerTest {
 
     @Test
     fun `auto-download disabled loads no catalogue`() = runTest {
-        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER))
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER))
 
         val result = buildWorker().doWork()
 

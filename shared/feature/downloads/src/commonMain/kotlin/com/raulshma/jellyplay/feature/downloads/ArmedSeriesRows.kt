@@ -21,6 +21,14 @@ import com.raulshma.jellyplay.core.model.resolveAgainst
  * resolved mode as if it were a stored override. Explicit NEVER rows stay
  * listed too (the check visits and skips them — hiding them would make the
  * arm undiscoverable and its resolution unexplainable).
+ *
+ * [reArmable] keys on the RAW ROW mode == NEVER (the disarm tombstone the
+ * un-arm verb now writes), never on [resolvedMode] — a FOLLOW_GLOBAL row
+ * under a global NEVER also RESOLVES to Never but is an ARMED row (the check
+ * follows the global preference the moment it flips back), so its button must
+ * stay "Stop auto-download". Re-arm writes [AutoDownloadMode.FOLLOW_GLOBAL]
+ * via [DownloadsSeriesPolicyActions.reArmSeries] — [armSeries] would no-op on
+ * the existing row.
  */
 @Immutable
 data class ArmedSeriesRow(
@@ -28,6 +36,7 @@ data class ArmedSeriesRow(
     val displayName: String,
     val followsGlobal: Boolean,
     val resolvedMode: AutoDownloadMode,
+    val reArmable: Boolean,
 )
 
 /**
@@ -48,6 +57,7 @@ fun armedSeriesRows(
             displayName = arm.seriesName.takeIf(String::isNotBlank) ?: arm.seriesId,
             followsGlobal = arm.mode == AutoDownloadMode.FOLLOW_GLOBAL,
             resolvedMode = arm.mode.resolveAgainst(globalMode),
+            reArmable = arm.mode == AutoDownloadMode.NEVER,
         )
     }
     .sortedWith(compareBy({ it.displayName.lowercase() }, { it.seriesId }))

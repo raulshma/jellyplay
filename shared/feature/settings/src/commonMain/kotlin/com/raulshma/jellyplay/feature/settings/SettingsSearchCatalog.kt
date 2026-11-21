@@ -74,10 +74,13 @@ object SettingsSearchCatalog : SettingsSearchProvider {
      * decoration ([SettingsScreenGroups.all]) — a declaration list that is
      * not decorated into a screen group cannot reach the catalog, which is
      * what makes the group decoration the single declaration of each
-     * screen's group facts.
+     * screen's group facts. Each group's derived card item
+     * ([SettingsSearchItemGroup.cardItem] — the GROUP-grain searchable face
+     * of its rendered card) rides right after its member rows, so the card
+     * hits tie-break in the same curated order.
      */
     override val items: List<SettingsSearchItem> =
-        SettingsScreenGroups.all.flatMap { it.items }
+        SettingsScreenGroups.all.flatMap { group -> group.items + listOfNotNull(group.cardItem) }
 
     /**
      * The whole catalog resolved to the current locale for fuzzy matching and
@@ -91,7 +94,10 @@ object SettingsSearchCatalog : SettingsSearchProvider {
      *
      * Dispatched onto [Dispatchers.Default] as a hard rule: one
      * resolve call fans out to a compose-resources read per catalog entry
-     * (258 items × title/subtitle/category = 774 reads today), and each
+     * (three per item — title/subtitle/category; the item count itself is
+     * ratcheted per group in `SettingsSearchCatalogTest`, the per-group
+     * size pins — the historical mark: 528 items × 3 = 1584 reads before
+     * the group-card hits joined), and each
      * not-yet-cached read blocks its caller — on Android the runtime resolves
      * a string via `runBlocking` on the composition thread and re-opens the
      * per-locale asset, inflating from byte 0 to the entry offset (the app's
@@ -110,6 +116,16 @@ object SettingsSearchCatalog : SettingsSearchProvider {
 
     /** The [SettingsSearchProvider] funnel — same filtered resolve as above. */
     override suspend fun resolved(): List<ResolvedSettingsItem> = resolved(defaultResolve)
+
+    /**
+     * The card landing fold: group-card hit ids land on their group's first
+     * member row ([groupCardLandingRowId]), every row id lands on itself —
+     * the same fold the in-settings search's [settingsResultClickAction]
+     * applies, so both dispatches inject the id the landing screen's
+     * expand/scroll/glow checks declare.
+     */
+    override fun landingRowId(itemId: String): String =
+        groupCardLandingRowId(itemId) ?: itemId
 
     /**
      * Projects the recent-setting ids against the fully resolved catalog;

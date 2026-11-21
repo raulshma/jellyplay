@@ -198,6 +198,19 @@ object DownloadsPreferenceSpecs {
             default = emptySet<String>(),
             resetCategory = PreferenceResetCategory.DOWNLOADS_NETWORK,
         ),
+        /*
+         * The gh-225 follow-up opt-in: when ON, the auto-download pass ARMS
+         * every Sonarr-monitored series (ADR-0015 arm rows) even with zero
+         * downloaded episodes, so the pass keeps checking them like any
+         * other armed series. The consumer wave reads the slice field; the
+         * flag itself is a plain boolean like [WIFI_ONLY_DOWNLOADS] — no
+         * cross-key invariant, no band, no namespacing.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "auto_arm_from_arr",
+            default = false,
+            resetCategory = PreferenceResetCategory.DOWNLOADS_NETWORK,
+        ),
     )
 
     /** Storage cap/location, the downloads-list surface state, and auto-delete. */
@@ -352,6 +365,8 @@ object DownloadsPreferenceSpecs {
     val AUTO_DOWNLOAD_KEEP_DAYS: PreferenceSpec<Int> get() = row("auto_download_keep_days")
 
     val AUTO_DOWNLOAD_SERVERS: PreferenceSpec<Set<String>> get() = row("auto_download_servers")
+
+    val AUTO_ARM_FROM_ARR: PreferenceSpec<Boolean> get() = row("auto_arm_from_arr")
 
     val MAX_DOWNLOAD_STORAGE_GB: PreferenceSpec<Int> get() = row("max_download_storage_gb")
 

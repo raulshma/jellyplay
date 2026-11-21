@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
+import com.raulshma.jellyplay.core.data.download.ArrAutoArmSync
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
 import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
@@ -17,7 +18,9 @@ import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -48,15 +51,18 @@ class DesktopAutoDownloadSchedulerTest {
     private val downloadIntake: DownloadIntake = mockk()
     private val downloadsStore: DownloadsStore = mockk()
     private val serverIdentityStore: ServerIdentityStore = mockk()
+    /** The arr auto-arm stage mock — setup no-ops it (its own suite pins the gates). */
+    private val arrAutoArmSync: ArrAutoArmSync = mockk()
 
     @BeforeTest
     fun setup() {
         // Legacy-behavior slice (lookahead 0 = take every missing episode); the
         // lookahead-enabled desktop-parity case below overrides the slice.
-        every { downloadsStore.downloads } returns MutableStateFlow(
+        givenPrefs(
             DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0),
         )
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
+        coEvery { arrAutoArmSync.sync(any()) } just runs
         coEvery { downloadRepository.downloadCoverage() } returns
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-old"))
@@ -65,6 +71,16 @@ class DesktopAutoDownloadSchedulerTest {
         coEvery { policyStore.recordAutoDownloadSuggestions(any()) } returns 0
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
         coEvery { downloadIntake.startSeries(any(), any()) } returns Result.success(emptyList())
+    }
+
+    /**
+     * Stubs BOTH surfaces the check touches off one slice: the pass reads
+     * disk truth via [DownloadsStore.readDownloadsOrNull] (the eagerly-shared
+     * projection is the observer surface only — see checkOnce's comment).
+     */
+    private fun givenPrefs(slice: DownloadsSlice) {
+        every { downloadsStore.downloads } returns MutableStateFlow(slice)
+        coEvery { downloadsStore.readDownloadsOrNull() } returns slice
     }
 
     private fun snapshot(
@@ -98,6 +114,7 @@ class DesktopAutoDownloadSchedulerTest {
         policyStore = policyStore,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
+        arrAutoArmSync = arrAutoArmSync,
         serverIdentityStore = serverIdentityStore,
         scope = CoroutineScope(StandardTestDispatcher(testScheduler)),
     )
@@ -106,7 +123,7 @@ class DesktopAutoDownloadSchedulerTest {
 
     @Test
     fun `auto-download disabled fetches nothing`() = runTest {
-        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER))
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER))
         val scheduler = buildScheduler()
 
         scheduler.start()
@@ -118,6 +135,32 @@ class DesktopAutoDownloadSchedulerTest {
         // global NEVER and is skipped BEFORE its catalogue load.
         coVerify(exactly = 0) { episodeCatalogue.loadSeriesEpisodes(any(), any()) }
         coVerify(exactly = 0) { downloadIntake.startSeries(any(), any(), any()) }
+    }
+
+    @Test
+    fun `arr auto-arm opted in keeps the loop scheduled with a global NEVER and zero arms`() = runTest {
+        // The gh-225 follow-up keep-alive contract, desktop side: Android's
+        // shouldStayScheduled stays true while autoArmFromArr is on (global
+        // NEVER + zero policy rows included) because the next pass may arm
+        // rows from nothing. The desktop loop has no cancel path — this pins
+        // that sync() (the pref-toggle poke) arms the loop under exactly that
+        // configuration and its startup pass RUNS the arr stage (the loop is
+        // alive; a future desktop gate must keep this condition true). The
+        // download state is emptied too (EMPTY coverage + no downloaded
+        // episodes), so the pass proves it arms rows from NOTHING — the
+        // default setup's downloaded series s1 must not be what keeps the
+        // stage reachable.
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER, autoArmFromArr = true))
+        coEvery { policyStore.hasSeriesPolicies() } returns false
+        coEvery { downloadRepository.downloadCoverage() } returns flowOf(DownloadCoverage.EMPTY)
+        coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
+        val scheduler = buildScheduler()
+
+        scheduler.sync()
+        testScheduler.runCurrent()
+        scheduler.stop()
+
+        coVerify(exactly = 1) { arrAutoArmSync.sync(any()) }
     }
 
     // ── Gate-on pass: per-season intake ───────────────────────────────
@@ -148,9 +191,7 @@ class DesktopAutoDownloadSchedulerTest {
         // one episode past the downloaded anchor (ep-1) instead of every
         // missing one. Episodes carry explicit numbers because the playback
         // order falls back to name comparison when they are unset.
-        every { downloadsStore.downloads } returns MutableStateFlow(
-            DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 1),
-        )
+        givenPrefs(DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 1))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-1"))
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(
             EpisodeCatalogueSnapshot(

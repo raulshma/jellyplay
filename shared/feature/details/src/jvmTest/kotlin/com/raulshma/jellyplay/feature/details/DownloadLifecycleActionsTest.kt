@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadArm
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
@@ -24,6 +25,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -33,6 +35,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_download_series_armed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_details_not_loaded
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_no_source
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_not_a_series
@@ -56,6 +59,8 @@ class DownloadLifecycleActionsTest {
     private val adaptiveBitrateManager: AdaptiveBitrateManager = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk(relaxed = true)
     private val mediaDetailProvider: MediaDetailProvider = mockk(relaxed = true)
+    private val policyStore: com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore = mockk(relaxed = true)
+    private val autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler = mockk(relaxed = true)
 
     private val strings = fakeDetailStrings()
     private val messages = RecordingMessages()
@@ -122,6 +127,8 @@ class DownloadLifecycleActionsTest {
             adaptiveBitrateManager = adaptiveBitrateManager,
             downloadRepository = downloadRepository,
             mediaDetailProvider = mediaDetailProvider,
+            policyStore = policyStore,
+            autoDownloadScheduler = autoDownloadScheduler,
         )
     }
 
@@ -520,6 +527,154 @@ class DownloadLifecycleActionsTest {
     }
     // endregion
 
+    // region armSeries (the sheet's arm-without-enqueueing action)
+    @Test
+    fun `armSeries writes the manual arm with the series name and never enqueues`() = runTest {
+        val seriesDetail = MediaDetail(item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES))
+        val h = makeActions(scope = helperScope(), detail = seriesDetail)
+
+        h.armSeries()
+        advanceUntilIdle()
+
+        // The gh-225 follow-up's manual arm: the store's manualArmSeries verb
+        // (insert-if-absent arm + tombstone re-arm) — NO intake call, so
+        // nothing is enqueued and the sheet's policy-chip flow stays
+        // untouched. The first arm row is a keep-alive term of its own, so
+        // the same launch reconciles the schedule (with the global mode and
+        // autoArmFromArr off, nothing else schedules the pass this arm rides).
+        coVerify(exactly = 1) { policyStore.manualArmSeries("series-1", "Series") }
+        coVerify(exactly = 1) { autoDownloadScheduler.sync() }
+        coVerify(exactly = 0) { policyStore.armSeries(any(), any()) }
+        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any(), any()) }
+        assertTrue(
+            messages.recorded.contains(DetailMessage.Text(strings.get(Res.string.detail_download_series_armed))),
+        )
+    }
+
+    @Test
+    fun `armSeries on a non-series emits not-a-series and skips the write`() = runTest {
+        val movieDetail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
+        val h = makeActions(scope = helperScope(), detail = movieDetail)
+
+        h.armSeries()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { policyStore.manualArmSeries(any(), any()) }
+        coVerify(exactly = 0) { autoDownloadScheduler.sync() }
+        assertTrue(
+            messages.recorded.contains(DetailMessage.Text(strings.get(Res.string.detail_error_not_a_series))),
+        )
+    }
+
+    @Test
+    fun `armSeries with no loaded session emits details-not-loaded and skips the write`() = runTest {
+        val h = makeActions(scope = helperScope(), detail = null)
+
+        h.armSeries()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { policyStore.manualArmSeries(any(), any()) }
+        coVerify(exactly = 0) { autoDownloadScheduler.sync() }
+        assertTrue(
+            messages.recorded.contains(DetailMessage.Text(strings.get(Res.string.detail_error_details_not_loaded))),
+        )
+    }
+
+    @Test
+    fun `armSeries runs the onArmed callback only after the write lands`() = runTest {
+        val seriesDetail = MediaDetail(item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES))
+        val h = makeActions(scope = helperScope(), detail = seriesDetail)
+        val order = mutableListOf<String>()
+
+        coEvery { policyStore.manualArmSeries(any(), any()) } coAnswers {
+            order += "write"
+            Unit
+        }
+
+        h.armSeries {
+            // The sheet host's chip re-seed rides this slot: it must observe
+            // the landed write (the stored policy read answers post-write).
+            order += "onArmed"
+        }
+        advanceUntilIdle()
+
+        assertEquals(listOf("write", "onArmed"), order)
+    }
+    // endregion
+
+    // region seriesArmed (the sheet's arm-row state)
+    @Test
+    fun `seriesArmed mirrors the store's arm rows for the session series`() = runTest {
+        val seriesDetail = MediaDetail(item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES))
+        val armsFlow = MutableStateFlow(
+            listOf(SeriesDownloadArm(seriesId = "series-1", mode = AutoDownloadMode.FOLLOW_GLOBAL, seriesName = "Series")),
+        )
+        every { policyStore.observeArmedSeries() } returns armsFlow
+        val h = makeActions(scope = helperScope(), detail = seriesDetail)
+        // WhileSubscribed sharing: collect on the test scope to start it, then
+        // cancel before the body ends — runTest fails on active children
+        // otherwise (the downloads mirror test's mechanics).
+        val warmJob = launch { h.seriesArmed.collect { /* warm */ } }
+        advanceUntilIdle()
+
+        assertTrue(h.seriesArmed.value)
+
+        // The store re-emits without a live arm for the session series (the
+        // zero-rows un-arm rule, or a disarm tombstone on another series) →
+        // the row drops back to un-armed.
+        armsFlow.value = listOf(
+            SeriesDownloadArm(seriesId = "other-series", mode = AutoDownloadMode.NEVER, seriesName = "Other"),
+        )
+        advanceUntilIdle()
+
+        assertFalse(h.seriesArmed.value)
+        warmJob.cancel()
+    }
+
+    @Test
+    fun `seriesArmed reads a same-id NEVER tombstone as not armed`() = runTest {
+        // The deliberate stop must not render as armed: the sheet's row
+        // offers the arm action again (which re-arms through manualArmSeries),
+        // consistent with the Never chip below it. Keys on the RAW row mode.
+        val seriesDetail = MediaDetail(item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES))
+        val armsFlow = MutableStateFlow(
+            listOf(SeriesDownloadArm(seriesId = "series-1", mode = AutoDownloadMode.NEVER, seriesName = "Series")),
+        )
+        every { policyStore.observeArmedSeries() } returns armsFlow
+        val h = makeActions(scope = helperScope(), detail = seriesDetail)
+        val warmJob = launch { h.seriesArmed.collect { /* warm */ } }
+        advanceUntilIdle()
+
+        assertFalse(h.seriesArmed.value)
+
+        // A manual re-arm flips the tombstone → the row reads armed again.
+        armsFlow.value = listOf(
+            SeriesDownloadArm(seriesId = "series-1", mode = AutoDownloadMode.FOLLOW_GLOBAL, seriesName = "Series"),
+        )
+        advanceUntilIdle()
+
+        assertTrue(h.seriesArmed.value)
+        warmJob.cancel()
+    }
+
+    @Test
+    fun `seriesArmed stays false for a non-series session even with arm rows present`() = runTest {
+        // The arm row even matches the item's id: only the SERIES-type guard
+        // (mirroring armSeries's) keeps the row un-armed.
+        val movieDetail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
+        val armsFlow = MutableStateFlow(
+            listOf(SeriesDownloadArm(seriesId = "m1", mode = AutoDownloadMode.FOLLOW_GLOBAL, seriesName = "Movie")),
+        )
+        every { policyStore.observeArmedSeries() } returns armsFlow
+        val h = makeActions(scope = helperScope(), detail = movieDetail)
+        val warmJob = launch { h.seriesArmed.collect { /* warm */ } }
+        advanceUntilIdle()
+
+        assertFalse(h.seriesArmed.value)
+        warmJob.cancel()
+    }
+    // endregion
+
     // region loadDownloadSheetEpisodes — on-demand per-season cache + idempotency
     @Test
     fun `loadDownloadSheetEpisodes expands once and is idempotent for a fetched season`() = runTest {
@@ -554,6 +709,8 @@ class DownloadLifecycleActionsTest {
             adaptiveBitrateManager = adaptiveBitrateManager,
             downloadRepository = downloadRepository,
             mediaDetailProvider = mediaDetailProvider,
+            policyStore = policyStore,
+            autoDownloadScheduler = autoDownloadScheduler,
         )
 
         actions.loadDownloadSheetEpisodes("s1")

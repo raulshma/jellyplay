@@ -56,10 +56,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The `group_jellyplay` section: the companion plugin's whole root-screen face
- * in ONE grouped row — the navigation entries (Sync across devices,
- * Messages, My ratings, Your watching) above the per-feature switches, inside
- * a single [SettingsGroup] card. The section hides unless the probe reports
+ * The companion plugin's settings group (ADR-0017): the plugin screen's whole
+ * face in ONE grouped card — the navigation entries (Sync across devices,
+ * Messages, My ratings, Your watching) above the per-feature switches.
+ * Hosted on [Route.JellyPlayPluginSettings] behind the root's one
+ * JellyPlay-plugin entrance; formerly the root's inline `group_jellyplay`
+ * section. The section hides unless the probe reports
  * AVAILABLE, and each row inside still rides its own gate: the sync entry
  * needs the `settings-sync` meta key exposed; the Messages / My ratings /
  * Your-watching entries need their feature key exposed AND the user's toggle
@@ -103,7 +105,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 internal fun SettingsJellyPlayPluginSection(
     viewModel: SettingsViewModel,
-    lastClickedSettingId: String?,
+    highlightSettingId: String?,
     onOpenSync: () -> Unit,
     onOpenMessages: () -> Unit,
     onOpenUserRatings: () -> Unit,
@@ -190,13 +192,10 @@ internal fun SettingsJellyPlayPluginSection(
                 }
             }
         } else null,
-        // The search-reveal arm: this group's toggle rows are catalog
-        // bare-Settings targets (the NoOp + pending-highlight arm of
-        // settingsResultClickAction), so a search hit must expand the card —
-        // the four system groups' idiom. The member of
-        // SettingsScreenGroups.rootRevealGroups this section renders; the
-        // contract test pins the coverage.
-        initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.jellyplayFeatures.itemIdSet,
+        // The deep-link arm: a search hit on a plugin-feature row routes to
+        // the plugin screen with the id baked in, so a hit must expand the
+        // card for its ids (the system groups' idiom).
+        initiallyExpanded = highlightSettingId in SettingsScreenGroups.jellyplayFeatures.itemIdSet,
     ) {
         SettingsItemList(total = rowCount) {
             if (syncVisible) {
@@ -255,7 +254,7 @@ internal fun SettingsJellyPlayPluginSection(
                         else -> rowSubtitle(row)
                     },
                     checked = declared.featureKey in featureToggles,
-                    highlighted = lastClickedSettingId == row.id,
+                    highlighted = highlightSettingId == row.id,
                     enabled = !locked,
                     onCheckedChange = { enabled ->
                         viewModel.setJellyPlayFeatureEnabled(declared.featureKey, enabled)
@@ -267,14 +266,16 @@ internal fun SettingsJellyPlayPluginSection(
 }
 
 /**
- * The refused-contract face: the whole section hides (every gate is closed),
- * so this banner is the drift's ONLY surface — what the server runs vs what
- * this client understands, in error-container colors. The range's rendering
- * (single version as `1`, a real range as `1–2`) is the model's
- * [JellyPlayContractMismatch.supportedRangeLabel].
+ * The refused-contract face: the whole plugin face hides (every gate is
+ * closed), so this banner is the drift's ONLY surface — what the server runs
+ * vs what this client understands, in error-container colors. Rendered on
+ * BOTH faces the plugin has: the plugin screen's body (the section's arm)
+ * and the root's plugin entrance slot (where the probe also runs). The
+ * range's rendering (single version as `1`, a real range as `1–2`) is the
+ * model's [JellyPlayContractMismatch.supportedRangeLabel].
  */
 @Composable
-private fun JellyPlayContractMismatchBanner(mismatch: JellyPlayContractMismatch) {
+internal fun JellyPlayContractMismatchBanner(mismatch: JellyPlayContractMismatch) {
     val supported = mismatch.supportedRangeLabel
     Column(
         modifier = Modifier

@@ -158,4 +158,12 @@
     <string name="downloads_armed_series_subtitle">O download automático continua buscando novos episódios dessas séries, mesmo sem nada baixado.</string>
     <string name="downloads_armed_series_mode_follow_global">Seguir a configuração global</string>
     <string name="downloads_armed_series_unarm">Parar o download automático</string>
+    <string name="downloads_arm_series_title">Ativar uma série</string>
+    <string name="downloads_arm_series_subtitle">Observa uma série em busca de novos episódios sem baixá-los agora. Os novos episódios seguirão a sua configuração de download automático.</string>
+    <string name="downloads_arm_series_query_label">Pesquisar séries</string>
+    <string name="downloads_arm_series_empty">Nenhuma série encontrada</string>
+    <string name="downloads_arm_series_search_error">Falha na pesquisa. Verifique sua conexão e tente novamente.</string>
+    <string name="downloads_arm_series_action">Ativar</string>
+    <string name="downloads_arm_series_armed">Série ativada — os novos episódios seguirão a sua configuração de download automático.</string>
+    <string name="downloads_armed_series_rearm">Retomar o download automático</string>
 </resources>

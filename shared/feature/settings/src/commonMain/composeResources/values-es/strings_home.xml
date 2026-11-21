@@ -92,6 +92,14 @@
     <string name="settings_home_screen_layout">Diseño de pantalla de inicio</string>
     <string name="settings_home_sections_visible">%1$d de %2$d secciones visibles</string>
     <string name="settings_home_title">Pantalla de inicio</string>
+    <string name="settings_home_entry_display">Pantalla de inicio</string>
+    <string name="settings_home_entry_display_subtitle">Hero, reloj, dock y presentación de la pantalla principal</string>
+    <string name="settings_home_entry_rows">Filas y diseño</string>
+    <string name="settings_home_entry_rows_subtitle">A continuación, diseño de secciones y elementos ocultos</string>
+    <string name="settings_home_entry_cards">Tarjetas e insignias</string>
+    <string name="settings_home_entry_cards_subtitle">Insignias, valoraciones, spoilers y estilo de tarjeta</string>
+    <string name="settings_home_tuning">Ajuste fino</string>
+    <string name="settings_home_curation">Ocultos y restauración</string>
     <string name="settings_home_cards">Tarjetas</string>
     <string name="settings_home_display">Visualización de inicio</string>
     <string name="settings_continue_next_up">Seguir viendo y A continuación</string>

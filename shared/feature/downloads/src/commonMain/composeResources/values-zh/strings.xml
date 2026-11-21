@@ -151,4 +151,12 @@
     <string name="downloads_armed_series_subtitle">即使没有任何已下载的内容，自动下载也会继续关注这些剧集的新集。</string>
     <string name="downloads_armed_series_mode_follow_global">跟随全局设置</string>
     <string name="downloads_armed_series_unarm">停止自动下载</string>
+    <string name="downloads_arm_series_title">添加剧集</string>
+    <string name="downloads_arm_series_subtitle">关注某个剧集的新剧集，暂不下载。新剧集将跟随自动下载设置。</string>
+    <string name="downloads_arm_series_query_label">搜索剧集</string>
+    <string name="downloads_arm_series_empty">未找到剧集</string>
+    <string name="downloads_arm_series_search_error">搜索失败。请检查网络连接后重试。</string>
+    <string name="downloads_arm_series_action">添加</string>
+    <string name="downloads_arm_series_armed">剧集已加入自动下载，新剧集将跟随自动下载设置。</string>
+    <string name="downloads_armed_series_rearm">恢复自动下载</string>
 </resources>

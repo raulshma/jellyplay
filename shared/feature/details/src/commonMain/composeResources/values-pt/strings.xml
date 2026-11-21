@@ -213,6 +213,7 @@
     <string name="detail_error_download_failed">Falha na transferência</string>
     <string name="detail_error_not_a_series">Isto não é uma série</string>
     <string name="detail_error_queue_failed">Falha ao pôr transferências na fila</string>
+    <string name="detail_error_arm_failed">Não foi possível ativar esta série</string>
     <string name="detail_error_unavailable_offline">Este item não está disponível offline.</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
@@ -525,4 +526,8 @@
     <string name="detail_option_stop_notify_new_episodes">Parar de notificar sobre novos episódios</string>
     <string name="detail_msg_series_notifications_on">Notificações de novos episódios ativadas</string>
     <string name="detail_msg_series_notifications_off">Notificações de novos episódios desativadas</string>
+    <string name="detail_download_series_arm">Download automático</string>
+    <string name="detail_download_series_arm_hint">Ativa esta série sem baixar episódios. Os novos episódios seguirão a sua configuração de download automático.</string>
+    <string name="detail_download_series_arm_action">Ativar</string>
+    <string name="detail_download_series_armed">Série ativada — os novos episódios seguirão a sua configuração de download automático.</string>
 </resources>

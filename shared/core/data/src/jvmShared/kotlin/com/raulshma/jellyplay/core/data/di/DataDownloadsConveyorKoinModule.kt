@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.download.ArrAutoArmSync
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
@@ -117,6 +118,26 @@ internal val dataDownloadsConveyorModule: Module = module {
     }
     single<DownloadRepository> { get<DownloadRepositoryImpl>() }
     single<SeriesDownloadPolicyStore> { get<DownloadRepositoryImpl>() }
+
+    // The arr auto-arm stage (gh-225 follow-up) the auto-download check runs
+    // between its retention sweep and universe derivation. A leaf over the
+    // graph's existing seams: the DatastoreKoinModules ExperimentalFeatureGate
+    // single (the Direct *arr flag), dataSeerrArrModule's ArrRepository, the
+    // network SonarrApiClient/MediaInfoApiClient/AuthApiClient singles, and
+    // the policy-store binding above. No MediaRepositoryAccess edge: the
+    // stage's match index builds from the enumeration rows themselves
+    // (getItemsWithUserData projects ProviderIds), so there is no DetailFeed
+    // read — and no construction cycle with MediaRepositoryImpl to defer.
+    single {
+        ArrAutoArmSync(
+            featureGate = get(),
+            arrRepository = get(),
+            sonarrApiClient = get(),
+            policyStore = get<SeriesDownloadPolicyStore>(),
+            authApiClient = get(),
+            mediaInfoApiClient = get(),
+        )
+    }
 
     // The download summary surface (glossary: Download summary surface) — ONE
     // collector over the in-flight count flow, posting through the

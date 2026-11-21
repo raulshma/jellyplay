@@ -2,24 +2,28 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.ui.graphics.vector.ImageVector
 import org.jetbrains.compose.resources.StringResource
+import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_account
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_activity_insights
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cat_look_and_feel
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cat_media_playback
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cat_system_data
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations
 
 /**
  * One entrance section of the settings root screen: the lazy-item [key] plus
- * the visibility axis it renders on. [tvOnly] marks the TV-only on-screen
- * group (the screensaver group) — it occupies a slot in the phone numbering
- * that no phone section ever reads, exactly like the hand-typed literal it
- * replaced (`settingsSection("group_screensaver", 16)` inside `if (isTv)`).
- *
- * [revealGroup] marks the section that hosts a search-reveal group — a
- * `SettingsScreenGroups` group whose rows are bare-`Route.Settings` catalog
- * targets (the NoOp arm of `settingsResultClickAction`): the section's card
- * expands for its ids and the pane scrolls here on a search-reveal tap
- * ([resolveRootRevealItemIndex]). Null for sections with no reveal rows.
+ * the NON-CLICKABLE category [headerRes] the section renders above its
+ * content when it leads a category (ADR-0017's flat root: entrance rows
+ * wrapped under category headers — Account, Activity & Insights, Media &
+ * playback, Look & feel, System & data, Integrations, About). The header is
+ * a GROUP-grain fact declared on this section entry — never a per-row
+ * wrapper — so the root's category taxonomy single-homes on
+ * [SETTINGS_ENTRANCE_SECTIONS] next to the emission order it governs.
  */
 internal data class SettingsEntranceSection(
     val key: String,
-    val tvOnly: Boolean = false,
-    val revealGroup: SettingsSearchItemGroup? = null,
+    val headerRes: StringResource? = null,
 )
 
 /**
@@ -52,136 +56,66 @@ internal data class SettingsEntranceSectionRow(
 
 /**
  * The settings root screen's entrance sections in render order — the single
- * source of the staggered-entrance step numbering. Adding a section means
- * inserting one entry here; every follower renumbers automatically instead of
- * 19 hand-typed literals drifting apart.
+ * source of the entrance-step numbering AND of the category headers
+ * (ADR-0017): media-first flat list under non-clickable category headers,
+ * account pinned top, ONE taxonomy across phone/TV/desktop (surface
+ * differences ride [SettingsCapabilities] and the TV fork only — the former
+ * separate phone/TV step lists are converged onto this one list).
  *
- * The list mirrors the `settingsSection(...)` call sites in [SettingsScreen]:
- * `item_notifications` and the `group_idle_ambient` / `group_discord_presence`
- * / `group_shell_hooks` groups are the platform-gated sections (they compose
- * only where the matching `settingsCapabilities` flag holds) but keep their
- * slots — today's literal numbers keep counting them on every platform, and
- * the pinned derivation must equal those numbers exactly (the accepted
- * stagger hole on platforms without the capability). The gate applies to the
+ * The list mirrors the `settingsSection(...)` call sites in the browse pane:
+ * `item_notifications` and the Ambient / JellyPlay-plugin entrances are the
+ * capability/probe-gated sections (their CONTENT composes only where the
+ * gate opens — the header a category lead carries still renders, so a
+ * category never loses its label to a closed gate). The gate applies to the
  * CONTENT, never to this declaration: a call site whose key is missing here
  * throws on first composition (SettingsScreenKt.settingsSection fails fast),
  * which on desktop meant crashing on open — SettingsSectionKeysGuardTest
  * pins the mirror so the drift cannot ship again.
  *
  * Converted domains splice their OWN entry ([SettingsEntranceSectionRow.section])
- * at their render position — appearance first, then the whole fused
- * catalog (home, playback, audio, language, notifications, storage, security,
- * backup, integrations, about — each entry declared in the domain's rows file
- * beside its rows) — so the emission and the step index derive from one
- * declaration. The remaining literal entries are the sections with no fused
- * row domain (the composite profile/power-user/devices sections, the
- * capability-gated on-screen groups, privacy data, experimental, what's-new).
+ * at their render position; the remaining literal entries are the sections
+ * with no fused row domain (the composite profile/power-user/devices/
+ * account/activity/system sections, privacy data, experimental, what's-new,
+ * and the two composite entrances declared beside their domains' rows —
+ * AmbientEntrance in SystemSettingsRows.kt, JellyPlayPluginEntrance in
+ * JellyPlayFeatureSettingsRows.kt). Category headers ride the category's
+ * LEAD section via [SettingsEntranceSection.headerRes] (`.copy` at the splice
+ * for converted domains).
  */
 internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("profile"),
     SettingsEntranceSection("power_user_mode"),
-    SettingsEntranceSection("active_devices"),
+    SettingsEntranceSection("active_devices", headerRes = Res.string.settings_account),
     SettingsEntranceSection("account"),
-    SettingsEntranceSection("activity"),
-    SettingsEntranceSection("system"),
-    SettingsEntranceSection("group_jellyplay", revealGroup = SettingsScreenGroups.jellyplayFeatures),
-    HomeEntrance.section,
-    AppearanceEntrance.section,
-    PerformanceEntrance.section,
-    PlaybackEntrance.section,
+    SettingsEntranceSection("activity", headerRes = Res.string.settings_activity_insights),
+    PlaybackEntrance.section.copy(headerRes = Res.string.settings_cat_media_playback),
     AudioEntrance.section,
     LanguageEntrance.section,
+    AppearanceEntrance.section.copy(headerRes = Res.string.settings_cat_look_and_feel),
+    HomeEntrance.section,
+    PerformanceEntrance.section,
+    AmbientEntrance.section,
+    StorageEntrance.section.copy(headerRes = Res.string.settings_cat_system_data),
+    DownloadsEntrance.section,
     NotificationEntrance.section,
-    StorageEntrance.section,
     SecurityEntrance.section,
     SettingsEntranceSection("item_privacy_data"),
     BackupEntrance.section,
-    SettingsEntranceSection("group_screensaver", tvOnly = true, revealGroup = SettingsScreenGroups.systemScreensaver),
-    SettingsEntranceSection("group_idle_ambient", revealGroup = SettingsScreenGroups.systemIdleAmbient),
-    SettingsEntranceSection("group_discord_presence", revealGroup = SettingsScreenGroups.systemDiscordPresence),
-    SettingsEntranceSection("group_shell_hooks", revealGroup = SettingsScreenGroups.systemHooks),
-    SettingsEntranceSection("item_experimental"),
+    SettingsEntranceSection("system"),
+    JellyPlayPluginEntrance.section.copy(headerRes = Res.string.settings_integrations),
     IntegrationsEntrance.section,
-    AboutEntrance.section,
+    SettingsEntranceSection("item_experimental"),
+    AboutEntrance.section.copy(headerRes = Res.string.settings_about),
     SettingsEntranceSection("item_whatsnew"),
 )
 
-/** The derived entrance steps for one section: phone and TV stagger indexes. */
-internal data class SettingsEntranceSteps(
-    val phone: Int,
-    val tv: Int,
-)
-
 /**
- * Pure index lookup of a section's (phone, tv) entrance steps: TV numbers are
- * the section's index in [SETTINGS_ENTRANCE_SECTIONS]; phone numbers skip the
- * [tvOnly] entries (so the TV-only screensaver group shifts only the
- * followers that can actually render after it). Returns `null` for a key not
- * declared in the list — the call site fails fast instead of silently
- * numbering a section that was never inserted.
+ * Pure index lookup of a section's entrance step: the section's index in
+ * [SETTINGS_ENTRANCE_SECTIONS]. ONE list, ONE axis — the wizard-mirror
+ * property: the stagger sequence is DERIVED from the same declaration that
+ * drives root emission, never a second hand-maintained taxonomy. Returns
+ * `null` for a key not declared in the list — the call site fails fast
+ * instead of silently numbering a section that was never inserted.
  */
-internal fun settingsEntranceStep(key: String): SettingsEntranceSteps? {
-    val index = SETTINGS_ENTRANCE_SECTIONS.indexOfFirst { it.key == key }
-    if (index < 0) return null
-    val phone = SETTINGS_ENTRANCE_SECTIONS.take(index).count { !it.tvOnly }
-    return SettingsEntranceSteps(phone = phone, tv = index)
-}
-
-/**
- * The root browse pane's reveal-scroll resolution — the sub-screens'
- * `resolveHighlightScrollIndex` idiom over this declaration. A search-reveal
- * tap (the `settingsResultClickAction` NoOp arm) marks `lastClickedSettingId`,
- * and the pane must SCROLL to the section hosting that id: the highlighted
- * row's own focus choreography (SettingListItem's 400ms-delayed focus grab +
- * bring-into-view) can only fire once its lazy slot composes, and an
- * off-screen section never composes — so before this scroll existed, a
- * search-reveal into a below-fold group landed on a screen that never moved:
- * no reveal, no focus animation.
- *
- * Returns the browse pane's LazyColumn ITEM index for the section hosting
- * [revealId] on THIS platform: the declaration index minus every gated
- * section before it whose gate is closed here (the pane's `if` skips those
- * lazy items entirely — the stagger numbering tolerates the hole, the item
- * index must not). `-1` when the id is null or no reveal group hosts it —
- * navigation ids (the entrance/account rows) navigate away and must not
- * scroll the pane on back. Pure, so the contract tests pin it directly.
- */
-internal fun resolveRootRevealItemIndex(
-    revealId: String?,
-    isTv: Boolean,
-    capabilities: SettingsCapabilities,
-): Int {
-    if (revealId == null) return -1
-    val hostIndex = SETTINGS_ENTRANCE_SECTIONS.indexOfFirst { section ->
-        section.revealGroup != null && revealId in section.revealGroup.itemIdSet
-    }
-    if (hostIndex < 0) return -1
-    val host = SETTINGS_ENTRANCE_SECTIONS[hostIndex]
-    // A host whose own gate is closed here renders no section at all (a TV
-    // group on a phone; a desktop-backed group on Android) — nothing to
-    // scroll to; the catalog's platform filter should not have offered the
-    // id in the first place.
-    if (!sectionGateOpen(host, isTv, capabilities)) return -1
-    val gatedOff = SETTINGS_ENTRANCE_SECTIONS.take(hostIndex).count { !sectionGateOpen(it, isTv, capabilities) }
-    return hostIndex - gatedOff
-}
-
-/**
- * The pane's per-section presence gates, mirrored from SettingsBrowsePane's
- * emission `if`s (the declaration's [SettingsEntranceSection.tvOnly] plus the
- * four capability flags). `SettingsRootRevealScrollTest` pins this mirror
- * against the pane source — the same textual pin
- * SettingsSectionKeysGuardTest runs for the keys themselves.
- */
-private fun sectionGateOpen(
-    section: SettingsEntranceSection,
-    isTv: Boolean,
-    capabilities: SettingsCapabilities,
-): Boolean = when (section.key) {
-    "group_screensaver" -> isTv
-    NotificationEntrance.key -> capabilities.supportsNotifications
-    "group_idle_ambient" -> capabilities.supportsIdleAmbientScreen
-    "group_discord_presence" -> capabilities.supportsDiscordPresence
-    "group_shell_hooks" -> capabilities.supportsShellHooks
-    else -> true
-}
+internal fun settingsEntranceStep(key: String): Int? =
+    SETTINGS_ENTRANCE_SECTIONS.indexOfFirst { it.key == key }.takeIf { it >= 0 }

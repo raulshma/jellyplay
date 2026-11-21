@@ -20,14 +20,17 @@ import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
+import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_appearance
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_playback
+import com.raulshma.jellyplay.core.ui.model.labelResource
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduced_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_perf_animations
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_perf_shared_elements
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_perf_nav_transitions
@@ -400,3 +403,21 @@ internal val PerformanceEntrance = SettingsEntranceSectionRow(
     icon = Tabler.Outline.Gauge,
     titleRes = Res.string.settings_performance,
 )
+
+// ── Entrance summary (ADR-0017 decision 3) ──────────────────────────────
+
+/**
+ * The root Performance entrance's summary: the master level's own face (the
+ * [PerformanceLevel.labelResource] seam — the same localized words the level
+ * pickers render) plus the Reduce Motion marker while it is on. The level and
+ * the motion flag ride different projections at the call site (the root
+ * slice's level, the appearance-screen slice's flag), so they arrive as
+ * explicit slice values; pinned by SettingsSummariesTest.
+ */
+internal fun performanceSummaryParts(
+    performanceLevel: PerformanceLevel,
+    reduceMotionEnabled: Boolean,
+): List<SettingsSummaryPart> = buildList {
+    add(SettingsSummaryPart.Token(performanceLevel.labelResource()))
+    if (reduceMotionEnabled) add(SettingsSummaryPart.Token(Res.string.settings_reduced_motion))
+}

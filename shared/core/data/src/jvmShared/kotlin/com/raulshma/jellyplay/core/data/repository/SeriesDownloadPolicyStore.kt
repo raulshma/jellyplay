@@ -82,11 +82,44 @@ interface SeriesDownloadPolicyStore {
     fun observeArmedSeries(): Flow<List<SeriesDownloadArm>>
 
     /**
+     * Arms [seriesId] WITHOUT downloading anything (gh-225 follow-up: the
+     * arr auto-arm sync's add-only write; the manual entries go through
+     * [manualArmSeries], which adds the tombstone re-arm on top).
+     * Inserts a [AutoDownloadMode.FOLLOW_GLOBAL] arm row via insert-if-absent
+     * — the OfflineDownloadWriterCore implicit-arm write pattern — so an
+     * existing row (an explicit INSTANT/ASK/NEVER sheet override, or an
+     * earlier arm) is never clobbered or demoted, and backfills a blank
+     * display name without overwriting a set one. [seriesName] is the armed
+     * list's display cache; blank stays blank until a download request
+     * carries the name.
+     */
+    suspend fun armSeries(seriesId: String, seriesName: String)
+
+    /**
+     * The MANUAL arm entries' one verb (the Downloads picker and the series
+     * sheet's arm action): [armSeries]' insert-if-absent arm, PLUS a raw
+     * [AutoDownloadMode.NEVER] tombstone flips back to
+     * [AutoDownloadMode.FOLLOW_GLOBAL] through [setSeriesPolicy] — a
+     * deliberate stop is re-armable by hand, while [armSeries] alone would
+     * no-op on the existing row. The arr auto-arm sync keeps calling
+     * [armSeries] directly: add-only means a tombstone is NEVER resurrected
+     * by a sync, only by an explicit user action through this member.
+     */
+    suspend fun manualArmSeries(seriesId: String, seriesName: String)
+
+    /**
      * The zero-rows un-arm rule's seam (ADR-0015 decision 5): when [seriesId]
      * has no `downloads` rows left, its arm row and pending Ask prompts are
-     * deleted. (OfflineRepositoryImpl carries a byte-identical private twin —
-     * cycle-justified leaf injection, recorded on its ctor — so this seam and
-     * that twin are the rule's two bodies; a third would be a defect.)
+     * deleted — EXCEPT an explicit [AutoDownloadMode.NEVER] row: the
+     * "never auto-download" tombstone's ROW survives hygiene (the follow-up
+     * arr auto-arm sync re-arms any series with no policy row, so an erased
+     * tombstone would be resurrected) while its pending prompts drop, the
+     * same setSeriesPolicy(NEVER) invariant — prompts recorded under a policy
+     * that no longer wants them are dead. THE one body of the rule —
+     * OfflineRepositoryImpl's three delete
+     * scopes call this member through its lazy ctor store edge (the
+     * DesktopDownloadManager cycle-break precedent), so no second body exists
+     * anywhere; a hand-folded copy would be a defect.
      *
      * The rule's verb split — WATCH-BOUNDARY deletions NEVER call this
      * (auto-delete-after-watch, smart-downloads cleanup, the #14 post-playback
@@ -105,8 +138,8 @@ interface SeriesDownloadPolicyStore {
      * wants them are dead. A [AutoDownloadMode.FOLLOW_GLOBAL] write is the
      * sheet's "Default" (ADR-0015: Default now ARMS — follow-global, survives
      * hygiene) and keeps its suggestions, exactly like any explicit mode.
-     * Clearing (writing no row) is the disarm verb — only the Downloads
-     * screen's un-arm action writes it.
+     * Clearing (writing no row) deletes the row outright; no UI caller writes
+     * it anymore — the manual disarm is the NEVER tombstone (ADR-0016).
      */
     suspend fun setSeriesPolicy(seriesId: String, mode: AutoDownloadMode?)
 

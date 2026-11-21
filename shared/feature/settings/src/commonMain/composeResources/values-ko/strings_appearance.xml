@@ -5,12 +5,23 @@
     <!-- care and the newsletter groups. -->
     <string name="settings_newsletter_cd">뉴스레터</string>
     <string name="settings_appearance_title">모양</string>
+    <string name="settings_appearance_sections">모양 섹션</string>
+    <string name="settings_appearance_entry_theme">테마 &amp; 화면</string>
+    <string name="settings_appearance_entry_theme_subtitle">색상, 글꼴, 라이브러리 보기 모드, 접근성 및 눈 보호</string>
+    <string name="settings_appearance_entry_library_views">라이브러리 보기</string>
+    <string name="settings_appearance_entry_library_views_subtitle">배지, 에피소드 목록 및 탐색 표시</string>
+    <string name="settings_appearance_entry_detail">상세 화면</string>
+    <string name="settings_appearance_entry_detail_subtitle">출연진 레일, 칩, 섹션 및 상한</string>
+    <string name="settings_appearance_detail_tuning">밀도 &amp; 상한</string>
+    <string name="settings_appearance_entry_navigation">탐색 &amp; 햅틱 피드백</string>
+    <string name="settings_appearance_entry_navigation_subtitle">하단 바, 밀도 및 피드백</string>
     <string name="settings_theme">테마</string>
     <string name="settings_artwork_dynamic">아트워크 동적</string>
     <string name="settings_theme_mode">테마 모드</string>
     <string name="settings_theme_follow_system">시스템 설정 따르기</string>
     <string name="settings_theme_always_light">항상 밝게</string>
     <string name="settings_theme_always_dark">항상 어둡게</string>
+    <string name="settings_theme_scheduled_label">예약</string>
     <string name="settings_theme_scheduled">자동 낮/밤 (%1$d:00\u2013%2$d:00)</string>
     <string name="settings_dynamic_theming">동적 테마</string>
     <string name="settings_dynamic_theming_subtitle">아트워크에서 추출한 색상</string>
@@ -23,6 +34,7 @@
     <string name="settings_oled_token">OLED</string>
     <string name="settings_performance_token">성능</string>
     <string name="settings_contrast_suffix">%1$s 대비</string>
+    <string name="settings_accent_suffix">%1$s 강조색</string>
     <string name="settings_library_view_mode">라이브러리 보기 모드</string>
     <string name="settings_layout_mode">레이아웃</string>
     <string name="settings_layout_mode_subtitle">자동, 휴대전화 또는 태블릿 레이아웃 선택</string>

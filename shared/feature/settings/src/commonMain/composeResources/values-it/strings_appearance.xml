@@ -5,12 +5,23 @@
     <!-- care and the newsletter groups. -->
     <string name="settings_newsletter_cd">Newsletter</string>
     <string name="settings_appearance_title">Aspetto</string>
+    <string name="settings_appearance_sections">Sezioni di aspetto</string>
+    <string name="settings_appearance_entry_theme">Tema e visualizzazione</string>
+    <string name="settings_appearance_entry_theme_subtitle">Colori, caratteri, modalità vista libreria, accessibilità e riposo oculare</string>
+    <string name="settings_appearance_entry_library_views">Viste libreria</string>
+    <string name="settings_appearance_entry_library_views_subtitle">Badge, elenchi episodi e visualizzazione di navigazione</string>
+    <string name="settings_appearance_entry_detail">Schermata dettagli</string>
+    <string name="settings_appearance_entry_detail_subtitle">Rail del cast, chip, sezioni e limiti</string>
+    <string name="settings_appearance_detail_tuning">Densità e limiti</string>
+    <string name="settings_appearance_entry_navigation">Navigazione e feedback aptico</string>
+    <string name="settings_appearance_entry_navigation_subtitle">Barra inferiore, densità e feedback</string>
     <string name="settings_theme">Tema</string>
     <string name="settings_artwork_dynamic">Copertina dinamica</string>
     <string name="settings_theme_mode">Modalità tema</string>
     <string name="settings_theme_follow_system">Segui l'impostazione di sistema</string>
     <string name="settings_theme_always_light">Sempre chiaro</string>
     <string name="settings_theme_always_dark">Sempre scuro</string>
+    <string name="settings_theme_scheduled_label">Programmato</string>
     <string name="settings_theme_scheduled">Giorno/notte automatico (%1$d:00\u2013%2$d:00)</string>
     <string name="settings_dynamic_theming">Tema dinamico</string>
     <string name="settings_dynamic_theming_subtitle">Colori estratti dalla copertina</string>
@@ -23,6 +34,7 @@
     <string name="settings_oled_token">OLED</string>
     <string name="settings_performance_token">Prestazioni</string>
     <string name="settings_contrast_suffix">Contrasto %1$s</string>
+    <string name="settings_accent_suffix">Accento %1$s</string>
     <string name="settings_library_view_mode">Modalità vista libreria</string>
     <string name="settings_layout_mode">Layout</string>
     <string name="settings_layout_mode_subtitle">Scegli layout automatico, telefono o tablet</string>

@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * The appearance preference aggregates: the logical appearance domain and the
- * AppearanceSettingsScreen slice.
+ * appearance settings screens' slice (ADR-0017's hub + leaves).
  */
 
 @Immutable
@@ -32,13 +32,15 @@ data class AppearancePreferences(
 )
 
 /**
- * Fields read by `AppearanceSettingsScreen`. This is the broadest slice because
- * the Appearance screen surfaces theme, layout, library-card display,
+ * Fields read by the appearance settings screens (the hub + its leaves,
+ * ADR-0017). This is the broadest slice because
+ * the appearance screens surface theme, layout, library-card display,
  * newsletter, and accessibility settings together. Navigation-customization
  * fields are excluded — they live in [navigationCustomization]; the
  * home-discovery card-display quartet is excluded too — it lives (with its
  * rows) on `HomeScreenPreferences`. The card-badge toggles appear here as
- * well: the same two rows show in Appearance → Library & Cards, writing the
+ * well: the same two rows show on the appearance domain's Library views leaf,
+ * writing the
  * SAME home-store prefs.
  */
 @Immutable

@@ -92,6 +92,14 @@
     <string name="settings_home_screen_layout">主屏布局</string>
     <string name="settings_home_sections_visible">%2$d 个分区中 %1$d 个可见</string>
     <string name="settings_home_title">主屏幕</string>
+    <string name="settings_home_entry_display">主页显示</string>
+    <string name="settings_home_entry_display_subtitle">主视觉、时钟、Dock 与主屏呈现</string>
+    <string name="settings_home_entry_rows">行 &amp; 布局</string>
+    <string name="settings_home_entry_rows_subtitle">待看、分区布局与隐藏项目</string>
+    <string name="settings_home_entry_cards">卡片 &amp; 徽标</string>
+    <string name="settings_home_entry_cards_subtitle">徽标、评分、剧透与卡片样式</string>
+    <string name="settings_home_tuning">微调</string>
+    <string name="settings_home_curation">隐藏与恢复</string>
     <string name="settings_home_cards">卡片</string>
     <string name="settings_home_display">主屏显示</string>
     <string name="settings_continue_next_up">继续观看和待看</string>

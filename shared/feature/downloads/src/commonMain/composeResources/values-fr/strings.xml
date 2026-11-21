@@ -158,4 +158,12 @@
     <string name="downloads_armed_series_subtitle">Le téléchargement automatique continue de surveiller ces séries pour de nouveaux épisodes, même quand rien n'est téléchargé.</string>
     <string name="downloads_armed_series_mode_follow_global">Suit le réglage global</string>
     <string name="downloads_armed_series_unarm">Arrêter le téléchargement automatique</string>
+    <string name="downloads_arm_series_title">Surveiller une série</string>
+    <string name="downloads_arm_series_subtitle">Surveille une série pour de nouveaux épisodes sans les télécharger maintenant. Les nouveaux épisodes suivent votre réglage de téléchargement automatique.</string>
+    <string name="downloads_arm_series_query_label">Rechercher des séries</string>
+    <string name="downloads_arm_series_empty">Aucune série trouvée</string>
+    <string name="downloads_arm_series_search_error">Échec de la recherche. Vérifiez votre connexion et réessayez.</string>
+    <string name="downloads_arm_series_action">Surveiller</string>
+    <string name="downloads_arm_series_armed">Série activée — les nouveaux épisodes suivront votre réglage de téléchargement automatique.</string>
+    <string name="downloads_armed_series_rearm">Reprendre le téléchargement automatique</string>
 </resources>

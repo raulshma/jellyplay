@@ -48,9 +48,26 @@ class MediaInfoApiClientImplTest {
         mockWebServer = MockWebServer()
         mockWebServer.start()
         val jellyfin = mockk<Jellyfin>(relaxed = true)
-        // Full-arity createApi stub: the multi-write (updateSession) rebuilds
-        // the client inside its critical section (see AuthApiClientTest's note).
-        every { jellyfin.createApi(any(), any(), any(), any(), any()) } returns mockk(relaxed = true)
+        // Full-arity createApi stub (the multi-write (updateSession) rebuilds
+        // the client inside its critical section — see AuthApiClientTest's
+        // note) FORWARDED to a real SDK client over OkHttp: the relaxed-mock
+        // client cannot answer typed service reads (api.itemsApi), and
+        // getItemsWithUserData exercises exactly that path against the
+        // MockWebServer.
+        val realJellyfin = org.jellyfin.sdk.createJellyfin {
+            clientInfo = org.jellyfin.sdk.model.ClientInfo(name = "test", version = "1.0.0")
+            deviceInfo = org.jellyfin.sdk.model.DeviceInfo(id = "test-device", name = "test")
+            apiClientFactory = org.jellyfin.sdk.api.okhttp.OkHttpFactory(OkHttpClient())
+        }
+        every { jellyfin.createApi(any(), any(), any(), any(), any()) } coAnswers {
+            realJellyfin.createApi(
+                baseUrl = arg(0),
+                accessToken = arg(1),
+                clientInfo = arg(2),
+                deviceInfo = arg(3),
+                httpClientOptions = arg(4),
+            )
+        }
         engine = JellyfinApiEngine(
             jellyfinLazy = LazyProvider { jellyfin },
             okHttpClientLazy = LazyProvider { OkHttpClient() },
@@ -151,6 +168,39 @@ class MediaInfoApiClientImplTest {
         // Plain media-type names never qualify, even dash-containing ones.
         assertFalse(isPlaybackReportingUserIdToken("Movie"))
         assertFalse(isPlaybackReportingUserIdToken("MusicVideo-Extra"))
+    }
+
+    @Test
+    fun `getItemsWithUserData normalizes wire ProviderIds keys to the lowercase lookup grammar`() = runTest {
+        // The arr auto-arm match index (ArrAutoArmSync's tvdbId extraction)
+        // reads `providerIds?.get("tvdb")` off the rows this read returns, and
+        // the Jellyfin wire sends PascalCase provider keys ("Tvdb") — the
+        // producer-to-consumer contract pinned here is that the WIRE form
+        // lands lowercase, or the stage silently never matches (the DTO-level
+        // pin is JellyfinDtoMappersTest's; this walks the real client + JSON
+        // decode, the representation the stage actually consumes).
+        mockWebServer.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """{"Items":[""" +
+                        """{"Id":"11111111-2222-4333-8444-555555555555","Name":"Matched Series",""" +
+                        """"Type":"Series","ProviderIds":{"Tvdb":"121361","Imdb":"tt0407362"}}],""" +
+                        """"TotalRecordCount":1,"StartIndex":0}""",
+                ),
+        )
+
+        val (total, items) = client.getItemsWithUserData(
+            userId = "99999999-9999-4999-8999-999999999999",
+            includeItemTypes = listOf("Series"),
+            limit = 200,
+        ).getOrThrow()
+
+        assertEquals(1, total)
+        assertEquals(
+            mapOf("tvdb" to "121361", "imdb" to "tt0407362"),
+            items.single().providerIds,
+        )
     }
 
     @Test

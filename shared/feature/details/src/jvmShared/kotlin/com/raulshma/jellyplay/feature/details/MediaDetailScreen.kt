@@ -999,6 +999,32 @@ fun MediaDetailScreen(
                 onDismissRequest = { dialogSession.dismissSeriesDownloadSheet() },
                 sheetState = downloadSheetState,
             ) {
+                // The explicit "Auto-download" arm row (gh-225 follow-up):
+                // arms the series WITHOUT enqueueing episodes — the episode
+                // picker + policy chips below stay untouched. Wired like this
+                // block's other sheet callbacks (the lifecycle helper
+                // directly — the callback bundles are remembered in the
+                // content-tree scope above and not visible at the sheet
+                // host). State-aware: once the arm write lands the row flips
+                // to its non-interactive confirmation state (seriesArmed),
+                // so a repeat click can't re-post the armed toast.
+                val seriesArmed by viewModel.downloads.seriesArmed.collectAsStateWithLifecycle()
+                SeriesArmActionRow(
+                    // Arm + chip re-seed: once the write lands the stored row
+                    // (a flipped tombstone reads Default again — the sentinel
+                    // is never a chip) re-seeds the sheet's policy selection,
+                    // so a confirm AFTER arming rides the refreshed choice
+                    // instead of the stale chip the sheet opened with. The
+                    // selection only moves through this arm action or an
+                    // explicit chip tap — never on its own.
+                    onArm = {
+                        viewModel.downloads.armSeries {
+                            dialogSession.seedSeriesDownloadPolicy(viewModel.downloads.seriesPolicy())
+                        }
+                    },
+                    armed = seriesArmed,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
                 SeriesDownloadSheet(
                     seasons = uiState.seasons,
                     episodes = sheetDownloads.downloadSheetEpisodes,

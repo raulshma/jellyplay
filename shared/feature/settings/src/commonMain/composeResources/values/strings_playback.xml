@@ -1,13 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The Playback settings screen family: the player, -->
-    <!-- advanced-video and engine groups, Live TV / DVR, casting -->
-    <!-- and SyncPlay. -->
+    <!-- The Playback settings screen family: the hub and its eight -->
+    <!-- leaves (basics, controls & gestures, player chrome, video & -->
+    <!-- transcoding, player engines, skipping & segments, SyncPlay & -->
+    <!-- casting, Live TV & DVR), Live TV / DVR, casting and SyncPlay. -->
     <string name="settings_unknown">Unknown</string>
     <string name="settings_power_user_mode">Power User Mode</string>
     <string name="settings_power_user_mode_desc">Expose advanced codecs, cache tools &amp; experimental flags</string>
     <string name="settings_playback">Playback</string>
     <string name="settings_playback_subtitle">Player Engine: %1$s</string>
+    <string name="settings_playback_sections">Playback sections</string>
+    <string name="settings_playback_entry_basics">Basics</string>
+    <string name="settings_playback_entry_basics_subtitle">Engine, autoplay, resume &amp; player behavior</string>
+    <string name="settings_playback_entry_controls">Controls &amp; gestures</string>
+    <string name="settings_playback_entry_controls_subtitle">Touch, orientation, gestures &amp; input bindings</string>
+    <string name="settings_playback_entry_chrome">Player chrome</string>
+    <string name="settings_playback_entry_chrome_subtitle">Overlay, seek bar, buttons &amp; HUD layout</string>
+    <string name="settings_playback_entry_video_quality">Video &amp; transcoding</string>
+    <string name="settings_playback_entry_video_quality_subtitle">Quality, decoder, passthrough &amp; transcode caps</string>
+    <string name="settings_playback_entry_engines">Player engines</string>
+    <string name="settings_playback_entry_engines_subtitle">MPV, VLC, ExoPlayer &amp; external player tuning</string>
+    <string name="settings_playback_entry_segments">Skipping &amp; segments</string>
+    <string name="settings_playback_entry_segments_subtitle">Intro/outro skip, recaps &amp; Next Up preroll</string>
+    <string name="settings_playback_entry_syncplay_casting">SyncPlay &amp; casting</string>
+    <string name="settings_playback_entry_syncplay_casting_subtitle">Watch parties, DLNA &amp; renderer choice</string>
+    <string name="settings_playback_entry_live_tv">Live TV &amp; DVR</string>
+    <string name="settings_playback_entry_live_tv_subtitle">Recording padding &amp; quality</string>
     <string name="settings_transition_style">Transition Style</string>
     <string name="settings_test_connection">Test Connection</string>
     <string name="settings_content_regions">Content Regions</string>

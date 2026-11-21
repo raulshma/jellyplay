@@ -31,8 +31,8 @@ series, music, and more — and plays it back with zero network.
   [Browsing downloads inline](#browsing-downloads-inline).
 - 📺 **Series & episode selection** — download single episodes, full
   seasons, or entire series; JellyPlay pre-calculates storage needs.
-- 🔁 **Auto-download** — optionally fetch new episodes of series you
-  already download, on a periodic schedule.
+- 🔁 **Auto-download** — optionally fetch new episodes of series you've
+  downloaded or armed (by hand or from Sonarr), on a periodic schedule.
 - 🔄 **Watch-progress sync outbox** — playback position, start/stop,
   played/unplayed state, favorite flips, and book reading positions are
   captured offline and drained back to your
@@ -117,6 +117,43 @@ have JellyPlay periodically (every ~6 hours) check series you've already
 downloaded for new episodes and queue them automatically — subject to
 your Wi-Fi-only and schedule settings.
 
+**Arm a series without downloading anything.** A series only enters the
+periodic check once it's *armed* — downloading anything arms it, and you
+can also arm directly:
+
+- **From the Downloads screen** — the armed-series list has an
+  **Arm a series** picker: search your library for a series and tap it.
+  JellyPlay then keeps checking that series for new episodes even with
+  zero downloaded episodes. Picking a series you previously stopped
+  re-arms it.
+- **From the series page** — the download sheet has an explicit
+  **Auto-download** action beside the quality and season pickers. It
+  also re-arms a stopped series (a stopped series shows the action
+  again instead of an "armed" confirmation).
+
+A series you've never downloaded or watched an episode of starts at the
+beginning: the check queues its first episodes (up to your lookahead
+count), not nothing — so arming from Sonarr or the picker really does
+start downloading without a hand-download first.
+
+**Auto-Arm Series Tracked in Sonarr** (experimental) — once the Direct
+*arr Integration experimental flag is enabled, **Settings → Storage**
+gains an opt-in row that arms every series your Sonarr instances
+monitor *and* your Jellyfin library actually contains (matched by TVDB
+id), so new episodes start downloading as they air without you ever
+downloading one by hand. The match runs inside the same periodic pass,
+is add-only (it never un-arms or overrides anything you set yourself),
+and skips itself silently when a server can't be reached. Sonarr only —
+movies are not covered.
+
+**Stop auto-download** (the armed list's stop button) doesn't erase the
+series: it leaves an explicit "never" marker, so the series stays
+listed with its button flipped to **Auto-download** — tap that to
+re-arm. The marker survives list cleanups: deleting a stopped series'
+last downloaded episode won't let Sonarr arming re-arm something you
+deliberately stopped. Arms are device-local, like downloads themselves:
+arming on one device says nothing about your other devices.
+
 ## Download qualities
 
 Quality maps to a server-side max-bitrate cap. **Original** requests the
@@ -144,6 +181,7 @@ Open **Settings → Storage** to tune downloads. Defaults are shown below.
 | **Download quality** | Original | Global quality cap (Original / 1080p / 720p / 480p) |
 | **Smart downloads** | Off | Auto-deletes episodes you've watched ≥95% |
 | **Auto-download new episodes** | Off | Periodically fetches new episodes of downloaded series |
+| **Auto-Arm Series Tracked in Sonarr** | Off | Arms every Sonarr-monitored series in your library for auto-download, even with nothing downloaded (experimental; requires the Direct *arr Integration flag and a configured Sonarr server) |
 | **Download schedule** | Off | Restrict downloads to a start–end time window (optionally Wi-Fi-only during the window) |
 | **Live Updates** (Android 16+) | Off | Promotes the download-progress notification to the lock screen and status area (ProgressStyle); requires the system Live Updates grant — tap the row to open the Android settings screen. Hidden below Android 16 and on desktop. |
 | **Max download storage** | Unlimited (0) | Cap the downloads directory at 5/10/20/50 GB |

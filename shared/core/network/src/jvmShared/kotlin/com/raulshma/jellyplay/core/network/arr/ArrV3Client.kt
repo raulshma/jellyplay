@@ -322,7 +322,7 @@ internal class ArrV3Client(
     /**
      * `GET {path}` decoding a bare JSON array with [element]'s serializer —
      * Radarr's `/movie?tmdbId=` lookups (a single-element array, or empty when
-     * not tracked).
+     * not tracked) and Sonarr's unfiltered `/series` full-series list.
      */
     suspend fun <T> getList(
         server: ArrServerConfig,

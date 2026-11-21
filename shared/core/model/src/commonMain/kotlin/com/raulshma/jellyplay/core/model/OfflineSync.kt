@@ -66,6 +66,37 @@ data class OfflineSyncState(
 }
 
 /**
+ * Why the detail fetch at the offline freshness seam failed (a freshness
+ * check or a resync's FETCH_DETAIL step). Diagnosability vocabulary only —
+ * support must be able to tell an auth revocation from a DNS failure from a
+ * server 500, which used to collapse into the same `syncError` badge /
+ * "Fetch failed" step. Never rendered as user-facing text: the existing
+ * badge/step copy stays, and the cause travels on the record field + the
+ * manager's log line. Classified once at the fold (core:data's sync package,
+ * `Throwable.fetchFailureCause`) from the network layer's pre-classified
+ * [com.raulshma.jellyplay.core.network.api.ApiException] — the same
+ * classification that layer attached at throw time, re-expressed as data.
+ */
+@Immutable
+@Serializable
+enum class FetchFailureCause {
+    /** Auth revoked / no permission: HTTP 401 or 403 (`ApiException.isAccessDenied`). */
+    AUTH,
+
+    /** The server was unreachable: DNS, connect, timeout, generic IO. */
+    NETWORK,
+
+    /** The server answered with an HTTP error status (e.g. 404, 5xx). */
+    SERVER,
+
+    /** A response arrived but could not be parsed into the model. */
+    PARSE,
+
+    /** Nothing recognizable in the failure chain. */
+    OTHER,
+}
+
+/**
  * Result of a single-item freshness check. [needsResync] is true when a
  * metadata/images resync would bring the item current; [mediaFileChanged] is
  * reported separately since it requires a media-file re-download.
@@ -75,6 +106,14 @@ data class OfflineSyncState(
 data class ResyncCheckResult(
     val itemId: String,
     val state: OfflineSyncState,
+    /**
+     * Why the fetch failed, when [OfflineSyncState.status] is
+     * [SyncStatus.ERROR] because the detail read itself failed. Null on every
+     * non-fetch-failure path. The persisted badge stays cause-less (no cause
+     * column on the row; the projection stays lossless) — this field is the
+     * one-shot answer of the check that hit the failure.
+     */
+    val failureCause: FetchFailureCause? = null,
 )
 
 /**
@@ -167,6 +206,12 @@ data class ResyncStepResult(
     val step: ResyncStep,
     val success: Boolean,
     val message: String? = null,
+    /**
+     * Typed failure classification for a failed step ([FetchFailureCause]):
+     * [message] is user-facing text surfaced verbatim by the resync UI, so
+     * the diagnosability payload rides here, not in the string.
+     */
+    val failureCause: FetchFailureCause? = null,
 )
 
 /** Aggregate result of resyncing a single item. */

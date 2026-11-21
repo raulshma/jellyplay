@@ -292,6 +292,22 @@ internal fun SonarrManagedEpisodeResource.toArrSeriesEpisode(): ArrSeriesEpisode
 )
 
 /**
+ * The series row → [SonarrSeriesInfo] projection BOTH
+ * `SonarrApiClientImpl.getSeriesInfo` and `getSeriesList` map through.
+ * Sonarr's schema marks `tvdbId` required on a series resource, so the
+ * nullable wire field is defensive only; an absent value degrades to the
+ * 0 sentinel (the same absent-means-0 convention
+ * [SonarrEpisodeInfo.episodeFileId] uses) rather than failing the decode.
+ */
+internal fun SonarrSeriesResource.toSonarrSeriesInfo(): SonarrSeriesInfo = SonarrSeriesInfo(
+    id = id,
+    title = title,
+    tvdbId = tvdbId ?: 0,
+    monitored = monitored,
+    path = path,
+)
+
+/**
  * The client-side tvdbId filter BOTH `SonarrApiClientImpl.findSeriesByTvdb`
  * and `getSeriesInfo` apply (some Sonarr versions ignore the `?tvdbId=`
  * param and return ALL series — trusting `firstOrNull()` would target the

@@ -156,4 +156,12 @@
     <string name="downloads_armed_series_subtitle">Auto-Download beobachtet diese Serien weiter auf neue Episoden, auch wenn nichts heruntergeladen ist.</string>
     <string name="downloads_armed_series_mode_follow_global">Folgt der globalen Einstellung</string>
     <string name="downloads_armed_series_unarm">Auto-Download stoppen</string>
+    <string name="downloads_arm_series_title">Serie aktivieren</string>
+    <string name="downloads_arm_series_subtitle">Beobachtet eine Serie auf neue Episoden, ohne jetzt etwas herunterzuladen. Neue Episoden folgen der Auto-Download-Einstellung.</string>
+    <string name="downloads_arm_series_query_label">Serien suchen</string>
+    <string name="downloads_arm_series_empty">Keine Serien gefunden</string>
+    <string name="downloads_arm_series_search_error">Suche fehlgeschlagen. Bitte Verbindung prüfen und erneut versuchen.</string>
+    <string name="downloads_arm_series_action">Aktivieren</string>
+    <string name="downloads_arm_series_armed">Serie aktiviert — neue Episoden folgen der Auto-Download-Einstellung.</string>
+    <string name="downloads_armed_series_rearm">Auto-Download fortsetzen</string>
 </resources>

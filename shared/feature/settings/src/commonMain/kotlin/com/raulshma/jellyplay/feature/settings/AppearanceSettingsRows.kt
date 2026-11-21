@@ -5,6 +5,10 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
+import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
+import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
+import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_subtitle
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_title
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_color_style_subtitle
@@ -15,6 +19,23 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_detail_tuning
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_entry_detail
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_entry_detail_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_entry_library_views
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_entry_library_views_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_entry_navigation
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_entry_navigation_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_entry_theme
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_entry_theme_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_auto_hide
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_pinned
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_token
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_detail_confirm_played
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_detail_hide_watched
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_new_badges_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_quality_badges_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_theme_music
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_parallax
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_parallax_subtitle
@@ -150,6 +171,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_always_dark
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_always_light
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_follow_system
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_scheduled_label
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tv_ui_scale
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tv_ui_scale_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
@@ -284,7 +309,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_oversc
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * row↔spec drift. The residual rows (Library/Navigation/Newsletter-store
  * knobs — stores the spec tier does not cover) carry their full hand search
- * faces here.
+ * faces here, as do the hub's four composite entrance rows (ADR-0017's
+ * appearance split: one launcher row per leaf, the playback hub's
+ * entrance-row shape).
  *
  * Search results, catalog order, group membership, and per-gate visibility
  * derive from these declarations (`SpecDerivedSearchItemsTest`,
@@ -424,7 +451,7 @@ internal object AppearanceRows {
         searchTitleRes = Res.string.ss_library_view_mode_title,
         searchSubtitleRes = Res.string.ss_library_view_mode_subtitle,
         keywords = listOf("library", "view", "grid", "list", "layout"),
-        route = Route.AppearanceSettings(),
+        route = Route.ThemeSettings(),
         isAdvanced = true,
     )
 
@@ -486,6 +513,11 @@ internal object AppearanceRows {
 
     // ── RESIDUAL row (NavigationStore — no spec machinery). ─────────────
 
+    // ── RESIDUAL row (NavigationStore — no spec machinery in the feature's
+    // projection; the row renders in the THEME group — the show-labels
+    // toggle is a theme/display concern, unlike the Navigation leaf's bar
+    // customization rows). ──────────────────────────────────────────────
+
     val NavLabels = SettingsRow(
         id = "nav_labels",
         icon = Tabler.Outline.TextSize,
@@ -493,7 +525,7 @@ internal object AppearanceRows {
         searchTitleRes = Res.string.ss_nav_labels_title,
         searchSubtitleRes = Res.string.ss_nav_labels_subtitle,
         keywords = listOf("navigation", "labels", "text", "icons", "bottom bar"),
-        route = Route.AppearanceSettings(),
+        route = Route.ThemeSettings(),
         isAdvanced = true,
     )
 
@@ -549,7 +581,7 @@ internal object AppearanceRows {
             "navigation", "bar", "items", "bottom", "reorder", "hide", "show", "tabs", "home",
             "library", "search", "live tv", "browse", "shortcuts", "customize",
         ),
-        route = Route.AppearanceSettings(),
+        route = Route.NavigationDisplaySettings(),
     )
 
     /** The search hit restates the row's screen title (the fold: no search title). */
@@ -559,7 +591,7 @@ internal object AppearanceRows {
         titleRes = Res.string.settings_nav_hide_on_scroll,
         searchSubtitleRes = Res.string.settings_nav_hide_on_scroll_on,
         keywords = listOf("navigation", "hide", "scroll", "auto hide", "bottom bar", "collapsible"),
-        route = Route.AppearanceSettings(),
+        route = Route.NavigationDisplaySettings(),
     )
 
     // ── Global interface & interaction rows (residual grammar — see the
@@ -573,7 +605,7 @@ internal object AppearanceRows {
         searchTitleRes = Res.string.ss_start_tab_title,
         searchSubtitleRes = Res.string.ss_start_tab_subtitle,
         keywords = listOf("start", "launch", "open", "tab", "destination", "home screen", "startup"),
-        route = Route.AppearanceSettings(),
+        route = Route.NavigationDisplaySettings(),
     )
 
     val TimeUse24h = SettingsRow(
@@ -682,7 +714,7 @@ internal object AppearanceRows {
         searchTitleRes = Res.string.ss_hide_episode_thumbnails_title,
         searchSubtitleRes = Res.string.ss_hide_episode_thumbnails_subtitle,
         keywords = listOf("hide", "episode", "thumbnail", "spoiler", "preview"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         isAdvanced = true,
         gate = RowAdmission.Always,
     )
@@ -705,7 +737,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_quality_badges_subtitle,
         searchSubtitleRes = Res.string.settings_show_quality_badges_subtitle,
         keywords = listOf("quality", "badges", "4k", "hdr", "dolby", "vision", "atmos", "card", "resolution"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -717,7 +749,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_new_badges_subtitle,
         searchSubtitleRes = Res.string.settings_show_new_badges_subtitle,
         keywords = listOf("new", "badge", "arrivals", "added", "visit", "card", "home"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -730,7 +762,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_compact_episode_list_subtitle,
         searchSubtitleRes = Res.string.settings_compact_episode_list_subtitle,
         keywords = listOf("episode", "list", "compact", "vertical", "layout", "rows", "dense"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -744,7 +776,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_episode_stream_badges_subtitle,
         searchSubtitleRes = Res.string.settings_show_episode_stream_badges_subtitle,
         keywords = listOf("episode", "stream", "badge", "subtitle", "audio", "channels", "language"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -758,7 +790,7 @@ internal object AppearanceRows {
         searchTitleRes = Res.string.ss_skip_specials_title,
         searchSubtitleRes = Res.string.ss_skip_specials_subtitle,
         keywords = listOf("skip", "special", "episode", "bonus", "exclude"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         isAdvanced = true,
         gate = RowAdmission.Always,
     )
@@ -772,7 +804,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_missing_episodes_subtitle,
         searchSubtitleRes = Res.string.settings_show_missing_episodes_subtitle,
         keywords = listOf("missing", "episode", "unaired", "virtual", "placeholder", "season", "show"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         isAdvanced = true,
         gate = RowAdmission.Always,
     )
@@ -786,7 +818,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_prefer_logos_subtitle,
         searchSubtitleRes = Res.string.ss_prefer_logos_subtitle,
         keywords = listOf("logo", "clear logo", "title", "artwork", "image", "banner", "details", "prefer"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -801,7 +833,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_tagline_subtitle,
         searchSubtitleRes = Res.string.settings_show_tagline_subtitle,
         keywords = listOf("tagline", "slogan", "title", "details", "subtitle line"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -812,7 +844,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_play_theme_music_subtitle,
         searchSubtitleRes = Res.string.settings_play_theme_music_subtitle,
         keywords = listOf("theme", "music", "audio", "background", "series", "details", "play"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -823,7 +855,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_external_links_subtitle,
         searchSubtitleRes = Res.string.settings_show_external_links_subtitle,
         keywords = listOf("external", "links", "imdb", "tmdb", "provider", "buttons", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -834,7 +866,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_reviews_subtitle,
         searchSubtitleRes = Res.string.settings_show_reviews_subtitle,
         keywords = listOf("reviews", "ratings", "critic", "audience", "tmdb", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -858,7 +890,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_prefer_local_trailers_subtitle,
         searchSubtitleRes = Res.string.settings_prefer_local_trailers_subtitle,
         keywords = listOf("trailer", "local", "server", "youtube", "remote", "details", "play"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -869,7 +901,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_trailer_preview_on_focus_subtitle,
         searchSubtitleRes = Res.string.settings_trailer_preview_on_focus_subtitle,
         keywords = listOf("trailer", "preview", "focus", "tv", "hero", "backdrop", "autoplay"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -880,7 +912,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_promoted_actions_landscape_subtitle,
         searchSubtitleRes = Res.string.settings_show_promoted_actions_landscape_subtitle,
         keywords = listOf("promoted", "actions", "landscape", "tv", "rail", "menu", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -891,7 +923,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_download_progress_subtitle,
         searchSubtitleRes = Res.string.settings_show_download_progress_subtitle,
         keywords = listOf("download", "progress", "episode", "bar", "percent", "offline"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -902,7 +934,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_upcoming_strip_subtitle,
         searchSubtitleRes = Res.string.settings_show_upcoming_strip_subtitle,
         keywords = listOf("upcoming", "airing", "next", "strip", "series", "air date", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -913,7 +945,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_more_in_collection_subtitle,
         searchSubtitleRes = Res.string.settings_show_more_in_collection_subtitle,
         keywords = listOf("collection", "franchise", "boxset", "more", "movie", "series", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.LibraryDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -924,7 +956,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_filmography_roles_subtitle,
         searchSubtitleRes = Res.string.settings_show_filmography_roles_subtitle,
         keywords = listOf("filmography", "role", "person", "actor", "cast", "grouping"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -935,7 +967,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_frequent_costars_subtitle,
         searchSubtitleRes = Res.string.settings_show_frequent_costars_subtitle,
         keywords = listOf("costar", "co-star", "person", "actor", "appears with", "cast"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -950,8 +982,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_cast_item_size_subtitle,
         searchSubtitleRes = Res.string.settings_cast_item_size_subtitle,
         keywords = listOf("cast", "rail", "item", "size", "people", "cards", "density", "details", "crew"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val CastSeeAllLimit = SettingsRow(
@@ -961,8 +993,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_cast_see_all_limit_subtitle,
         searchSubtitleRes = Res.string.settings_cast_see_all_limit_subtitle,
         keywords = listOf("cast", "see all", "limit", "threshold", "people", "crew", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val BackdropParallax = SettingsRow(
@@ -972,7 +1004,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_backdrop_parallax_subtitle,
         searchSubtitleRes = Res.string.settings_backdrop_parallax_subtitle,
         keywords = listOf("backdrop", "parallax", "scroll", "hero", "background", "motion", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -983,7 +1015,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_overview_collapse_lines_subtitle,
         searchSubtitleRes = Res.string.settings_overview_collapse_lines_subtitle,
         keywords = listOf("overview", "synopsis", "collapse", "lines", "read more", "description", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -994,7 +1026,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_hide_watched_episodes_subtitle,
         searchSubtitleRes = Res.string.settings_hide_watched_episodes_subtitle,
         keywords = listOf("hide", "watched", "played", "episodes", "season", "spoiler", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1005,7 +1037,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_confirm_mark_played_subtitle,
         searchSubtitleRes = Res.string.settings_confirm_mark_played_subtitle,
         keywords = listOf("confirm", "mark", "played", "watched", "dialog", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1016,7 +1048,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_studio_chips_subtitle,
         searchSubtitleRes = Res.string.settings_show_studio_chips_subtitle,
         keywords = listOf("studio", "chips", "network", "company", "details", "header"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1027,7 +1059,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_genre_chips_subtitle,
         searchSubtitleRes = Res.string.settings_show_genre_chips_subtitle,
         keywords = listOf("genre", "chips", "categories", "details", "header"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1038,7 +1070,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_tag_chips_subtitle,
         searchSubtitleRes = Res.string.settings_show_tag_chips_subtitle,
         keywords = listOf("tag", "chips", "labels", "details", "header"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1049,7 +1081,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_skip_chips_subtitle,
         searchSubtitleRes = Res.string.settings_show_skip_chips_subtitle,
         keywords = listOf("skip", "intro", "credits", "chips", "segments", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1060,7 +1092,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_season_tabs_artwork_subtitle,
         searchSubtitleRes = Res.string.settings_season_tabs_artwork_subtitle,
         keywords = listOf("season", "tab", "artwork", "poster", "thumbnail", "series", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1071,8 +1103,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_people_grid_density_subtitle,
         searchSubtitleRes = Res.string.settings_people_grid_density_subtitle,
         keywords = listOf("cast", "crew", "grid", "density", "person", "cards", "size", "columns"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val ShowTrailerBadges = SettingsRow(
@@ -1082,7 +1114,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_show_trailer_badges_subtitle,
         searchSubtitleRes = Res.string.settings_show_trailer_badges_subtitle,
         keywords = listOf("trailer", "badge", "local", "remote", "source", "video", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1093,7 +1125,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_persist_section_hides_subtitle,
         searchSubtitleRes = Res.string.settings_persist_section_hides_subtitle,
         keywords = listOf("persist", "hidden", "sections", "eye", "hide", "franchise", "remember", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1104,8 +1136,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_similar_limit_subtitle,
         searchSubtitleRes = Res.string.settings_similar_limit_subtitle,
         keywords = listOf("similar", "more like this", "limit", "row", "recommendations", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val UpcomingLimit = SettingsRow(
@@ -1115,8 +1147,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_upcoming_limit_subtitle,
         searchSubtitleRes = Res.string.settings_upcoming_limit_subtitle,
         keywords = listOf("upcoming", "airing next", "limit", "strip", "episodes", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     // ── RESIDUAL rows (LibraryStore — no spec machinery): the detail-screen
@@ -1130,7 +1162,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_section_order_subtitle,
         searchSubtitleRes = Res.string.settings_section_order_subtitle,
         keywords = listOf("section", "order", "reorder", "layout", "details", "arrange", "move"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1141,8 +1173,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_stagger_style_subtitle,
         searchSubtitleRes = Res.string.settings_stagger_style_subtitle,
         keywords = listOf("stagger", "animation", "entrance", "speed", "cascade", "motion", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val BackdropResolution = SettingsRow(
@@ -1152,8 +1184,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_backdrop_resolution_subtitle,
         searchSubtitleRes = Res.string.settings_backdrop_resolution_subtitle,
         keywords = listOf("backdrop", "resolution", "decode", "720", "1080", "1440", "quality", "hero", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val ChapterCardSize = SettingsRow(
@@ -1163,8 +1195,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_chapter_card_size_subtitle,
         searchSubtitleRes = Res.string.settings_chapter_card_size_subtitle,
         keywords = listOf("chapter", "card", "size", "thumbnail", "row", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val ReviewsPreviewLines = SettingsRow(
@@ -1174,8 +1206,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_reviews_preview_lines_subtitle,
         searchSubtitleRes = Res.string.settings_reviews_preview_lines_subtitle,
         keywords = listOf("review", "preview", "lines", "text", "critic", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val FilmographySort = SettingsRow(
@@ -1185,8 +1217,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_filmography_sort_subtitle,
         searchSubtitleRes = Res.string.settings_filmography_sort_subtitle,
         keywords = listOf("filmography", "sort", "order", "person", "actor", "year", "alphabetical"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val FranchiseBoxLimit = SettingsRow(
@@ -1196,8 +1228,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_franchise_box_limit_subtitle,
         searchSubtitleRes = Res.string.settings_franchise_box_limit_subtitle,
         keywords = listOf("franchise", "collection", "box", "rows", "limit", "more in", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val FranchiseMemberLimit = SettingsRow(
@@ -1207,8 +1239,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_franchise_member_limit_subtitle,
         searchSubtitleRes = Res.string.settings_franchise_member_limit_subtitle,
         keywords = listOf("franchise", "collection", "members", "limit", "items", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     val SmartPlayPriority = SettingsRow(
@@ -1218,7 +1250,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_smart_play_priority_subtitle,
         searchSubtitleRes = Res.string.settings_smart_play_priority_subtitle,
         keywords = listOf("play", "smart", "resume", "next up", "replay", "priority", "dispatch"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1229,7 +1261,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_stream_fallback_language_subtitle,
         searchSubtitleRes = Res.string.settings_stream_fallback_language_subtitle,
         keywords = listOf("stream", "fallback", "language", "audio", "subtitle", "track", "picker"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1240,7 +1272,7 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_promoted_rail_source_subtitle,
         searchSubtitleRes = Res.string.settings_promoted_rail_source_subtitle,
         keywords = listOf("promoted", "rail", "preset", "landscape", "tv", "menu", "actions", "details"),
-        route = Route.AppearanceSettings(),
+        route = Route.DetailDisplaySettings(),
         gate = RowAdmission.Always,
     )
 
@@ -1251,8 +1283,8 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_episode_overview_preview_subtitle,
         searchSubtitleRes = Res.string.settings_episode_overview_preview_subtitle,
         keywords = listOf("episode", "overview", "preview", "snippet", "synopsis", "season", "details"),
-        route = Route.AppearanceSettings(),
-        gate = RowAdmission.Always,
+        route = Route.DetailDisplaySettings(),
+        isAdvanced = true,
     )
 
     /**
@@ -1376,6 +1408,59 @@ internal object AppearanceRows {
         isAdvanced = true,
     )
 
+    // ── The appearance hub's composite entrance rows (ADR-0017) ──────────
+    // One residual launcher row per leaf: the row renders on the hub screen
+    // and deep-links the leaf route it opens (the playback hub's
+    // entrance-row shape — the route lives on the row). The on-screen
+    // subtitle is the leaf's live summary (appearanceThemeSummaryParts and
+    // siblings, wired at the hub screen); the static subtitleRes here stays
+    // the declaration's fallback face and the search face. The order
+    // here IS the hub's entrance order.
+
+    /** Theme & display — the theme/accessibility leaf ([Route.ThemeSettings]). */
+    val ThemeEntrance = SettingsRow(
+        id = "appearance_theme",
+        icon = Tabler.Outline.Palette,
+        titleRes = Res.string.settings_appearance_entry_theme,
+        subtitleRes = Res.string.settings_appearance_entry_theme_subtitle,
+        searchSubtitleRes = Res.string.settings_appearance_entry_theme_subtitle,
+        keywords = listOf("appearance", "theme", "display", "colors", "accent", "accessibility", "eye care", "motion"),
+        route = Route.ThemeSettings(),
+    )
+
+    /** Library views — the library/card browsing leaf ([Route.LibraryDisplaySettings]). */
+    val LibraryViewsEntrance = SettingsRow(
+        id = "appearance_library_views",
+        icon = Tabler.Outline.LayoutGrid,
+        titleRes = Res.string.settings_appearance_entry_library_views,
+        subtitleRes = Res.string.settings_appearance_entry_library_views_subtitle,
+        searchSubtitleRes = Res.string.settings_appearance_entry_library_views_subtitle,
+        keywords = listOf("appearance", "library", "cards", "badges", "episodes", "browsing", "display"),
+        route = Route.LibraryDisplaySettings(),
+    )
+
+    /** Detail screen — the media-detail presentation leaf ([Route.DetailDisplaySettings]). */
+    val DetailDisplayEntrance = SettingsRow(
+        id = "appearance_detail_screen",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_appearance_entry_detail,
+        subtitleRes = Res.string.settings_appearance_entry_detail_subtitle,
+        searchSubtitleRes = Res.string.settings_appearance_entry_detail_subtitle,
+        keywords = listOf("appearance", "detail", "cast", "chips", "sections", "layout", "density"),
+        route = Route.DetailDisplaySettings(),
+    )
+
+    /** Navigation & haptics — the app-chrome leaf ([Route.NavigationDisplaySettings]). */
+    val NavigationEntrance = SettingsRow(
+        id = "appearance_navigation",
+        icon = Tabler.Outline.Menu2,
+        titleRes = Res.string.settings_appearance_entry_navigation,
+        subtitleRes = Res.string.settings_appearance_entry_navigation_subtitle,
+        searchSubtitleRes = Res.string.settings_appearance_entry_navigation_subtitle,
+        keywords = listOf("appearance", "navigation", "bottom bar", "haptics", "density", "interaction"),
+        route = Route.NavigationDisplaySettings(),
+    )
+
     /**
      * Every fused appearance row. A computed
      * accessor (not an initializer): the group row lists are top-level vals
@@ -1383,22 +1468,35 @@ internal object AppearanceRows {
      * object↔file-facade initialization order into a cycle.
      */
     val all: List<SettingsRow>
-        get() = AppearanceThemeRows + AppearanceNavigationRows + AppearanceLibraryRows +
+        get() = AppearanceHubRows + AppearanceThemeRows + AppearanceNavigationRows +
+            AppearanceLibraryViewsRows + AppearanceDetailRows + AppearanceDetailTuningRows +
             AppearancePerformanceRows + AppearanceEyeCareRows + AppearanceNewsletterRows
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// The spec-derived derivation inputs: the appearance screen's searchable
+// The spec-derived derivation inputs: the appearance domain's searchable
 // semantics live on the datastore-side spec declarations — this domain's own
-// ([AppearancePreferenceSpecs]) plus the cross-domain knobs the library group
-// renders (the experimental share-media / hide-search-history toggles). The
-// row lists below are the ordered spine — presentation faces, catalog order,
-// gates. (The home-discovery watch-state quartet lives in the home cards
-// group.)
+// ([AppearancePreferenceSpecs], whose rows carry the per-leaf route kinds
+// ADR-0017's split introduced) plus the cross-domain knobs the library-views
+// leaf renders (the experimental share-media / hide-search-history toggles).
+// The row lists below are the ordered spine — presentation faces, catalog
+// order, gates. (The home-discovery watch-state quartet lives in the home
+// cards group.)
 // ═══════════════════════════════════════════════════════════════════════
 
+/**
+ * The domain's route-kind map (ADR-0017's appearance split): every spec route
+ * kind an appearance row's search face can carry binds its leaf `Route` — the
+ * kind names the leaf the row's group renders on ([Route.AppearanceSettings]
+ * itself is the hub and carries no spec rows; the hub's entrance rows are
+ * residuals with hand routes, and the newsletter advanced group's residuals
+ * keep hand routes to the hub).
+ */
 private val searchRoutes: Map<String, Route> = mapOf(
-    AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS to Route.AppearanceSettings(),
+    AppearancePreferenceSpecs.ROUTE_THEME_SETTINGS to Route.ThemeSettings(),
+    AppearancePreferenceSpecs.ROUTE_LIBRARY_DISPLAY_SETTINGS to Route.LibraryDisplaySettings(),
+    AppearancePreferenceSpecs.ROUTE_DETAIL_DISPLAY_SETTINGS to Route.DetailDisplaySettings(),
+    AppearancePreferenceSpecs.ROUTE_NAVIGATION_DISPLAY_SETTINGS to Route.NavigationDisplaySettings(),
 )
 
 private val appearanceSpecEntries: List<PreferenceSearchSpec> =
@@ -1407,7 +1505,19 @@ private val appearanceSpecEntries: List<PreferenceSearchSpec> =
 
 private val appearanceCategory = CoreUiRes.string.ss_cat_appearance
 
-/** The theme group's 20 rows, in catalog order (= the spec declarations' order). */
+/**
+ * The hub's four entrance rows, in hub order (the [AppearanceRows] entrance
+ * declarations' order) — the [Route.AppearanceSettings] hub's whole entrance
+ * group.
+ */
+internal val AppearanceHubRows: List<SettingsRow> = listOf(
+    AppearanceRows.ThemeEntrance,
+    AppearanceRows.LibraryViewsEntrance,
+    AppearanceRows.DetailDisplayEntrance,
+    AppearanceRows.NavigationEntrance,
+)
+
+/** The theme group's 21 rows, in catalog order (= the spec declarations' order). */
 internal val AppearanceThemeRows: List<SettingsRow> = listOf(
     AppearanceRows.DateFormat,
     AppearanceRows.FontScale,
@@ -1511,12 +1621,15 @@ internal val AppearanceNavigationRows: List<SettingsRow> = listOf(
 )
 
 /**
- * The "Library & Cards" group's rows: the library-content residuals (episode
- * + detail-screen display toggles) + the appearance haptics toggle and the
- * experimental share-media / hide-search-history toggles (spec-backed).
- * (The home-discovery watch-state quartet lives in the home cards group.)
+ * The "Library views" leaf's rows (ADR-0017's split of the former "Library &
+ * Cards" group): the library/card browsing toggles — episode lists, the card
+ * badges, the display toggles, the appearance haptics toggle and the
+ * experimental share-media / hide-search-history toggles (spec-backed) — in
+ * the former group's relative order. (The detail-screen rows moved to
+ * [AppearanceDetailRows]; the home-discovery watch-state quartet lives in the
+ * home cards group.)
  */
-internal val AppearanceLibraryRows: List<SettingsRow> = listOf(
+internal val AppearanceLibraryViewsRows: List<SettingsRow> = listOf(
     AppearanceRows.HideEpisodeThumbnails,
     AppearanceRows.QualityBadges,
     AppearanceRows.NewBadges,
@@ -1538,10 +1651,21 @@ internal val AppearanceLibraryRows: List<SettingsRow> = listOf(
     AppearanceRows.ShowDownloadProgress,
     AppearanceRows.ShowUpcomingStrip,
     AppearanceRows.ShowMoreInCollection,
+    AppearanceRows.HideSearchHistory,
+)
+
+/**
+ * The "Detail screen" leaf's visible rows (ADR-0017's split of the former
+ * "Library & Cards" group, narrowed by the phase-5 reclassification): the
+ * detail_* behavior/display toggles plus the filmography pair and the
+ * section-order editor — everything a mainstream reader touches. The
+ * density/limit fine-tuning moved to [AppearanceDetailTuningRows]. The
+ * `detail_section_order` header row renders with its reorderable editor rows
+ * ([DETAIL_SECTION_ORDER_EDITOR_ROWS], screen-local admissions).
+ */
+internal val AppearanceDetailRows: List<SettingsRow> = listOf(
     AppearanceRows.ShowFilmographyRoles,
     AppearanceRows.ShowFrequentCostars,
-    AppearanceRows.CastItemSize,
-    AppearanceRows.CastSeeAllLimit,
     AppearanceRows.BackdropParallax,
     AppearanceRows.OverviewCollapseLines,
     AppearanceRows.HideWatchedEpisodes,
@@ -1551,13 +1675,33 @@ internal val AppearanceLibraryRows: List<SettingsRow> = listOf(
     AppearanceRows.ShowTagChips,
     AppearanceRows.ShowSkipChips,
     AppearanceRows.SeasonTabsArtwork,
-    AppearanceRows.PeopleGridDensity,
     AppearanceRows.ShowTrailerBadges,
     AppearanceRows.PersistSectionHides,
-    AppearanceRows.SimilarLimit,
-    AppearanceRows.UpcomingLimit,
     // The detail QoL knobs, wave 2.
     AppearanceRows.SectionOrder,
+    AppearanceRows.SmartPlayPriority,
+    AppearanceRows.StreamFallbackLanguage,
+    AppearanceRows.PromotedRailSource,
+)
+
+/**
+ * The Detail screen leaf's advanced-gated "Density & limits" group (the
+ * phase-5 reclassification, ADR-0017 decision 6): the tuning-shaped detail
+ * rows — the cast/crew geometry pair, the grid density, the rail/row limits,
+ * the decode resolution, the chapter card size, the reviews preview lines,
+ * the filmography sort, the franchise limits, the stagger cascade and the
+ * episode-overview preview length — moved off the visible group verbatim,
+ * whole-group behind the advanced toggle (the trailing-expert-group shape of
+ * the Theme leaf). The rows keep their leaf routes and relative catalog
+ * order; their residual `isAdvanced` flags make the search hits auto-arm
+ * the gate.
+ */
+internal val AppearanceDetailTuningRows: List<SettingsRow> = listOf(
+    AppearanceRows.CastItemSize,
+    AppearanceRows.CastSeeAllLimit,
+    AppearanceRows.PeopleGridDensity,
+    AppearanceRows.SimilarLimit,
+    AppearanceRows.UpcomingLimit,
     AppearanceRows.StaggerStyle,
     AppearanceRows.BackdropResolution,
     AppearanceRows.ChapterCardSize,
@@ -1565,11 +1709,7 @@ internal val AppearanceLibraryRows: List<SettingsRow> = listOf(
     AppearanceRows.FilmographySort,
     AppearanceRows.FranchiseBoxLimit,
     AppearanceRows.FranchiseMemberLimit,
-    AppearanceRows.SmartPlayPriority,
-    AppearanceRows.StreamFallbackLanguage,
-    AppearanceRows.PromotedRailSource,
     AppearanceRows.EpisodeOverviewPreview,
-    AppearanceRows.HideSearchHistory,
 )
 
 /**
@@ -1605,20 +1745,41 @@ internal val AppearanceNewsletterRuntimeReorderableRows: List<SettingsRow> = lis
 )
 
 /**
- * The appearance screen's six screen groups — items AND per-row admissions
- * derive from the row lists above in one act ([List.asRowGroup]), so the
- * declaration is the single home of the groups' order, faces and gates.
- * Aggregated in [SettingsSearchCatalog] (via [SettingsScreenGroups]); the
- * projection is fail-fast at init on any row↔spec drift.
+ * The appearance domain's screen groups (ADR-0017's hub + four leaves) —
+ * items AND per-row admissions derive from the row lists above in one act
+ * ([List.asRowGroup]), so the declaration is the single home of the groups'
+ * order, faces and gates. The hub's entrance group and the newsletter group
+ * are all-residual (`emptyList()` spec entries); the leaf groups join their
+ * spec-backed rows' entries. Aggregated in [SettingsSearchCatalog] (via
+ * [SettingsScreenGroups]); the projection is fail-fast at init on any row↔spec
+ * drift.
  */
+internal val AppearanceHubGroup =
+    AppearanceHubRows.asRowGroup("appearance.hub", emptyList(), searchRoutes, appearanceCategory)
+
 internal val AppearanceThemeGroup =
     AppearanceThemeRows.asRowGroup("appearance.theme", specEntriesFor(AppearanceThemeRows, appearanceSpecEntries), searchRoutes, appearanceCategory)
 
 internal val AppearanceNavigationGroup =
     AppearanceNavigationRows.asRowGroup("appearance.navigation", specEntriesFor(AppearanceNavigationRows, appearanceSpecEntries), searchRoutes, appearanceCategory)
 
-internal val AppearanceLibraryGroup =
-    AppearanceLibraryRows.asRowGroup("appearance.library", specEntriesFor(AppearanceLibraryRows, appearanceSpecEntries), searchRoutes, appearanceCategory)
+internal val AppearanceLibraryViewsGroup =
+    AppearanceLibraryViewsRows.asRowGroup("appearance.libraryViews", specEntriesFor(AppearanceLibraryViewsRows, appearanceSpecEntries), searchRoutes, appearanceCategory)
+
+internal val AppearanceDetailGroup =
+    AppearanceDetailRows.asRowGroup("appearance.detail", specEntriesFor(AppearanceDetailRows, appearanceSpecEntries), searchRoutes, appearanceCategory)
+
+/** The Detail leaf's advanced "Density & limits" group WITH its searchable card face (the group-card hit lands on the first member row). */
+internal val AppearanceDetailTuningGroup =
+    AppearanceDetailTuningRows.asRowGroup(
+        "appearance.detailTuning",
+        specEntriesFor(AppearanceDetailTuningRows, appearanceSpecEntries),
+        searchRoutes,
+        appearanceCategory,
+        cardTitleRes = Res.string.settings_appearance_detail_tuning,
+        cardSubtitleRes = Res.string.settings_appearance_entry_detail,
+        cardKeywords = listOf("density", "limits", "grid", "cast", "rail", "stagger", "franchise"),
+    )
 
 internal val AppearancePerformanceGroup =
     AppearancePerformanceRows.asRowGroup("appearance.performance", specEntriesFor(AppearancePerformanceRows, appearanceSpecEntries), searchRoutes, appearanceCategory)
@@ -1626,11 +1787,23 @@ internal val AppearancePerformanceGroup =
 internal val AppearanceEyeCareGroup =
     AppearanceEyeCareRows.asRowGroup("appearance.eyeCare", specEntriesFor(AppearanceEyeCareRows, appearanceSpecEntries), searchRoutes, appearanceCategory)
 
+/** The hub's advanced Newsletter group WITH its searchable card face (the declared hub exception's card — the group-card hit lands on the first member row). */
 internal val AppearanceNewsletterGroup =
-    AppearanceNewsletterRows.asRowGroup("appearance.newsletter", emptyList(), searchRoutes, appearanceCategory)
+    AppearanceNewsletterRows.asRowGroup(
+        "appearance.newsletter",
+        emptyList(),
+        searchRoutes,
+        appearanceCategory,
+        cardTitleRes = Res.string.settings_newsletter_config,
+        cardSubtitleRes = Res.string.settings_appearance_title,
+        cardKeywords = listOf("newsletter", "digest", "email", "sections", "delivery", "layout"),
+    )
 
 // The catalog projections, kept as named vals — the search/catalog-order pins
 // (SpecDerivedSearchItemsTest, SettingsSearchCatalogTest) read these lists.
+
+/** The catalog projection of the hub's entrance group. */
+internal val AppearanceHubSearchItems: List<SettingsSearchItem> = AppearanceHubGroup.items
 
 /** The catalog projection of the theme group. */
 internal val AppearanceThemeSearchItems: List<SettingsSearchItem> = AppearanceThemeGroup.items
@@ -1638,8 +1811,14 @@ internal val AppearanceThemeSearchItems: List<SettingsSearchItem> = AppearanceTh
 /** The catalog projection of the navigation-customization group. */
 internal val AppearanceNavigationSearchItems: List<SettingsSearchItem> = AppearanceNavigationGroup.items
 
-/** The catalog projection of the "Library & Cards" group. */
-internal val AppearanceLibrarySearchItems: List<SettingsSearchItem> = AppearanceLibraryGroup.items
+/** The catalog projection of the "Library views" group. */
+internal val AppearanceLibraryViewsSearchItems: List<SettingsSearchItem> = AppearanceLibraryViewsGroup.items
+
+/** The catalog projection of the "Detail screen" group. */
+internal val AppearanceDetailSearchItems: List<SettingsSearchItem> = AppearanceDetailGroup.items
+
+/** The catalog projection of the Detail leaf's advanced "Density & limits" group. */
+internal val AppearanceDetailTuningSearchItems: List<SettingsSearchItem> = AppearanceDetailTuningGroup.items
 
 /** The catalog projection of the performance group. */
 internal val AppearancePerformanceSearchItems: List<SettingsSearchItem> = AppearancePerformanceGroup.items
@@ -1671,3 +1850,78 @@ internal val AppearanceEntrance = SettingsEntranceSectionRow(
     icon = Tabler.Outline.Palette,
     titleRes = Res.string.settings_appearance,
 )
+
+// ── The appearance hub's entrance summaries (ADR-0017 decision 3) ───────
+// The hub's four entrance rows' live subtitles. Pure folds over
+// [AppearanceScreenPreferences] (the `appearanceScreenPreferences` projection
+// — the same slice the hub and its leaves read), emitting
+// [SettingsSummaryPart]s the hub screen resolves at composition. Pinned by
+// SettingsSummariesTest (exact verdicts). The detail fold NEVER names the
+// tuning values — the leaf's 13 tuning rows are slot-gated behind the
+// advanced toggle, so presenting them as if visible would lie.
+
+/**
+ * Theme & display — the theme mode's localized picker label (the concise
+ * "Scheduled" face, not the picker subtitle's hour range), the color variant
+ * off Standard, and the OLED marker while on.
+ */
+internal fun appearanceThemeSummaryParts(preferences: AppearanceScreenPreferences): List<SettingsSummaryPart> = buildList {
+    add(
+        SettingsSummaryPart.Token(
+            when (preferences.themeMode) {
+                ThemeMode.SYSTEM -> Res.string.settings_theme_follow_system
+                ThemeMode.LIGHT -> Res.string.settings_theme_always_light
+                ThemeMode.DARK -> Res.string.settings_theme_always_dark
+                ThemeMode.SCHEDULED -> Res.string.settings_theme_scheduled_label
+            },
+        ),
+    )
+    val variant = ThemeVariant.fromId(preferences.themeVariant)
+    if (variant != ThemeVariant.STANDARD) {
+        add(SettingsSummaryPart.Literal(variant.displayName))
+    }
+    if (preferences.oledMode) add(SettingsSummaryPart.Token(Res.string.settings_oled_token))
+}
+
+/**
+ * Library views — the card-badge deviations off the shipped on-state; at the
+ * defaults the entrance's static subtitle carries.
+ */
+internal fun appearanceLibraryViewsSummaryParts(preferences: AppearanceScreenPreferences): List<SettingsSummaryPart> = buildList {
+    if (!preferences.showQualityBadges) {
+        add(SettingsSummaryPart.Token(Res.string.settings_sum_quality_badges_off))
+    }
+    if (!preferences.showNewBadges) {
+        add(SettingsSummaryPart.Token(Res.string.settings_sum_new_badges_off))
+    }
+    if (isEmpty()) add(SettingsSummaryPart.Token(Res.string.settings_appearance_entry_library_views_subtitle))
+}
+
+/**
+ * Detail screen — the two always-visible behavior toggles' on-state (hide
+ * watched, confirm mark-played); at the defaults the static subtitle carries.
+ * The leaf's tuning rows are slot-gated advanced content — never named here.
+ */
+internal fun appearanceDetailSummaryParts(preferences: AppearanceScreenPreferences): List<SettingsSummaryPart> = buildList {
+    if (preferences.hideWatchedEpisodes) {
+        add(SettingsSummaryPart.Token(Res.string.settings_sum_detail_hide_watched))
+    }
+    if (preferences.confirmMarkPlayed) {
+        add(SettingsSummaryPart.Token(Res.string.settings_sum_detail_confirm_played))
+    }
+    if (isEmpty()) add(SettingsSummaryPart.Token(Res.string.settings_appearance_entry_detail_subtitle))
+}
+
+/**
+ * Navigation & haptics — the leaf's hide-on-scroll posture (the one state the
+ * navigation-customization group's subtitle leads with). Reads only controls
+ * the Navigation Display leaf renders: the nav-bar label style lives on the
+ * Theme leaf and the haptics toggle on Library views, so naming them here
+ * would summarize sibling screens.
+ */
+internal fun appearanceNavigationSummaryParts(preferences: NavigationCustomizationPreferences): List<SettingsSummaryPart> =
+    listOf(
+        SettingsSummaryPart.Token(
+            if (preferences.hideBottomNavOnScroll) Res.string.settings_nav_auto_hide else Res.string.settings_nav_pinned,
+        ),
+    )

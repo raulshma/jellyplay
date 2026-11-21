@@ -166,11 +166,24 @@ class OfflineSyncManager(
         try {
             // Force read: bypass the TTL detail cache so we get a fresh fetch,
             // not a stale read.
-            val fresh = detailFeed.getMediaDetail(itemId, force = true).getOrNull()
+            val fetch = detailFeed.getMediaDetail(itemId, force = true)
+            val fresh = fetch.getOrNull()
             if (fresh == null) {
+                // Classify the failure at the fold (the shared half — same
+                // classifier the resync fold uses): the persisted badge stays
+                // cause-less (no cause column on the row, the projection must
+                // stay lossless), so the diagnosis rides the returned record's
+                // failureCause field + this log line.
+                val failure = fetch.exceptionOrNull()
+                val cause = failure.fetchFailureCause()
+                Log.w(TAG, "Freshness check failed for $itemId ($cause)", failure)
                 recordError(itemId, baseline)
                 checkingFlagCleared = true
-                return ResyncCheckResult(itemId, baseline.toOfflineSyncState().copy(status = SyncStatus.ERROR))
+                return ResyncCheckResult(
+                    itemId,
+                    baseline.toOfflineSyncState().copy(status = SyncStatus.ERROR),
+                    failureCause = cause,
+                )
             }
             val result = comparator.diff(baseline.toSyncBaseline(), fresh, itemId)
             persistCheckResult(
@@ -253,9 +266,23 @@ class OfflineSyncManager(
                 return@withContext ResyncResult(itemId, steps, mediaFileChanged)
             }
             // Force read: fetch fresh detail, bypassing the TTL cache.
-            val detail = detailFeed.getMediaDetail(itemId, force = true).getOrNull()
+            val fetch = detailFeed.getMediaDetail(itemId, force = true)
+            val detail = fetch.getOrNull()
             if (detail == null) {
-                steps += ResyncStepResult(itemId, ResyncStep.FETCH_DETAIL, success = false, message = "Fetch failed")
+                // Same classification half as the check fold. The step message
+                // is user-facing (ResyncActions surfaces it verbatim on the
+                // detail screen), so the cause rides the typed field — the
+                // string stays untouched.
+                val failure = fetch.exceptionOrNull()
+                val cause = failure.fetchFailureCause()
+                Log.w(TAG, "Resync fetch failed for $itemId ($cause)", failure)
+                steps += ResyncStepResult(
+                    itemId,
+                    ResyncStep.FETCH_DETAIL,
+                    success = false,
+                    message = "Fetch failed",
+                    failureCause = cause,
+                )
                 setProgress(itemId, ResyncPhase.ERROR, null)
                 return@withContext ResyncResult(itemId, steps, mediaFileChanged)
             }

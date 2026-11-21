@@ -523,6 +523,8 @@
     <string name="ss_auto_download_max_per_pass_subtitle">Cap on new downloads per check pass; 0 is unlimited</string>
     <string name="ss_auto_download_keep_days_subtitle">Delete watched downloads older than the window; unwatched are protected</string>
     <string name="ss_auto_download_servers_subtitle">Restrict auto-download to selected servers</string>
+    <string name="ss_auto_arm_from_arr_title">Auto-Arm Series Tracked in Sonarr</string>
+    <string name="ss_auto_arm_from_arr_subtitle">Arm Sonarr-monitored series for auto-download even with no downloaded episodes</string>
     <string name="ss_auto_download_clean_up_now_subtitle">Run the keep-downloads-for retention sweep immediately</string>
     <string name="ss_download_schedule_title">Download Schedule</string>
     <string name="ss_download_schedule_subtitle">Only download during specific hours</string>

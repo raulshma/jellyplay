@@ -197,6 +197,16 @@ data class MediaItem(
      * Derived at map time in JellyfinDtoMappers.
      */
     val trickplayInfo: TrickplayInfo? = null,
+    /**
+     * The item's external-provider ids (Jellyfin's `ProviderIds` map —
+     * `tvdb`, `tmdb`, `imdb`, …), keys normalized lowercase to match the
+     * [MediaDetail.providerIds] convention. Populated only where the fetch
+     * projected the `ProviderIds` field (the detail projection; the
+     * media-info with-user-data read the arr auto-arm's match index pages);
+     * every other listing maps to null — null means "not projected", never
+     * "no ids". Derived at map time in JellyfinDtoMappers.
+     */
+    val providerIds: Map<String, String>? = null,
 )
 
 /**

@@ -135,12 +135,21 @@ private var cachedAudioPassthroughCodecs: ParsedCache<Set<AudioPassthroughCodec>
 object PlaybackPreferenceSpecs {
 
     /**
-     * Route kind shared by every settings-search row that deep-links into the
-     * playback settings screen (this domain's and the in-player video
-     * domain's catalog rows alike) — the plain id the feature layer maps to
-     * `Route.PlaybackSettings()`.
+     * The playback domain's per-leaf route kinds (ADR-0017's domain hub
+     * split): the plain ids the feature layer maps to the eight leaf
+     * `Route`s the playback settings hub ([Route.PlaybackSettings])
+     * entrances open. A row's kind names the leaf its group renders on —
+     * search/deep-link/highlight resolution is split-transparent because the
+     * row ids never move.
      */
-    const val ROUTE_PLAYBACK_SETTINGS = "playback_settings"
+    const val ROUTE_PLAYBACK_BASICS = "playback_basics"
+    const val ROUTE_PLAYBACK_CONTROLS = "playback_controls"
+    const val ROUTE_PLAYER_CHROME_SETTINGS = "player_chrome_settings"
+    const val ROUTE_PLAYBACK_VIDEO_QUALITY = "playback_video_quality"
+    const val ROUTE_PLAYER_ENGINE_SETTINGS = "player_engine_settings"
+    const val ROUTE_MEDIA_SEGMENT_SETTINGS = "media_segment_settings"
+    const val ROUTE_SYNCPLAY_CASTING_SETTINGS = "syncplay_casting_settings"
+    const val ROUTE_LIVE_TV_DVR_SETTINGS = "live_tv_dvr_settings"
 
     // ------------------------------------------------------------------
     // The row groups — the ONE registration of this domain's rows, in
@@ -174,7 +183,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_player_engine_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("player", "engine", "mpv", "exoplayer", "vlc", "playback"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
             ),
         ),
         PreferenceSpec.enumRow(
@@ -188,7 +197,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_external_player_app_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("external", "player", "app", "mpv", "mx player", "vlc", "mpvkt", "handoff"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYER_ENGINE_SETTINGS,
             ),
         ),
         PreferenceSpec.enumRow(
@@ -201,7 +210,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_streaming_quality_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("quality", "streaming", "resolution", "4k", "1080p", "sd"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -228,7 +237,7 @@ object PlaybackPreferenceSpecs {
                     "performance", "low end", "medium", "high end", "smooth",
                     "stutter", "profile", "auto", "1080p", "bitrate", "device",
                 ),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -253,7 +262,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_hdr_format_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("hdr", "hdr10", "dolby", "vision", "sdr", "tone mapping", "format", "dv"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -273,7 +282,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_force_transcode_above_height_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("transcode", "resolution", "height", "4k", "1080p", "limit", "cap", "above"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -291,7 +300,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_preferred_transcode_video_codec_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("transcode", "video", "codec", "h264", "hevc", "h.265", "av1", "encoder"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -309,7 +318,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_preferred_transcode_audio_codec_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("transcode", "audio", "codec", "aac", "ac3", "eac3", "opus"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -355,7 +364,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_playback_mode_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("delivery", "direct play", "transcode", "force", "streaming method", "auto", "playback mode"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -386,7 +395,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_live_stream_option_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("live tv", "direct stream", "transcode", "tuner", "htsp", "tvheadend", "channel", "mpeg-ts", "mpeg ts", "broadcast"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -402,7 +411,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_offline_playback_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("offline", "download", "downloaded", "streaming", "prefer", "direct play", "local", "copy"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -420,7 +429,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_decoder_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("decoder", "hardware", "software", "decoding", "codec"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -434,7 +443,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_audio_passthrough_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("passthrough", "surround", "hdmi", "receiver", "raw"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -478,7 +487,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_max_audio_channels_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("channels", "speaker", "layout", "5.1", "7.1", "stereo", "surround", "downmix"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -503,7 +512,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_downmix_boost_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("downmix", "boost", "stereo", "loudness", "volume", "night", "gain", "db"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -527,7 +536,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_spatial_audio_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("spatial", "spatializer", "atmos", "surround", "3d audio", "headphones"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
                 platformRule = PreferencePlatformRule.ANDROID_ONLY,
             ),
@@ -713,7 +722,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_frame_rate_matching_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("refresh rate", "frame rate", "hz", "judder", "tv"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -731,7 +740,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_keep_screen_on_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("screen", "awake", "lock", "stay on", "timeout"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
                 isAdvanced = true,
             ),
         ),
@@ -745,7 +754,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_pause_on_focus_loss_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("pause", "focus", "loss", "audio focus", "interruption"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
                 isAdvanced = true,
             ),
         ),
@@ -759,7 +768,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_duck_on_transient_focus_loss_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("duck", "phone", "call", "focus", "transient", "volume", "rewind"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
                 isAdvanced = true,
             ),
         ),
@@ -773,7 +782,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_autoplay_countdown_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("countdown", "timer", "autoplay", "next"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
             ),
         ),
         PreferenceSpec.plainBoolean(
@@ -786,7 +795,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_background_audio_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("background", "audio", "video background", "pip"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
                 isAdvanced = true,
             ),
         ),
@@ -807,7 +816,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_auto_pip_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("pip", "picture in picture", "home", "minimize", "background", "floating window"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
                 isAdvanced = true,
                 platformRule = PreferencePlatformRule.ANDROID_ONLY,
             ),
@@ -826,7 +835,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_session_restore_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("session", "restore", "resume", "crash", "reopen", "continue", "interrupted"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
             ),
         ),
         /*
@@ -863,7 +872,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_offer_delete_movies_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("delete", "offer", "movie", "after playback", "finished", "cleanup", "prompt"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
                 isAdvanced = true,
             ),
         ),
@@ -881,7 +890,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_offer_delete_episodes_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("delete", "offer", "episode", "after playback", "finished", "cleanup", "prompt"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
                 isAdvanced = true,
             ),
         ),
@@ -904,7 +913,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_custom_device_profile_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("device profile", "custom", "json", "transcode", "codec", "advanced"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),
         ),
@@ -934,7 +943,7 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_android_tv_watch_next_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("android tv", "watch next", "home", "tv", "continue"),
-                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                routeKind = ROUTE_PLAYBACK_BASICS,
                 isAdvanced = true,
                 platformRule = PreferencePlatformRule.ANDROID_ONLY,
             ),
@@ -1003,7 +1012,7 @@ object PlaybackPreferenceSpecs {
         subtitleKey = "ss_passthrough_codec_subtitle",
         categoryKey = "ss_cat_playback",
         keywords = listOf("passthrough", "codec", "ac3", "dolby digital", "bitstream", "receiver"),
-        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
         isAdvanced = true,
     )
 
@@ -1013,7 +1022,7 @@ object PlaybackPreferenceSpecs {
         subtitleKey = "ss_passthrough_codec_subtitle",
         categoryKey = "ss_cat_playback",
         keywords = listOf("passthrough", "codec", "eac3", "dolby digital plus", "dd+", "bitstream", "receiver"),
-        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
         isAdvanced = true,
     )
 
@@ -1023,7 +1032,7 @@ object PlaybackPreferenceSpecs {
         subtitleKey = "ss_passthrough_codec_subtitle",
         categoryKey = "ss_cat_playback",
         keywords = listOf("passthrough", "codec", "dts", "bitstream", "receiver"),
-        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
         isAdvanced = true,
     )
 
@@ -1033,7 +1042,7 @@ object PlaybackPreferenceSpecs {
         subtitleKey = "ss_passthrough_codec_subtitle",
         categoryKey = "ss_cat_playback",
         keywords = listOf("passthrough", "codec", "dts-hd", "dtshd", "dts hd", "bitstream", "receiver"),
-        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
         isAdvanced = true,
     )
 
@@ -1043,7 +1052,7 @@ object PlaybackPreferenceSpecs {
         subtitleKey = "ss_passthrough_codec_subtitle",
         categoryKey = "ss_cat_playback",
         keywords = listOf("passthrough", "codec", "truehd", "dolby atmos", "mlp", "bitstream", "receiver"),
-        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
         isAdvanced = true,
     )
 

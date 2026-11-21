@@ -78,7 +78,17 @@ class RoutePredicatesTest {
         Route.UserManagement(),
         Route.SeerrSettings(),
         Route.AppearanceSettings(),
+        // ADR-0017 appearance leaves (theme / library views / detail screen /
+        // navigation & haptics)
+        Route.ThemeSettings(),
+        Route.LibraryDisplaySettings(),
+        Route.DetailDisplaySettings(),
+        Route.NavigationDisplaySettings(),
         Route.HomeSettings(),
+        // ADR-0017 home leaves (home display / rows & layout / cards & badges)
+        Route.HomeDisplaySettings(),
+        Route.HomeRowsSettings(),
+        Route.HomeCardsSettings(),
         Route.PinnedHomeSections(),
         Route.HomeLayoutPresets(),
         Route.LibraryHomeSections(),
@@ -86,12 +96,24 @@ class RoutePredicatesTest {
         Route.DiscoverRows(),
         Route.DiscoverRowEditor(),
         Route.PlaybackSettings(),
+        // ADR-0017 playback leaves (basics / controls & gestures / player
+        // chrome / video & transcoding / player engines / skipping &
+        // segments / syncplay & casting / live TV & DVR)
+        Route.PlaybackBasics(),
+        Route.PlaybackControls(),
+        Route.PlayerChromeSettings(),
+        Route.PlaybackVideoQuality(),
+        Route.PlayerEngineSettings(),
+        Route.MediaSegmentSettings(),
+        Route.SyncPlayCastingSettings(),
+        Route.LiveTvDvrSettings(),
         Route.PerformanceSettings(),
         Route.InputBindings,
         Route.AudioSettings(),
         Route.LanguageSettings(),
         Route.NotificationSettings(),
         Route.StorageSettings(),
+        Route.DownloadsSettings(),
         Route.SecuritySettings(),
         Route.PrivacyData(),
         Route.BackupSettings(),
@@ -101,6 +123,11 @@ class RoutePredicatesTest {
         Route.Integrations(),
         Route.ArrSettings(),
         Route.SubtitleProviderSettings(),
+        // ADR-0017 root-leak screens: the capability-gated Ambient screen
+        // (screensaver + idle-ambient merged) and the companion-plugin
+        // entrance screen.
+        Route.AmbientSettings(),
+        Route.JellyPlayPluginSettings(),
         // JellyPlay companion-plugin screens (ADR 0010) — reached from the
         // Settings root's capability-gated entries, no classification flags.
         Route.JellyPlayMessages,
@@ -237,10 +264,19 @@ class RoutePredicatesTest {
                 "NotificationSettings", "StorageSettings", "SecuritySettings",
                 "PrivacyData", "BackupSettings", "RestoreWizard",
                 "ExperimentalSettings", "FactoryReset",
+                // ADR-0017 leaf screens & root-leak entrances — settings
+                // sub-screens like their hubs, deliberately unclassified
+                "ThemeSettings", "LibraryDisplaySettings", "DetailDisplaySettings",
+                "NavigationDisplaySettings",
+                "HomeDisplaySettings", "HomeRowsSettings", "HomeCardsSettings",
+                "PlaybackBasics", "PlaybackControls", "PlayerChromeSettings",
+                "PlaybackVideoQuality", "PlayerEngineSettings", "MediaSegmentSettings",
+                "SyncPlayCastingSettings", "LiveTvDvrSettings",
+                "DownloadsSettings", "AmbientSettings",
                 // JellyPlay companion-plugin screens (ADR 0010) — Settings-root
                 // capability-gated entries, deliberately unclassified
                 "JellyPlayMessages", "JellyPlaySync", "JellyPlayUserRatings",
-                "JellyPlayYourWatching",
+                "JellyPlayYourWatching", "JellyPlayPluginSettings",
                 // music
                 "Artists", "Albums", "Tracks", "Genres", "SmartPlaylists",
                 "MoodPlaylists", "Playlists",

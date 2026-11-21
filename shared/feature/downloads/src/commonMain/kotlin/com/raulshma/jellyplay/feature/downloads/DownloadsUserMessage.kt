@@ -24,6 +24,15 @@ sealed interface DownloadsUserMessage {
      */
     data object SuggestionsQueued : DownloadsUserMessage
 
+    /**
+     * A series was armed for auto-download — the arm picker's confirm
+     * (gh-225 follow-up). Posted after the manualArmSeries write lands; the
+     * picker sheet closes on the same tap, so the confirmation rides the
+     * app-wide bus (the details sheet's armed-message behavior) to stay
+     * visible. Fixed copy (see the SuggestionsQueued note).
+     */
+    data object SeriesArmed : DownloadsUserMessage
+
     /** Raw failure text (exception message or fixed fallback). */
     data class Raw(val text: String) : DownloadsUserMessage
 }

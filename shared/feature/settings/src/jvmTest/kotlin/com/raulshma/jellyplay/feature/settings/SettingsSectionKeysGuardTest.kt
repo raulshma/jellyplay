@@ -77,10 +77,15 @@ class SettingsSectionKeysGuardTest {
         LanguageEntrance.key,
         NotificationEntrance.key,
         StorageEntrance.key,
+        DownloadsEntrance.key,
         SecurityEntrance.key,
         BackupEntrance.key,
         IntegrationsEntrance.key,
         AboutEntrance.key,
+        // The two composite ADR-0017 entrances (declared beside their
+        // domains' rows, like the converted domains).
+        AmbientEntrance.key,
+        JellyPlayPluginEntrance.key,
     )
 
     @Test
@@ -94,16 +99,15 @@ class SettingsSectionKeysGuardTest {
         val screenKeys = sources.flatMap { source ->
             callSite.findAll(stripComments(source.readText())).map { it.groupValues[1] }
         }.toList()
-        // The 13 remaining literal call sites: the sections with no fused row
+        // The 9 remaining literal call sites: the sections with no fused row
         // domain (profile, power_user_mode, active_devices, account, activity,
-        // system, item_privacy_data, group_screensaver, group_idle_ambient,
-        // group_discord_presence, group_shell_hooks, item_experimental,
-        // item_whatsnew). The 12 converted domains' call sites read their
+        // system, item_privacy_data, item_experimental, item_whatsnew). The
+        // 14 converted domains'/entrances' call sites read their
         // SettingsEntranceSectionRow.key and are invisible to this scan —
         // a count below this floor means discovery is broken (renamed
         // helper? new call shape?), fix the scan here.
         assertTrue(
-            screenKeys.size >= 13,
+            screenKeys.size >= 9,
             "scanned only ${screenKeys.size} settingsSection call sites — discovery is " +
                 "broken (renamed helper? new call shape?), fix the scan in " +
                 javaClass.simpleName,

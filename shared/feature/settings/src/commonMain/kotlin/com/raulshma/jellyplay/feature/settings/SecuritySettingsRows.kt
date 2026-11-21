@@ -13,9 +13,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auth
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorize_device_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_lock_timer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_lock_timer_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_biometric_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_biometric_unlock
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lock_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_biometric_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_for_player_lock
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_lock
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_display_content
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_display_content_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_security
@@ -191,4 +195,28 @@ internal val SecurityEntrance = SettingsEntranceSectionRow(
     rowId = "security",
     icon = Tabler.Outline.Lock,
     titleRes = Res.string.settings_security,
+)
+
+// ── Entrance summary (ADR-0017 decision 3) ──────────────────────────────
+
+/**
+ * The root Security entrance's summary: the lock posture as ONE face —
+ * the combined "PIN lock: On / Biometric lock: On" tokens while both arms
+ * are on, otherwise the single armed arm's face, otherwise Lock: Off. Reads
+ * the root slice's security flags (already projected there); the same four
+ * faces the call site used to `when` over inline, now pinned by
+ * SettingsSummariesTest.
+ */
+internal fun securitySummaryParts(
+    pinLockEnabled: Boolean,
+    biometricLockEnabled: Boolean,
+): List<SettingsSummaryPart> = listOf(
+    SettingsSummaryPart.Token(
+        when {
+            pinLockEnabled && biometricLockEnabled -> Res.string.settings_pin_biometric_on
+            biometricLockEnabled -> Res.string.settings_biometric_on
+            pinLockEnabled -> Res.string.settings_pin_on
+            else -> Res.string.settings_lock_off
+        },
+    ),
 )

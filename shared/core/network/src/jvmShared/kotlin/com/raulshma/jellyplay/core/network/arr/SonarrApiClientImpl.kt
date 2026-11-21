@@ -27,8 +27,8 @@ import okhttp3.Request
  * decoders ([ArrWireDto]); the genuinely Sonarr-specific surface — the
  * `/series` + `/episode` management endpoints with their client-side tvdbId
  * defense, season/episode lookup ladder, and monitor toggle — stays here,
- * riding the engine's URL/text/PUT/DELETE arms so the request preamble still
- * has exactly one copy.
+ * riding the engine's URL/text/list/PUT/DELETE arms so the request preamble
+ * still has exactly one copy.
  *
  * Structure mirrors [com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl]
  * and [RadarrApiClientImpl]: injected unqualified [OkHttpClient], the shared
@@ -282,9 +282,13 @@ class SonarrApiClientImpl(
             arr.asSequence()
                 .map { engine.json.decodeFromJsonElement(SonarrSeriesResource.serializer(), it) }
                 .firstOrNull { it.tvdbId == tvdbId }
-                ?.let { SonarrSeriesInfo(id = it.id, title = it.title, monitored = it.monitored, path = it.path) }
+                ?.toSonarrSeriesInfo()
         }
     }
+
+    override suspend fun getSeriesList(server: ArrServerConfig): Result<List<SonarrSeriesInfo>> =
+        engine.getList(server, "/series", emptyList(), SonarrSeriesResource.serializer())
+            .map { rows -> rows.map { it.toSonarrSeriesInfo() } }
 
     override suspend fun getEpisodesForSeries(
         server: ArrServerConfig,

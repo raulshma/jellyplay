@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_audio_player
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -16,6 +17,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_caching_enable
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_default_speed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_description
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_fine_tuning
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_player
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_backfill
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_backfill_subtitle
@@ -28,6 +30,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_bass
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_channel_mix_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_channel_mixing
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_crossfade_duration
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_crossfade_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed_value
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_equalizer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_equalizer_preset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gapless_playback
@@ -548,7 +552,7 @@ internal object AudioRows {
      * object-to-file-facade initialization order into a cycle.
      */
     val all: List<SettingsRow>
-        get() = AudioPlayerRows + AudioCacheRows
+        get() = AudioPlayerRows + AudioFineTuningRows + AudioCacheRows
 }
 
 // ---------------------------------------------------------------------
@@ -561,6 +565,11 @@ private val searchRoutes: Map<String, Route> = emptyMap()
 
 private val audioCategory = CoreUiRes.string.ss_cat_audio_player
 
+/**
+ * The "Audio Player" group's visible rows: the playback/behavior toggles and
+ * the effect blocks (each strength/preset row beside its effect toggle). The
+ * gain/buffer fine-tuning moved to [AudioFineTuningRows].
+ */
 internal val AudioPlayerRows: List<SettingsRow> = listOf(
     AudioRows.AudioDefaultSpeed,
     AudioRows.AudioVisualizer,
@@ -577,19 +586,36 @@ internal val AudioPlayerRows: List<SettingsRow> = listOf(
     AudioRows.ChannelMixing,
     AudioRows.LrBalance,
     AudioRows.AudioAutoplayNext,
-    AudioRows.NightModeVolume,
-    AudioRows.NightModeGain,
-    AudioRows.AudioSkipPrevThreshold,
-    AudioRows.AudioPreloadBuffer,
-    AudioRows.ReplaygainPreamp,
     AudioRows.EqualizerPreset,
     AudioRows.NightMode,
     AudioRows.NightModeStrength,
     AudioRows.BassBoostStrength,
     AudioRows.VirtualizerStrength,
-    AudioRows.VolumeBoostGain,
     AudioRows.AutoEqByGenre,
     AudioRows.ChannelMixMode,
+)
+
+/**
+ * The advanced "Fine-tuning" group (the phase-5 reclassification, ADR-0017
+ * decision 6): the numeric gain/buffer fine-tune rows — the replaygain
+ * pre-amp, the volume-boost gain, the pitch shift, the skip-previous
+ * threshold, the preload buffer, and the night-mode volume/gain pair — moved
+ * off the interleaved advanced block whole-group behind the advanced toggle
+ * (the trailing-expert-group shape of the Theme leaf). Gate notes: the
+ * replaygain pre-amp and volume-boost gain keep their All(Advanced, WhenOn)
+ * parent gates (their effect toggles stay in the main group — the flags read
+ * the preferences, not the layout); the night-mode strength row did NOT move
+ * — it is admission-coupled to its night_mode parent toggle and stays beside
+ * it in the main group. Their residual `isAdvanced` flags already carried
+ * the advanced gate; the search hits auto-arm it unchanged.
+ */
+internal val AudioFineTuningRows: List<SettingsRow> = listOf(
+    AudioRows.NightModeVolume,
+    AudioRows.NightModeGain,
+    AudioRows.AudioSkipPrevThreshold,
+    AudioRows.AudioPreloadBuffer,
+    AudioRows.ReplaygainPreamp,
+    AudioRows.VolumeBoostGain,
     AudioRows.PitchShift,
 )
 
@@ -610,6 +636,18 @@ internal val AudioCacheRows: List<SettingsRow> = listOf(
 internal val AudioGroup =
     AudioPlayerRows.asRowGroup("audio", emptyList(), searchRoutes, audioCategory)
 
+/** The audio screen's advanced Fine-tuning group WITH its searchable card face (the group-card hit lands on the first member row). */
+internal val AudioFineTuningGroup =
+    AudioFineTuningRows.asRowGroup(
+        "audio.fineTuning",
+        emptyList(),
+        searchRoutes,
+        audioCategory,
+        cardTitleRes = Res.string.settings_audio_fine_tuning,
+        cardSubtitleRes = Res.string.settings_audio_player,
+        cardKeywords = listOf("fine-tuning", "tuning", "gain", "buffer", "pitch", "replaygain", "pre-amp"),
+    )
+
 internal val AudioCacheGroup =
     AudioCacheRows.asRowGroup("audio.cache", emptyList(), searchRoutes, audioCategory)
 
@@ -618,6 +656,8 @@ internal val AudioCacheGroup =
 // lists.
 
 internal val AudioSettingsSearchItems: List<SettingsSearchItem> = AudioGroup.items
+
+internal val AudioFineTuningSearchItems: List<SettingsSearchItem> = AudioFineTuningGroup.items
 
 internal val AudioCacheSearchItems: List<SettingsSearchItem> = AudioCacheGroup.items
 
@@ -630,3 +670,31 @@ internal val AudioEntrance = SettingsEntranceSectionRow(
     icon = Tabler.Outline.Music,
     titleRes = Res.string.settings_audio_player,
 )
+
+// ── Entrance summary (ADR-0017 decision 3) ──────────────────────────────
+
+/**
+ * The root Audio entrance's summary: the default speed face always, the
+ * crossfade overlap while it is on, and the equalizer while it is enabled.
+ * Reads the audio screen's slice (the `audioPreferences` projection — the
+ * same slice the Audio screen reads); pure, pinned by SettingsSummariesTest.
+ */
+internal fun audioSummaryParts(preferences: AudioPreferences): List<SettingsSummaryPart> = buildList {
+    add(
+        SettingsSummaryPart.Formatted(
+            Res.string.settings_default_speed_value,
+            defaultSpeedFace(preferences.audioDefaultSpeed),
+        ),
+    )
+    if (preferences.audioCrossfadeDurationMs > 0L) {
+        add(
+            SettingsSummaryPart.Formatted(
+                Res.string.settings_crossfade_on,
+                preferences.audioCrossfadeDurationMs / 1000L,
+            ),
+        )
+    }
+    if (preferences.equalizerEnabled) {
+        add(SettingsSummaryPart.Token(Res.string.settings_equalizer))
+    }
+}

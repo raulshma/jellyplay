@@ -6,9 +6,11 @@ import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SeriesArtReads
 import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.SelectionState
@@ -63,6 +65,15 @@ class DownloadsViewModel(
     private val policyStore: SeriesDownloadPolicyStore,
     /** The confirm path: confirmed prompts enqueue through the normal series intake (no policy write). */
     private val intake: DownloadIntake,
+    /** The arm picker's series-search seam, forwarded verbatim to [seriesPolicyActions] (never read VM-side). */
+    private val libraryFeed: LibraryFeed,
+    /**
+     * The arm picker's schedule reconcile, forwarded verbatim to
+     * [seriesPolicyActions] (never called VM-side) — the first arm row must
+     * reconcile the auto-download schedule or the pass it arms for stays
+     * unscheduled under a global off / autoArmFromArr-off configuration.
+     */
+    private val autoDownloadScheduler: AutoDownloadScheduler,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(DownloadsUiState())
@@ -136,6 +147,8 @@ class DownloadsViewModel(
         policyStore = policyStore,
         intake = intake,
         downloadsStore = downloadsStore,
+        libraryFeed = libraryFeed,
+        autoDownloadScheduler = autoDownloadScheduler,
         postMessage = { messageChannel.trySend(it) },
     )
 
