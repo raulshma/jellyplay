@@ -19,6 +19,18 @@ interface SettingsSearchProvider {
     val items: List<SettingsSearchItem>
 
     /**
+     * The row id a tapped search hit [itemId] deep-links to: the identity for
+     * every row item, and the OWNING GROUP'S FIRST MEMBER ROW id for a
+     * group-card search item (the card's own route already bakes that same
+     * id — this is the fold the search dispatches inject through, since the
+     * generic `withHighlightSettingId(item.id)` re-injection would otherwise
+     * clobber it with the group id, which no screen's expand/glow checks
+     * declare). Default identity so fakes and non-catalog providers stay
+     * row-item providers.
+     */
+    fun landingRowId(itemId: String): String = itemId
+
+    /**
      * The locale-resolved catalog minus the rows this platform does not offer
      * ([SettingsSearchItem.platforms] via [filterFor]) — the funnel every
      * search consumer must match against, so a row that cannot exist here

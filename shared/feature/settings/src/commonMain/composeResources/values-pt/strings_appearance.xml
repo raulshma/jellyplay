@@ -5,12 +5,23 @@
     <!-- care and the newsletter groups. -->
     <string name="settings_newsletter_cd">Boletim</string>
     <string name="settings_appearance_title">Aparência</string>
+    <string name="settings_appearance_sections">Secções de aparência</string>
+    <string name="settings_appearance_entry_theme">Tema e ecrã</string>
+    <string name="settings_appearance_entry_theme_subtitle">Cores, tipos de letra, modo de vista da biblioteca, acessibilidade e descanso visual</string>
+    <string name="settings_appearance_entry_library_views">Vistas de biblioteca</string>
+    <string name="settings_appearance_entry_library_views_subtitle">Selos, listas de episódios e visualização de navegação</string>
+    <string name="settings_appearance_entry_detail">Ecrã de detalhes</string>
+    <string name="settings_appearance_entry_detail_subtitle">Faixas de elenco, chips, secções e limites</string>
+    <string name="settings_appearance_detail_tuning">Densidade e limites</string>
+    <string name="settings_appearance_entry_navigation">Navegação e feedback háptico</string>
+    <string name="settings_appearance_entry_navigation_subtitle">Barra inferior, densidade e feedback</string>
     <string name="settings_theme">Tema</string>
     <string name="settings_artwork_dynamic">Imagem dinâmica</string>
     <string name="settings_theme_mode">Modo do tema</string>
     <string name="settings_theme_follow_system">Seguir a definição do sistema</string>
     <string name="settings_theme_always_light">Sempre claro</string>
     <string name="settings_theme_always_dark">Sempre escuro</string>
+    <string name="settings_theme_scheduled_label">Agendado</string>
     <string name="settings_theme_scheduled">Dia/noite automático (%1$d:00\u2013%2$d:00)</string>
     <string name="settings_dynamic_theming">Temas dinâmicos</string>
     <string name="settings_dynamic_theming_subtitle">Cores extraídas da imagem</string>
@@ -23,6 +34,7 @@
     <string name="settings_oled_token">OLED</string>
     <string name="settings_performance_token">Desempenho</string>
     <string name="settings_contrast_suffix">Contraste %1$s</string>
+    <string name="settings_accent_suffix">Acento %1$s</string>
     <string name="settings_library_view_mode">Modo de vista da biblioteca</string>
     <string name="settings_layout_mode">Esquema</string>
     <string name="settings_layout_mode_subtitle">Escolher esquema automático, telefone ou tablet</string>

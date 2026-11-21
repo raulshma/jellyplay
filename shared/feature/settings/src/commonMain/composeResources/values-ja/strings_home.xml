@@ -92,6 +92,14 @@
     <string name="settings_home_screen_layout">ホーム画面のレイアウト</string>
     <string name="settings_home_sections_visible">%2$d セクション中 %1$d 件が表示中</string>
     <string name="settings_home_title">ホーム画面</string>
+    <string name="settings_home_entry_display">ホーム表示</string>
+    <string name="settings_home_entry_display_subtitle">ヒーロー、時計、ドックとホーム画面の表示</string>
+    <string name="settings_home_entry_rows">行 &amp; レイアウト</string>
+    <string name="settings_home_entry_rows_subtitle">次に視聴、セクションレイアウトと非表示項目</string>
+    <string name="settings_home_entry_cards">カード &amp; バッジ</string>
+    <string name="settings_home_entry_cards_subtitle">バッジ、評価、ネタバレとカードスタイル</string>
+    <string name="settings_home_tuning">微調整</string>
+    <string name="settings_home_curation">非表示と復元</string>
     <string name="settings_home_cards">カード</string>
     <string name="settings_home_display">ホーム表示</string>
     <string name="settings_continue_next_up">視聴を続けると次に視聴</string>

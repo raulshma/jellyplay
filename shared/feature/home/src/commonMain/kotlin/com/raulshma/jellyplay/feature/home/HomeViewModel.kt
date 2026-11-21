@@ -534,6 +534,17 @@ internal class HomeViewModel(
         settingsSearchResults(queries, settingsSearchProvider)
 
     /**
+     * The row id a tapped settings search hit deep-links to: the identity for
+     * row items, and the owning group's FIRST MEMBER ROW id for a group-card
+     * hit — the id the landing screen's expand/scroll/glow checks declare
+     * (the hit's own route bakes the same id; the dispatch injects it through
+     * this fold so the generic re-injection cannot clobber it with the group
+     * id). VM-exposed like [settingsSearchResults] — the provider seam stays
+     * injected in exactly one place.
+     */
+    fun settingsLandingRowId(itemId: String): String = settingsSearchProvider.landingRowId(itemId)
+
+    /**
      * The photo-folder child-URL cache (see [PhotoFolderChildUrlsStore]).
      */
     private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)

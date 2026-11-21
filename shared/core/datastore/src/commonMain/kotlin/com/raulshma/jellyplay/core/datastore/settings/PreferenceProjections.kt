@@ -194,7 +194,8 @@ class PreferenceProjections constructor(
     // -------------------------------------------------------------------------
 
     /**
-     * Fields read by `PlaybackSettingsScreen`. The broadest slice — spans the
+     * Fields read by the playback settings screens (the hub + its leaves,
+     * ADR-0017). The broadest slice — spans the
      * video, playback, audio-effects, subtitle, audio, engine, syncplay and
      * volume-profile stores. Nested combines keep within Flow's 5-arg combine
      * arity.
@@ -236,7 +237,7 @@ class PreferenceProjections constructor(
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), AudioPreferences())
 
-    /** Fields read by `StorageSettingsScreen`. */
+    /** Fields read by the storage and Downloads settings screens (the sibling pair, ADR-0017). */
     val storagePreferences: StateFlow<StoragePreferences> =
         combine(
             stores.downloads.downloads,
@@ -319,7 +320,8 @@ class PreferenceProjections constructor(
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), ExperimentalPreferences())
 
     /**
-     * Fields read by `AppearanceSettingsScreen`. The broadest screen slice:
+     * Fields read by the appearance settings screens (the hub + its leaves,
+     * ADR-0017). The broadest screen slice:
      * theme + home layout + discovery + newsletter + accessibility, projected
      * across 6 stores. Navigation-customization fields are excluded (they live
      * in [navigationCustomizationPreferences]).
@@ -347,10 +349,11 @@ class PreferenceProjections constructor(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), AppearanceScreenPreferences())
 
     /**
-     * Fields read by `HomeSettingsScreen` — a single-store slice over
-     * [HomeDiscoveryStore] so the home config hub recomposes only on
+     * Fields read by the home settings screens (the hub + its leaves,
+     * ADR-0017) — a single-store slice over
+     * [HomeDiscoveryStore] so the home screens recompose only on
      * home-discovery writes. Includes the card-display quartet: the knobs are
-     * home-discovery state and their rows render on the hub's Cards group.
+     * home-discovery state and their rows render on the Cards & badges leaf.
      */
     val homeScreenPreferences: StateFlow<HomeScreenPreferences> =
         stores.homeDiscovery.homeDiscovery.map { home ->

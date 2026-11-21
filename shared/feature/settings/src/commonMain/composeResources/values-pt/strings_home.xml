@@ -92,6 +92,14 @@
     <string name="settings_home_screen_layout">Disposição do ecrã inicial</string>
     <string name="settings_home_sections_visible">%1$d de %2$d secções visíveis</string>
     <string name="settings_home_title">Ecrã inicial</string>
+    <string name="settings_home_entry_display">Ecrã inicial</string>
+    <string name="settings_home_entry_display_subtitle">Hero, relógio, dock e apresentação do ecrã principal</string>
+    <string name="settings_home_entry_rows">Linhas e disposição</string>
+    <string name="settings_home_entry_rows_subtitle">A seguir, disposição das secções e itens ocultos</string>
+    <string name="settings_home_entry_cards">Cartões e selos</string>
+    <string name="settings_home_entry_cards_subtitle">Selos, avaliações, spoilers e estilo dos cartões</string>
+    <string name="settings_home_tuning">Ajustes finos</string>
+    <string name="settings_home_curation">Ocultos e restauro</string>
     <string name="settings_home_cards">Cartões</string>
     <string name="settings_home_display">Apresentação do ecrã inicial</string>
     <string name="settings_continue_next_up">Continuar e A seguir</string>

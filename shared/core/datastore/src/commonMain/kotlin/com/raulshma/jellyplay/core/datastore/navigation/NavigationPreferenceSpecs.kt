@@ -78,7 +78,11 @@ object NavigationPreferenceSpecs {
                 subtitleKey = "ss_nav_labels_subtitle",
                 categoryKey = "ss_cat_appearance",
                 keywords = listOf("navigation", "labels", "text", "icons", "bottom bar"),
-                routeKind = AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS,
+                // The feature's row renders in the THEME group (the
+                // show-labels toggle is a theme/display concern) — its kind
+                // names the Theme & display leaf, not the Navigation &
+                // haptics leaf the bar-customization rows deep-link.
+                routeKind = AppearancePreferenceSpecs.ROUTE_THEME_SETTINGS,
                 isAdvanced = true,
             ),
         ),
@@ -94,7 +98,7 @@ object NavigationPreferenceSpecs {
                 subtitleKey = "settings_nav_hide_on_scroll_on",
                 categoryKey = "ss_cat_appearance",
                 keywords = listOf("navigation", "hide", "scroll", "auto hide", "bottom bar", "collapsible"),
-                routeKind = AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS,
+                routeKind = AppearancePreferenceSpecs.ROUTE_NAVIGATION_DISPLAY_SETTINGS,
             ),
         ),
     )
@@ -119,7 +123,7 @@ object NavigationPreferenceSpecs {
             subtitleKey = "ss_start_tab_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("start", "launch", "open", "tab", "destination", "home screen", "startup"),
-            routeKind = AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS,
+            routeKind = AppearancePreferenceSpecs.ROUTE_NAVIGATION_DISPLAY_SETTINGS,
         ),
     )
 

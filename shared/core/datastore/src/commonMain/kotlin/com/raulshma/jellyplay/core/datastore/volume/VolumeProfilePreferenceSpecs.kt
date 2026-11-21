@@ -135,7 +135,7 @@ object VolumeProfilePreferenceSpecs {
                 subtitleKey = "ss_remember_volume_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("volume", "remember", "memory", "per content", "content type", "loudness", "level", "movies", "audiobooks"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_BASICS,
                 platformRule = PreferencePlatformRule.DESKTOP_ONLY,
             ),
         ),

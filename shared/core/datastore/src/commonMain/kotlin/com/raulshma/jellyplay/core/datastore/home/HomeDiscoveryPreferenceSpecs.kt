@@ -170,6 +170,15 @@ object HomeDiscoveryPreferenceSpecs {
     /** Route kind: the discover rows editor drill-in. */
     const val ROUTE_DISCOVER_ROWS = "discover_rows"
 
+    /** Route kind: the Home display leaf (ADR-0017's home split; [ROUTE_HOME_SETTINGS] is the hub). */
+    const val ROUTE_HOME_DISPLAY_SETTINGS = "home_display_settings"
+
+    /** Route kind: the Rows & layout leaf (ADR-0017's home split). */
+    const val ROUTE_HOME_ROWS_SETTINGS = "home_rows_settings"
+
+    /** Route kind: the Cards & badges leaf (ADR-0017's home split). */
+    const val ROUTE_HOME_CARDS_SETTINGS = "home_cards_settings"
+
     // ------------------------------------------------------------------
     // Mode + hero/backdrop
     // ------------------------------------------------------------------
@@ -184,7 +193,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_mode_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("home", "layout", "mode", "video", "music"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -198,7 +207,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_hero_section_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("hero", "banner", "featured", "home", "carousel"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -213,7 +222,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_hero_style_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("hero", "style", "carousel", "slideshow", "detailed", "slider", "layout", "banner"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -230,7 +239,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_hero_slideshow_interval_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("slideshow", "interval", "seconds", "hero", "timing", "rotate", "advance", "speed"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -247,7 +256,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_backdrop_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("home", "backdrop", "artwork", "background", "blur", "wallpaper"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -267,7 +276,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_home_hero_video_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("hero", "video", "trailer", "theme", "ambient", "motion", "billboard", "clip"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -282,7 +291,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_home_hero_video_tv_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("hero", "video", "trailer", "tv", "android tv", "ambient", "motion", "billboard"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -301,7 +310,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_home_focus_backdrop_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("focus", "backdrop", "ambient", "immersive", "tv", "android tv", "blur", "background"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -316,7 +325,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_home_stats_card_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("stats", "statistics", "week", "watch", "played", "library", "card"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -331,7 +340,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_home_genre_rail_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("genre", "chips", "rail", "browse", "categories", "quick access"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -346,7 +355,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_home_presence_chips_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("presence", "watch party", "friends", "sessions", "join", "watching", "now playing"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -366,7 +375,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_new_section_announcements_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("new", "section", "announcement", "toast", "update", "customize", "notification"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -498,7 +507,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_home_layout_autopush_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("layout", "sync", "server", "display preferences", "upload", "push", "cross-device", "roam"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_ROWS_SETTINGS,
         ),
     )
 
@@ -512,7 +521,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_continue_watching_click_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("continue watching", "tap", "click", "resume", "play", "details"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -534,7 +543,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_show_unwatched_badge_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("unwatched", "badge", "indicator", "new", "marker"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -548,7 +557,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_hide_watched_items_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("hide", "watched", "filter", "library", "clean"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -562,7 +571,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_show_watched_checkmark_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("watched", "checkmark", "badge", "indicator", "finished"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -576,7 +585,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_show_external_ratings_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("ratings", "imdb", "tmdb", "critic", "score", "star"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -590,7 +599,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_merge_continue_next_up_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("merge", "combine", "continue watching", "next up", "single row"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_ROWS_SETTINGS,
         ),
     )
 
@@ -613,7 +622,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_show_quality_badges_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("quality", "4k", "hdr", "dolby", "vision", "atmos", "badge", "resolution", "codec"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -628,7 +637,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_show_new_badges_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("new", "badge", "dot", "recently", "added", "indicator", "marker"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -650,7 +659,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_home_trickplay_preview_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("trickplay", "preview", "hover", "focus", "scrub", "thumbnails", "chapter"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
             platformRule = PreferencePlatformRule.ANDROID_ONLY,
         ),
     )
@@ -672,7 +681,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_anti_spoiler_home_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("spoiler", "progress", "watched"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -691,7 +700,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_next_up_max_days_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("next up", "days", "time window", "recent", "max days", "filter"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_ROWS_SETTINGS,
         ),
     )
 
@@ -705,7 +714,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_next_up_rewatching_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("next up", "rewatching", "rewatch", "repeat"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_ROWS_SETTINGS,
         ),
     )
 
@@ -724,7 +733,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_classic_rows_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("classic", "legacy", "jellyfin 12", "continue watching", "episodes", "series", "seasons", "recently added", "latest", "row", "behavior"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_ROWS_SETTINGS,
         ),
     )
 
@@ -744,7 +753,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "settings_exclude_active_sessions_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("continue watching", "next up", "active", "session", "playing", "device", "resume", "currently"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_ROWS_SETTINGS,
         ),
     )
 
@@ -772,7 +781,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_unhide_cw_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("unhide", "continue watching", "hidden", "reset", "show"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_ROWS_SETTINGS,
         ),
     )
 
@@ -862,7 +871,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_clock_home_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("clock", "time", "home", "wall", "current"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -876,7 +885,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_settings_in_home_search_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("search", "settings", "home", "find", "discover", "quick", "shortcut"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -890,7 +899,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_hide_top_header_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("top header", "app bar", "home bar", "hide", "scroll", "auto hide", "collapse", "dock"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -908,7 +917,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_greeting_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("greeting", "hello", "good morning", "welcome", "user name", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -922,7 +931,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_hide_see_all_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("see all", "pill", "row header", "hide", "minimal", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -936,7 +945,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_card_scale_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("card", "poster", "size", "scale", "width", "rows", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -952,7 +961,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_card_corner_radius_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("corner", "radius", "rounded", "cards", "shape", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -966,7 +975,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_show_mode_switch_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("mode", "switch", "video", "music", "toggle", "dock", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -980,7 +989,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_clock_show_date_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("clock", "date", "calendar", "day", "home", "header"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -994,7 +1003,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_newsletter_banner_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("newsletter", "banner", "digest", "hide", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -1008,7 +1017,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_always_show_user_switcher_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("user", "switcher", "avatar", "profile", "accounts", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -1022,7 +1031,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_cw_progress_style_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("progress", "bar", "percent", "continue watching", "resume", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_ROWS_SETTINGS,
         ),
     )
 
@@ -1039,6 +1048,7 @@ object HomeDiscoveryPreferenceSpecs {
             categoryKey = "ss_cat_home",
             keywords = listOf("presence", "chips", "watch party", "sessions", "limit", "home"),
             routeKind = ROUTE_HOME_SETTINGS,
+            isAdvanced = true,
         ),
     )
 
@@ -1055,6 +1065,7 @@ object HomeDiscoveryPreferenceSpecs {
             categoryKey = "ss_cat_home",
             keywords = listOf("genre", "rail", "chips", "categories", "limit", "home"),
             routeKind = ROUTE_HOME_SETTINGS,
+            isAdvanced = true,
         ),
     )
 
@@ -1068,7 +1079,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_ask_continue_remember_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("ask", "continue watching", "remember", "choice", "tap behavior", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_ROWS_SETTINGS,
         ),
     )
 
@@ -1082,7 +1093,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_rows_animations_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("entrance", "animation", "fade", "sections", "rows", "motion", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -1096,7 +1107,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_opaque_dock_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("dock", "opaque", "translucent", "header", "readability", "capsule", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -1187,7 +1198,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_pre_section_order_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("pre-section", "order", "stats", "genre", "newsletter", "banner", "reorder", "arrange", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -1209,7 +1220,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_new_badge_sections_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("new", "badge", "sections", "latest", "recently", "added", "upcoming", "gate", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -1225,6 +1236,7 @@ object HomeDiscoveryPreferenceSpecs {
             categoryKey = "ss_cat_home",
             keywords = listOf("refresh", "cadence", "interval", "automatic", "eager", "relaxed", "manual", "pull to refresh", "home"),
             routeKind = ROUTE_HOME_SETTINGS,
+            isAdvanced = true,
         ),
     )
 
@@ -1247,6 +1259,7 @@ object HomeDiscoveryPreferenceSpecs {
             categoryKey = "ss_cat_home",
             keywords = listOf("hero", "rotation", "idle", "dwell", "milliseconds", "advance", "carousel", "speed", "home"),
             routeKind = ROUTE_HOME_SETTINGS,
+            isAdvanced = true,
         ),
     )
 
@@ -1269,6 +1282,7 @@ object HomeDiscoveryPreferenceSpecs {
             categoryKey = "ss_cat_home",
             keywords = listOf("hero", "rotation", "scroll", "defer", "pause", "while scrolling", "carousel", "home"),
             routeKind = ROUTE_HOME_SETTINGS,
+            isAdvanced = true,
         ),
     )
 
@@ -1283,7 +1297,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_discover_pattern_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("discover", "row", "pattern", "partition", "uniform", "compact", "layout", "cards", "seerr", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -1303,7 +1317,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_newsletter_window_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("newsletter", "banner", "window", "weekday", "weekend", "digest", "always", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -1321,6 +1335,7 @@ object HomeDiscoveryPreferenceSpecs {
             categoryKey = "ss_cat_home",
             keywords = listOf("presence", "poll", "seconds", "interval", "watch party", "sessions", "cadence", "refresh", "home"),
             routeKind = ROUTE_HOME_SETTINGS,
+            isAdvanced = true,
         ),
     )
 
@@ -1343,7 +1358,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_trickplay_peek_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("trickplay", "peek", "hold", "preview", "thumbnail", "hover", "focus", "milliseconds", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -1366,6 +1381,7 @@ object HomeDiscoveryPreferenceSpecs {
             categoryKey = "ss_cat_home",
             keywords = listOf("search", "results", "height", "overlay", "dropdown", "pane", "size", "home"),
             routeKind = ROUTE_HOME_SETTINGS,
+            isAdvanced = true,
         ),
     )
 
@@ -1389,7 +1405,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_my_media_columns_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("my media", "tiles", "columns", "grid", "width", "libraries", "row", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -1414,7 +1430,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_stats_metrics_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("stats", "card", "metrics", "played", "unplayed", "minutes", "watch time", "hide", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_DISPLAY_SETTINGS,
         ),
     )
 
@@ -1436,7 +1452,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_new_badge_days_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("new", "badge", "days", "window", "arrival", "threshold", "recently", "expire", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -1460,7 +1476,7 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_row_unwatched_counters_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("unwatched", "counter", "count", "row", "header", "title", "badge", "home"),
-            routeKind = ROUTE_HOME_SETTINGS,
+            routeKind = ROUTE_HOME_CARDS_SETTINGS,
         ),
     )
 
@@ -1479,6 +1495,7 @@ object HomeDiscoveryPreferenceSpecs {
             categoryKey = "ss_cat_home",
             keywords = listOf("hero", "random", "start", "shuffle", "first", "carousel", "surprise", "home"),
             routeKind = ROUTE_HOME_SETTINGS,
+            isAdvanced = true,
         ),
     )
 

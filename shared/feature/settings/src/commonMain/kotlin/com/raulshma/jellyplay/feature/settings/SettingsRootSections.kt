@@ -371,24 +371,51 @@ internal fun PowerUserModeCard(
 }
 
 /**
- * Section scaffold: one lazy item wrapped in the staggered entrance. The
- * (phone, tv) steps derive from the ordered SETTINGS_ENTRANCE_SECTIONS
- * list — pinned by SettingsEntranceStepsTest — so inserting a section
- * renumbers the followers automatically. Hoisted out of [SettingsScreen] so
- * `isTv` arrives as an explicit parameter; the entrance-step key check still
- * throws on undeclared keys.
+ * Section scaffold: one lazy item wrapped in the staggered entrance, headed
+ * by the section's declared non-clickable category header when it leads one
+ * ([SETTINGS_ENTRANCE_SECTIONS]' `headerRes` — the group-grain carrier of the
+ * root's category taxonomy, ADR-0017). The single step index derives from the
+ * same ordered declaration — one taxonomy across phone/TV/desktop — so
+ * inserting a section renumbers the followers automatically. Hoisted out of
+ * [SettingsScreen] so `isTv` arrives as an explicit parameter; the
+ * entrance-step key check still throws on undeclared keys.
  */
 internal fun LazyListScope.settingsSection(
     key: String,
     isTv: Boolean,
     content: @Composable () -> Unit,
 ) {
-    val steps = requireNotNull(settingsEntranceStep(key)) {
+    val step = requireNotNull(settingsEntranceStep(key)) {
         "undeclared settings entrance section '$key' — add it to SETTINGS_ENTRANCE_SECTIONS"
     }
+    val header = SETTINGS_ENTRANCE_SECTIONS.first { it.key == key }.headerRes
     item(key = key) {
-        AnimatedSettingsEntrance(if (isTv) steps.tv else steps.phone) { content() }
+        AnimatedSettingsEntrance(step) {
+            Column {
+                if (header != null) {
+                    SettingsCategoryHeader(title = stringResource(header))
+                }
+                content()
+            }
+        }
     }
+}
+
+/**
+ * One non-clickable settings-root category header (ADR-0017's flat root):
+ * a plain label row above the entrance/action rows of its category. Renders
+ * on every surface; on TV it is an ordinary unfocusable Text the D-pad steps
+ * over (no focus target of its own).
+ */
+@Composable
+internal fun SettingsCategoryHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, top = 6.dp, bottom = 2.dp),
+    )
 }
 
 @Composable

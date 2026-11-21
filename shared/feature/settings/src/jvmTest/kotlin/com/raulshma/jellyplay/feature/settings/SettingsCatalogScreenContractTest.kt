@@ -122,10 +122,13 @@ class SettingsCatalogScreenContractTest {
     fun `every catalog id comes from a single source and lands in exactly one group`() {
         // A declaration built with a raw literal (bypassing the fused rows
         // and the experimental holder), or a new vocabulary not registered
-        // above, fails here.
+        // above, fails here. The card items are the second declared source:
+        // a group-card hit's id IS its group's id (pinned by
+        // [groupCardItems] below) — never a row id.
         val singleSourceIds = allHolderIds.toSet() + allFusedIds.toSet()
-        val undeclared = SettingsSearchCatalog.items.map { it.id }.filter { it !in singleSourceIds }
-        assertEquals(emptyList(), undeclared, "catalog ids declared outside the single sources (fused rows + experimental holder)")
+        val cardIds = SettingsScreenGroups.all.mapNotNull { it.cardItem?.id }.toSet()
+        val undeclared = SettingsSearchCatalog.items.map { it.id }.filter { it !in singleSourceIds && it !in cardIds }
+        assertEquals(emptyList(), undeclared, "catalog ids declared outside the single sources (fused rows + experimental holder + group cards)")
 
         // …and each lands in exactly one screen group (a declaration that
         // lands in no group cannot reach the catalog, but a group decoration
@@ -139,9 +142,9 @@ class SettingsCatalogScreenContractTest {
             "duplicate group names",
         )
         assertEquals(
-            SettingsScreenGroups.all.flatMap { it.items }.map { it.id },
+            SettingsScreenGroups.all.flatMap { it.items + listOfNotNull(it.cardItem) }.map { it.id },
             SettingsSearchCatalog.items.map { it.id },
-            "catalog is not the flat concatenation of the decorated groups",
+            "catalog is not the flat concatenation of the decorated groups (+ their card items)",
         )
     }
 
@@ -172,7 +175,13 @@ class SettingsCatalogScreenContractTest {
     fun `groups the screens feed totals from declare every id's admission`() {
         val undeclaredExceptions = mapOf(
             "audio" to emptySet<String>(),
-            "playback.player" to emptySet(),
+            // The playback hub's entrance rows and the three former
+            // playback.player leaves: every declared row carries a gate the
+            // strict derivation reads (the entrances declare Always).
+            "playback.hub" to emptySet(),
+            "playback.basics" to emptySet(),
+            "playback.controls" to emptySet(),
+            "playback.playerChrome" to emptySet(),
             "playback.advancedVideo" to emptySet(),
             "playback.engine" to emptySet(),
             "notifications" to emptySet(),
@@ -180,6 +189,12 @@ class SettingsCatalogScreenContractTest {
             "language.trackSelection" to emptySet(),
             "language.subtitles" to emptySet(),
             "storage.cache" to emptySet(),
+            // The phase-5 reclassification: the three new advanced trailing
+            // groups declare their advanced bases and only compose behind
+            // the advanced structural block — every id fully covered.
+            "appearance.detailTuning" to emptySet(),
+            "storage.networkTuning" to emptySet(),
+            "audio.fineTuning" to emptySet(),
             // The auto-arm row is DECLARED RowAdmission.ContentGated (its
             // emission rides the experimental Direct *arr flag the screen
             // reads through the VM), so the derived admissions carry no entry
@@ -196,9 +211,20 @@ class SettingsCatalogScreenContractTest {
                 SecurityRows.RemoteControlEnabled.id,
                 SecurityRows.RemoteDisplayContentEnabled.id,
             ),
-            // The unhide row rides hidden-CW content state — no admission
-            // vocabulary; the screen adds the +1 explicitly.
-            "home.display" to setOf(HomeRows.UnhideCw.id),
+            // ADR-0017's home split: the hub's entrance rows (declare Always)
+            // and the advanced Fine-tuning group (the declared hub exception —
+            // every row renders behind the shell's whole-group gate) are
+            // fully covered. The display-main leaf renders every declared row
+            // unconditionally except the slideshow-interval row's WhenOn
+            // parent (flags-expressible). The curation group's unhide row
+            // rides hidden-CW content state — no admission vocabulary; the
+            // screen adds the +1 explicitly.
+            "home.hub" to emptySet(),
+            "home.tuning" to emptySet(),
+            "home.displayMain" to emptySet(),
+            "home.curation" to setOf(HomeRows.UnhideCw.id),
+            "home.nextUp" to emptySet(),
+            "home.layout" to emptySet(),
             // The cards group renders every declared row unconditionally —
             // declared Always per id, fully covered.
             "home.cards" to emptySet(),
@@ -227,11 +253,15 @@ class SettingsCatalogScreenContractTest {
                 AppearanceRows.ScheduledEnd.id,
                 AppearanceRows.ThemeScheduler.id,
             ),
-            // Library & Cards renders every declared row unconditionally (its
-            // shipped always-on behavior) — declared Always per id, fully
-            // covered; the screen-local confirm-library-reset action row is
-            // the explicit +1 at the call site.
-            "appearance.library" to emptySet(),
+            // The appearance hub's entrance rows (declare Always) and the
+            // former "Library & Cards" split (every declared row renders
+            // unconditionally — its shipped always-on behavior): fully
+            // covered; the screen-local confirm-library-reset action row and
+            // the section-order editor's reorderable rows are the explicit
+            // +1/+10 terms at their call sites.
+            "appearance.hub" to emptySet(),
+            "appearance.libraryViews" to emptySet(),
+            "appearance.detail" to emptySet(),
             // The three advanced-only groups declare their advanced base and
             // only compose behind the advanced structural block.
             "appearance.performance" to emptySet(),
@@ -266,11 +296,13 @@ class SettingsCatalogScreenContractTest {
         // no conditional, so no admission overrides. A total that IS the
         // declaration size self-tracks a new unconditional row, so the per-id
         // guard above cannot apply; pin instead that the group admits ALL
-        // eleven rows under the default flags — the four advanced-tagged rows
-        // carry an explicit [RowAdmission.Always] gate, so the derived
-        // admissions agree with the screen's unconditional size.
+        // seven rows under the default flags — the user_data_sync row keeps
+        // its explicit [RowAdmission.Always] gate (the shipped quirk), so the
+        // derived admissions agree with the screen's unconditional size. (The
+        // phase-5 reclassification moved the four diagnostics rows to the
+        // storage.networkTuning group — the eleven became seven.)
         val sizeDerivedGroups = mapOf(
-            "storage.network" to 11,
+            "storage.network" to 7,
         )
         sizeDerivedGroups.forEach { (groupId, declaredCount) ->
             val group = requireNotNull(SettingsScreenGroups.all.firstOrNull { it.id == groupId })
@@ -296,24 +328,31 @@ class SettingsCatalogScreenContractTest {
         assertFalse(settingsCapabilities.supportsScreenOrientation)
         assertFalse(settingsCapabilities.supportsTouchGestures)
         val desktop = RowAdmissionFlags()
+        // ADR-0017: the touch fork split across the leaves — the seek
+        // duration row landed on Basics, the gesture set on Controls.
         listOf(
-            PlaybackRows.Orientation.id,
-            PlaybackRows.SeekDuration.id,
-            PlaybackRows.Gestures.id,
-            PlaybackRows.GestureIndicatorSide.id,
-        ).forEach { id ->
-            assertFalse(SettingsScreenGroups.playbackPlayer.rowAdmitted(id, desktop), "$id must drop without its capability")
+            SettingsScreenGroups.playbackBasics to PlaybackRows.SeekDuration.id,
+            SettingsScreenGroups.playbackControls to PlaybackRows.Gestures.id,
+            SettingsScreenGroups.playbackControls to PlaybackRows.GestureIndicatorSide.id,
+            SettingsScreenGroups.playbackControls to PlaybackRows.DoubleTapHoldSeek.id,
+        ).forEach { (group, id) ->
+            assertFalse(group.rowAdmitted(id, desktop), "$id must drop without its capability")
         }
+        assertFalse(
+            SettingsScreenGroups.playbackControls.rowAdmitted(PlaybackRows.Orientation.id, desktop),
+            "the orientation row must drop without its capability",
+        )
         val touch = RowAdmissionFlags(supportsTouchGestures = true)
         listOf(
-            PlaybackRows.SeekDuration.id,
-            PlaybackRows.Gestures.id,
-            PlaybackRows.GestureIndicatorSide.id,
-        ).forEach {
-            assertTrue(SettingsScreenGroups.playbackPlayer.rowAdmitted(it, touch), "$it must admit on the capability")
+            SettingsScreenGroups.playbackBasics to PlaybackRows.SeekDuration.id,
+            SettingsScreenGroups.playbackControls to PlaybackRows.Gestures.id,
+            SettingsScreenGroups.playbackControls to PlaybackRows.GestureIndicatorSide.id,
+            SettingsScreenGroups.playbackControls to PlaybackRows.DoubleTapHoldSeek.id,
+        ).forEach { (group, it) ->
+            assertTrue(group.rowAdmitted(it, touch), "$it must admit on the capability")
         }
         assertTrue(
-            SettingsScreenGroups.playbackPlayer.rowAdmitted(
+            SettingsScreenGroups.playbackControls.rowAdmitted(
                 PlaybackRows.Orientation.id,
                 RowAdmissionFlags(supportsScreenOrientation = true),
             ),
@@ -322,14 +361,14 @@ class SettingsCatalogScreenContractTest {
         // this JVM's default seam flags (the desktop binary backs the row)
         // and drops where the capability is off (Android).
         assertTrue(
-            SettingsScreenGroups.playbackPlayer.rowAdmitted(
+            SettingsScreenGroups.playbackBasics.rowAdmitted(
                 PlaybackRows.RememberVolumePerContentType.id,
                 desktop,
             ),
             "the volume-memory row admits on the desktop seam",
         )
         assertFalse(
-            SettingsScreenGroups.playbackPlayer.rowAdmitted(
+            SettingsScreenGroups.playbackBasics.rowAdmitted(
                 PlaybackRows.RememberVolumePerContentType.id,
                 RowAdmissionFlags(supportsVolumeMemory = false),
             ),
@@ -339,14 +378,29 @@ class SettingsCatalogScreenContractTest {
 
     @Test
     fun `tv rows admit on the tv form factor alone - the shipped count semantics`() {
-        // The two TV rows declare gate = Tv, yet the total has always
-        // admitted them on isTv alone (their emission sits inside the advanced
-        // block, which carries the advanced half of the gate).
+        // ADR-0017: the TV pair split — the watch-next row on Basics, the
+        // overscan zoom beside the chrome knobs. The zoom row declares
+        // gate = Tv alone (its total admits on isTv; its emission sits inside
+        // the chrome leaf's advanced block, which carries the advanced half).
+        // The watch-next row declares the FULL gate its emission reads —
+        // All(Advanced, Tv) — so the basics total does not count it while
+        // advanced settings are off.
         val tv = RowAdmissionFlags(isTv = true)
-        assertTrue(SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.AndroidTvWatchNext.id, tv))
-        assertTrue(SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.TvZoomMode.id, tv))
-        assertFalse(SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.AndroidTvWatchNext.id, RowAdmissionFlags()))
-        assertFalse(SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.TvZoomMode.id, RowAdmissionFlags(showAdvanced = true)))
+        val tvAdvanced = RowAdmissionFlags(isTv = true, showAdvanced = true)
+        assertTrue(
+            SettingsScreenGroups.playbackBasics.rowAdmitted(PlaybackRows.AndroidTvWatchNext.id, tvAdvanced),
+            "watch-next admits on TV with advanced settings on",
+        )
+        assertFalse(
+            SettingsScreenGroups.playbackBasics.rowAdmitted(PlaybackRows.AndroidTvWatchNext.id, tv),
+            "watch-next is not counted while advanced settings are off",
+        )
+        assertFalse(
+            SettingsScreenGroups.playbackBasics.rowAdmitted(PlaybackRows.AndroidTvWatchNext.id, RowAdmissionFlags(showAdvanced = true)),
+            "watch-next stays excluded on non-TV devices",
+        )
+        assertTrue(SettingsScreenGroups.playbackPlayerChrome.rowAdmitted(PlaybackRows.TvZoomMode.id, tv))
+        assertFalse(SettingsScreenGroups.playbackPlayerChrome.rowAdmitted(PlaybackRows.TvZoomMode.id, RowAdmissionFlags(showAdvanced = true)))
     }
 
     @Test
@@ -451,7 +505,10 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         val declaredParents = listOf(
-            SettingsScreenGroups.playbackPlayer,
+            SettingsScreenGroups.playbackHub,
+            SettingsScreenGroups.playbackBasics,
+            SettingsScreenGroups.playbackControls,
+            SettingsScreenGroups.playbackPlayerChrome,
             SettingsScreenGroups.playbackAdvancedVideo,
             SettingsScreenGroups.playbackEngine,
             SettingsScreenGroups.playbackMediaSegments,
@@ -568,51 +625,61 @@ class SettingsCatalogScreenContractTest {
     // ── 3. The fixed drifts, pinned behaviorally ────────────────────────
 
     /**
-     * The playback screen sections in LazyColumn order — the same fold the
-     * shell derives from the screen's [PreferenceScreenGroup] slot
-     * declaration, so the adjust pins below run the very
-     * [deriveAdjustForAdvanced] the shell computes (the hand-written
-     * per-screen lambda and the hand-maintained section list are gone).
+     * The playback leaves' sections in LazyColumn order, per screen
+     * (ADR-0017: the former one seven-group screen became the hub + eight
+     * leaves, so the deep-link scroll pins run per leaf against the same
+     * [deriveAdjustForAdvanced] fold the shell computes).
      */
-    private val playbackSections = listOf(
-        SettingsScreenSection(SettingsScreenGroups.playbackPlayer.itemIdSet),
+    private val videoQualitySections = listOf(
         SettingsScreenSection(SettingsScreenGroups.playbackAdvancedVideo.itemIdSet, advancedOnly = true),
-        SettingsScreenSection(SettingsScreenGroups.playbackEngine.itemIdSet, advancedOnly = true),
-        SettingsScreenSection(SettingsScreenGroups.playbackMediaSegments.itemIdSet, advancedOnly = true),
-        SettingsScreenSection(SettingsScreenGroups.playbackSyncPlay.itemIdSet),
-        SettingsScreenSection(SettingsScreenGroups.playbackCasting.itemIdSet),
-        SettingsScreenSection(SettingsScreenGroups.playbackDvr.itemIdSet),
     )
 
-    /** The playback screen groups in LazyColumn order, from the declaration. */
-    private val playbackGroups = playbackSections.map { it.idSet }
+    private val videoQualityGroups = videoQualitySections.map { it.idSet }
+
+    private val engineSections = listOf(
+        SettingsScreenSection(SettingsScreenGroups.playbackEngine.itemIdSet, advancedOnly = true),
+    )
+
+    private val engineGroups = engineSections.map { it.idSet }
+
+    private val syncPlayCastingSections = listOf(
+        SettingsScreenSection(SettingsScreenGroups.playbackSyncPlay.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.playbackCasting.itemIdSet),
+    )
+
+    private val syncPlayCastingGroups = syncPlayCastingSections.map { it.idSet }
 
     @Test
-    fun `vlc_video_output deep-links into the engine group`() {
+    fun `vlc_video_output deep-links into the engine leaf`() {
         assertTrue(PlaybackRows.VlcVideoOutput.id in SettingsScreenGroups.playbackEngine.itemIdSet)
         assertEquals(
-            2,
-            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
+            0,
+            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, engineGroups, deriveAdjustForAdvanced(engineSections, true)),
         )
         // With advanced hidden the engine group doesn't compose — no scroll.
         assertEquals(
             -1,
-            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
+            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, engineGroups, deriveAdjustForAdvanced(engineSections, false)),
         )
     }
 
     @Test
-    fun `live_stream_option and dialogue_boost_strength land in the advanced-video group`() {
+    fun `live_stream_option and dialogue_boost_strength land in the advanced-video leaf`() {
         val advanced = SettingsScreenGroups.playbackAdvancedVideo.itemIdSet
         assertTrue(PlaybackRows.LiveStreamOption.id in advanced)
         assertTrue(PlaybackRows.DialogueBoostStrength.id in advanced)
         assertEquals(
-            1,
-            resolveHighlightScrollIndex(PlaybackRows.LiveStreamOption.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
+            0,
+            resolveHighlightScrollIndex(PlaybackRows.LiveStreamOption.id, videoQualityGroups, deriveAdjustForAdvanced(videoQualitySections, true)),
         )
         assertEquals(
-            1,
-            resolveHighlightScrollIndex(PlaybackRows.DialogueBoostStrength.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
+            0,
+            resolveHighlightScrollIndex(PlaybackRows.DialogueBoostStrength.id, videoQualityGroups, deriveAdjustForAdvanced(videoQualitySections, true)),
+        )
+        // With advanced hidden the advanced-only group doesn't compose.
+        assertEquals(
+            -1,
+            resolveHighlightScrollIndex(PlaybackRows.LiveStreamOption.id, videoQualityGroups, deriveAdjustForAdvanced(videoQualitySections, false)),
         )
     }
 
@@ -624,34 +691,44 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
-    fun `gesture_indicator_side scrolls within the player group`() {
-        // The derivation keeps this row reachable in the player scroll list.
+    fun `gesture_indicator_side scrolls within the controls leaf`() {
+        // The derivation keeps this row reachable in the controls scroll
+        // list.
         assertEquals(
             0,
-            resolveHighlightScrollIndex(PlaybackRows.GestureIndicatorSide.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
+            resolveHighlightScrollIndex(
+                PlaybackRows.GestureIndicatorSide.id,
+                SettingsScreenGroups.playbackControls.itemIdSet.let(::listOf),
+            ),
         )
     }
 
     @Test
-    fun `always-visible playback groups shift correctly when advanced is hidden`() {
-        // SyncPlay/casting/DVR always render; with advanced off they sit at
-        // LazyColumn indices 1/2/3 behind the player group.
-        assertEquals(
-            1,
-            resolveHighlightScrollIndex(PlaybackRows.SyncplayJoinBehavior.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
-        )
-        assertEquals(
-            2,
-            resolveHighlightScrollIndex(PlaybackRows.BackgroundCasting.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
-        )
-        assertEquals(
-            3,
-            resolveHighlightScrollIndex(PlaybackRows.DvrRecordingQuality.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
-        )
-        // The player group never moves.
+    fun `the syncplay-and-casting leaf's groups scroll in declaration order`() {
+        // The leaf's two always-visible groups render in declaration order;
+        // the DVR trio deep-links its own leaf.
         assertEquals(
             0,
-            resolveHighlightScrollIndex(PlaybackRows.PlayerEngine.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
+            resolveHighlightScrollIndex(PlaybackRows.SyncplayJoinBehavior.id, syncPlayCastingGroups, deriveAdjustForAdvanced(syncPlayCastingSections, false)),
+        )
+        assertEquals(
+            1,
+            resolveHighlightScrollIndex(PlaybackRows.BackgroundCasting.id, syncPlayCastingGroups, deriveAdjustForAdvanced(syncPlayCastingSections, false)),
+        )
+        assertEquals(
+            0,
+            resolveHighlightScrollIndex(
+                PlaybackRows.DvrRecordingQuality.id,
+                SettingsScreenGroups.playbackDvr.itemIdSet.let(::listOf),
+            ),
+        )
+        // The basics group never moves.
+        assertEquals(
+            0,
+            resolveHighlightScrollIndex(
+                PlaybackRows.PlayerEngine.id,
+                SettingsScreenGroups.playbackBasics.itemIdSet.let(::listOf),
+            ),
         )
     }
 
@@ -879,10 +956,22 @@ class SettingsCatalogScreenContractTest {
             List(SettingsScreenGroups.storageCache.items.count { !it.isAdvanced } + 1) { it },
         )
 
-        // Network: unconditionally the whole declaration (the screen feeds
-        // `SettingsScreenGroups.storageNetwork.items.size` directly — no
-        // conditional, so no admission function).
-        assertEquals(11, SettingsScreenGroups.storageNetwork.items.size, "the storage.network declaration changed — update this pin")
+        // Network: unconditionally the whole visible declaration (the screen
+        // feeds `SettingsScreenGroups.storageNetwork.items.size` directly —
+        // no conditional, so no admission function). The four diagnostics
+        // rows moved to the advanced networkTuning group (the phase-5
+        // reclassification).
+        assertEquals(7, SettingsScreenGroups.storageNetwork.items.size, "the storage.network declaration changed — update this pin")
+        assertEquals(
+            SettingsScreenGroups.storageNetworkTuning.items.size,
+            rowTotalFor(SettingsScreenGroups.storageNetworkTuning, RowAdmissionFlags(showAdvanced = true)),
+            "the diagnostics group grew a non-advanced row",
+        )
+        assertEquals(
+            0,
+            rowTotalFor(SettingsScreenGroups.storageNetworkTuning, RowAdmissionFlags(showAdvanced = false)),
+            "the diagnostics group must stay wholly advanced",
+        )
 
         // Downloads: the download_schedule_* window rows only when
         // scheduling is on (their declared WhenOn gate); the auto-download
@@ -960,14 +1049,14 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
-    fun `playback row totals track the player advanced-video and engine declarations`() {
-        // Player: the six unconditional rows (player_engine, default_speed,
+    fun `playback row totals track the leaves advanced-video and engine declarations`() {
+        // Basics: the nine unconditional rows (player_engine, default_speed,
         // default_aspect, video_autoplay_next, autoplay_countdown,
-        // hold_speed_multiplier) survive every gate off; each flag reveals
-        // exactly its own rows — plus the volume-memory toggle, whose
-        // Platform(VolumeMemory) admission rides this JVM's desktop seam (on).
+        // autoplay_episode_limit, session_restore, next_episode_details, the
+        // desktop volume-memory toggle) survive every gate off; each flag
+        // reveals exactly its own rows.
         val allGatesOff = rowTotalFor(
-            SettingsScreenGroups.playbackPlayer,
+            SettingsScreenGroups.playbackBasics,
             RowAdmissionFlags(
                 isTv = false,
                 showAdvanced = false,
@@ -976,59 +1065,23 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         // Naive derivation: with every gate off, the non-advanced
-        // declarations survive EXCEPT the Platform-gated rows (the
-        // orientation fork row and the touch fork rows — both capabilities
-        // are off here) and the WhenOn(autoplay) still-watching rows (no
-        // parents on). The Always-admitted input-bindings editor row (every
-        // platform has some input surface) and the desktop-backed
-        // volume-memory toggle (this JVM's seam) stay in.
+        // declarations survive EXCEPT the Platform-gated rows (the touch
+        // fork's seek-duration row — the gesture fork lives on Controls —
+        // both capabilities are off here) and the WhenOn(autoplay)
+        // still-watching rows (no parents on). The desktop-backed
+        // volume-memory toggle (this JVM's seam) stays in.
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } -
-                PlaybackPlayerOrientationRows.size -
-                PlaybackPlayerTouchRows.size -
-                PlaybackPlayerStillWatchingRows.size,
+            SettingsScreenGroups.playbackBasics.items.count { !it.isAdvanced } -
+                PlaybackBasicsTouchRows.size -
+                PlaybackBasicsStillWatchingRows.size,
             allGatesOff,
         )
         assertEquals(
-            // the orientation capability reveals exactly its own row
-            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } -
-                PlaybackPlayerTouchRows.size -
-                PlaybackPlayerStillWatchingRows.size,
+            // the touch capability reveals exactly its own row
+            SettingsScreenGroups.playbackBasics.items.count { !it.isAdvanced } -
+                PlaybackBasicsStillWatchingRows.size,
             rowTotalFor(
-                SettingsScreenGroups.playbackPlayer,
-                RowAdmissionFlags(
-                    isTv = false,
-                    showAdvanced = false,
-                    supportsScreenOrientation = true,
-                    supportsTouchGestures = false,
-                ),
-            ),
-        )
-        assertEquals(
-            // the touch capability reveals exactly the touch fork rows; the orientation row stays hidden
-            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } -
-                PlaybackPlayerOrientationRows.size -
-                PlaybackPlayerStillWatchingRows.size,
-            rowTotalFor(
-                SettingsScreenGroups.playbackPlayer,
-                RowAdmissionFlags(
-                    isTv = false,
-                    showAdvanced = false,
-                    supportsScreenOrientation = false,
-                    supportsTouchGestures = true,
-                ),
-            ),
-        )
-        // Every non-advanced declaration renders with caps on (isTv off: the
-        // two TV rows ride isTv alone — shipped semantics, also without
-        // advanced mode), EXCEPT the still-watching rows and the
-        // pause-screensaver delay row, which ride their parent toggles (their
-        // declared WhenOn gates — the flags here carry no parentsOn).
-        assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } -
-                PlaybackPlayerStillWatchingRows.size,
-            rowTotalFor(
-                SettingsScreenGroups.playbackPlayer,
+                SettingsScreenGroups.playbackBasics,
                 RowAdmissionFlags(
                     isTv = false,
                     showAdvanced = false,
@@ -1038,13 +1091,18 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - // minus the still-dropped exception rows:
-                PlaybackPlayerTvRows.size - // the two TV rows
-                PlaybackPlayerStillWatchingRows.size - // the WhenOn(autoplay) still-watching rows
-                PlaybackPlayerPauseScreensaverDelayRows.size - // the WhenOn(pause_screensaver) delay row
-                PlaybackPlayerAutoPipRows.size, // the Platform(Pip) auto-PiP row (off on this desktop JVM's seam)
+            // Advanced mode reveals the advanced declarations EXCEPT the
+            // parent-gated and capability-gated rows: the WhenOn(autoplay)
+            // still-watching pair, the WhenOn(pause_screensaver) delay row,
+            // the Tv watch-next row (no TV here) and the Platform(Pip)
+            // auto-PiP row (off on this desktop JVM's seam).
+            SettingsScreenGroups.playbackBasics.items.size - // minus the still-dropped exception rows:
+                PlaybackBasicsStillWatchingRows.size -
+                PlaybackBasicsPauseScreensaverDelayRows.size -
+                PlaybackBasicsTvRows.size -
+                PlaybackBasicsAutoPipRows.size,
             rowTotalFor(
-                SettingsScreenGroups.playbackPlayer,
+                SettingsScreenGroups.playbackBasics,
                 RowAdmissionFlags(
                     isTv = false,
                     showAdvanced = true,
@@ -1053,27 +1111,82 @@ class SettingsCatalogScreenContractTest {
                 ),
             ),
         )
-        // On TV the two TV rows come back (they ride isTv alone — shipped
+        // On TV the watch-next row comes back (it rides isTv alone — shipped
         // semantics, also without advanced mode); every other advanced
-        // declaration (the resume-on-headset-plug row among them) admits
-        // under advanced, and the Always-admitted input-bindings editor row
-        // needs no advanced. The WhenOn(autoplay) still-watching rows (no
-        // parents on), the WhenOn(pause_screensaver) delay row (no parents
-        // on), and the Platform(Pip) auto-PiP row (off on this desktop JVM's
-        // seam — TV does not back it) drop.
+        // declaration admits under advanced. The WhenOn(autoplay)
+        // still-watching rows (no parents on), the WhenOn(pause_screensaver)
+        // delay row (no parents on), and the Platform(Pip) auto-PiP row (off
+        // on this desktop JVM's seam — TV does not back it) drop.
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - // minus the still-dropped exception rows:
-                PlaybackPlayerStillWatchingRows.size -
-                PlaybackPlayerPauseScreensaverDelayRows.size -
-                PlaybackPlayerAutoPipRows.size,
+            SettingsScreenGroups.playbackBasics.items.size - // minus the still-dropped exception rows:
+                PlaybackBasicsStillWatchingRows.size -
+                PlaybackBasicsPauseScreensaverDelayRows.size -
+                PlaybackBasicsAutoPipRows.size,
             rowTotalFor(
-                SettingsScreenGroups.playbackPlayer,
+                SettingsScreenGroups.playbackBasics,
                 RowAdmissionFlags(
                     isTv = true,
                     showAdvanced = true,
                     supportsScreenOrientation = true,
                     supportsTouchGestures = true,
                 ),
+            ),
+        )
+
+        // Controls: the six always rows (the Always-admitted input-bindings
+        // editor row included — every platform has some input surface) plus
+        // the capability forks; the four advanced rows behind the toggle.
+        val controlsAllGatesOff = rowTotalFor(
+            SettingsScreenGroups.playbackControls,
+            RowAdmissionFlags(
+                isTv = false,
+                showAdvanced = false,
+                supportsScreenOrientation = false,
+                supportsTouchGestures = false,
+            ),
+        )
+        assertEquals(
+            SettingsScreenGroups.playbackControls.items.count { !it.isAdvanced } -
+                PlaybackControlsOrientationRows.size -
+                PlaybackControlsTouchRows.size,
+            controlsAllGatesOff,
+        )
+        // With both capabilities forced on every declared row admits: the
+        // six always rows plus the four advanced rows behind the toggle.
+        assertEquals(
+            SettingsScreenGroups.playbackControls.items.size,
+            rowTotalFor(
+                SettingsScreenGroups.playbackControls,
+                RowAdmissionFlags(
+                    isTv = false,
+                    showAdvanced = true,
+                    supportsScreenOrientation = true,
+                    supportsTouchGestures = true,
+                ),
+            ),
+        )
+
+        // Chrome: every row is advanced (the group composes only behind the
+        // toggle); off-TV the Tv zoom drops.
+        assertEquals(
+            0,
+            rowTotalFor(
+                SettingsScreenGroups.playbackPlayerChrome,
+                RowAdmissionFlags(isTv = false, showAdvanced = false),
+            ),
+        )
+        assertEquals(
+            SettingsScreenGroups.playbackPlayerChrome.items.size - PlaybackChromeTvRows.size,
+            rowTotalFor(
+                SettingsScreenGroups.playbackPlayerChrome,
+                RowAdmissionFlags(isTv = false, showAdvanced = true),
+            ),
+        )
+        assertEquals(
+            SettingsScreenGroups.playbackPlayerChrome.items.size,
+            rowTotalFor(
+                SettingsScreenGroups.playbackPlayerChrome,
+                RowAdmissionFlags(isTv = true, showAdvanced = true),
             ),
         )
 
@@ -1307,71 +1420,97 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
-    fun `home display row total is the declared rows minus the gated pair plus the conditional unhide row`() {
-        // The count follows the emitted rows: the declared rows minus the
-        // unhide row (the content-gated +1 once hidden CW items exist) and
-        // minus the hero-slideshow interval row while its WhenOn
-        // (home_hero_style = slideshow) parent is off.
-        val displayRowsWithoutGatedPair = SettingsScreenGroups.homeDisplay.items.count {
-            it.id != HomeRows.UnhideCw.id && it.id != HomeRows.HomeHeroSlideshowInterval.id
+    fun `home leaf row totals track the split declarations`() {
+        // ADR-0017's home split: the display-main leaf's count follows its
+        // emitted rows — the declared rows minus the hero-slideshow interval
+        // row while its WhenOn (home_hero_style = slideshow) parent is off.
+        val displayRowsWithoutGatedRow = SettingsScreenGroups.homeDisplayMain.items.count {
+            it.id != HomeRows.HomeHeroSlideshowInterval.id
         }
-        assertEquals(displayRowsWithoutGatedPair, homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = false))
+        assertEquals(displayRowsWithoutGatedRow, homeDisplayMainScreenRowTotal(heroSlideshowOn = false))
         assertEquals(
-            displayRowsWithoutGatedPair + 1, // +1: the unhide row, once hidden CW items exist
-            homeDisplayScreenRowTotal(hiddenCwItems = 1, heroSlideshowOn = false),
+            displayRowsWithoutGatedRow + 1, // +1: the slideshow interval row, its parent on
+            homeDisplayMainScreenRowTotal(heroSlideshowOn = true),
         )
         assertEquals(
-            displayRowsWithoutGatedPair + 1, // +1: the slideshow interval row, its parent on
-            homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = true),
+            SettingsScreenGroups.homeDisplayMain.items.size - HomeDisplayMainGatedRows.size,
+            homeDisplayMainScreenRowTotal(heroSlideshowOn = false),
+            "the display-main declaration changed — update this pin",
         )
         assertEquals(
-            SettingsScreenGroups.homeDisplay.items.size - HomeDisplayGatedRows.size,
-            homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = false),
-            "the display declaration changed — update this pin",
+            SettingsScreenGroups.homeDisplayMain.itemIds.last(),
+            HomeRows.ContinueWatchingClick.id,
+            "the display-main declaration's catalog order drifted",
+        )
+
+        // The curation group: the declared rows (the strict derivation
+        // excludes the ContentGated unhide row) plus the conditional unhide
+        // row (the content-gated +1 once hidden CW items exist).
+        assertEquals(
+            SettingsScreenGroups.homeCuration.items.size - HomeCurationContentGatedRows.size,
+            homeCurationScreenRowTotal(hiddenCwItems = 0),
+        )
+        assertEquals(
+            SettingsScreenGroups.homeCuration.items.size - HomeCurationContentGatedRows.size + 1,
+            homeCurationScreenRowTotal(hiddenCwItems = 1),
+        )
+        assertEquals(
+            SettingsScreenGroups.homeCuration.items.size - HomeCurationContentGatedRows.size,
+            homeCurationScreenRowTotal(hiddenCwItems = 0),
+            "the curation declaration changed — update this pin",
         )
         // The unhide row is declared last, so the derived emission order
         // keeps it at the end.
-        assertEquals(HomeRows.UnhideCw.id, SettingsScreenGroups.homeDisplay.itemIds.last())
-        // …and they admit for emission (rowAdmitted's no-gate default /
-        // the WhenOn parent fed by the screen) — the screen's content-state
-        // `if`s carry their gates.
-        assertTrue(SettingsScreenGroups.homeDisplay.rowAdmitted(HomeRows.UnhideCw.id, RowAdmissionFlags()))
+        assertEquals(HomeRows.UnhideCw.id, SettingsScreenGroups.homeCuration.itemIds.last())
+        // …and it admits for emission (rowAdmitted's ContentGated default) —
+        // the screen's content-state `if` carries the gate.
+        assertTrue(SettingsScreenGroups.homeCuration.rowAdmitted(HomeRows.UnhideCw.id, RowAdmissionFlags()))
+
+        // The hub's Fine-tuning group: the whole declared tuning set — the
+        // slot only composes behind the advanced toggle, so the total reads
+        // the advanced leg.
+        assertEquals(
+            SettingsScreenGroups.homeTuning.items.size,
+            homeTuningScreenRowTotal(),
+        )
     }
 
     @Test
-    fun `appearance library row total is the declaration plus the reset action row`() {
+    fun `appearance library row totals are the declarations plus their screen-local terms`() {
         // Every declared row renders unconditionally (its declared Always —
-        // the shipped always-on set) and the screen-local confirm-library-
-        // reset action row is the explicit +1.
+        // the shipped always-on set). ADR-0017's split: the Library views
+        // leaf adds the screen-local confirm-library-reset action row (+1);
+        // the Detail screen leaf adds the section-order editor's reorderable
+        // rows (+10).
         assertEquals(
-            SettingsScreenGroups.appearanceLibrary.items.size,
-            rowTotalFor(SettingsScreenGroups.appearanceLibrary, RowAdmissionFlags()),
+            SettingsScreenGroups.appearanceLibraryViews.items.size,
+            rowTotalFor(SettingsScreenGroups.appearanceLibraryViews, RowAdmissionFlags()),
         )
         assertEquals(
-            SettingsScreenGroups.appearanceLibrary.items.size + 1 + DETAIL_SECTION_ORDER_EDITOR_ROWS,
-            appearanceLibraryScreenRowTotal(),
+            SettingsScreenGroups.appearanceLibraryViews.items.size + 1,
+            appearanceLibraryViewsScreenRowTotal(),
         )
-        // Declared rows (the library-content + detail-display residuals and
-        // the spec-backed toggles) plus the screen-local
-        // confirm-library-reset action row and the section-order editor's
-        // reorderable rows.
         assertEquals(
-            SettingsScreenGroups.appearanceLibrary.items.size +
-                1 + // +1: the screen-local confirm-library-reset action row
-                DETAIL_SECTION_ORDER_EDITOR_ROWS,
-            appearanceLibraryScreenRowTotal(),
+            SettingsScreenGroups.appearanceDetail.items.size,
+            rowTotalFor(SettingsScreenGroups.appearanceDetail, RowAdmissionFlags()),
+        )
+        assertEquals(
+            SettingsScreenGroups.appearanceDetail.items.size + DETAIL_SECTION_ORDER_EDITOR_ROWS,
+            appearanceDetailScreenRowTotal(),
         )
     }
 
     @Test
     fun `home cards row total is the card-display toggles with the TV-gated trickplay fork`() {
-        // The card-display quartet plus the badge/spoiler/trickplay toggles
-        // and the QoL wave-3 badge-window/counter rows: every row renders
-        // unconditionally on the home hub except the two TV-only trickplay
-        // rows (the preview toggle and the peek hold — both declared
-        // RowAdmission.Tv), so the strict derivation counts all twelve on TV
-        // and all but the trickplay pair off it.
-        assertEquals(12, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
+        // The card-display toggles, the badge/spoiler/trickplay cluster, the
+        // QoL wave-3 badge-window/counter rows and the card-chrome trio
+        // (ADR-0017's split moved scale/radius/animations off the former
+        // display group): every row renders unconditionally on the Cards &
+        // badges leaf except the two TV-only trickplay rows (the preview
+        // toggle and the peek hold — both declared RowAdmission.Tv), so the
+        // strict derivation counts all fifteen on TV and all but the
+        // trickplay pair off it.
+        assertEquals(15, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
         assertEquals(
             SettingsScreenGroups.homeCards.items.size,
             homeCardsScreenRowTotal(isTv = true),
@@ -1532,7 +1671,7 @@ class SettingsCatalogScreenContractTest {
 
     @Test
     fun `appearance expert group totals derive from their advanced declarations`() {
-        // The three advanced-only groups only compose behind the advanced
+        // The advanced-only groups only compose behind the advanced
         // structural block; their totals read the declared advanced base —
         // the whole declaration (the groups declare no other gates, per the
         // fully-covered exception pins above).
@@ -1543,6 +1682,17 @@ class SettingsCatalogScreenContractTest {
         assertEquals(
             SettingsScreenGroups.appearanceEyeCare.items.size,
             rowTotalFor(SettingsScreenGroups.appearanceEyeCare, RowAdmissionFlags(showAdvanced = true)),
+        )
+        // The Detail leaf's "Density & limits" group (the phase-5
+        // reclassification): same wholly-advanced base.
+        assertEquals(
+            SettingsScreenGroups.appearanceDetailTuning.items.size,
+            rowTotalFor(SettingsScreenGroups.appearanceDetailTuning, RowAdmissionFlags(showAdvanced = true)),
+        )
+        assertEquals(
+            0,
+            rowTotalFor(SettingsScreenGroups.appearanceDetailTuning, RowAdmissionFlags(showAdvanced = false)),
+            "the detail tuning group must stay wholly advanced",
         )
         // Newsletter: the declared trio minus the sections row
         // ([AppearanceNewsletterRuntimeReorderableRows] — it renders as the
@@ -1555,33 +1705,29 @@ class SettingsCatalogScreenContractTest {
     }
 
     /**
-     * The appearance screen sections in LazyColumn order — the same fold the
-     * shell derives from the screen's [PreferenceScreenGroup] slot
-     * declaration, so the trailing-shape adjust pin below runs the very
+     * The Theme & display leaf's sections in LazyColumn order — the same fold
+     * the shell derives from the leaf's [PreferenceScreenGroup] slot
+     * declaration ([ThemeSettingsScreenSlots], ADR-0017's appearance split:
+     * the advanced-only expert groups are the leaf's TRAILING slots now), so
+     * the trailing-shape adjust pin below runs the very
      * [deriveAdjustForAdvanced] the shell computes.
      */
     private val appearanceSections = listOf(
         SettingsScreenSection(SettingsScreenGroups.appearanceTheme.itemIdSet),
-        SettingsScreenSection(SettingsScreenGroups.appearanceNavigation.itemIdSet),
-        SettingsScreenSection(SettingsScreenGroups.appearanceLibrary.itemIdSet),
         SettingsScreenSection(SettingsScreenGroups.appearancePerformance.itemIdSet, advancedOnly = true),
         SettingsScreenSection(SettingsScreenGroups.appearanceEyeCare.itemIdSet, advancedOnly = true),
-        SettingsScreenSection(SettingsScreenGroups.appearanceNewsletter.itemIdSet, advancedOnly = true),
     )
 
     @Test
     fun `appearance trailing expert groups stay out of the derived scroll adjust when advanced is hidden`() {
-        // The shipped trailing shape: with advanced hidden the three trailing
+        // The shipped trailing shape: with advanced hidden the two trailing
         // expert groups don't compose (their ids cannot scroll → -1) and
-        // nothing trails them, so the three always-visible leading groups
-        // keep their indices; with advanced shown every group composes and
-        // the adjust is the identity.
-        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(3))
-        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(4))
-        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(5))
+        // nothing trails them, so the leading theme group keeps its index;
+        // with advanced shown every group composes and the adjust is the
+        // identity.
+        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(1))
+        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(2))
         assertEquals(0, deriveAdjustForAdvanced(appearanceSections, false)(0))
-        assertEquals(1, deriveAdjustForAdvanced(appearanceSections, false)(1))
-        assertEquals(2, deriveAdjustForAdvanced(appearanceSections, false)(2))
         for (raw in appearanceSections.indices) {
             assertEquals(raw, deriveAdjustForAdvanced(appearanceSections, true)(raw))
         }
@@ -1590,7 +1736,7 @@ class SettingsCatalogScreenContractTest {
         val appearanceGroups = appearanceSections.map { it.idSet }
         val expertId = SettingsScreenGroups.appearancePerformance.itemIds.first()
         assertEquals(
-            3,
+            1,
             resolveHighlightScrollIndex(expertId, appearanceGroups, deriveAdjustForAdvanced(appearanceSections, true)),
         )
         assertEquals(
@@ -1646,7 +1792,8 @@ class SettingsCatalogScreenContractTest {
     fun `screen-shell slot declarations derive the same hidden counts as their group declarations`() {
         // The migrated screens' hoisted slot declarations — the ONE
         // ordered declarations the screens map their hand-written bodies
-        // onto ([AppearanceSettingsScreenSlots] et al., beside each screen).
+        // onto ([AppearanceHubSlots]/[ThemeSettingsScreenSlots] et al.,
+        // beside each screen).
         // Consumed directly here, so a screen reorder or re-flag updates
         // both sides of every pin below at once instead of stranding a stale
         // replica. The default content-count hook IS the declared-admission
@@ -1658,33 +1805,49 @@ class SettingsCatalogScreenContractTest {
         // not move its hint. The deliberately-absent content-only slots (the
         // security screen's quick-connect and remote-control groups)
         // contribute zero by construction.
-        val appearanceSlots = AppearanceSettingsScreenSlots
+        val appearanceHubSlots = AppearanceHubSlots
+        val themeLeafSlots = ThemeSettingsScreenSlots
         val languageSlots = LanguageSettingsScreenSlots
         val storageSlots = StorageSettingsScreenSlots
         val securitySlots = SecuritySettingsScreenSlots
         val notificationSlots = NotificationSettingsScreenSlots
         val backupSlots = BackupSettingsScreenSlots
-        // The playback declaration is parameterized by the preferred player
-        // (the engine slot's content-count hook is the one runtime-keyed
-        // shape the flags vocabulary cannot express); the shipped JVM shape
-        // is the LIBVLC branch — this JVM's desktop seam backs the mpv
-        // device rows and the vlc branch is capability-free.
-        val playbackSlots = PlaybackSettingsScreenSlots(PlayerType.LIBVLC)
-        val appearanceGroups = listOf(
-            SettingsScreenGroups.appearanceTheme,
-            SettingsScreenGroups.appearanceNavigation,
-            SettingsScreenGroups.appearanceLibrary,
-            SettingsScreenGroups.appearancePerformance,
-            SettingsScreenGroups.appearanceEyeCare,
+        // ADR-0017: the combined playback screen became the hub + eight
+        // leaves. The engines leaf keeps the one runtime-keyed declaration —
+        // its slot is parameterized by the preferred player (the content-
+        // count hook is the shape the flags vocabulary cannot express); the
+        // shipped JVM shape is the LIBVLC branch — this JVM's desktop seam
+        // backs the mpv device rows and the vlc branch is capability-free.
+        val playbackHubSlots = PlaybackHubSlots
+        val playbackEngineSlots = PlayerEngineSettingsScreenSlots(PlayerType.LIBVLC)
+        // ADR-0017's appearance split: the hub keeps the newsletter trio (the
+        // declared hub exception), and the Theme & display leaf hosts the
+        // theme group plus the advanced-only Performance/Eye-care trailing
+        // slots.
+        val appearanceHubGroups = listOf(
+            SettingsScreenGroups.appearanceHub,
             SettingsScreenGroups.appearanceNewsletter,
         )
         assertEquals(
-            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
-            hiddenRowsFor(appearanceSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            hiddenRowsFor(appearanceHubGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            hiddenRowsFor(appearanceHubSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)),
         )
         assertEquals(
-            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
-            hiddenRowsFor(appearanceSlots, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+            hiddenRowsFor(appearanceHubGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+            hiddenRowsFor(appearanceHubSlots, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+        )
+        val themeLeafGroups = listOf(
+            SettingsScreenGroups.appearanceTheme,
+            SettingsScreenGroups.appearancePerformance,
+            SettingsScreenGroups.appearanceEyeCare,
+        )
+        assertEquals(
+            hiddenRowsFor(themeLeafGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            hiddenRowsFor(themeLeafSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+        )
+        assertEquals(
+            hiddenRowsFor(themeLeafGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+            hiddenRowsFor(themeLeafSlots, RowAdmissionFlags(showAdvanced = false, isTv = true)),
         )
         assertEquals(
             hiddenRowsFor(
@@ -1698,12 +1861,49 @@ class SettingsCatalogScreenContractTest {
                 listOf(
                     SettingsScreenGroups.storageCache,
                     SettingsScreenGroups.storageNetwork,
-                    SettingsScreenGroups.storageDownloads,
+                    SettingsScreenGroups.storageNetworkTuning,
                 ),
                 RowAdmissionFlags(showAdvanced = false),
             ),
             hiddenRowsFor(storageSlots, RowAdmissionFlags(showAdvanced = false)),
         )
+        // The Detail leaf's slots (ADR-0017's appearance split + the phase-5
+        // reclassification): the visible detail group plus the advanced
+        // "Density & limits" trailing slot — the shell count IS the thirteen.
+        assertEquals(
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.appearanceDetail, SettingsScreenGroups.appearanceDetailTuning),
+                RowAdmissionFlags(showAdvanced = false, isTv = false),
+            ),
+            hiddenRowsFor(DetailDisplaySettingsScreenSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+        )
+        assertEquals(
+            13,
+            hiddenRowsFor(DetailDisplaySettingsScreenSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            "the detail leaf hint drifted",
+        )
+        // ADR-0017's home + storage splits: the home hub's slots (entrances +
+        // the advanced Fine-tuning exception) and the leaves' slot lists, the
+        // Downloads sibling's single slot — same parity shape as the
+        // appearance split. The phase-5 parity fix: the tuning rows carry
+        // their declared advanced gates now, so the default declared-
+        // admission hook derives the honest 8 — the group-level derivation
+        // and the slot's hook agree (both 8; no content-count hook, no
+        // double-count).
+        val homeHubSlots = HomeSettingsScreenSlots
+        assertEquals(
+            8,
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.homeHub, SettingsScreenGroups.homeTuning),
+                RowAdmissionFlags(showAdvanced = false, isTv = false),
+            ),
+            "the group-level tuning derivation must agree with the slot's 8",
+        )
+        assertEquals(8, hiddenRowsFor(homeHubSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)), "the home hub hint drifted")
+        assertEquals(0, hiddenRowsFor(HomeDisplaySettingsScreenSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)), "the display leaf grew an advanced row")
+        assertEquals(0, hiddenRowsFor(HomeRowsSettingsScreenSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)), "the rows leaf grew an advanced row")
+        assertEquals(0, hiddenRowsFor(HomeCardsSettingsScreenSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)), "the cards leaf grew an advanced row")
+        assertEquals(0, hiddenRowsFor(DownloadsSettingsScreenSlots, RowAdmissionFlags(showAdvanced = false)), "the downloads screen grew an advanced row")
         assertEquals(
             hiddenRowsFor(
                 listOf(SettingsScreenGroups.security),
@@ -1735,33 +1935,31 @@ class SettingsCatalogScreenContractTest {
             hiddenRowsFor(backupSlots, RowAdmissionFlags()),
         )
 
-        // Playback: the engine slot's prefix hook is the declared-admission
-        // delta over the branch the screen emits — the shell count is the
-        // plain groups' delta plus that one branch term (this JVM's desktop
-        // seam backs the mpv device rows; the vlc branch is capability-free).
+        // Playback hub: the entrance rows declare Always — the hub declares
+        // no advanced rows, so its derived hint is flat zero (the advanced
+        // tiers live on the leaves now).
         val desktop = RowAdmissionFlags(showAdvanced = false)
-        val plainPlaybackGroups = listOf(
-            SettingsScreenGroups.playbackPlayer,
-            SettingsScreenGroups.playbackAdvancedVideo,
-            SettingsScreenGroups.playbackMediaSegments,
-            SettingsScreenGroups.playbackSyncPlay,
-            SettingsScreenGroups.playbackCasting,
-            SettingsScreenGroups.playbackDvr,
-        )
         assertEquals(
-            hiddenRowsFor(plainPlaybackGroups, desktop) +
-                (
-                    rowTotalFor(SettingsScreenGroups.playbackEngine, desktop.copy(showAdvanced = true)) { it.id.startsWith("vlc_") } -
-                        rowTotalFor(SettingsScreenGroups.playbackEngine, desktop) { it.id.startsWith("vlc_") }
-                    ),
-            hiddenRowsFor(playbackSlots, desktop),
+            0,
+            hiddenRowsFor(playbackHubSlots, desktop),
+            "the playback hub grew an advanced row (or an entrance lost its Always gate)",
+        )
+        // Engines leaf: the leaf hosts ONLY the engine slot, so the shell
+        // count IS the branch term — the slot's prefix hook differences the
+        // preferred player's rows across the advanced leg (vlc here: the
+        // branch is capability-free; the desktop seam backs the mpv device
+        // rows for the mpv arm).
+        assertEquals(
+            rowTotalFor(SettingsScreenGroups.playbackEngine, desktop.copy(showAdvanced = true)) { it.id.startsWith("vlc_") } -
+                rowTotalFor(SettingsScreenGroups.playbackEngine, desktop) { it.id.startsWith("vlc_") },
+            hiddenRowsFor(playbackEngineSlots, desktop),
         )
         // …and it is honest where the frozen literal was not: the count moves
         // with the engine branch (vlc's declared row count differs from mpv's
         // desktop-gated one) instead of sitting at a hand-picked constant.
-        val mpvSlots = PlaybackSettingsScreenSlots(PlayerType.MPV)
+        val mpvSlots = PlayerEngineSettingsScreenSlots(PlayerType.MPV)
         assertTrue(
-            hiddenRowsFor(playbackSlots, desktop) != hiddenRowsFor(mpvSlots, desktop),
+            hiddenRowsFor(playbackEngineSlots, desktop) != hiddenRowsFor(mpvSlots, desktop),
             "the derived playback hint must track the engine branch (the frozen 28 could not)",
         )
 
@@ -1798,12 +1996,14 @@ class SettingsCatalogScreenContractTest {
         assertTrue(signOutFromServer.action is SettingsSearchResultAction.OpenSignOutDialog && signOutFromServer.action.fromServer)
         assertFalse(signOutFromServer.recordRecent)
 
-        // Bare-settings screensaver targets reveal their on-screen group: no
-        // navigation, only the pending highlight.
+        // A moved tuning row (ADR-0017: the dream rows live on the Ambient
+        // screen) navigates like any other sub-screen row — the id baked into
+        // its owning screen's route, highlight marked.
         val screensaver = settingsResultClickAction(
-            SystemRows.ScreensaverKenBurns.id, Route.Settings, isAdvanced = false, showAdvancedSettings = true,
+            SystemRows.ScreensaverKenBurns.id, Route.AmbientSettings(), isAdvanced = false, showAdvancedSettings = true,
         )
-        assertTrue(screensaver.action is SettingsSearchResultAction.NoOp)
+        val screensaverAction = screensaver.action as SettingsSearchResultAction.NavigateToScreen
+        assertEquals(Route.AmbientSettings(SystemRows.ScreensaverKenBurns.id), screensaverAction.route)
         assertEquals(SystemRows.ScreensaverKenBurns.id, screensaver.pendingHighlightId)
         assertTrue(screensaver.recordRecent)
 
@@ -1836,49 +2036,45 @@ class SettingsCatalogScreenContractTest {
 
         val on = settingsResultClickAction(AudioRows.Equalizer.id, Route.AudioSettings(), isAdvanced = true, showAdvancedSettings = true)
         assertFalse(on.enableAdvanced)
+
+        // The phase-5 parity proof: a FINE-TUNING row's search hit arms the
+        // gate. The home hub's refresh-cadence tuning row carries its
+        // advanced face on the CATALOG item itself (the spec-flag flip), so
+        // the arm decision derives from the same face the search pane
+        // renders — no hand-restated flag.
+        val tuningHit = SettingsSearchCatalog.items.single { it.id == HomeRows.HomeRefreshCadence.id }
+        assertTrue(tuningHit.isAdvanced, "the tuning row's search face must carry the advanced flag")
+        val armed = settingsResultClickAction(tuningHit.id, tuningHit.route, isAdvanced = tuningHit.isAdvanced, showAdvancedSettings = false)
+        assertTrue(armed.enableAdvanced, "a tuning-row search hit must auto-arm the advanced gate")
     }
 
-    // ── 9. The root screen's on-screen reveal contract ──────────────────
+    // ── 9. The bare-Settings route totality contract ────────────────────
 
     /**
-     * The catalog ids routed bare-`Route.Settings` resolve (minus the two
-     * destructive actions) to the NoOp reveal arm: the pending highlight is
-     * the row's ONLY reveal, which surfaces solely when the row's
-     * [SettingsScreenGroups.rootRevealGroups] group auto-expands from
-     * `lastClickedSettingId`. A reveal id parked in a group outside the
-     * declaration renders its highlight inside a collapsed card — the
-     * `jellyplay_feature_*` class of bug — so the coverage must be total.
+     * ADR-0017 emptied the root's on-screen settings surface: every former
+     * inline group (the screensaver/idle-ambient tuning groups, Discord +
+     * shell hooks, the plugin section) moved onto its declared screen, so a
+     * search hit routes to THAT screen with the id baked in — the NoOp
+     * reveal arm of `settingsResultClickAction` has no on-screen rows left.
+     * The only catalog rows routed bare-`Route.Settings` are the two
+     * destructive account actions, which resolve to confirm dialogs before
+     * any navigation (section 8). This pin holds that totality in BOTH
+     * directions: no searchable row may land on the root (a new on-screen
+     * root row must declare a real route like every other row), and the two
+     * dialog actions must stay the exact bare-Settings set (a route change
+     * there is a reviewed semantics change, not a refactor).
      */
     @Test
-    fun `every on-screen reveal id belongs to a root-screen reveal group`() {
-        val revealIds = SettingsSearchCatalog.items
-            .filter { it.route == Route.Settings }
-            .map { it.id } - setOf(AccountRows.Logout.id, AccountRows.SignOutFromServer.id)
-        assertTrue(revealIds.isNotEmpty(), "no bare-Settings reveal ids found — the route scan is broken")
-        val covered = SettingsScreenGroups.rootRevealGroups.flatMap { it.itemIdSet }.toSet()
-        val uncovered = revealIds.filterNot { it in covered }
-        assertEquals(
-            emptyList(),
-            uncovered,
-            "reveal ids whose root-screen group does not auto-expand for them — wire the group's " +
-                "initiallyExpanded to lastClickedSettingId ∈ itemIdSet and declare it in rootRevealGroups",
-        )
-    }
-
-    /** The reverse pin: a group in the reveal declaration whose ids stopped routing bare-Settings is stale. */
-    @Test
-    fun `every reveal-group id is itself a bare-Settings reveal id`() {
-        val revealIds = SettingsSearchCatalog.items
+    fun `the only bare-Settings routes are the two destructive account actions`() {
+        val bareSettingsIds = SettingsSearchCatalog.items
             .filter { it.route == Route.Settings }
             .map { it.id }
-            .toSet()
-        val stray = SettingsScreenGroups.rootRevealGroups
-            .flatMap { it.itemIdSet }
-            .filterNot { it in revealIds }
         assertEquals(
-            emptyList(),
-            stray,
-            "groups parked in rootRevealGroups that no longer target the root screen — drop them from the declaration",
+            listOf(AccountRows.Logout.id, AccountRows.SignOutFromServer.id),
+            bareSettingsIds,
+            "a searchable row routes bare-Settings onto the root screen — ADR-0017 moved every " +
+                "on-screen root row onto its declared screen; route the row to its owning screen " +
+                "(the bare-Route.Settings arm of settingsResultClickAction is dialog-only now)",
         )
     }
 
@@ -1905,18 +2101,46 @@ class SettingsCatalogScreenContractTest {
      * copies (`withHighlightSettingId`) match the bare binding.
      */
     private val screenGroupsByRoute: Map<KClass<out Route>, List<SettingsSearchItemGroup>> = mapOf(
+        // ADR-0017's appearance split: the hub hosts the entrance group plus
+        // the newsletter advanced group (the declared hub exception), each
+        // leaf its domain groups (the Theme leaf hosts the theme +
+        // performance + eye-care trio).
         Route.AppearanceSettings::class to listOf(
-            SettingsScreenGroups.appearanceTheme,
-            SettingsScreenGroups.appearanceNavigation,
-            SettingsScreenGroups.appearanceLibrary,
-            SettingsScreenGroups.appearancePerformance,
-            SettingsScreenGroups.appearanceEyeCare,
+            SettingsScreenGroups.appearanceHub,
             SettingsScreenGroups.appearanceNewsletter,
         ),
+        Route.ThemeSettings::class to listOf(
+            SettingsScreenGroups.appearanceTheme,
+            SettingsScreenGroups.appearancePerformance,
+            SettingsScreenGroups.appearanceEyeCare,
+        ),
+        Route.LibraryDisplaySettings::class to listOf(
+            SettingsScreenGroups.appearanceLibraryViews,
+        ),
+        Route.DetailDisplaySettings::class to listOf(
+            SettingsScreenGroups.appearanceDetail,
+            SettingsScreenGroups.appearanceDetailTuning,
+        ),
+        Route.NavigationDisplaySettings::class to listOf(
+            SettingsScreenGroups.appearanceNavigation,
+        ),
+        // ADR-0017's home split: the hub hosts the entrance group plus the
+        // advanced-gated Fine-tuning group (the declared hub exception), each
+        // leaf its domain groups (the Rows & layout leaf hosts the Next Up +
+        // layout + curation trio).
         Route.HomeSettings::class to listOf(
-            SettingsScreenGroups.homeDisplay,
+            SettingsScreenGroups.homeHub,
+            SettingsScreenGroups.homeTuning,
+        ),
+        Route.HomeDisplaySettings::class to listOf(
+            SettingsScreenGroups.homeDisplayMain,
+        ),
+        Route.HomeRowsSettings::class to listOf(
             SettingsScreenGroups.homeNextUp,
             SettingsScreenGroups.homeLayout,
+            SettingsScreenGroups.homeCuration,
+        ),
+        Route.HomeCardsSettings::class to listOf(
             SettingsScreenGroups.homeCards,
         ),
         Route.PerformanceSettings::class to listOf(
@@ -1926,32 +2150,76 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.performanceAmbient,
             SettingsScreenGroups.playbackBuffers,
         ),
+        // ADR-0017's playback hub split: the hub hosts the entrance group,
+        // each leaf its domain groups (SyncPlay & casting hosts the pair).
         Route.PlaybackSettings::class to listOf(
-            SettingsScreenGroups.playbackPlayer,
+            SettingsScreenGroups.playbackHub,
+        ),
+        Route.PlaybackBasics::class to listOf(
+            SettingsScreenGroups.playbackBasics,
+        ),
+        Route.PlaybackControls::class to listOf(
+            SettingsScreenGroups.playbackControls,
+        ),
+        Route.PlayerChromeSettings::class to listOf(
+            SettingsScreenGroups.playbackPlayerChrome,
+        ),
+        Route.PlaybackVideoQuality::class to listOf(
             SettingsScreenGroups.playbackAdvancedVideo,
+        ),
+        Route.PlayerEngineSettings::class to listOf(
             SettingsScreenGroups.playbackEngine,
+        ),
+        Route.MediaSegmentSettings::class to listOf(
+            SettingsScreenGroups.playbackMediaSegments,
+        ),
+        Route.SyncPlayCastingSettings::class to listOf(
             SettingsScreenGroups.playbackSyncPlay,
             SettingsScreenGroups.playbackCasting,
+        ),
+        Route.LiveTvDvrSettings::class to listOf(
             SettingsScreenGroups.playbackDvr,
-            SettingsScreenGroups.playbackMediaSegments,
         ),
         Route.AudioSettings::class to listOf(
             SettingsScreenGroups.audio,
             SettingsScreenGroups.audioCache,
+            SettingsScreenGroups.audioFineTuning,
         ),
         Route.LanguageSettings::class to listOf(
             SettingsScreenGroups.languageGeneral,
             SettingsScreenGroups.languageTrackSelection,
             SettingsScreenGroups.languageSubtitles,
         ),
+        // ADR-0017's storage split: the cache + network halves stay on the
+        // storage screen (plus the advanced Network diagnostics group — the
+        // phase-5 reclassification); the Downloads group is the sibling
+        // screen.
         Route.StorageSettings::class to listOf(
             SettingsScreenGroups.storageCache,
             SettingsScreenGroups.storageNetwork,
+            SettingsScreenGroups.storageNetworkTuning,
+        ),
+        Route.DownloadsSettings::class to listOf(
             SettingsScreenGroups.storageDownloads,
         ),
         Route.SecuritySettings::class to listOf(SettingsScreenGroups.security),
         Route.NotificationSettings::class to listOf(SettingsScreenGroups.notifications),
         Route.BackupSettings::class to listOf(SettingsScreenGroups.backup),
+        // ADR-0017: the TV dream + desktop idle-ambient groups as ONE Ambient
+        // screen; the desktop-integration groups on the Integrations screen;
+        // the plugin per-feature switches on the plugin screen.
+        Route.AmbientSettings::class to listOf(
+            SettingsScreenGroups.systemScreensaver,
+            SettingsScreenGroups.systemIdleAmbient,
+        ),
+        Route.Integrations::class to listOf(
+            SettingsScreenGroups.integrations,
+            SettingsScreenGroups.systemDiscordPresence,
+            SettingsScreenGroups.systemHooks,
+        ),
+        Route.JellyPlayPluginSettings::class to listOf(
+            SettingsScreenGroups.jellyplayFeatures,
+        ),
     )
 
     /**
@@ -1966,7 +2234,7 @@ class SettingsCatalogScreenContractTest {
     private val routesWithoutDeclaredGroups: Map<KClass<out Route>, String> = mapOf(
         // The root screen's coverage is its own family (section 9 pins
         // rootRevealGroups, the auto-expand subset of the root's groups).
-        Route.Settings::class to "the root screen — pinned by the section-9 reveal family",
+        Route.Settings::class to "the root screen — pinned by the section-9 bare-Settings totality family",
         // Navigation-only destinations: the row is a launcher (the activity
         // insights / system entrances, the management screens, the tools),
         // not a highlight target.
@@ -1987,7 +2255,6 @@ class SettingsCatalogScreenContractTest {
         Route.HomeLayoutPresets::class to "HomeLayoutPresetsScreen (inline body) — migrate onto the shell",
         Route.LibraryHomeSections::class to "LibraryHomeSectionsScreen (inline body) — migrate onto the shell",
         Route.DiscoverRows::class to "DiscoverRowsScreen (inline body) — migrate onto the shell",
-        Route.Integrations::class to "IntegrationsScreen (bespoke body) — migrate onto the shell",
         Route.SeerrSettings::class to "SeerrSettingsScreen (inline body) — migrate onto the shell",
         Route.JellyPlaySync::class to "JellyPlaySyncScreen (bespoke body) — migrate onto the shell",
         Route.About::class to "AboutScreen (bespoke body) — migrate onto the shell",
@@ -2003,7 +2270,41 @@ class SettingsCatalogScreenContractTest {
      * (its route's [routesWithoutDeclaredGroups] entry names the target).
      */
     private val declaredIdsRoutingElsewhere: Map<KClass<out Route>, Set<String>> = mapOf(
+        // The playback hub's eight entrance rows (ADR-0017): rows the hub
+        // renders that deep-link the leaf screens they open.
+        Route.PlaybackSettings::class to setOf(
+            PlaybackRows.BasicsEntrance.id, // → Route.PlaybackBasics
+            PlaybackRows.ControlsEntrance.id, // → Route.PlaybackControls
+            PlaybackRows.PlayerChromeEntrance.id, // → Route.PlayerChromeSettings
+            PlaybackRows.VideoQualityEntrance.id, // → Route.PlaybackVideoQuality
+            PlaybackRows.PlayerEnginesEntrance.id, // → Route.PlayerEngineSettings
+            PlaybackRows.SegmentsEntrance.id, // → Route.MediaSegmentSettings
+            PlaybackRows.SyncPlayCastingEntrance.id, // → Route.SyncPlayCastingSettings
+            PlaybackRows.LiveTvDvrEntrance.id, // → Route.LiveTvDvrSettings
+        ),
+        // The appearance hub's four entrance rows (ADR-0017's appearance
+        // split): rows the hub renders that deep-link the leaf screens they
+        // open. (The newsletter trio is NOT exempt: it routes to and renders
+        // on the hub itself.)
+        Route.AppearanceSettings::class to setOf(
+            AppearanceRows.ThemeEntrance.id, // → Route.ThemeSettings
+            AppearanceRows.LibraryViewsEntrance.id, // → Route.LibraryDisplaySettings
+            AppearanceRows.DetailDisplayEntrance.id, // → Route.DetailDisplaySettings
+            AppearanceRows.NavigationEntrance.id, // → Route.NavigationDisplaySettings
+        ),
+        // The home hub's three entrance rows (ADR-0017's home split): rows
+        // the hub renders that deep-link the leaf screens they open. (The
+        // Fine-tuning group is NOT exempt: its rows route to and render on
+        // the hub itself.)
         Route.HomeSettings::class to setOf(
+            HomeRows.DisplayEntrance.id, // → Route.HomeDisplaySettings
+            HomeRows.RowsLayoutEntrance.id, // → Route.HomeRowsSettings
+            HomeRows.CardsEntrance.id, // → Route.HomeCardsSettings
+        ),
+        // The Rows & layout leaf renders the home drill-in launchers (the
+        // former hub screen's set moved whole with the layout group) plus
+        // the exclusion/hidden-libraries restore rows.
+        Route.HomeRowsSettings::class to setOf(
             HomeRows.NextUpHidden.id, // → Route.NextUpExcluded
             HomeRows.HiddenLibraries.id, // → Route.MyMediaHidden
             HomeRows.PinnedHomeSections.id, // → Route.PinnedHomeSections
@@ -2011,10 +2312,17 @@ class SettingsCatalogScreenContractTest {
             HomeRows.ConfigureLibraries.id, // → Route.LibraryHomeSections
             HomeRows.DiscoverRows.id, // → Route.DiscoverRows
         ),
+        // The Integrations hub's launcher trio: rows the hub renders that
+        // deep-link the dedicated surfaces they open (the hub itself and the
+        // subtitle drill-in route Integrations — same class, covered above).
+        Route.Integrations::class to setOf(
+            IntegrationsRows.SeerrSettings.id, // → Route.SeerrSettings
+        ),
         Route.LanguageSettings::class to setOf(
             LanguageRows.SubtitleTester.id, // → Route.SubtitleTester
         ),
     )
+
 
     /** The data-driven scan: every catalog route kind is bound or named. */
     @Test
@@ -2031,13 +2339,203 @@ class SettingsCatalogScreenContractTest {
         )
         // The staleness leg: every binding and every named exemption still
         // has catalog items routed to it (a migrated-away entry or an
-        // exemption whose row died is deleted, not kept).
-        val stale = (screenGroupsByRoute.keys + routesWithoutDeclaredGroups.keys) - routeKinds
+        // exemption whose row died is deleted, not kept). The launcher
+        // routes are exempt: their group's ids route the leaves they open,
+        // so no catalog item routes to the launcher itself (by design).
+        val stale = (screenGroupsByRoute.keys + routesWithoutDeclaredGroups.keys) - routeKinds - launcherRoutes.keys
         assertEquals(
             emptySet(),
             stale,
             "declared/exempt routes with no catalog items routed to them — delete the stale entry",
         )
+    }
+
+    /**
+     * The launcher routes (ADR-0017's domain hubs): declaration-path screens
+     * whose declared entrance group's rows are composite entrances that
+     * deep-link the leaves they open — so no ENTRANCE routes to the launcher
+     * itself. Each entry names why the route is a launcher. A launcher MAY
+     * keep one inline advanced group routed to it
+     * ([launcherInlineGroups] — the glossary's declared hub exception: the
+     * appearance hub's newsletter trio); a launcher without an entry there
+     * is strict (nothing routes to it).
+     */
+    private val launcherRoutes: Map<KClass<out Route>, String> = mapOf(
+        Route.PlaybackSettings::class to
+            "the playback hub — its eight entrance rows route the leaves they open",
+        Route.AppearanceSettings::class to
+            "the appearance hub — its four entrance rows route the leaves they open; " +
+            "the newsletter advanced group is the declared hub exception and stays routed here",
+        Route.HomeSettings::class to
+            "the home hub — its three entrance rows route the leaves they open; " +
+            "the Fine-tuning advanced group is the declared hub exception and stays routed here",
+    )
+
+    /**
+     * The ONE inline group a launcher keeps routed to itself (absent = the
+     * strict launcher: nothing routes to it). The appearance hub's newsletter
+     * advanced group is the glossary's declared hub exception — its rows are
+     * real hub rows, not entrances. The home hub's Fine-tuning group is the
+     * same declared shape. (Both launchers also keep their inline group's
+     * GROUP-CARD hit routed here — the card ids join the forward pin's
+     * allowed set through this map's groups.)
+     */
+    private val launcherInlineGroups: Map<KClass<out Route>, SettingsSearchItemGroup> = mapOf(
+        Route.AppearanceSettings::class to SettingsScreenGroups.appearanceNewsletter,
+        Route.HomeSettings::class to SettingsScreenGroups.homeTuning,
+    )
+
+    /**
+     * The declared GROUP-CARD search items (the group-grain card concept):
+     * each entry pins card id ↔ owning group ↔ hosting route class. A card
+     * face is declared ONLY on an advancedOnly group that renders a labeled
+     * card — the five "hidden card" groups — so the card ids here are exactly
+     * [SettingsScreenGroups.all]'s non-null [SettingsSearchItemGroup.cardItem]s
+     * (the totality leg of the test below); a sixth advancedOnly group
+     * without a rendered label card declares no card face and is named in
+     * the test body.
+     */
+    private val groupCardItems: List<GroupCardPin> = listOf(
+        GroupCardPin("home.tuning", SettingsScreenGroups.homeTuning, Route.HomeSettings::class),
+        GroupCardPin("appearance.detailTuning", SettingsScreenGroups.appearanceDetailTuning, Route.DetailDisplaySettings::class),
+        GroupCardPin("appearance.newsletter", SettingsScreenGroups.appearanceNewsletter, Route.AppearanceSettings::class),
+        GroupCardPin("audio.fineTuning", SettingsScreenGroups.audioFineTuning, Route.AudioSettings::class),
+        GroupCardPin("storage.networkTuning", SettingsScreenGroups.storageNetworkTuning, Route.StorageSettings::class),
+    )
+
+    /** One declared group-card pin: the card id, its owning group, its hosting route class. */
+    private data class GroupCardPin(
+        val cardId: String,
+        val group: SettingsSearchItemGroup,
+        val hostingRoute: KClass<out Route>,
+    )
+
+    /**
+     * The group-card pins, both legs. The card leg: each declared card item
+     * exists, carries its group's id and title resource, isAdvanced (the
+     * advancedOnly slot shape the declared cards ride — the hit auto-arms
+     * the power-user gate), non-empty keywords (the catalog ratchet), and a
+     * route of the declared hosting class whose BAKED highlight is the
+     * group's FIRST member row id (the expand + scroll + glow path is the
+     * existing row-id machinery — the card deep-links through it with zero
+     * new landing code). The totality leg: the catalog's card set is EXACTLY
+     * this pin list — a new card face joins here (and its hosting route's
+     * forward pin above) or the aggregation fails loudly.
+     */
+    @Test
+    fun `group card items are pinned to their groups and land on the first member row`() {
+        groupCardItems.forEach { pin ->
+            val card = requireNotNull(pin.group.cardItem) { "${pin.group.id} declares no card item — update this pin or drop the face" }
+            assertEquals(pin.cardId, card.id, "${pin.group.id}'s card id must be the group's id")
+            assertEquals(pin.group.id, card.id, "card id and owning group id drifted")
+            assertEquals(pin.hostingRoute, card.route::class, "${pin.cardId} must route its hosting screen")
+            assertTrue(card.isAdvanced, "${pin.cardId} must auto-arm the power-user gate (advancedOnly slot shape)")
+            assertTrue(card.keywords.isNotEmpty(), "${pin.cardId} carries no keywords")
+            assertEquals(
+                pin.group.itemIds.first(),
+                highlightOf(card.route),
+                "${pin.cardId}'s baked highlight must be the group's first member row id",
+            )
+        }
+        // Totality: the catalog's card set is exactly the pinned ids (the
+        // rows+card concatenation keeps every card hit adjacent to its
+        // group's rows in the curated flat order).
+        val pinnedCardIds = groupCardItems.map { it.cardId }.toSet()
+        assertEquals(
+            groupCardItems.map { it.cardId },
+            SettingsSearchCatalog.items.map { it.id }.filter { it in pinnedCardIds },
+        )
+        assertEquals(
+            groupCardItems.map { it.cardId }.toSet(),
+            SettingsScreenGroups.all.mapNotNull { it.cardItem?.id }.toSet(),
+            "a card face was declared without (or removed from) this pin list",
+        )
+        // The landing fold and the baked route agree: the dispatch injects
+        // exactly the id the card's route already carries.
+        groupCardItems.forEach { pin ->
+            val baked = highlightOf(requireNotNull(pin.group.cardItem).route)
+            assertEquals(baked, groupCardLandingRowId(pin.cardId), "${pin.cardId}'s fold and baked landing drifted")
+        }
+        assertNull(groupCardLandingRowId("__no_such_card__"), "a non-card id must fold to identity (null → self)")
+    }
+
+    /** The baked highlight id of a highlightable route (null when none). */
+    private fun highlightOf(route: Route): String? = when (route) {
+        is Route.HomeSettings -> route.highlightSettingId
+        is Route.AudioSettings -> route.highlightSettingId
+        is Route.DetailDisplaySettings -> route.highlightSettingId
+        is Route.StorageSettings -> route.highlightSettingId
+        is Route.AppearanceSettings -> route.highlightSettingId
+        else -> null
+    }
+
+    /**
+     * The hub entrance rows' explicit destinations (entrance id → the route
+     * class it deep-links). Spelled out here — NOT derived from the rows'
+     * declared routes — so a row whose route drifts to the wrong leaf fails
+     * the pin instead of redefining its own expectation. The forward pin's
+     * launcher exemption is per-entrance: an id may be absent from screen R's
+     * declared groups only while R is the destination this map names, so an
+     * entrance routed to the wrong leaf is never silently exempted.
+     */
+    private val hubEntranceDestinations: Map<String, KClass<out Route>> = mapOf(
+        PlaybackRows.BasicsEntrance.id to Route.PlaybackBasics::class,
+        PlaybackRows.ControlsEntrance.id to Route.PlaybackControls::class,
+        PlaybackRows.PlayerChromeEntrance.id to Route.PlayerChromeSettings::class,
+        PlaybackRows.VideoQualityEntrance.id to Route.PlaybackVideoQuality::class,
+        PlaybackRows.PlayerEnginesEntrance.id to Route.PlayerEngineSettings::class,
+        PlaybackRows.SegmentsEntrance.id to Route.MediaSegmentSettings::class,
+        PlaybackRows.SyncPlayCastingEntrance.id to Route.SyncPlayCastingSettings::class,
+        PlaybackRows.LiveTvDvrEntrance.id to Route.LiveTvDvrSettings::class,
+        AppearanceRows.ThemeEntrance.id to Route.ThemeSettings::class,
+        AppearanceRows.LibraryViewsEntrance.id to Route.LibraryDisplaySettings::class,
+        AppearanceRows.DetailDisplayEntrance.id to Route.DetailDisplaySettings::class,
+        AppearanceRows.NavigationEntrance.id to Route.NavigationDisplaySettings::class,
+        HomeRows.DisplayEntrance.id to Route.HomeDisplaySettings::class,
+        HomeRows.RowsLayoutEntrance.id to Route.HomeRowsSettings::class,
+        HomeRows.CardsEntrance.id to Route.HomeCardsSettings::class,
+    )
+
+    /**
+     * The Rows & layout leaf's route binding must be the same group set its
+     * screen renders ([HomeRowsSettingsScreenSlots]) — a hand-copied binding
+     * could validate a different set than the screen emits. The slots expose
+     * only their id sets, so the parity is ID-based; the hidden-row count
+     * assertion beside the slot pin stays separate.
+     */
+    @Test
+    fun `the Rows and layout route binding matches the screen's slot declaration`() {
+        assertEquals(
+            HomeRowsSettingsScreenSlots.map { it.idSet },
+            screenGroupsByRoute.getValue(Route.HomeRowsSettings::class).map { it.itemIdSet },
+            "the Route.HomeRowsSettings binding drifted from HomeRowsSettingsScreenSlots — " +
+                "the route-binding check would validate groups the screen does not render",
+        )
+    }
+
+    /**
+     * The entrance-destination map is total over the hubs' entrance rows and
+     * every entrance actually routes the destination it names — the two legs
+     * the forward pin's per-entrance exemption stands on.
+     */
+    @Test
+    fun `every hub entrance routes its explicit destination`() {
+        val entranceIds = SettingsScreenGroups.playbackHub.itemIdSet +
+            SettingsScreenGroups.appearanceHub.itemIdSet +
+            SettingsScreenGroups.homeHub.itemIdSet
+        assertEquals(
+            entranceIds,
+            hubEntranceDestinations.keys,
+            "hub entrance ids and hubEntranceDestinations drifted — add/remove the row's entry beside its declaration",
+        )
+        val catalogRoutes = SettingsSearchCatalog.items.associate { it.id to it.route::class }
+        hubEntranceDestinations.forEach { (id, destination) ->
+            assertEquals(
+                destination,
+                catalogRoutes[id],
+                "hub entrance $id does not route its declared destination — the deep link would land on the wrong leaf",
+            )
+        }
     }
 
     /** The forward pin: every id routed to R is covered by R's declared groups. */
@@ -2046,11 +2544,36 @@ class SettingsCatalogScreenContractTest {
         // The vlc_video_output class of bug, per screen: an id whose deep
         // link navigates to screen R but that no group R declares can neither
         // scroll nor expand — the highlight lands nowhere.
+        // The launcher rows (the hubs' entrances, declared in each hub's
+        // group) are entitled to sit outside R's groups only while R is the
+        // leaf that entrance deep-links ([hubEntranceDestinations]) — never
+        // as a blanket hub-id exemption. A screen's GROUP-CARD hits are the
+        // second covered set: a card id lands on its group's first member
+        // row (which R's group DOES declare), so the card itself is covered
+        // by its owning group's card item, not by any itemIdSet.
         screenGroupsByRoute.forEach { (routeKind, groups) ->
             val routedIds = SettingsSearchCatalog.items.filter { it.route::class == routeKind }.map { it.id }
+            if (routeKind in launcherRoutes) {
+                // A launcher takes no deep-link rows: every entrance routes
+                // the leaf it opens. The declared inline exception (the
+                // newsletter trio on the appearance hub) — plus that inline
+                // group's own card item — is the ONLY set allowed to route
+                // here.
+                val inlineIds = launcherInlineGroups[routeKind]
+                    ?.let { group -> group.itemIdSet + listOfNotNull(group.cardItem?.id) }
+                    ?: emptySet()
+                assertEquals(
+                    inlineIds.toList(),
+                    routedIds,
+                    "$routeKind is a launcher — only its declared inline group (and its card item) may route to it; " +
+                        "every entrance must route the leaf it opens",
+                )
+                return@forEach
+            }
             assertTrue(routedIds.isNotEmpty(), "$routeKind binding has no catalog items — the binding is stale")
-            val covered = groups.flatMap { it.itemIdSet }.toSet()
-            val uncovered = routedIds.filterNot { it in covered }
+            val covered = groups.flatMap { it.itemIdSet }.toSet() +
+                groups.mapNotNull { it.cardItem?.id }.toSet()
+            val uncovered = routedIds.filterNot { id -> id in covered || hubEntranceDestinations[id] == routeKind }
             assertEquals(
                 emptyList(),
                 uncovered,
@@ -2079,6 +2602,54 @@ class SettingsCatalogScreenContractTest {
                 stray,
                 "ids declared in $routeKind's groups that route to no catalog item of that screen — " +
                     "remove them from the group or name them in declaredIdsRoutingElsewhere",
+            )
+        }
+    }
+
+    /**
+     * The scroll-resolution totality: EVERY catalog item routed to a screen
+     * with declared groups — row AND group-card — resolves a landing group
+     * on that screen's declaration, so the shell's
+     * [rememberHighlightScrollIndex] never comes up empty for a searchable
+     * id (the gate is armed — identity adjust — the state every search click
+     * produces before the screen composes). The card items resolve on their
+     * FIRST member row id (the id their routes bake), never on the card id
+     * itself, which no screen's declaration carries. This is the scroll leg
+     * of the forward pin above, stated on the resolver the screens run.
+     */
+    @Test
+    fun `every catalog item resolves a scroll landing on its route's declared groups`() {
+        screenGroupsByRoute.forEach { (routeKind, groups) ->
+            // A strict launcher (e.g. the playback hub) legitimately routes
+            // nothing here; the forward pin guards binding staleness.
+            val routed = SettingsSearchCatalog.items.filter { it.route::class == routeKind }
+            val idSets = groups.map { it.itemIdSet }
+            routed.forEach { item ->
+                // The hub launchers' entrance rows deep-link the leaf they
+                // open; no leaf declares them (the shipped launcher shape —
+                // the same per-entrance exemption the forward pin stands on).
+                if (hubEntranceDestinations[item.id] == routeKind) return@forEach
+                val landingId = groupCardLandingRowId(item.id) ?: item.id
+                val index = resolveHighlightScrollIndex(landingId, idSets)
+                assertTrue(
+                    index >= 0,
+                    "${item.id} (landing row $landingId) resolves no scroll group on $routeKind's declared groups",
+                )
+            }
+        }
+        // The card landings explicitly: first member id → hosting screen.
+        SettingsScreenGroups.all.forEach { group ->
+            val card = group.cardItem ?: return@forEach
+            val binding = screenGroupsByRoute[card.route::class] ?: return@forEach
+            val index = resolveHighlightScrollIndex(group.itemIds.first(), binding.map { it.itemIdSet })
+            assertTrue(
+                index >= 0,
+                "${card.id}'s first member row resolves no scroll group on its hosting screen",
+            )
+            assertEquals(
+                -1,
+                resolveHighlightScrollIndex(card.id, binding.map { it.itemIdSet }),
+                "${card.id}'s own id must NOT be a scroll target — the card lands on its first member",
             )
         }
     }

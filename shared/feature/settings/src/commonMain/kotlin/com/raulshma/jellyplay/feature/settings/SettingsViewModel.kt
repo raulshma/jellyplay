@@ -13,8 +13,13 @@ import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.AudioPreferences
+import com.raulshma.jellyplay.core.model.DownloadPreferences
 import com.raulshma.jellyplay.core.model.HomeScreenPreferences
+import com.raulshma.jellyplay.core.model.LanguagePreferences
+import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
+import com.raulshma.jellyplay.core.model.StoragePreferences
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -88,9 +93,44 @@ class SettingsViewModel(
     private val preferencesFlow: kotlinx.coroutines.flow.StateFlow<SettingsScreenPreferences> =
         projections.settingsScreenPreferences
 
-    /** Home-config slice backing the root Home row's "sections visible" summary. */
+    /** Home-config slice backing the root Home row's live entrance summary. */
     val homePreferences: kotlinx.coroutines.flow.StateFlow<HomeScreenPreferences> =
         projections.homeScreenPreferences
+
+    // ── The entrance-summary slices (ADR-0017 decision 3): the root's live
+    // entrance subtitles read their OWN domain's screen slice — the same
+    // projections the domain screens read — one exposure per domain, beside
+    // the [homePreferences] precedent above.
+
+    /** Playback slice backing the root Playback row's live entrance summary. */
+    val playbackPreferences: kotlinx.coroutines.flow.StateFlow<PlaybackPreferences> =
+        projections.playbackPreferences
+
+    /** Audio slice backing the root Audio row's live entrance summary. */
+    val audioPreferences: kotlinx.coroutines.flow.StateFlow<AudioPreferences> =
+        projections.audioPreferences
+
+    /** Language slice backing the root Language row's live entrance summary. */
+    val languagePreferences: kotlinx.coroutines.flow.StateFlow<LanguagePreferences> =
+        projections.languagePreferences
+
+    /** Downloads slice backing the root Downloads row's live entrance summary. */
+    val downloadPreferences: kotlinx.coroutines.flow.StateFlow<DownloadPreferences> =
+        projections.downloadPreferences
+
+    /** Storage/network slice backing the root Storage row's live entrance summary. */
+    val storagePreferences: kotlinx.coroutines.flow.StateFlow<StoragePreferences> =
+        projections.storagePreferences
+
+    /**
+     * The Reduce Motion flag behind the root Performance row's summary marker
+     * — projected off the appearance-screen slice (the flag's owning
+     * projection), reduced to the one field the row reads.
+     */
+    val reduceMotionEnabled: kotlinx.coroutines.flow.StateFlow<Boolean> =
+        projections.appearanceScreenPreferences
+            .map { it.reduceMotionEnabled }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     var preferences by composeState(SettingsScreenPreferences())
         private set

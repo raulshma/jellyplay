@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * The downloads/storage preference aggregates: the logical downloads domain
- * and the StorageSettingsScreen slice.
+ * and the storage/Downloads settings screens' slice (ADR-0017's sibling pair).
  */
 
 /**
@@ -56,7 +56,7 @@ data class DownloadPreferences(
     val autoOfflineEnabled: Boolean = true,
 )
 
-/** Fields read by `StorageSettingsScreen`. */
+/** Fields read by the storage and Downloads settings screens (the sibling pair, ADR-0017). */
 @Immutable
 @Serializable
 data class StoragePreferences(

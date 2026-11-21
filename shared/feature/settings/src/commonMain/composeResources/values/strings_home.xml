@@ -156,6 +156,14 @@
     <string name="settings_home_screen_layout">Home Screen Layout</string>
     <string name="settings_home_sections_visible">%1$d of %2$d sections visible</string>
     <string name="settings_home_title">Home Screen</string>
+    <string name="settings_home_entry_display">Home display</string>
+    <string name="settings_home_entry_display_subtitle">Hero, clock, dock &amp; main-screen presentation</string>
+    <string name="settings_home_entry_rows">Rows &amp; layout</string>
+    <string name="settings_home_entry_rows_subtitle">Next Up, section layout &amp; hidden items</string>
+    <string name="settings_home_entry_cards">Cards &amp; badges</string>
+    <string name="settings_home_entry_cards_subtitle">Badges, ratings, spoilers &amp; card style</string>
+    <string name="settings_home_tuning">Fine-tuning</string>
+    <string name="settings_home_curation">Hidden &amp; restore</string>
     <string name="settings_home_cards">Cards</string>
     <string name="settings_home_display">Home Display</string>
     <string name="settings_continue_next_up">Continue Watching &amp; Next Up</string>

@@ -86,9 +86,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_titl
 // property of their catalog declarations.
 private val ACTION_ONLY_IDS = setOf(AccountRows.Logout.id, AccountRows.SignOutFromServer.id)
 
-// Dream-screen pickers (slideshow interval, transition style) flow through the shared
-// `PickerState` dispatcher rather than a screen-local sealed dialog enum.
-
 /**
  * What a settings-search result tap does — the effect vocabulary
  * [settingsResultClickAction] decides between and the composable performs.
@@ -110,8 +107,11 @@ internal sealed class SettingsSearchResultAction {
     object OpenSetupWizard : SettingsSearchResultAction()
 
     /**
-     * No navigation — an on-screen target (the screensaver rows) reveals
-     * itself through the pending highlight alone.
+     * No navigation — an on-screen root target reveals itself through the
+     * pending highlight alone. Vacuous since ADR-0017 moved every on-screen
+     * root row onto its declared screen (the only bare-Settings catalog rows
+     * left are the dialog actions), but kept as the defensive arm for any
+     * bare-`Route.Settings` id.
      */
     object NoOp : SettingsSearchResultAction()
 }
@@ -134,9 +134,8 @@ internal data class SettingsSearchResultClick(
 /**
  * Decides [SettingsSearchResultClick] for the tapped result. The destructive
  * account actions open their confirm dialogs (`logout` directly,
- * `sign_out_from_server` through the bare-`Route.Settings` branch); the other
- * bare-Settings targets are this screen's own rows (the screensaver group)
- * and only reveal themselves via the pending highlight; the setup wizard
+ * `sign_out_from_server` through the bare-`Route.Settings` branch — since
+ * ADR-0017 the ONLY bare-Settings catalog rows); the setup wizard
  * keeps its host indirection; everything else navigates with the id baked
  * into the route, marking the pending highlight except for Server/User
  * Management, which the old per-route dispatch never marked (unknown
@@ -144,6 +143,12 @@ internal data class SettingsSearchResultClick(
  * resolves them to -1). The destructive [ACTION_ONLY_IDS] never enter the
  * recent-settings list, and an advanced result auto-enables advanced
  * settings when they are off.
+ *
+ * The baked id is the LANDING row id: a group-card search hit's id
+ * ([groupCardLandingRowId]) lands on its group's FIRST member row — the
+ * card's own route carries that same id baked in, and the re-injection here
+ * must keep it (the card id itself expands/glows nothing) — while every row
+ * id lands on itself, unchanged.
  */
 internal fun settingsResultClickAction(
     id: String,
@@ -151,6 +156,7 @@ internal fun settingsResultClickAction(
     isAdvanced: Boolean,
     showAdvancedSettings: Boolean,
 ): SettingsSearchResultClick {
+    val landingId = groupCardLandingRowId(id) ?: id
     val click = when {
         id == AccountRows.Logout.id -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = false),
@@ -172,7 +178,7 @@ internal fun settingsResultClickAction(
             pendingHighlightId = SystemRows.SetupWizard.id,
         )
         else -> SettingsSearchResultClick(
-            action = SettingsSearchResultAction.NavigateToScreen(route.withHighlightSettingId(id)),
+            action = SettingsSearchResultAction.NavigateToScreen(route.withHighlightSettingId(landingId)),
             pendingHighlightId = if (route is Route.ServerManagement || route is Route.UserManagement) {
                 null
             } else {
@@ -187,8 +193,9 @@ internal fun settingsResultClickAction(
 }
 
 /**
- * Bundles the navigation actions passed into [SettingsScreen] (and
- * [AppearanceSettingsScreen]'s drill-ins).
+ * Bundles the navigation actions passed into [SettingsScreen] (and the
+ * appearance hub's and the leaves' drill-ins — [AppearanceSettingsScreen]'s
+ * entrances, [NavigationDisplaySettingsScreen]'s shortcuts editor).
  *
  * Grouping them into a single `@Immutable` value lets the navigation call site
  * `remember` one instance, so the screen subtree is treated as skip-worthy by
@@ -281,11 +288,6 @@ fun SettingsScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var signOutFromServer by remember { mutableStateOf(false) }
-    // The screen-level dialog state: the screensaver/idle sections write
-    // through this holder (activeDialog.value = ...) so one
-    // SettingsPickerDialog at the screen root still owns dismissal.
-    val activeDialogState = remember { mutableStateOf<PickerState<*>?>(null) }
-    var activeDialog by activeDialogState
 
     // The search panel's five loose state pieces (query / active / category
     // filter / display list / recents) and their interactions — open → type →
@@ -672,13 +674,11 @@ fun SettingsScreen(
                         onNavigate = onNavigate,
                         onSetupWizard = onSetupWizard,
                         onNewsletterClick = onNewsletterClick,
-                        lastClickedSettingId = lastClickedSettingId,
                         onLastClickedSettingIdChange = { lastClickedSettingId = it },
                         onSignOut = { fromServer ->
                             signOutFromServer = fromServer
                             showSignOutConfirm = true
                         },
-                        activeDialogState = activeDialogState,
                     )
                 }
             }
@@ -703,9 +703,5 @@ fun SettingsScreen(
             )
         }
 
-        SettingsPickerDialog(
-            state = activeDialog,
-            onDismiss = { activeDialog = null },
-        )
     }
 }

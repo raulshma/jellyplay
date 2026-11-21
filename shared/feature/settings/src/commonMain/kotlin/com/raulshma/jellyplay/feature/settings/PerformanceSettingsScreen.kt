@@ -330,7 +330,7 @@ private fun PerformanceLevelGroupBody(
                 subtitle = stringResource(Res.string.settings_perf_crossref_profile_subtitle),
                 trailingText = "",
                 highlighted = false,
-                onClick = { navActions.onNavigate(Route.PlaybackSettings(PlaybackRows.RedetectPerformance.id)) },
+                onClick = { navActions.onNavigate(Route.PlaybackVideoQuality(PlaybackRows.RedetectPerformance.id)) },
             )
         }
     }
@@ -569,7 +569,7 @@ private fun PlaybackBufferGroupBody(
                 subtitle = stringResource(Res.string.settings_perf_crossref_back_buffer_subtitle),
                 trailingText = "",
                 highlighted = false,
-                onClick = { navActions.onNavigate(Route.PlaybackSettings(PlaybackRows.ExoBackBuffer.id)) },
+                onClick = { navActions.onNavigate(Route.PlayerEngineSettings(PlaybackRows.ExoBackBuffer.id)) },
             )
             SettingListItem(
                 icon = Tabler.Outline.InfoCircle,
@@ -577,7 +577,7 @@ private fun PlaybackBufferGroupBody(
                 subtitle = stringResource(Res.string.settings_perf_crossref_profile_subtitle),
                 trailingText = "",
                 highlighted = false,
-                onClick = { navActions.onNavigate(Route.PlaybackSettings(PlaybackRows.VideoPerformanceProfile.id)) },
+                onClick = { navActions.onNavigate(Route.PlaybackVideoQuality(PlaybackRows.VideoPerformanceProfile.id)) },
             )
         }
     }

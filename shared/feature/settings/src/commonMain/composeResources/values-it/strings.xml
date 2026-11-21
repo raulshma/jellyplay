@@ -39,6 +39,8 @@
     <string name="settings_notifications">Notifiche</string>
     <string name="settings_notifications_checking">Controllo %1$s</string>
     <string name="settings_downloads_storage">Download e spazio</string>
+    <string name="settings_storage_network">Archiviazione e rete</string>
+    <string name="settings_downloads_subtitle">Qualità dei download, download automatici intelligenti e pianificazioni</string>
     <string name="settings_cache_subtitle">Cache: %1$d MB</string>
     <string name="settings_security">Sicurezza</string>
     <string name="settings_pin_biometric_on">Blocco PIN + Biometrico: Attivo</string>
@@ -48,6 +50,11 @@
     <string name="settings_backup_restore">Backup e ripristino</string>
     <string name="settings_backup_restore_subtitle">Esporta o importa le impostazioni dell'app</string>
     <string name="settings_screensaver">Salvaschermo</string>
+    <string name="settings_ambient">Ambiente</string>
+    <string name="settings_ambient_subtitle">Salvaschermo e schermata di inattività</string>
+    <string name="settings_cat_media_playback">Media e riproduzione</string>
+    <string name="settings_cat_look_and_feel">Aspetto</string>
+    <string name="settings_cat_system_data">Sistema e dati</string>
     <string name="settings_show_title">Mostra titolo</string>
     <string name="settings_display_media_title">Mostra il titolo del contenuto</string>
     <string name="settings_hide_media_title">Nascondi il titolo del contenuto</string>
@@ -298,6 +305,7 @@
     <string name="settings_max_cache_size_subtitle">Spazio su disco massimo per la cache</string>
     <string name="settings_unlimited">Illimitato</string>
     <string name="settings_network_offline">Rete e offline</string>
+    <string name="settings_network_diagnostics">Diagnostica di rete</string>
     <string name="settings_status_value">Stato: %1$s</string>
     <string name="settings_offline_mode">Modalità offline</string>
     <string name="settings_online">Online</string>
@@ -370,6 +378,27 @@
     <string name="settings_custom_options">opzione/i personalizzata/e</string>
     <string name="settings_reset_to_defaults">Ripristina predefiniti</string>
     <string name="settings_living_room_tv">TV del salotto</string>
+
+    <!-- Entrance-summary tokens (ADR-0017 decision 3): the short faces the
+         per-domain *SummaryParts folds emit where no row face exists. -->
+    <string name="settings_subtitle_label">Sottotitoli: %1$s</string>
+    <string name="settings_sum_chrome_chapters_off">Nessun indicatore di capitolo</string>
+    <string name="settings_sum_chrome_buffer_off">Nessun intervallo nel buffer</string>
+    <string name="settings_sum_plugin_sync_on">Sincronizzazione attiva</string>
+    <string name="settings_sum_plugin_sync_off">Sincronizzazione disattiva</string>
+    <string name="settings_sum_quality_badges_off">Nessun badge di qualità</string>
+    <string name="settings_sum_new_badges_off">Nessun badge NUOVO</string>
+    <string name="settings_sum_detail_hide_watched">Nascondi episodi visti</string>
+    <string name="settings_sum_detail_confirm_played">Conferma contrassegno come visto</string>
+    <string name="settings_sum_haptics_off">Feedback aptico disattivato</string>
+    <plurals name="settings_sum_pinned_sections">
+        <item quantity="one">%1$d sezione fissata</item>
+        <item quantity="other">%1$d sezioni fissate</item>
+    </plurals>
+    <plurals name="settings_sum_badges_on">
+        <item quantity="one">%1$d set di badge attivo</item>
+        <item quantity="other">%1$d set di badge attivi</item>
+    </plurals>
 
     <!-- Streaming quality labels -->
 
@@ -495,7 +524,6 @@
     <string name="settings_show_advanced">Mostra impostazioni avanzate</string>
     <string name="settings_advanced_hidden">Impostazioni avanzate nascoste</string>
     <string name="settings_advanced_shown">Impostazioni avanzate visibili</string>
-
 
     <plurals name="settings_advanced_settings_hidden">
         <item quantity="one">%1$d impostazione avanzata nascosta</item>
@@ -851,6 +879,8 @@
 
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">Plugin del server</string>
+    <string name="settings_jellyplay_plugin_entry">Plugin JellyPlay</string>
+    <string name="settings_jellyplay_plugin_entry_subtitle">Funzionalità del plugin del server e sincronizzazione delle impostazioni</string>
     <string name="settings_jellyplay_plugin_section_summary">Scegli quali funzionalità offre il plugin JellyPlay</string>
     <string name="settings_jellyplay_plugin_version_summary">Plugin del server v%1$s</string>
     <string name="settings_jellyplay_contract_mismatch_title">Aggiornamento del plugin richiesto</string>
@@ -1270,9 +1300,9 @@
     <string name="settings_perf_group_ambient">Effetti ambientali</string>
     <string name="settings_perf_group_buffers">Buffer di riproduzione</string>
     <string name="settings_perf_crossref_profile_title">Profilo del dispositivo e nuovo rilevamento</string>
-    <string name="settings_perf_crossref_profile_subtitle">La fascia rilevata del dispositivo e l’azione di nuovo rilevamento si trovano in Riproduzione → Video avanzato</string>
+    <string name="settings_perf_crossref_profile_subtitle">La fascia rilevata del dispositivo e l’azione di nuovo rilevamento si trovano in Riproduzione → Video e transcodifica</string>
     <string name="settings_perf_crossref_back_buffer_title">Durata del back buffer</string>
-    <string name="settings_perf_crossref_back_buffer_subtitle">La riga del back buffer del dominio del motore si trova in Riproduzione → Configurazione engine (ExoPlayer)</string>
+    <string name="settings_perf_crossref_back_buffer_subtitle">La riga del back buffer del dominio del motore si trova in Riproduzione → Motori di riproduzione (ExoPlayer)</string>
     <string name="settings_perf_customize">Personalizza…</string>
     <string name="settings_perf_customize_subtitle">Tutte le righe granulari delle prestazioni si trovano nell’hub Prestazioni</string>
     <string name="settings_perf_animations">Animazioni</string>

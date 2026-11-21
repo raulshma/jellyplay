@@ -49,6 +49,8 @@
     <string name="settings_notifications">Notifications</string>
     <string name="settings_notifications_checking">Checking %1$s</string>
     <string name="settings_downloads_storage">Downloads &amp; Storage</string>
+    <string name="settings_storage_network">Storage &amp; network</string>
+    <string name="settings_downloads_subtitle">Download quality, smart auto-downloads &amp; schedules</string>
     <string name="settings_cache_subtitle">Cache: %1$d MB</string>
     <string name="settings_security">Security</string>
     <string name="settings_pin_biometric_on">PIN + Biometric lock: On</string>
@@ -58,6 +60,11 @@
     <string name="settings_backup_restore">Backup &amp; Restore</string>
     <string name="settings_backup_restore_subtitle">Export or import app settings</string>
     <string name="settings_screensaver">Screensaver</string>
+    <string name="settings_ambient">Ambient</string>
+    <string name="settings_ambient_subtitle">Screensaver &amp; idle screen</string>
+    <string name="settings_cat_media_playback">Media &amp; Playback</string>
+    <string name="settings_cat_look_and_feel">Look &amp; Feel</string>
+    <string name="settings_cat_system_data">System &amp; Data</string>
     <string name="settings_show_title">Show Title</string>
     <string name="settings_display_media_title">Display media title</string>
     <string name="settings_hide_media_title">Hide media title</string>
@@ -479,6 +486,7 @@
     <string name="settings_max_cache_applies_after_restart">Applies the next time the app starts</string>
     <string name="settings_unlimited">Unlimited</string>
     <string name="settings_network_offline">Network &amp; Offline</string>
+    <string name="settings_network_diagnostics">Network diagnostics</string>
     <string name="settings_status_value">Status: %1$s</string>
     <string name="settings_offline_mode">Offline Mode</string>
     <string name="settings_online">Online</string>
@@ -555,6 +563,28 @@
     <string name="settings_custom_options">custom option(s)</string>
     <string name="settings_reset_to_defaults">Reset to Defaults</string>
     <string name="settings_living_room_tv">Living Room TV</string>
+
+    <!-- Entrance-summary tokens (ADR-0017 decision 3): the short faces the
+         per-domain *SummaryParts folds emit where no row face exists. -->
+    <string name="settings_subtitle_label">Subtitles: %1$s</string>
+    <string name="settings_sum_chrome_chapters_off">No chapter markers</string>
+    <string name="settings_sum_chrome_buffer_off">No buffered range</string>
+    <string name="settings_sum_plugin_sync_on">Sync on</string>
+    <string name="settings_sum_plugin_sync_off">Sync off</string>
+    <string name="settings_sum_quality_badges_off">No quality badges</string>
+    <string name="settings_sum_new_badges_off">No NEW badges</string>
+    <string name="settings_sum_detail_hide_watched">Hide watched episodes</string>
+    <string name="settings_sum_detail_confirm_played">Confirm mark-played</string>
+    <string name="settings_sum_haptics_off">Haptics off</string>
+    <plurals name="settings_sum_pinned_sections">
+        <item quantity="one">%1$d pinned section</item>
+        <item quantity="other">%1$d pinned sections</item>
+    </plurals>
+    <plurals name="settings_sum_badges_on">
+        <item quantity="one">%1$d badge set on</item>
+        <item quantity="other">%1$d badge sets on</item>
+    </plurals>
+
     <string name="settings_idle_ambient">Idle Screen</string>
     <string name="settings_idle_ambient_on">A "Ready to play" screen appears when idle</string>
     <string name="settings_idle_ambient_off">The window keeps showing the last screen</string>
@@ -966,6 +996,8 @@
          One row per user-facing capability; each row renders only where the plugin's
          capabilities probe exposes the feature (transcodes: admin users only). -->
     <string name="settings_jellyplay_plugin_section">Server plugin</string>
+    <string name="settings_jellyplay_plugin_entry">JellyPlay plugin</string>
+    <string name="settings_jellyplay_plugin_entry_subtitle">Server plugin features &amp; settings sync</string>
     <string name="settings_jellyplay_plugin_section_summary">Choose which features the JellyPlay plugin provides</string>
     <string name="settings_jellyplay_plugin_version_summary">Server plugin v%1$s</string>
     <string name="settings_jellyplay_contract_mismatch_title">Plugin update needed</string>

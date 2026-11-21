@@ -39,6 +39,8 @@
     <string name="settings_notifications">Benachrichtigungen</string>
     <string name="settings_notifications_checking">%1$s wird geprüft</string>
     <string name="settings_downloads_storage">Downloads &amp; Speicher</string>
+    <string name="settings_storage_network">Speicher &amp; Netzwerk</string>
+    <string name="settings_downloads_subtitle">Download-Qualität, intelligente Auto-Downloads &amp; Zeitpläne</string>
     <string name="settings_cache_subtitle">Cache: %1$d MB</string>
     <string name="settings_security">Sicherheit</string>
     <string name="settings_pin_biometric_on">PIN + Biometrische Sperre: An</string>
@@ -48,6 +50,11 @@
     <string name="settings_backup_restore">Sichern &amp; Wiederherstellen</string>
     <string name="settings_backup_restore_subtitle">App-Einstellungen exportieren oder importieren</string>
     <string name="settings_screensaver">Bildschirmschoner</string>
+    <string name="settings_ambient">Ambient</string>
+    <string name="settings_ambient_subtitle">Bildschirmschoner &amp; Ruhebildschirm</string>
+    <string name="settings_cat_media_playback">Medien &amp; Wiedergabe</string>
+    <string name="settings_cat_look_and_feel">Erscheinungsbild</string>
+    <string name="settings_cat_system_data">System &amp; Daten</string>
     <string name="settings_show_title">Titel anzeigen</string>
     <string name="settings_display_media_title">Medientitel anzeigen</string>
     <string name="settings_hide_media_title">Medientitel ausblenden</string>
@@ -298,6 +305,7 @@
     <string name="settings_max_cache_size_subtitle">Maximaler Speicherplatz für Caching</string>
     <string name="settings_unlimited">Unbegrenzt</string>
     <string name="settings_network_offline">Netzwerk &amp; Offline</string>
+    <string name="settings_network_diagnostics">Netzwerkdiagnose</string>
     <string name="settings_status_value">Status: %1$s</string>
     <string name="settings_offline_mode">Offline-Modus</string>
     <string name="settings_online">Online</string>
@@ -370,6 +378,27 @@
     <string name="settings_custom_options">benutzerdefinierte Option(en)</string>
     <string name="settings_reset_to_defaults">Auf Standard zurücksetzen</string>
     <string name="settings_living_room_tv">Wohnzimmer-TV</string>
+
+    <!-- Entrance-summary tokens (ADR-0017 decision 3): the short faces the
+         per-domain *SummaryParts folds emit where no row face exists. -->
+    <string name="settings_subtitle_label">Untertitel: %1$s</string>
+    <string name="settings_sum_chrome_chapters_off">Keine Kapitelmarken</string>
+    <string name="settings_sum_chrome_buffer_off">Kein gepufferter Bereich</string>
+    <string name="settings_sum_plugin_sync_on">Sync an</string>
+    <string name="settings_sum_plugin_sync_off">Sync aus</string>
+    <string name="settings_sum_quality_badges_off">Keine Qualitäts-Badges</string>
+    <string name="settings_sum_new_badges_off">Keine NEU-Badges</string>
+    <string name="settings_sum_detail_hide_watched">Gesehene Episoden ausblenden</string>
+    <string name="settings_sum_detail_confirm_played">„Gesehen“-Markierung bestätigen</string>
+    <string name="settings_sum_haptics_off">Haptik aus</string>
+    <plurals name="settings_sum_pinned_sections">
+        <item quantity="one">%1$d angehefteter Bereich</item>
+        <item quantity="other">%1$d angeheftete Bereiche</item>
+    </plurals>
+    <plurals name="settings_sum_badges_on">
+        <item quantity="one">%1$d Badge-Set aktiv</item>
+        <item quantity="other">%1$d Badge-Sets aktiv</item>
+    </plurals>
 
     <!-- Streaming quality labels -->
 
@@ -491,7 +520,6 @@
     <string name="settings_show_advanced">Erweiterte Einstellungen anzeigen</string>
     <string name="settings_advanced_hidden">Erweiterte Einstellungen ausgeblendet</string>
     <string name="settings_advanced_shown">Erweiterte Einstellungen angezeigt</string>
-
 
     <plurals name="settings_advanced_settings_hidden">
         <item quantity="one">%1$d erweiterte Einstellung ausgeblendet</item>
@@ -847,6 +875,8 @@
 
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">Server-Plugin</string>
+    <string name="settings_jellyplay_plugin_entry">JellyPlay-Plugin</string>
+    <string name="settings_jellyplay_plugin_entry_subtitle">Server-Plugin-Funktionen &amp; Einstellungs-Sync</string>
     <string name="settings_jellyplay_plugin_section_summary">Wähle, welche Funktionen das JellyPlay-Plugin bereitstellt</string>
     <string name="settings_jellyplay_plugin_version_summary">Server-Plugin v%1$s</string>
     <string name="settings_jellyplay_contract_mismatch_title">Plugin-Update nötig</string>
@@ -1267,9 +1297,9 @@
     <string name="settings_perf_group_ambient">Ambient-Effekte</string>
     <string name="settings_perf_group_buffers">Wiedergabe-Puffer</string>
     <string name="settings_perf_crossref_profile_title">Geräteprofil &amp; Neuerkennung</string>
-    <string name="settings_perf_crossref_profile_subtitle">Die erkannte Gerätestufe und die Neu-Erkennung-Aktion findest du unter Wiedergabe → Erweitertes Video</string>
+    <string name="settings_perf_crossref_profile_subtitle">Die erkannte Gerätestufe und die Neu-Erkennung-Aktion findest du unter Wiedergabe → Video &amp; Transcoding</string>
     <string name="settings_perf_crossref_back_buffer_title">Back-Buffer-Dauer</string>
-    <string name="settings_perf_crossref_back_buffer_subtitle">Die Back-Buffer-Zeile des Engine-Bereichs liegt unter Wiedergabe → Engine-Konfiguration (ExoPlayer)</string>
+    <string name="settings_perf_crossref_back_buffer_subtitle">Die Back-Buffer-Zeile des Engine-Bereichs liegt unter Wiedergabe → Player-Engines (ExoPlayer)</string>
     <string name="settings_perf_customize">Anpassen…</string>
     <string name="settings_perf_customize_subtitle">Alle granularen Leistungszeilen findest du im Leistungsbereich</string>
     <string name="settings_perf_animations">Animationen</string>

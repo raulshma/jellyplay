@@ -5,12 +5,23 @@
     <!-- care and the newsletter groups. -->
     <string name="settings_newsletter_cd">ニュースレター</string>
     <string name="settings_appearance_title">外観</string>
+    <string name="settings_appearance_sections">外観セクション</string>
+    <string name="settings_appearance_entry_theme">テーマ &amp; 表示</string>
+    <string name="settings_appearance_entry_theme_subtitle">色、フォント、ライブラリーの表示モード、アクセシビリティと目の保護</string>
+    <string name="settings_appearance_entry_library_views">ライブラリ表示</string>
+    <string name="settings_appearance_entry_library_views_subtitle">バッジ、エピソードリストとブラウジング表示</string>
+    <string name="settings_appearance_entry_detail">詳細画面</string>
+    <string name="settings_appearance_entry_detail_subtitle">キャスト列、チップ、セクションと上限</string>
+    <string name="settings_appearance_detail_tuning">密度と上限</string>
+    <string name="settings_appearance_entry_navigation">ナビゲーション &amp; 触覚フィードバック</string>
+    <string name="settings_appearance_entry_navigation_subtitle">ボトムバー、密度とフィードバック</string>
     <string name="settings_theme">テーマ</string>
     <string name="settings_artwork_dynamic">アートワークから動的に</string>
     <string name="settings_theme_mode">テーマモード</string>
     <string name="settings_theme_follow_system">システム設定に従う</string>
     <string name="settings_theme_always_light">常にライト</string>
     <string name="settings_theme_always_dark">常にダーク</string>
+    <string name="settings_theme_scheduled_label">スケジュール</string>
     <string name="settings_theme_scheduled">自動で日中/夜 (%1$d:00\u2013%2$d:00)</string>
     <string name="settings_dynamic_theming">ダイナミックテーマ</string>
     <string name="settings_dynamic_theming_subtitle">アートワークから色を抽出</string>
@@ -23,6 +34,7 @@
     <string name="settings_oled_token">OLED</string>
     <string name="settings_performance_token">パフォーマンス</string>
     <string name="settings_contrast_suffix">%1$s コントラスト</string>
+    <string name="settings_accent_suffix">%1$s アクセント</string>
     <string name="settings_library_view_mode">ライブラリーの表示モード</string>
     <string name="settings_layout_mode">レイアウト</string>
     <string name="settings_layout_mode_subtitle">自動、電話、タブレットのレイアウトを選択</string>

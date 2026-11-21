@@ -77,16 +77,33 @@ class HomeNavigationTest {
     }
 
     @Test
-    fun onConfigureHomeLayout_navigatesToHomeSettings() {
-        val callbacks = buildTestCallbacks(navigator)
+    fun onConfigureHomeLayout_navigatesToHomeRowsSettings() {
+        // The production binding ([homeCallbacks] — the same lambdas the home
+        // entry composes), not a test-local copy.
+        val callbacks = homeCallbacks(navigator, onModeChange = {})
         callbacks.onConfigureHomeLayout()
 
-        verify { navigator.navigate(Route.HomeSettings("pinned_home_sections")) }
+        verify { navigator.navigate(Route.HomeRowsSettings("pinned_home_sections")) }
+    }
+
+    @Test
+    fun onCustomizeHome_opensRowsSettingsWithLayoutGroupHighlighted() {
+        // The announcement snackbar's Customize: assert the rendered screen
+        // FIRST — the production binding navigates to the Rows & layout leaf
+        // carrying the pinned_home_sections highlight id (the route verified
+        // below). That id is a member of the leaf's Home Screen Layout group
+        // (pinned on the settings side by the catalog contract tests), which
+        // is what expands the group on arrival — the claim rests on the
+        // asserted route, not on this test's own construction.
+        val callbacks = homeCallbacks(navigator, onModeChange = {})
+        callbacks.onCustomizeHome()
+
+        verify { navigator.navigate(Route.HomeRowsSettings("pinned_home_sections")) }
     }
 
     @Test
     fun onConfigureLibraries_navigatesToLibraryHomeSections() {
-        val callbacks = buildTestCallbacks(navigator)
+        val callbacks = homeCallbacks(navigator, onModeChange = {})
         callbacks.onConfigureLibraries()
 
         verify { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) }
@@ -130,8 +147,10 @@ class HomeNavigationTest {
             },
             onSettingsSearchItemClick = { route -> navigator.navigate(route) },
             onNewsletterClick = { navigator.navigate(Route.Newsletter) },
-            onConfigureHomeLayout = { navigator.navigate(Route.HomeSettings("pinned_home_sections")) },
-            onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
+            // The settings drill-ins (configure layout / customize /
+            // configure libraries) are NOT re-declared here: the navigation
+            // tests for them invoke the production binding ([homeCallbacks])
+            // so a routing change fails its test instead of drifting.
         )
     }
 }

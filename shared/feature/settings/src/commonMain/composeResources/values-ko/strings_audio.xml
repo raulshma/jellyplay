@@ -3,6 +3,7 @@
     <!-- The Audio settings screen family. -->
     <string name="settings_audio_player">오디오 재생기</string>
     <string name="settings_audio_player_title">오디오 재생기</string>
+    <string name="settings_audio_fine_tuning">미세 조정</string>
     <string name="settings_audio_default_speed">기본 속도</string>
     <string name="settings_audio_default_speed_normal">일반 재생 속도</string>
     <string name="settings_audio_default_speed_value">%1$sx 재생</string>

@@ -4,11 +4,13 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
+import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_language_subtitles
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_label
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_language
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_display_language
@@ -22,6 +24,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_subtitle_style
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_high_contrast_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_language_subtitles
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_label
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_open_subtitle_tester
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_open_subtitle_tester_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pgs_direct_play
@@ -357,4 +360,28 @@ internal val LanguageEntrance = SettingsEntranceSectionRow(
     rowId = "language",
     icon = Tabler.Outline.Language,
     titleRes = Res.string.settings_language_subtitles,
+)
+
+// ── Entrance summary (ADR-0017 decision 3) ──────────────────────────────
+
+/**
+ * The root Language entrance's summary: the preferred audio and subtitle
+ * languages ("Audio: X, Subtitles: Y"), each falling back to the localized
+ * default face ([defaultLanguageFace] — resolved at composition, passed in to
+ * keep this fold pure). Reads the language slice (the `languagePreferences`
+ * projection — the same slice the language screen reads); pinned by
+ * SettingsSummariesTest.
+ */
+internal fun languageSummaryParts(
+    preferences: LanguagePreferences,
+    defaultLanguageFace: String,
+): List<SettingsSummaryPart> = listOf(
+    SettingsSummaryPart.Formatted(
+        Res.string.settings_audio_label,
+        preferences.preferredAudioLanguage ?: defaultLanguageFace,
+    ),
+    SettingsSummaryPart.Formatted(
+        Res.string.settings_subtitle_label,
+        preferences.preferredSubtitleLanguage ?: defaultLanguageFace,
+    ),
 )

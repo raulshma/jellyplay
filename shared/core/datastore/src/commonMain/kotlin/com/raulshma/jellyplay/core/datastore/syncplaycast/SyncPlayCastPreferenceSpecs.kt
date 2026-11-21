@@ -80,7 +80,7 @@ object SyncPlayCastPreferenceSpecs {
                 subtitleKey = "ss_syncplay_join_behavior_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("syncplay", "join", "behavior", "group", "watch party"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_SYNCPLAY_CASTING_SETTINGS,
             ),
         ),
         /*
@@ -99,7 +99,7 @@ object SyncPlayCastPreferenceSpecs {
                 subtitleKey = "ss_syncplay_tolerance_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("syncplay", "tolerance", "drift", "sync", "correction"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_SYNCPLAY_CASTING_SETTINGS,
             ),
         ),
         PreferenceSpec.plainBoolean(
@@ -112,7 +112,7 @@ object SyncPlayCastPreferenceSpecs {
                 subtitleKey = "ss_syncplay_auto_accept_invites_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("syncplay", "auto", "accept", "invites", "friends"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_SYNCPLAY_CASTING_SETTINGS,
             ),
         ),
     )
@@ -129,7 +129,7 @@ object SyncPlayCastPreferenceSpecs {
                 subtitleKey = "ss_casting_strategy_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("casting", "strategy", "dlna", "cast", "chromecast", "tv"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_SYNCPLAY_CASTING_SETTINGS,
             ),
         ),
         PreferenceSpec.plainBoolean(
@@ -142,7 +142,7 @@ object SyncPlayCastPreferenceSpecs {
                 subtitleKey = "ss_background_casting_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("casting", "background", "keep alive", "dlna", "cast"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_SYNCPLAY_CASTING_SETTINGS,
             ),
         ),
         /*
@@ -162,7 +162,7 @@ object SyncPlayCastPreferenceSpecs {
                 subtitleKey = "ss_preferred_renderer_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("renderer", "preferred", "cast", "device", "target", "tv"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_SYNCPLAY_CASTING_SETTINGS,
             ),
         ),
     )
@@ -179,7 +179,7 @@ object SyncPlayCastPreferenceSpecs {
                 subtitleKey = "ss_dvr_pre_padding_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("dvr", "pre padding", "recording", "live tv", "start", "early"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_LIVE_TV_DVR_SETTINGS,
             ),
         ),
         PreferenceSpec.plainInt(
@@ -192,7 +192,7 @@ object SyncPlayCastPreferenceSpecs {
                 subtitleKey = "ss_dvr_post_padding_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("dvr", "post padding", "recording", "live tv", "end", "extend"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_LIVE_TV_DVR_SETTINGS,
             ),
         ),
         PreferenceSpec.string(
@@ -205,7 +205,7 @@ object SyncPlayCastPreferenceSpecs {
                 subtitleKey = "ss_dvr_recording_quality_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("dvr", "recording", "quality", "live tv", "resolution"),
-                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                routeKind = PlaybackPreferenceSpecs.ROUTE_LIVE_TV_DVR_SETTINGS,
                 isAdvanced = true,
             ),
         ),

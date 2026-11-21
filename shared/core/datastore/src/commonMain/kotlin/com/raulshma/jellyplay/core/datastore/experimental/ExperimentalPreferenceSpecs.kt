@@ -163,7 +163,7 @@ object ExperimentalPreferenceSpecs {
             subtitleKey = "ss_show_share_media_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("share", "media", "send", "details"),
-            routeKind = AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS,
+            routeKind = AppearancePreferenceSpecs.ROUTE_LIBRARY_DISPLAY_SETTINGS,
             isAdvanced = true,
         ),
     )
@@ -178,7 +178,7 @@ object ExperimentalPreferenceSpecs {
             subtitleKey = "ss_hide_search_history_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("search", "history", "hide", "privacy", "recent"),
-            routeKind = AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS,
+            routeKind = AppearancePreferenceSpecs.ROUTE_LIBRARY_DISPLAY_SETTINGS,
             isAdvanced = true,
         ),
     )

@@ -5,12 +5,23 @@
     <!-- care and the newsletter groups. -->
     <string name="settings_newsletter_cd">Newsletter</string>
     <string name="settings_appearance_title">Erscheinungsbild</string>
+    <string name="settings_appearance_sections">Erscheinungsbild-Bereiche</string>
+    <string name="settings_appearance_entry_theme">Design &amp; Anzeige</string>
+    <string name="settings_appearance_entry_theme_subtitle">Farben, Schriften, Mediathek-Ansichtsmodus, Barrierefreiheit &amp; Augenschonung</string>
+    <string name="settings_appearance_entry_library_views">Bibliotheksansichten</string>
+    <string name="settings_appearance_entry_library_views_subtitle">Badges, Episodenlisten &amp; Browsing-Darstellung</string>
+    <string name="settings_appearance_entry_detail">Detailbildschirm</string>
+    <string name="settings_appearance_entry_detail_subtitle">Besetzungsleisten, Chips, Abschnitte &amp; Limits</string>
+    <string name="settings_appearance_detail_tuning">Dichte &amp; Limits</string>
+    <string name="settings_appearance_entry_navigation">Navigation &amp; Haptik</string>
+    <string name="settings_appearance_entry_navigation_subtitle">Untere Leiste, Dichte &amp; Feedback</string>
     <string name="settings_theme">Design</string>
     <string name="settings_artwork_dynamic">Dynamisches Artwork</string>
     <string name="settings_theme_mode">Designmodus</string>
     <string name="settings_theme_follow_system">Systemeinstellung folgen</string>
     <string name="settings_theme_always_light">Immer hell</string>
     <string name="settings_theme_always_dark">Immer dunkel</string>
+    <string name="settings_theme_scheduled_label">Zeitgesteuert</string>
     <string name="settings_theme_scheduled">Auto Tag/Nacht (%1$d:00\u2013%2$d:00)</string>
     <string name="settings_dynamic_theming">Dynamische Designs</string>
     <string name="settings_dynamic_theming_subtitle">Aus Artwork extrahierte Farben</string>
@@ -23,6 +34,7 @@
     <string name="settings_oled_token">OLED</string>
     <string name="settings_performance_token">Leistung</string>
     <string name="settings_contrast_suffix">%1$s-Kontrast</string>
+    <string name="settings_accent_suffix">%1$s-Akzent</string>
     <string name="settings_library_view_mode">Mediathek-Ansichtsmodus</string>
     <string name="settings_layout_mode">Layout</string>
     <string name="settings_layout_mode_subtitle">Automatisches, Telefon- oder Tablet-Layout wählen</string>

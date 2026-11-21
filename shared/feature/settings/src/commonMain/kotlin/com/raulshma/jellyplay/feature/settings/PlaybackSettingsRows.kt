@@ -5,6 +5,12 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
+import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.SegmentBehavior
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_commercial
 import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_commercial_desc
@@ -20,8 +26,35 @@ import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_unknown
 import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_unknown_desc
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_playback
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.model.labelResource
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import org.jetbrains.compose.resources.StringResource
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed_value
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_format_auto
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_format_dv_only
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_format_hdr10_only
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_format_prefer_dv
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_format_sdr_only
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_media_segments_summary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_live_tv_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_chrome_buffer_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_chrome_chapters_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_live_tv
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_syncplay_casting_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_syncplay_casting
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_segments_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_segments
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_engines_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_engines
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_video_quality_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_video_quality
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_chrome_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_chrome
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_controls_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_controls
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_basics_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_entry_basics
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_exo_hdr_tone_mapping
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_hdr_tone_mapping_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_hdr_tone_mapping_title
@@ -75,6 +108,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_post_padding_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_pre_padding
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_pre_padding_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_quality_auto
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_quality_high
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_quality_low
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_quality_medium
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_recording_quality
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_recording_quality_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_episode_browser
@@ -574,7 +611,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offer_dele
  */
 internal object PlaybackRows {
 
-    // -- The "Video Player" group's 53 rows (52 spec-backed + the desktop volume-memory residual), in catalog order. --
+    // -- The former "Video Player" group's rows (ADR-0017 split them across
+    //    the Basics / Controls & gestures / Player chrome leaves): 52
+    //    spec-backed + the desktop volume-memory residual, in catalog order. --
 
     val PlayerEngine = SettingsRow(
         id = "player_engine",
@@ -1012,13 +1051,21 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_hold_speed_multiplier_subtitle,
     )
 
+    /**
+     * The Watch Next row rides BOTH gates its emission reads: it composes
+     * inside the basics screen's `if (showAdvanced)` advanced block
+     * ([PlaybackBasicsScreen.PlaybackBasicsAdvancedRows]) AND behind the TV
+     * form factor — the declared [RowAdmission.All] keeps the derived total
+     * from counting it while advanced settings are off (the total can never
+     * drift from the emitted rows).
+     */
     val AndroidTvWatchNext = SettingsRow(
         id = "android_tv_watch_next",
         icon = Tabler.Outline.DeviceTv,
         titleRes = Res.string.settings_watch_next_row,
         searchTitleRes = Res.string.ss_android_tv_watch_next_title,
         searchSubtitleRes = Res.string.ss_android_tv_watch_next_subtitle,
-        gate = RowAdmission.Tv,
+        gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.Tv),
     )
 
     val TvZoomMode = SettingsRow(
@@ -1077,7 +1124,7 @@ internal object PlaybackRows {
         subtitleRes = Res.string.ss_remember_volume_subtitle,
         searchSubtitleRes = Res.string.ss_remember_volume_subtitle,
         keywords = listOf("volume", "remember", "memory", "per content", "content type", "loudness", "level", "movies", "audiobooks"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlaybackBasics(),
         platforms = DESKTOP_ONLY_PLATFORMS,
         gate = RowAdmission.Platform(RowAdmissionCapability.VolumeMemory),
     )
@@ -1093,7 +1140,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_dialogue_boost_title,
         searchSubtitleRes = Res.string.ss_dialogue_boost_subtitle,
         keywords = listOf("dialogue", "boost", "speech", "vocal", "enhance"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlaybackVideoQuality(),
         isAdvanced = true,
     )
 
@@ -1103,7 +1150,7 @@ internal object PlaybackRows {
         titleRes = Res.string.settings_dialogue_boost_strength,
         searchSubtitleRes = Res.string.ss_dialogue_boost_strength_subtitle,
         keywords = listOf("dialogue", "boost", "strength", "level", "speech", "amplify"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlaybackVideoQuality(),
         isAdvanced = true,
         gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackRows.DialogueBoost.id)),
     )
@@ -1194,7 +1241,7 @@ internal object PlaybackRows {
         titleRes = Res.string.settings_spatial_audio_only_headphones,
         searchSubtitleRes = Res.string.ss_spatial_audio_only_headphones_subtitle,
         keywords = listOf("spatial", "headphones", "earbuds", "bluetooth", "output"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlaybackVideoQuality(),
         isAdvanced = true,
         gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackRows.SpatialAudio.id)),
     )
@@ -1264,7 +1311,7 @@ internal object PlaybackRows {
         subtitleRes = Res.string.settings_redetect_performance_subtitle,
         searchSubtitleRes = Res.string.settings_redetect_performance_subtitle,
         keywords = listOf("detect", "redetect", "performance", "device", "tier", "auto", "benchmark"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlaybackVideoQuality(),
         isAdvanced = true,
         gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackRows.VideoPerformanceProfile.id)),
     )
@@ -1329,7 +1376,7 @@ internal object PlaybackRows {
         subtitleRes = Res.string.settings_home_network_quality_subtitle,
         searchSubtitleRes = Res.string.settings_home_network_quality_subtitle,
         keywords = listOf("home network", "lan", "local", "quality", "cap", "bandwidth", "streaming"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlaybackVideoQuality(),
         isAdvanced = true,
     )
 
@@ -1342,7 +1389,7 @@ internal object PlaybackRows {
         subtitleRes = Res.string.settings_speed_test_subtitle,
         searchSubtitleRes = Res.string.settings_speed_test_subtitle,
         keywords = listOf("speed test", "throughput", "bandwidth", "measure", "connection"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlaybackVideoQuality(),
         isAdvanced = true,
     )
 
@@ -1354,7 +1401,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_audio_delay_title,
         searchSubtitleRes = Res.string.ss_audio_delay_subtitle,
         keywords = listOf("delay", "latency", "sync", "lip sync", "bluetooth"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlaybackVideoQuality(),
         isAdvanced = true,
     )
 
@@ -1377,7 +1424,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_video_output_title,
         searchSubtitleRes = Res.string.ss_mpv_video_output_subtitle,
         keywords = listOf("mpv", "video output", "vo", "gpu", "render"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1388,7 +1435,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_scaler_title,
         searchSubtitleRes = Res.string.ss_mpv_scaler_subtitle,
         keywords = listOf("mpv", "scaler", "scaling", "interpolation", "quality"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1399,7 +1446,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_debanding_title,
         searchSubtitleRes = Res.string.ss_mpv_debanding_subtitle,
         keywords = listOf("mpv", "deband", "debanding", "banding", "gradient"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1459,7 +1506,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_interpolation_title,
         searchSubtitleRes = Res.string.ss_mpv_interpolation_subtitle,
         keywords = listOf("mpv", "interpolation", "smooth", "motion", "judder"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1470,7 +1517,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_audio_output_title,
         searchSubtitleRes = Res.string.ss_mpv_audio_output_subtitle,
         keywords = listOf("mpv", "audio output", "ao", "sound"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1481,7 +1528,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_audio_fallback_title,
         searchSubtitleRes = Res.string.ss_mpv_audio_fallback_subtitle,
         keywords = listOf("mpv", "audio", "fallback", "secondary", "output"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1492,7 +1539,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_audio_device_title,
         searchSubtitleRes = Res.string.ss_mpv_audio_device_subtitle,
         keywords = listOf("mpv", "audio device", "output device", "sound card", "speaker", "wasapi", "directsound"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = DESKTOP_ONLY_PLATFORMS,
         gate = RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
@@ -1505,7 +1552,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_audio_exclusive_title,
         searchSubtitleRes = Res.string.ss_mpv_audio_exclusive_subtitle,
         keywords = listOf("mpv", "exclusive", "bit-perfect", "bitperfect", "wasapi exclusive", "device lock"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = DESKTOP_ONLY_PLATFORMS,
         gate = RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
@@ -1518,7 +1565,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_audio_mode_title,
         searchSubtitleRes = Res.string.ss_mpv_audio_mode_subtitle,
         keywords = listOf("mpv", "passthrough", "spdif", "optical", "hdmi", "bitstream", "stereo downmix", "surround", "receiver"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = DESKTOP_ONLY_PLATFORMS,
         gate = RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
@@ -1534,7 +1581,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_shader_pack_title,
         searchSubtitleRes = Res.string.ss_mpv_shader_pack_subtitle,
         keywords = listOf("mpv", "shader", "anime4k", "glsl", "upscale", "pack", "fsrcnnx", "artcnn"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = DESKTOP_ONLY_PLATFORMS,
         gate = RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
@@ -1547,7 +1594,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_tone_mapping_title,
         searchSubtitleRes = Res.string.ss_mpv_tone_mapping_subtitle,
         keywords = listOf("mpv", "tone mapping", "hdr", "sdr", "bt2390", "hable", "reinhard", "mobius", "brightness"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = DESKTOP_ONLY_PLATFORMS,
         gate = RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
@@ -1560,7 +1607,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_render_quality_title,
         searchSubtitleRes = Res.string.ss_mpv_render_quality_subtitle,
         keywords = listOf("mpv", "quality", "performance", "profile", "scaler", "deband", "high"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = DESKTOP_ONLY_PLATFORMS,
         gate = RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
@@ -1573,7 +1620,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_hdr_passthrough_title,
         searchSubtitleRes = Res.string.ss_mpv_hdr_passthrough_subtitle,
         keywords = listOf("mpv", "hdr", "hdr10", "passthrough", "gpu-next", "colorspace", "tv"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         // BOTH mpv hosts: the desktop HWND-embed hint path AND Android's
         // SurfaceView vo=gpu-next twin (evaluated against the shared
@@ -1592,7 +1639,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_tscale_title,
         searchSubtitleRes = Res.string.ss_mpv_tscale_subtitle,
         keywords = listOf("mpv", "tscale", "interpolation", "motion", "temporal", "mitchell", "oversample"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = DESKTOP_ONLY_PLATFORMS,
         gate = RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
@@ -1605,7 +1652,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_buffer_size_title,
         searchSubtitleRes = Res.string.ss_mpv_buffer_size_subtitle,
         keywords = listOf("mpv", "buffer", "demuxer", "size", "bytes", "cache"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1616,7 +1663,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_hwdec_override_title,
         searchSubtitleRes = Res.string.ss_mpv_hwdec_override_subtitle,
         keywords = listOf("mpv", "hardware", "hwdec", "decoder", "override", "gpu"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1627,7 +1674,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_skip_loop_filter_title,
         searchSubtitleRes = Res.string.ss_mpv_skip_loop_filter_subtitle,
         keywords = listOf("mpv", "skip", "loop filter", "h264", "performance"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1638,7 +1685,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_mpv_frame_drop_title,
         searchSubtitleRes = Res.string.ss_mpv_frame_drop_subtitle,
         keywords = listOf("mpv", "frame", "drop", "vdrop", "performance"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1648,7 +1695,7 @@ internal object PlaybackRows {
         titleRes = Res.string.settings_advanced_config,
         searchSubtitleRes = Res.string.settings_raw_mpv_options,
         keywords = listOf("mpv", "advanced", "config", "raw", "options", "editor", "custom"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1658,7 +1705,7 @@ internal object PlaybackRows {
         titleRes = Res.string.settings_reset_to_defaults,
         searchSubtitleRes = Res.string.ss_reset_engine_defaults_subtitle,
         keywords = listOf("reset", "defaults", "restore", "engine", "mpv", "vlc", "exoplayer", "configuration"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
     )
 
@@ -1671,7 +1718,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_vlc_audio_output_title,
         searchSubtitleRes = Res.string.ss_vlc_audio_output_subtitle,
         keywords = listOf("vlc", "libvlc", "audio output", "sound"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1683,7 +1730,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_vlc_audio_time_stretch_title,
         searchSubtitleRes = Res.string.ss_vlc_audio_time_stretch_subtitle,
         keywords = listOf("vlc", "time stretch", "pitch", "speed"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1695,7 +1742,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_vlc_video_output_title,
         searchSubtitleRes = Res.string.ss_vlc_video_output_subtitle,
         keywords = listOf("vlc", "libvlc", "video output", "display"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1707,7 +1754,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_vlc_network_caching_title,
         searchSubtitleRes = Res.string.ss_vlc_network_caching_subtitle,
         keywords = listOf("vlc", "network", "caching", "buffer", "streaming"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1719,7 +1766,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_vlc_skip_loop_filter_title,
         searchSubtitleRes = Res.string.ss_vlc_skip_loop_filter_subtitle,
         keywords = listOf("vlc", "skip", "loop filter", "h264", "quality"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1731,7 +1778,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_vlc_skip_frames_title,
         searchSubtitleRes = Res.string.ss_vlc_skip_frames_subtitle,
         keywords = listOf("vlc", "skip frames", "performance", "frame"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1743,7 +1790,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_vlc_decoder_threads_title,
         searchSubtitleRes = Res.string.ss_vlc_decoder_threads_subtitle,
         keywords = listOf("vlc", "decoder", "threads", "cpu", "multithreading"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1755,7 +1802,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_vlc_drop_late_frames_title,
         searchSubtitleRes = Res.string.ss_vlc_drop_late_frames_subtitle,
         keywords = listOf("vlc", "drop", "late", "frames", "delayed"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1769,7 +1816,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_exo_video_scaling_title,
         searchSubtitleRes = Res.string.ss_exo_video_scaling_subtitle,
         keywords = listOf("exoplayer", "exo", "scaling", "video", "resize"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1781,7 +1828,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_exo_frame_rate_strategy_title,
         searchSubtitleRes = Res.string.ss_exo_frame_rate_strategy_subtitle,
         keywords = listOf("exoplayer", "exo", "frame rate", "refresh", "strategy"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1793,7 +1840,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_exo_skip_silence_title,
         searchSubtitleRes = Res.string.ss_exo_skip_silence_subtitle,
         keywords = listOf("exoplayer", "exo", "skip", "silence", "audio", "gap"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1805,7 +1852,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_exo_audio_offload_title,
         searchSubtitleRes = Res.string.ss_exo_audio_offload_subtitle,
         keywords = listOf("exoplayer", "exo", "audio", "offload", "battery"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1817,7 +1864,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_exo_decoder_fallback_title,
         searchSubtitleRes = Res.string.ss_exo_decoder_fallback_subtitle,
         keywords = listOf("exoplayer", "exo", "decoder", "fallback", "secondary"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1829,7 +1876,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_exo_back_buffer_title,
         searchSubtitleRes = Res.string.ss_exo_back_buffer_subtitle,
         keywords = listOf("exoplayer", "exo", "back buffer", "rewind", "buffer"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1841,7 +1888,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_exo_hdr_tone_mapping_title,
         searchSubtitleRes = Res.string.ss_exo_hdr_tone_mapping_subtitle,
         keywords = listOf("exoplayer", "exo", "hdr", "tone mapping", "sdr", "dolby vision", "washed out", "color"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1853,7 +1900,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_exo_preferred_codecs_title,
         searchSubtitleRes = Res.string.ss_exo_preferred_codecs_subtitle,
         keywords = listOf("exoplayer", "exo", "codec", "mime", "preferred", "video"),
-        route = Route.PlaybackSettings(),
+        route = Route.PlayerEngineSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
     )
@@ -1878,7 +1925,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_syncplay_join_behavior_title,
         searchSubtitleRes = Res.string.ss_syncplay_join_behavior_subtitle,
         keywords = listOf("syncplay", "join", "behavior", "group", "watch party"),
-        route = Route.PlaybackSettings(),
+        route = Route.SyncPlayCastingSettings(),
     )
 
     val SyncplayTolerance = SettingsRow(
@@ -1889,7 +1936,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_syncplay_tolerance_title,
         searchSubtitleRes = Res.string.ss_syncplay_tolerance_subtitle,
         keywords = listOf("syncplay", "tolerance", "drift", "sync", "correction"),
-        route = Route.PlaybackSettings(),
+        route = Route.SyncPlayCastingSettings(),
     )
 
     val SyncplayAutoAcceptInvites = SettingsRow(
@@ -1900,7 +1947,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_syncplay_auto_accept_invites_title,
         searchSubtitleRes = Res.string.ss_syncplay_auto_accept_invites_subtitle,
         keywords = listOf("syncplay", "auto", "accept", "invites", "friends"),
-        route = Route.PlaybackSettings(),
+        route = Route.SyncPlayCastingSettings(),
     )
 
     // -- The "Casting & DLNA" group's rows — HAND-MAINTAINED residuals (same spec-less store). --
@@ -1913,7 +1960,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_casting_strategy_title,
         searchSubtitleRes = Res.string.ss_casting_strategy_subtitle,
         keywords = listOf("casting", "strategy", "dlna", "cast", "chromecast", "tv"),
-        route = Route.PlaybackSettings(),
+        route = Route.SyncPlayCastingSettings(),
     )
 
     val BackgroundCasting = SettingsRow(
@@ -1924,7 +1971,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_background_casting_title,
         searchSubtitleRes = Res.string.ss_background_casting_subtitle,
         keywords = listOf("casting", "background", "keep alive", "dlna", "cast"),
-        route = Route.PlaybackSettings(),
+        route = Route.SyncPlayCastingSettings(),
     )
 
     val PreferredRenderer = SettingsRow(
@@ -1935,7 +1982,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_preferred_renderer_title,
         searchSubtitleRes = Res.string.ss_preferred_renderer_subtitle,
         keywords = listOf("renderer", "preferred", "cast", "device", "target", "tv"),
-        route = Route.PlaybackSettings(),
+        route = Route.SyncPlayCastingSettings(),
     )
 
     // -- The "Live TV & DVR" group's DVR rows — HAND-MAINTAINED residuals (the padding/quality knobs live in the spec-less syncplay/casting store). --
@@ -1949,7 +1996,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_dvr_pre_padding_title,
         searchSubtitleRes = Res.string.ss_dvr_pre_padding_subtitle,
         keywords = listOf("dvr", "pre padding", "recording", "live tv", "start", "early"),
-        route = Route.PlaybackSettings(),
+        route = Route.LiveTvDvrSettings(),
     )
 
     val DvrPostPadding = SettingsRow(
@@ -1960,7 +2007,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_dvr_post_padding_title,
         searchSubtitleRes = Res.string.ss_dvr_post_padding_subtitle,
         keywords = listOf("dvr", "post padding", "recording", "live tv", "end", "extend"),
-        route = Route.PlaybackSettings(),
+        route = Route.LiveTvDvrSettings(),
     )
 
     // Advanced-tagged yet always rendered: the DVR block sits outside the
@@ -1975,7 +2022,7 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_dvr_recording_quality_title,
         searchSubtitleRes = Res.string.ss_dvr_recording_quality_subtitle,
         keywords = listOf("dvr", "recording", "quality", "live tv", "resolution"),
-        route = Route.PlaybackSettings(),
+        route = Route.LiveTvDvrSettings(),
         isAdvanced = true,
         gate = RowAdmission.Always,
     )
@@ -2311,6 +2358,103 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_video_confirm_exit_subtitle,
     )
 
+    // ── The playback hub's composite entrance rows (ADR-0017) ────────────
+    // One residual launcher row per leaf: the row renders on the hub screen
+    // and deep-links the leaf route it opens (the home hub's drill-in-row
+    // shape — the route on the row, not a spec kind). The on-screen subtitle
+    // is the leaf's live summary (playbackBasicsSummaryParts and siblings,
+    // wired at the hub screen); the static subtitleRes here stays the
+    // declaration's fallback face and the search face. The order
+    // here IS the hub's entrance order.
+
+    /** Basics — the mainstream playback-behavior leaf ([Route.PlaybackBasics]). */
+    val BasicsEntrance = SettingsRow(
+        id = "playback_basics",
+        icon = Tabler.Outline.PlayerPlay,
+        titleRes = Res.string.settings_playback_entry_basics,
+        subtitleRes = Res.string.settings_playback_entry_basics_subtitle,
+        searchSubtitleRes = Res.string.settings_playback_entry_basics_subtitle,
+        keywords = listOf("playback", "basics", "player", "engine", "autoplay", "resume", "streaming"),
+        route = Route.PlaybackBasics(),
+    )
+
+    /** Controls & gestures — the input-surface leaf ([Route.PlaybackControls]). */
+    val ControlsEntrance = SettingsRow(
+        id = "playback_controls",
+        icon = Tabler.Outline.HandMove,
+        titleRes = Res.string.settings_playback_entry_controls,
+        subtitleRes = Res.string.settings_playback_entry_controls_subtitle,
+        searchSubtitleRes = Res.string.settings_playback_entry_controls_subtitle,
+        keywords = listOf("playback", "controls", "gestures", "orientation", "touch", "input", "bindings"),
+        route = Route.PlaybackControls(),
+    )
+
+    /** Player chrome — the HUD customization leaf ([Route.PlayerChromeSettings]). */
+    val PlayerChromeEntrance = SettingsRow(
+        id = "player_chrome",
+        icon = Tabler.Outline.Video,
+        titleRes = Res.string.settings_playback_entry_chrome,
+        subtitleRes = Res.string.settings_playback_entry_chrome_subtitle,
+        searchSubtitleRes = Res.string.settings_playback_entry_chrome_subtitle,
+        keywords = listOf("player", "chrome", "overlay", "hud", "seek bar", "buttons", "customize", "layout"),
+        route = Route.PlayerChromeSettings(),
+    )
+
+    /** Video & transcoding — the advanced-video leaf ([Route.PlaybackVideoQuality]). */
+    val VideoQualityEntrance = SettingsRow(
+        id = "playback_video_quality",
+        icon = Tabler.Outline.Gauge,
+        titleRes = Res.string.settings_playback_entry_video_quality,
+        subtitleRes = Res.string.settings_playback_entry_video_quality_subtitle,
+        searchSubtitleRes = Res.string.settings_playback_entry_video_quality_subtitle,
+        keywords = listOf("video", "transcoding", "quality", "decoder", "passthrough", "streaming", "hdr"),
+        route = Route.PlaybackVideoQuality(),
+    )
+
+    /** Player engines — the engine-config leaf ([Route.PlayerEngineSettings]). */
+    val PlayerEnginesEntrance = SettingsRow(
+        id = "player_engines",
+        icon = Tabler.Outline.Settings,
+        titleRes = Res.string.settings_playback_entry_engines,
+        subtitleRes = Res.string.settings_playback_entry_engines_subtitle,
+        searchSubtitleRes = Res.string.settings_playback_entry_engines_subtitle,
+        keywords = listOf("player", "engines", "mpv", "vlc", "exoplayer", "external", "config"),
+        route = Route.PlayerEngineSettings(),
+    )
+
+    /** Skipping & segments — the media-segment leaf ([Route.MediaSegmentSettings]). */
+    val SegmentsEntrance = SettingsRow(
+        id = "playback_segments",
+        icon = Tabler.Outline.PlayerTrackNext,
+        titleRes = Res.string.settings_playback_entry_segments,
+        subtitleRes = Res.string.settings_playback_entry_segments_subtitle,
+        searchSubtitleRes = Res.string.settings_playback_entry_segments_subtitle,
+        keywords = listOf("skipping", "segments", "intro", "outro", "recap", "preview", "next up", "preroll"),
+        route = Route.MediaSegmentSettings(),
+    )
+
+    /** SyncPlay & casting — the watch-party leaf ([Route.SyncPlayCastingSettings]). */
+    val SyncPlayCastingEntrance = SettingsRow(
+        id = "playback_syncplay_casting",
+        icon = Tabler.Outline.Users,
+        titleRes = Res.string.settings_playback_entry_syncplay_casting,
+        subtitleRes = Res.string.settings_playback_entry_syncplay_casting_subtitle,
+        searchSubtitleRes = Res.string.settings_playback_entry_syncplay_casting_subtitle,
+        keywords = listOf("syncplay", "watch party", "casting", "dlna", "renderer", "cast"),
+        route = Route.SyncPlayCastingSettings(),
+    )
+
+    /** Live TV & DVR — the DVR leaf ([Route.LiveTvDvrSettings]). */
+    val LiveTvDvrEntrance = SettingsRow(
+        id = "playback_live_tv_dvr",
+        icon = Tabler.Outline.DeviceTvOld,
+        titleRes = Res.string.settings_playback_entry_live_tv,
+        subtitleRes = Res.string.settings_playback_entry_live_tv_subtitle,
+        searchSubtitleRes = Res.string.settings_playback_entry_live_tv_subtitle,
+        keywords = listOf("live tv", "dvr", "recording", "padding", "quality"),
+        route = Route.LiveTvDvrSettings(),
+    )
+
     /**
      * Every fused playback row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
@@ -2318,7 +2462,9 @@ internal object PlaybackRows {
      * object-to-file-facade initialization order into a cycle.
      */
     val all: List<SettingsRow>
-        get() = PlaybackPlayerRows + PlaybackAdvancedVideoRows + PlaybackEngineRows + PlaybackSyncPlayRows + PlaybackCastingRows + PlaybackDvrRows + PlaybackMediaSegmentsRows
+        get() = PlaybackHubRows + PlaybackBasicsRows + PlaybackControlsRows + PlaybackPlayerChromeRows +
+            PlaybackAdvancedVideoRows + PlaybackEngineRows + PlaybackSyncPlayRows + PlaybackCastingRows +
+            PlaybackDvrRows + PlaybackMediaSegmentsRows
 }
 
 // ---------------------------------------------------------------------
@@ -2327,8 +2473,22 @@ internal object PlaybackRows {
 // below are the spine — presentation faces, catalog order, gates.
 // ---------------------------------------------------------------------
 
+/**
+ * The domain's route-kind map (ADR-0017): every spec route kind a playback
+ * row's search face can carry binds its leaf `Route` — the kind names the
+ * leaf the row's group renders on ([Route.PlaybackSettings] itself is the
+ * hub and carries no spec rows; the hub's entrance rows are residuals with
+ * hand routes).
+ */
 private val searchRoutes: Map<String, Route> = mapOf(
-    PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS to Route.PlaybackSettings(),
+    PlaybackPreferenceSpecs.ROUTE_PLAYBACK_BASICS to Route.PlaybackBasics(),
+    PlaybackPreferenceSpecs.ROUTE_PLAYBACK_CONTROLS to Route.PlaybackControls(),
+    PlaybackPreferenceSpecs.ROUTE_PLAYER_CHROME_SETTINGS to Route.PlayerChromeSettings(),
+    PlaybackPreferenceSpecs.ROUTE_PLAYBACK_VIDEO_QUALITY to Route.PlaybackVideoQuality(),
+    PlaybackPreferenceSpecs.ROUTE_PLAYER_ENGINE_SETTINGS to Route.PlayerEngineSettings(),
+    PlaybackPreferenceSpecs.ROUTE_MEDIA_SEGMENT_SETTINGS to Route.MediaSegmentSettings(),
+    PlaybackPreferenceSpecs.ROUTE_SYNCPLAY_CASTING_SETTINGS to Route.SyncPlayCastingSettings(),
+    PlaybackPreferenceSpecs.ROUTE_LIVE_TV_DVR_SETTINGS to Route.LiveTvDvrSettings(),
 )
 
 private val playbackSpecEntries: List<PreferenceSearchSpec> =
@@ -2336,14 +2496,16 @@ private val playbackSpecEntries: List<PreferenceSearchSpec> =
 
 private val playbackCategory = CoreUiRes.string.ss_cat_playback
 
-internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
+/**
+ * The three leaves the former 83-row `playback.player` group split into
+ * (ADR-0017), in the player group's relative order: Basics (the mainstream
+ * behavior set), Controls & gestures (the input surfaces), Player chrome
+ * (the advanced video_* customization cluster).
+ */
+
+internal val PlaybackBasicsRows: List<SettingsRow> = listOf(
     PlaybackRows.PlayerEngine,
     PlaybackRows.SeekDuration,
-    PlaybackRows.Orientation,
-    PlaybackRows.Gestures,
-    PlaybackRows.GestureIndicatorSide,
-    PlaybackRows.DoubleTapHoldSeek,
-    PlaybackRows.InputBindings,
     PlaybackRows.DefaultSpeed,
     PlaybackRows.DefaultAspect,
     PlaybackRows.VideoAutoplayNext,
@@ -2362,7 +2524,6 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.HideOsdOnPause,
     PlaybackRows.PauseScreensaver,
     PlaybackRows.PauseScreensaverDelay,
-    PlaybackRows.BitmapSubtitleScale,
     PlaybackRows.SkipBackOnResume,
     PlaybackRows.ShowClockPlayer,
     PlaybackRows.PassOutProtection,
@@ -2373,7 +2534,6 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.PlayTrailerBeforeMovie,
     PlaybackRows.EpisodeBrowser,
     PlaybackRows.PlaybackMetadata,
-    PlaybackRows.SwipeSeekRange,
     PlaybackRows.RememberBrightness,
     PlaybackRows.TrickplayPreview,
     PlaybackRows.PreloadBuffer,
@@ -2382,14 +2542,30 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.AutoEnterPip,
     PlaybackRows.KeepScreenOn,
     PlaybackRows.IncognitoMode,
-    PlaybackRows.HoldSpeedMultiplier,
     PlaybackRows.AndroidTvWatchNext,
-    PlaybackRows.TvZoomMode,
     PlaybackRows.DefaultBrightnessLevel,
-    PlaybackRows.TrickplayOnGestures,
     PlaybackRows.ShowTimeRemaining,
     PlaybackRows.PauseOnFocusLoss,
     PlaybackRows.RememberVolumePerContentType,
+    PlaybackRows.AutoplayWifiOnly,
+    PlaybackRows.ConfirmExit,
+)
+
+internal val PlaybackControlsRows: List<SettingsRow> = listOf(
+    PlaybackRows.Orientation,
+    PlaybackRows.Gestures,
+    PlaybackRows.GestureIndicatorSide,
+    PlaybackRows.DoubleTapHoldSeek,
+    PlaybackRows.InputBindings,
+    PlaybackRows.HoldSpeedMultiplier,
+    PlaybackRows.SwipeSeekRange,
+    PlaybackRows.TrickplayOnGestures,
+    PlaybackRows.KeyboardSeekPreset,
+    PlaybackRows.HoldSeekCadence,
+)
+
+internal val PlaybackPlayerChromeRows: List<SettingsRow> = listOf(
+    PlaybackRows.BitmapSubtitleScale,
     // The player-chrome customization cluster: overlay/transport faces,
     // gesture-curve knobs, seek-bar presentation, engine badge and the
     // episode-browser watch filter.
@@ -2411,8 +2587,7 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.EpisodeBrowserHideWatched,
     // The second QoL wave: transport/HUD cadence + preset families.
     PlaybackRows.TvTimeoutScale,
-    PlaybackRows.KeyboardSeekPreset,
-    PlaybackRows.HoldSeekCadence,
+    PlaybackRows.TvZoomMode,
     PlaybackRows.SpeedPillClearance,
     PlaybackRows.PauseFadeStyle,
     PlaybackRows.ControlLayout,
@@ -2422,51 +2597,72 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.AmbientUnderFill,
     PlaybackRows.BufferingVeil,
     PlaybackRows.SpeedPresetSet,
-    PlaybackRows.AutoplayWifiOnly,
-    PlaybackRows.ConfirmExit,
 )
 
-// ── The player group's gate-fork exception sets ──────────────────────────
+internal val PlaybackHubRows: List<SettingsRow> = listOf(
+    PlaybackRows.BasicsEntrance,
+    PlaybackRows.ControlsEntrance,
+    PlaybackRows.PlayerChromeEntrance,
+    PlaybackRows.VideoQualityEntrance,
+    PlaybackRows.PlayerEnginesEntrance,
+    PlaybackRows.SegmentsEntrance,
+    PlaybackRows.SyncPlayCastingEntrance,
+    PlaybackRows.LiveTvDvrEntrance,
+)
+
+// ── The leaves' gate-fork exception sets ─────────────────────────────────
 // The rows the strict count treats specially (the capability forks, the
-// parent-toggle rows, the TV pair), named where the rows are declared so the
+// parent-toggle rows, the TV rows), named where the rows are declared so the
 // contract tests' count arithmetic derives from these lists instead of
 // restating hand-counted literals.
 
-/** The screen-orientation fork row ([RowAdmission.Platform] on [RowAdmissionCapability.ScreenOrientation]). */
-internal val PlaybackPlayerOrientationRows: List<SettingsRow> = listOf(
-    PlaybackRows.Orientation,
-)
-
-/** The touch-gesture fork rows ([RowAdmission.Platform] on [RowAdmissionCapability.TouchGestures] — the seek-duration row included). */
-internal val PlaybackPlayerTouchRows: List<SettingsRow> = listOf(
+/** The basics leaf's touch fork row ([RowAdmission.Platform] on [RowAdmissionCapability.TouchGestures]). */
+internal val PlaybackBasicsTouchRows: List<SettingsRow> = listOf(
     PlaybackRows.SeekDuration,
-    PlaybackRows.Gestures,
-    PlaybackRows.GestureIndicatorSide,
-    PlaybackRows.DoubleTapHoldSeek,
 )
 
 /** The still-watching pair riding [PlaybackRows.VideoAutoplayNext] ([RowAdmission.WhenOn]). */
-internal val PlaybackPlayerStillWatchingRows: List<SettingsRow> = listOf(
+internal val PlaybackBasicsStillWatchingRows: List<SettingsRow> = listOf(
     PlaybackRows.StillWatchingMode,
     PlaybackRows.StillWatchingEpisodes,
 )
 
 /** The screensaver delay row riding [PlaybackRows.PauseScreensaver] (All(Advanced, WhenOn)). */
-internal val PlaybackPlayerPauseScreensaverDelayRows: List<SettingsRow> = listOf(
+internal val PlaybackBasicsPauseScreensaverDelayRows: List<SettingsRow> = listOf(
     PlaybackRows.PauseScreensaverDelay,
 )
 
 /** The auto-PiP row behind the Android PiP stack (All(Advanced, Platform(Pip))). */
-internal val PlaybackPlayerAutoPipRows: List<SettingsRow> = listOf(
+internal val PlaybackBasicsAutoPipRows: List<SettingsRow> = listOf(
     PlaybackRows.AutoEnterPip,
 )
 
-/** The TV-only pair — admitted on the form factor alone (the shipped count semantics). */
-internal val PlaybackPlayerTvRows: List<SettingsRow> = listOf(
+/**
+ * The basics leaf's TV row — declared [RowAdmission.All]([RowAdmission.Advanced],
+ * [RowAdmission.Tv]): it admits only on TV WITH the advanced toggle on (the
+ * strict count test pins TV-with-advanced-off as NOT admitted), so the
+ * derived total counts it only in that state.
+ */
+internal val PlaybackBasicsTvRows: List<SettingsRow> = listOf(
     PlaybackRows.AndroidTvWatchNext,
-    PlaybackRows.TvZoomMode,
 )
 
+/** The controls leaf's screen-orientation fork row ([RowAdmission.Platform] on [RowAdmissionCapability.ScreenOrientation]). */
+internal val PlaybackControlsOrientationRows: List<SettingsRow> = listOf(
+    PlaybackRows.Orientation,
+)
+
+/** The controls leaf's touch-gesture fork rows ([RowAdmission.Platform] on [RowAdmissionCapability.TouchGestures]). */
+internal val PlaybackControlsTouchRows: List<SettingsRow> = listOf(
+    PlaybackRows.Gestures,
+    PlaybackRows.GestureIndicatorSide,
+    PlaybackRows.DoubleTapHoldSeek,
+)
+
+/** The chrome leaf's TV row ([RowAdmission.Tv] — the TV overscan zoom beside the chrome knobs). */
+internal val PlaybackChromeTvRows: List<SettingsRow> = listOf(
+    PlaybackRows.TvZoomMode,
+)
 internal val PlaybackAdvancedVideoRows: List<SettingsRow> = listOf(
     PlaybackRows.DialogueBoost,
     PlaybackRows.DialogueBoostStrength,
@@ -2632,8 +2828,17 @@ internal val PlaybackMediaSegmentsRows: List<SettingsRow> = listOf(
  * lists above in one act ([List.asRowGroup]), so the declaration is the
  * single home of the groups' order, faces and gates.
  */
-internal val PlaybackPlayerGroup =
-    PlaybackPlayerRows.asRowGroup("playback.player", specEntriesFor(PlaybackPlayerRows, playbackSpecEntries), searchRoutes, playbackCategory)
+internal val PlaybackHubGroup =
+    PlaybackHubRows.asRowGroup("playback.hub", emptyList(), searchRoutes, playbackCategory)
+
+internal val PlaybackBasicsGroup =
+    PlaybackBasicsRows.asRowGroup("playback.basics", specEntriesFor(PlaybackBasicsRows, playbackSpecEntries), searchRoutes, playbackCategory)
+
+internal val PlaybackControlsGroup =
+    PlaybackControlsRows.asRowGroup("playback.controls", specEntriesFor(PlaybackControlsRows, playbackSpecEntries), searchRoutes, playbackCategory)
+
+internal val PlaybackPlayerChromeGroup =
+    PlaybackPlayerChromeRows.asRowGroup("playback.playerChrome", specEntriesFor(PlaybackPlayerChromeRows, playbackSpecEntries), searchRoutes, playbackCategory)
 
 internal val PlaybackAdvancedVideoGroup =
     PlaybackAdvancedVideoRows.asRowGroup("playback.advancedVideo", specEntriesFor(PlaybackAdvancedVideoRows, playbackSpecEntries), searchRoutes, playbackCategory)
@@ -2657,7 +2862,13 @@ internal val PlaybackMediaSegmentsGroup =
 // pins (SpecDerivedSearchItemsTest, SettingsSearchCatalogTest) read these
 // lists.
 
-internal val PlaybackSettingsSearchItems: List<SettingsSearchItem> = PlaybackPlayerGroup.items
+internal val PlaybackHubSearchItems: List<SettingsSearchItem> = PlaybackHubGroup.items
+
+internal val PlaybackBasicsSearchItems: List<SettingsSearchItem> = PlaybackBasicsGroup.items
+
+internal val PlaybackControlsSearchItems: List<SettingsSearchItem> = PlaybackControlsGroup.items
+
+internal val PlaybackPlayerChromeSearchItems: List<SettingsSearchItem> = PlaybackPlayerChromeGroup.items
 
 internal val PlaybackAdvancedVideoSearchItems: List<SettingsSearchItem> = PlaybackAdvancedVideoGroup.items
 
@@ -2689,3 +2900,177 @@ internal val PlaybackEntrance = SettingsEntranceSectionRow(
     icon = Tabler.Outline.PlayerPlay,
     titleRes = Res.string.settings_playback,
 )
+
+// ── Entrance summaries (ADR-0017 decision 3) ────────────────────────────
+// The domain's live entrance subtitles: the settings root's Playback row and
+// the playback hub's eight entrance rows each render the current values of
+// the slice their screen reads ([PlaybackPreferences] — the
+// `playbackPreferences` projection). Pure folds emitting renderable
+// [SettingsSummaryPart]s — they read slices, never write; the @Composable
+// call sites resolve each part at composition (the SettingsBrowsePane
+// machinery). Pinned by SettingsSummariesTest (exact verdicts).
+
+/**
+ * The HDR delivery posture's summary token (the AUTO arm never surfaces —
+ * the picker's own faces, short forms).
+ */
+internal fun hdrFormatLabelRes(format: HdrFormatPreference): StringResource = when (format) {
+    HdrFormatPreference.AUTO -> Res.string.settings_hdr_format_auto
+    HdrFormatPreference.PREFER_DV_OVER_HDR10 -> Res.string.settings_hdr_format_prefer_dv
+    HdrFormatPreference.SDR_ONLY -> Res.string.settings_hdr_format_sdr_only
+    HdrFormatPreference.HDR10_ONLY -> Res.string.settings_hdr_format_hdr10_only
+    HdrFormatPreference.DOLBY_VISION_ONLY -> Res.string.settings_hdr_format_dv_only
+}
+
+/**
+ * The DVR recording-quality wire value's localized face — the ONE mapping the
+ * leaf's row + picker faces ([PlaybackGroups.PlaybackDvrGroup]) and the hub's
+ * DVR entrance summary read ([hdrFormatLabelRes] precedent). Null for an
+ * unknown wire value: the callers fall back to the raw stored string.
+ */
+internal fun dvrRecordingQualityLabelRes(quality: String): StringResource? = when (quality) {
+    "AUTO" -> Res.string.settings_dvr_quality_auto
+    "HIGH" -> Res.string.settings_dvr_quality_high
+    "MEDIUM" -> Res.string.settings_dvr_quality_medium
+    "LOW" -> Res.string.settings_dvr_quality_low
+    else -> null
+}
+
+/**
+ * The delivery posture's summary parts — playback mode, streaming quality and
+ * HDR preference, each only off its AUTO default. The shared fold behind BOTH
+ * summaries that name it ([playbackSummaryParts] beside the speed face,
+ * [playbackVideoQualitySummaryParts] with the empty-list fallback); the
+ * inclusion rules, labels and order live here once.
+ */
+private fun playbackDeliveryPostureParts(preferences: PlaybackPreferences): List<SettingsSummaryPart> = buildList {
+    if (preferences.playbackMode != PlaybackMode.AUTO) {
+        add(SettingsSummaryPart.Literal(preferences.playbackMode.displayName))
+    }
+    if (preferences.streamingQuality != StreamingQuality.AUTO) {
+        add(SettingsSummaryPart.Literal(preferences.streamingQuality.displayName))
+    }
+    if (preferences.hdrFormatPreference != HdrFormatPreference.AUTO) {
+        add(SettingsSummaryPart.Token(hdrFormatLabelRes(preferences.hdrFormatPreference)))
+    }
+}
+
+/**
+ * The root Playback entrance's summary: the default speed face always, then
+ * the delivery posture the user actually pinned ([playbackDeliveryPostureParts]).
+ */
+internal fun playbackSummaryParts(preferences: PlaybackPreferences): List<SettingsSummaryPart> = buildList {
+    add(
+        SettingsSummaryPart.Formatted(
+            Res.string.settings_default_speed_value,
+            defaultSpeedFace(preferences.videoDefaultSpeed),
+        ),
+    )
+    addAll(playbackDeliveryPostureParts(preferences))
+}
+
+/** Basics — the default speed face plus the aspect override off AUTO. */
+internal fun playbackBasicsSummaryParts(preferences: PlaybackPreferences): List<SettingsSummaryPart> = buildList {
+    add(
+        SettingsSummaryPart.Formatted(
+            Res.string.settings_default_speed_value,
+            defaultSpeedFace(preferences.videoDefaultSpeed),
+        ),
+    )
+    if (preferences.videoDefaultAspectRatio != "AUTO") {
+        add(SettingsSummaryPart.Literal(preferences.videoDefaultAspectRatio))
+    }
+}
+
+/**
+ * Controls & gestures — the gesture-mode preset and the orientation lock,
+ * each only where the Controls leaf's own capability gates admit the row
+ * ([PlaybackRows.Gestures]/[PlaybackRows.Orientation] declare
+ * [RowAdmission.Platform] over the touch-gesture / screen-orientation
+ * capabilities — a device without the capability renders no row, so the
+ * summary must not name the control either). With neither capability the
+ * static entrance subtitle carries (the chrome fold's fallback shape).
+ */
+internal fun playbackControlsSummaryParts(
+    preferences: PlaybackPreferences,
+    supportsTouchGestures: Boolean = settingsCapabilities.supportsTouchGestures,
+    supportsScreenOrientation: Boolean = settingsCapabilities.supportsScreenOrientation,
+): List<SettingsSummaryPart> = buildList {
+    if (supportsTouchGestures) {
+        add(SettingsSummaryPart.Token(preferences.videoGestureMode.labelResource()))
+    }
+    if (supportsScreenOrientation) {
+        add(SettingsSummaryPart.Token(preferences.videoDefaultOrientation.labelResource()))
+    }
+    if (isEmpty()) add(SettingsSummaryPart.Token(Res.string.settings_playback_entry_controls_subtitle))
+}
+
+/**
+ * Player chrome — the seek-bar presentation deviations off the shipped
+ * defaults (chapter markers / buffered range); at defaults the entrance's
+ * static subtitle carries (the all-default chrome posture is the norm and
+ * naming it twice is noise).
+ */
+internal fun playbackPlayerChromeSummaryParts(preferences: PlaybackPreferences): List<SettingsSummaryPart> = buildList {
+    if (!preferences.videoShowChapterMarkers) {
+        add(SettingsSummaryPart.Token(Res.string.settings_sum_chrome_chapters_off))
+    }
+    if (!preferences.videoShowBufferedRange) {
+        add(SettingsSummaryPart.Token(Res.string.settings_sum_chrome_buffer_off))
+    }
+    if (isEmpty()) add(SettingsSummaryPart.Token(Res.string.settings_playback_entry_chrome_subtitle))
+}
+
+/**
+ * Video & transcoding — the pinned delivery posture
+ * ([playbackDeliveryPostureParts]); at the all-AUTO default the static
+ * subtitle carries.
+ */
+internal fun playbackVideoQualitySummaryParts(preferences: PlaybackPreferences): List<SettingsSummaryPart> = buildList {
+    addAll(playbackDeliveryPostureParts(preferences))
+    if (isEmpty()) add(SettingsSummaryPart.Token(Res.string.settings_playback_entry_video_quality_subtitle))
+}
+
+/**
+ * Player engines — the preferred engine (and the external hand-off app
+ * beside it when the EXTERNAL arm is the engine).
+ */
+internal fun playbackEnginesSummaryParts(preferences: PlaybackPreferences): List<SettingsSummaryPart> = buildList {
+    add(SettingsSummaryPart.Literal(preferences.preferredPlayer.displayName))
+    if (preferences.preferredPlayer == PlayerType.EXTERNAL) {
+        add(SettingsSummaryPart.Literal(preferences.preferredExternalPlayer.displayName))
+    }
+}
+
+/**
+ * Skipping & segments — the per-type behavior posture (the group summary's
+ * own face: N auto-skip, M show-button) plus the skip-on-seek arm when on.
+ */
+internal fun playbackSegmentsSummaryParts(preferences: PlaybackPreferences): List<SettingsSummaryPart> = buildList {
+    val autoCount = preferences.segmentBehaviors.count { it.value == SegmentBehavior.AUTO_SKIP }
+    val buttonCount = preferences.segmentBehaviors.count { it.value == SegmentBehavior.SHOW_BUTTON }
+    add(
+        SettingsSummaryPart.Formatted2(
+            Res.string.settings_media_segments_summary,
+            autoCount,
+            buttonCount,
+        ),
+    )
+    if (preferences.skipSegmentsOnSeek) {
+        add(SettingsSummaryPart.Token(Res.string.settings_skip_segments_on_seek))
+    }
+}
+
+/** SyncPlay & casting — the casting strategy and the join-behavior preset. */
+internal fun playbackSyncPlayCastingSummaryParts(preferences: PlaybackPreferences): List<SettingsSummaryPart> = listOf(
+    SettingsSummaryPart.Literal(preferences.defaultCastingStrategy.displayName),
+    SettingsSummaryPart.Literal(preferences.syncPlayJoinBehavior.displayName),
+)
+
+/** Live TV & DVR — the recording quality (the leaf's localized label face). */
+internal fun playbackLiveTvDvrSummaryParts(preferences: PlaybackPreferences): List<SettingsSummaryPart> =
+    listOf(
+        dvrRecordingQualityLabelRes(preferences.dvrRecordingQuality)
+            ?.let { SettingsSummaryPart.Token(it) }
+            ?: SettingsSummaryPart.Literal(preferences.dvrRecordingQuality),
+    )

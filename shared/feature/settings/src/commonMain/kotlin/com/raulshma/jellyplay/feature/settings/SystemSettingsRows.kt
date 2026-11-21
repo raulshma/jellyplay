@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admin_dashboard
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ambient
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ambient_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admin_dashboard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories_subtitle
@@ -32,6 +34,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hook
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_minutes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ken_burns
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ken_burns_on
@@ -253,7 +258,8 @@ internal object SystemRows {
 // ---------------------------------------------------------------------
 
 private val systemSearchRoutes: Map<String, Route> = mapOf(
-    ScreensaverPreferenceSpecs.ROUTE_SETTINGS to Route.Settings,
+    ScreensaverPreferenceSpecs.ROUTE_AMBIENT_SETTINGS to Route.AmbientSettings(),
+    ScreensaverPreferenceSpecs.ROUTE_INTEGRATIONS to Route.Integrations(),
 )
 
 private val systemSpecEntries: List<PreferenceSearchSpec> = ScreensaverPreferenceSpecs.searchEntries
@@ -320,3 +326,63 @@ internal val SystemHooksGroup =
 
 /** The whole System declaration list — the five screen groups' concatenation, the pinned catalog order (the navigation pair, the dream rows, the desktop-shell rows). */
 internal val SystemSearchItems: List<SettingsSearchItem> = SystemCoreGroup.items + SystemScreensaverGroup.items + SystemIdleAmbientGroup.items + SystemDiscordPresenceGroup.items + SystemHooksGroup.items
+
+// ── The domain's composite entrances ────────────────────────────────────
+
+/**
+ * The Ambient domain's root-screen entrance (ADR-0017): the TV screensaver
+ * group + the desktop idle-ambient group as ONE capability-gated screen
+ * ([Route.AmbientSettings]) — the ONE ordered declaration that drives the
+ * root's `item_ambient` section emission and its entrance-step index. The
+ * row's own visibility gate (TV mode OR the idle-ambient capability) stays
+ * at the emission site — it is a runtime/probe fact the declaration cannot
+ * carry.
+ */
+internal val AmbientEntrance = SettingsEntranceSectionRow(
+    key = "item_ambient",
+    rowId = "ambient",
+    icon = Tabler.Outline.Moon,
+    titleRes = Res.string.settings_ambient,
+)
+
+// ── Entrance summary (ADR-0017 decision 3) ──────────────────────────────
+
+/**
+ * The root Ambient entrance's summary, split by the screen's capability fork
+ * (the same fork [ambientScreenAdmitted] gates the row with): the TV arm
+ * names the dream's on-content toggles (the TV screensaver's enable state is
+ * OS-governed — there is no in-app master switch to read), the desktop arm
+ * the idle screen's on/off posture with its timeout; the all-off TV posture
+ * falls back to the entrance's static subtitle. Reads the root slice's
+ * screensaver values (already projected onto [com.raulshma.jellyplay.core.model.SettingsScreenPreferences]);
+ * pure, pinned by SettingsSummariesTest.
+ */
+internal fun ambientSummaryParts(
+    isTv: Boolean,
+    idleAmbientEnabled: Boolean,
+    idleAmbientTimeoutMin: Long,
+    dreamShowTitle: Boolean,
+    dreamKenBurnsEnabled: Boolean,
+): List<SettingsSummaryPart> =
+    if (isTv) {
+        buildList {
+            if (dreamShowTitle) add(SettingsSummaryPart.Token(Res.string.settings_show_title))
+            if (dreamKenBurnsEnabled) add(SettingsSummaryPart.Token(Res.string.settings_ken_burns))
+            if (isEmpty()) add(SettingsSummaryPart.Token(Res.string.settings_ambient_subtitle))
+        }
+    } else {
+        listOf(
+            if (idleAmbientEnabled) {
+                if (idleAmbientTimeoutMin == 0L) {
+                    SettingsSummaryPart.Token(Res.string.settings_idle_ambient_timeout_off)
+                } else {
+                    SettingsSummaryPart.Formatted(
+                        Res.string.settings_idle_ambient_timeout_minutes,
+                        idleAmbientTimeoutMin,
+                    )
+                }
+            } else {
+                SettingsSummaryPart.Token(Res.string.settings_off)
+            },
+        )
+    }

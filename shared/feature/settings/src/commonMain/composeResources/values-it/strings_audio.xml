@@ -3,6 +3,7 @@
     <!-- The Audio settings screen family. -->
     <string name="settings_audio_player">Lettore audio</string>
     <string name="settings_audio_player_title">Lettore audio</string>
+    <string name="settings_audio_fine_tuning">Regolazioni fini</string>
     <string name="settings_audio_default_speed">Velocità predefinita</string>
     <string name="settings_audio_default_speed_normal">Velocità di riproduzione normale</string>
     <string name="settings_audio_default_speed_value">Riproduzione %1$sx</string>

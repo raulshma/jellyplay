@@ -39,6 +39,8 @@
     <string name="settings_notifications">通知</string>
     <string name="settings_notifications_checking">%1$s を確認中</string>
     <string name="settings_downloads_storage">ダウンロード &amp; ストレージ</string>
+    <string name="settings_storage_network">ストレージ &amp; ネットワーク</string>
+    <string name="settings_downloads_subtitle">ダウンロード品質、スマート自動ダウンロードとスケジュール</string>
     <string name="settings_cache_subtitle">キャッシュ: %1$d MB</string>
     <string name="settings_security">セキュリティ</string>
     <string name="settings_pin_biometric_on">PIN + 生体認証ロック: オン</string>
@@ -48,6 +50,11 @@
     <string name="settings_backup_restore">バックアップ &amp; 復元</string>
     <string name="settings_backup_restore_subtitle">アプリの設定をエクスポート/インポート</string>
     <string name="settings_screensaver">スクリーンセーバー</string>
+    <string name="settings_ambient">アンビエント</string>
+    <string name="settings_ambient_subtitle">スクリーンセーバー &amp; アイドル画面</string>
+    <string name="settings_cat_media_playback">メディア &amp; 再生</string>
+    <string name="settings_cat_look_and_feel">外観 &amp; 操作感</string>
+    <string name="settings_cat_system_data">システム &amp; データ</string>
     <string name="settings_show_title">タイトルを表示</string>
     <string name="settings_display_media_title">メディアのタイトルを表示</string>
     <string name="settings_hide_media_title">メディアのタイトルを非表示</string>
@@ -298,6 +305,7 @@
     <string name="settings_max_cache_size_subtitle">キャッシュ用の最大ディスク容量</string>
     <string name="settings_unlimited">無制限</string>
     <string name="settings_network_offline">ネットワーク &amp; オフライン</string>
+    <string name="settings_network_diagnostics">ネットワーク診断</string>
     <string name="settings_status_value">状態: %1$s</string>
     <string name="settings_offline_mode">オフラインモード</string>
     <string name="settings_online">オンライン</string>
@@ -368,6 +376,27 @@
     <string name="settings_custom_options">カスタムオプション</string>
     <string name="settings_reset_to_defaults">デフォルトにリセット</string>
     <string name="settings_living_room_tv">リビングのテレビ</string>
+
+    <!-- Entrance-summary tokens (ADR-0017 decision 3): the short faces the
+         per-domain *SummaryParts folds emit where no row face exists. -->
+    <string name="settings_subtitle_label">字幕: %1$s</string>
+    <string name="settings_sum_chrome_chapters_off">チャプターマーカーなし</string>
+    <string name="settings_sum_chrome_buffer_off">バッファ範囲なし</string>
+    <string name="settings_sum_plugin_sync_on">同期オン</string>
+    <string name="settings_sum_plugin_sync_off">同期オフ</string>
+    <string name="settings_sum_quality_badges_off">品質バッジなし</string>
+    <string name="settings_sum_new_badges_off">NEWバッジなし</string>
+    <string name="settings_sum_detail_hide_watched">視聴済みエピソードを非表示</string>
+    <string name="settings_sum_detail_confirm_played">視聴済みマークの確認</string>
+    <string name="settings_sum_haptics_off">触覚フィードバックオフ</string>
+    <plurals name="settings_sum_pinned_sections">
+        <item quantity="one">%1$d個のピン留めセクション</item>
+        <item quantity="other">%1$d個のピン留めセクション</item>
+    </plurals>
+    <plurals name="settings_sum_badges_on">
+        <item quantity="one">%1$d個のバッジセットがオン</item>
+        <item quantity="other">%1$d個のバッジセットがオン</item>
+    </plurals>
 
     <!-- Streaming quality labels -->
 
@@ -491,7 +520,6 @@
     <string name="settings_show_advanced">詳細設定を表示</string>
     <string name="settings_advanced_hidden">詳細設定を非表示にしました</string>
     <string name="settings_advanced_shown">詳細設定を表示しました</string>
-
 
     <plurals name="settings_advanced_settings_hidden">
         <item quantity="one">%1$d 件の詳細設定を非表示</item>
@@ -847,6 +875,8 @@
 
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">サーバープラグイン</string>
+    <string name="settings_jellyplay_plugin_entry">JellyPlayプラグイン</string>
+    <string name="settings_jellyplay_plugin_entry_subtitle">サーバープラグイン機能と設定の同期</string>
     <string name="settings_jellyplay_plugin_section_summary">JellyPlay プラグインが提供する機能を選択します</string>
     <string name="settings_jellyplay_plugin_version_summary">サーバープラグイン v%1$s</string>
     <string name="settings_jellyplay_contract_mismatch_title">プラグインの更新が必要です</string>
@@ -1266,9 +1296,9 @@
     <string name="settings_perf_group_ambient">アンビエント効果</string>
     <string name="settings_perf_group_buffers">再生バッファ</string>
     <string name="settings_perf_crossref_profile_title">デバイスプロファイルと再検出</string>
-    <string name="settings_perf_crossref_profile_subtitle">検出されたデバイス階層と再検出操作は 再生 → 高度な動画 にあります</string>
+    <string name="settings_perf_crossref_profile_subtitle">検出されたデバイス階層と再検出操作は 再生 → 動画 &amp; トランスコード にあります</string>
     <string name="settings_perf_crossref_back_buffer_title">バックバッファ時間</string>
-    <string name="settings_perf_crossref_back_buffer_subtitle">エンジン領域のバックバッファ行は 再生 → エンジン設定（ExoPlayer） にあります</string>
+    <string name="settings_perf_crossref_back_buffer_subtitle">エンジン領域のバックバッファ行は 再生 → プレーヤーエンジン（ExoPlayer） にあります</string>
     <string name="settings_perf_customize">カスタマイズ…</string>
     <string name="settings_perf_customize_subtitle">細かいパフォーマンス行はすべてパフォーマンスハブにあります</string>
     <string name="settings_perf_animations">アニメーション</string>

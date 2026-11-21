@@ -12,9 +12,9 @@ import kotlin.test.fail
  *
  * The search-reveal contract lives in TWO halves the data tests split
  * between them:
- *  - WHICH ids reveal on-screen → the root screen's coverage is pinned by
- *    `SettingsCatalogScreenContractTest`'s reveal tests over
- *    [SettingsScreenGroups.rootRevealGroups];
+ *  - WHICH ids reveal on which screen → the catalog↔screen route totality is
+ *    pinned by `SettingsCatalogScreenContractTest` (ADR-0017: the root hosts
+ *    no reveal rows — every group's ids deep-link their declared screen);
  *  - HOW a group expands for a highlight → every highlight-driven
  *    `SettingsGroup(initiallyExpanded = …)` expression must DERIVE from a
  *    declaration (`… in SettingsScreenGroups.<group>.itemIdSet`), never
