@@ -590,6 +590,9 @@ class ExoPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
+        // Per-request epoch first (see bumpLoadEpoch): the session watcher's
+        // stale-baseline drop reads it, so it must move before any state write.
+        bumpLoadEpoch()
         ensurePlayerThread("load")
 
         currentNormalizationGain = request.requestSpecific?.normalizationGain

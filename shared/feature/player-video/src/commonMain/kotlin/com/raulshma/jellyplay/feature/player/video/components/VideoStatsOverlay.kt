@@ -52,6 +52,8 @@ import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
+import com.raulshma.jellyplay.feature.player.video.state.PlaybackDiagnosticAdvisor
+import com.raulshma.jellyplay.feature.player.video.state.StatsAdvice
 import com.raulshma.jellyplay.feature.player.video.PlatformTranscodeReason
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_audio
@@ -637,12 +639,7 @@ internal object PerformanceStatsAdvice {
     const val DROPPED_FRAMES_HIGH_ABSOLUTE = 250
 
     fun isDropRateHigh(droppedFrames: Long, totalVideoFrames: Long): Boolean =
-        if (totalVideoFrames > 0) {
-            val total = droppedFrames + totalVideoFrames
-            droppedFrames.toFloat() / total.toFloat() * 100f >= DROP_RATE_HIGH_PERCENT
-        } else {
-            droppedFrames >= DROPPED_FRAMES_HIGH_ABSOLUTE
-        }
+        PlaybackDiagnosticAdvisor.isDropRateHigh(droppedFrames, totalVideoFrames)
 
     fun adviceFor(
         droppedFrames: Long,
@@ -650,12 +647,19 @@ internal object PerformanceStatsAdvice {
         isDirectPlay: Boolean,
         estimatedBandwidthBps: Long,
         streamBitrateBps: Int,
-    ): Advice? = when {
-        isDropRateHigh(droppedFrames, totalVideoFrames) && isDirectPlay -> Advice.TRY_AUTO_OR_LOW
-        isDropRateHigh(droppedFrames, totalVideoFrames) -> Advice.TRY_LOW_OR_SWITCH_ENGINE
-        estimatedBandwidthBps > 0 && streamBitrateBps > 0 && estimatedBandwidthBps < streamBitrateBps ->
-            Advice.LOWER_QUALITY_CHECK_WIFI
-        else -> null
+    ): Advice? = when (
+        PlaybackDiagnosticAdvisor.performanceStatsAdviceFor(
+            droppedFrames = droppedFrames,
+            totalVideoFrames = totalVideoFrames,
+            isDirectPlay = isDirectPlay,
+            estimatedBandwidthBps = estimatedBandwidthBps,
+            streamBitrateBps = streamBitrateBps,
+        )
+    ) {
+        StatsAdvice.TRY_AUTO_OR_LOW -> Advice.TRY_AUTO_OR_LOW
+        StatsAdvice.TRY_LOW_OR_SWITCH_ENGINE -> Advice.TRY_LOW_OR_SWITCH_ENGINE
+        StatsAdvice.LOWER_QUALITY_CHECK_WIFI -> Advice.LOWER_QUALITY_CHECK_WIFI
+        null -> null
     }
 }
 

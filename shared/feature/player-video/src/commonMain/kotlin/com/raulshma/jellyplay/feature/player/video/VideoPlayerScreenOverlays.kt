@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -62,9 +63,12 @@ import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
 import com.raulshma.jellyplay.feature.player.video.state.PlayerBackFocusLadder
+import com.raulshma.jellyplay.feature.player.video.components.BufferingDiagnosticsPill
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PinLockOverlay
+import com.raulshma.jellyplay.feature.player.video.components.PlaybackRecoveryBanner
+import com.raulshma.jellyplay.feature.player.video.components.ProgressiveLoadingHud
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SlideToUnlockOverlay
 import com.raulshma.jellyplay.feature.player.video.components.StillWatchingOverlay
@@ -72,8 +76,10 @@ import com.raulshma.jellyplay.feature.player.video.components.SubtitleDelayOverl
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayFilmstripOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayFullscreenOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
+import com.raulshma.jellyplay.feature.player.video.LoadPhase
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_skipped_segment
+import com.raulshma.jellyplay.feature.player.video.session.DiagnosticsSessionSlice
 
 // ── Section host: overlay tiers over the video surface ───────────────────
 // Owns the center overlays (gesture trickplay, intro/segment skip, skipped
@@ -135,6 +141,18 @@ internal data class CenterOverlayInputs(
     val upNextImageUrl: String?,
     val isNextEpisodeLoading: Boolean,
     val tvNextEpisodeFocusRequester: FocusRequester,
+    /**
+     * The recovery banner's WHOLE ladder wiring — the SAME holder the back
+     * ladder and the TV focus-ownership gates read: [RecoveryBannerLadder.isVisible]
+     * is the effective render decision (diagnostics pref + a distinct
+     * offer-presence flip, see [rememberRecoveryBannerLadder]) so the banner,
+     * the back ladder and the focus gates can never disagree about whether an
+     * offer is on screen, and [RecoveryBannerLadder.focusRequester] is the
+     * shared focus anchor (the banner's initial grab and the ladder's
+     * hide-edge handoff both target it). The proposal VALUE itself stays
+     * leaf-collected by the render site below.
+     */
+    val recoveryBanner: RecoveryBannerLadder,
     val isPlaying: Boolean,
     val isSheetOpen: Boolean,
     val isScreenLocked: Boolean,
@@ -336,8 +354,82 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         modifier = Modifier.align(Alignment.Center),
         label = "bufferingIndicator",
     ) {
-        JellyPlayLoadingIndicator(color = playerOnScrim())
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            JellyPlayLoadingIndicator(color = playerOnScrim())
+            val diagnostics = viewModel.sessionSlices.diagnostics
+            if (uiState.uiPrefs.playbackDiagnostics && diagnostics != null) {
+                val bufferHealth by diagnostics.bufferHealth.collectAsStateWithLifecycle()
+                val throughput by diagnostics.throughput.collectAsStateWithLifecycle()
+                val stallCause by diagnostics.stallCause.collectAsStateWithLifecycle()
+                Spacer(Modifier.height(10.dp))
+                BufferingDiagnosticsPill(
+                    isBuffering = uiState.isBuffering,
+                    bufferHealth = bufferHealth,
+                    throughput = throughput,
+                    stallCause = stallCause,
+                    isTranscoding = uiState.media.playMethod.contains("Transcode", ignoreCase = true),
+                )
+            }
+        }
     }
+
+    // Actionable slow-playback recovery banner. The RENDER decision is the
+    // root's folded banner visibility the BACK arm and the TV focus gates
+    // also read (inputs.recoveryBanner.isVisible), so they can never disagree;
+    // this leaf keeps collecting the full proposal for the value it renders.
+    val diagnostics = viewModel.sessionSlices.diagnostics
+    if (inputs.recoveryBanner.isVisible && diagnostics != null) {
+        val activeRecovery by diagnostics.activeRecovery.collectAsStateWithLifecycle()
+        activeRecovery?.let { recovery ->
+            PlaybackRecoveryBanner(
+                recovery = recovery,
+                // The shared requester (the back ladder holds the same one): the
+                // banner's initial TV grab and the ladder's focus handoff land
+                // on the SAME node.
+                focusRequester = inputs.recoveryBanner.focusRequester,
+                onApplyAction = { action -> diagnostics.applyRecovery(action) },
+                onDismiss = { diagnostics.dismissRecovery() },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 140.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Progressive Loading HUD during initial media startup (replaces the black void).
+ *
+ * [onCancel] is the nav exit (`currentOnBack`): both hosts route it to a route
+ * pop (PlayerActivity.finish / guardedNavigator.goBack), whose composition
+ * dispose runs the FULL release (viewModel.release → performRelease): the
+ * position ledger's teardown bracket snapshots the Stop-report inputs BEFORE
+ * the state clears, and releaseInternalsSessionPart cancels the owning LOAD
+ * job (sessionTasks.cancel(LOAD)) — a suspended media-detail resolution cannot
+ * resume into the released session, and the final Stop report still issues on
+ * the release scope. The diagnostics cancelLoad() path is a strict subset of
+ * this teardown (same bracket, minus the post-internals PiP/cast/engine half)
+ * — never routed to instead.
+ */
+@Composable
+internal fun PlayerInitializingOverlay(
+    viewModel: VideoPlayerViewModel,
+    uiState: VideoPlayerUiState,
+    onCancel: () -> Unit,
+) {
+    val diagnostics = viewModel.sessionSlices.diagnostics
+    val loadPhase = diagnostics?.loadPhase?.collectAsStateWithLifecycle()?.value
+        ?: LoadPhase.Loading.Preparing()
+    ProgressiveLoadingHud(
+        loadPhase = loadPhase,
+        title = uiState.title,
+        subtitle = uiState.subtitle,
+        showTelemetry = uiState.uiPrefs.playbackDiagnostics,
+        onCancel = onCancel,
+    )
 }
 
 /** Full-screen lock overlays: PIN pad (when configured) or slide-to-unlock; unlock re-reveals the controls. */
@@ -542,6 +634,59 @@ internal fun rememberExitConfirmController(
 ): PlayerExitConfirmController = remember { PlayerExitConfirmController(confirmEnabled, onExit) }
 
 /**
+ * The recovery banner's back-ladder wiring, remembered in ONE holder (the
+ * screen-ceiling's wiring-cluster idiom): the shared [FocusRequester] the
+ * banner's initial TV grab AND [rememberPlayerBackLadder]'s hide-edge handoff
+ * both target, the banner's visibility arm (the ladder's BACK-dismiss +
+ * focus-handoff gate), and the dismissal the ladder's BACK arm runs.
+ *
+ * [isVisible] is the banner's EFFECTIVE render decision, folded once here and
+ * reused by every consumer — the overlay tier renders from it, the BACK ladder
+ * dismisses on it, and the TV focus-ownership/grab gates read it — so an offer
+ * that is not rendered cannot intercept BACK or suppress the player's focus
+ * reassertion. A null diagnostics slice (no diagnostics telemetry) simply
+ * means never visible.
+ */
+internal class RecoveryBannerLadder(
+    val focusRequester: FocusRequester,
+    val isVisible: Boolean,
+    val onDismiss: () -> Unit,
+)
+
+/**
+ * Remembers the [RecoveryBannerLadder] over the session's diagnostics slice.
+ *
+ * The root observes ONLY a distinct banner-visibility projection — the full
+ * `activeRecovery` proposal stays with the overlay leaf that renders it — so
+ * a proposal change that keeps the same visibility (the stall deepening from
+ * one verdict to the next) never invalidates the screen root. Visibility is
+ * additionally gated on the playback-diagnostics pref (the banner render's
+ * first gate), folding the render condition and the BACK/focus consumers into
+ * one decision.
+ */
+@Composable
+internal fun rememberRecoveryBannerLadder(
+    diagnostics: DiagnosticsSessionSlice?,
+    /** The playback-diagnostics pref — the banner render's first gate. */
+    diagnosticsEnabled: Boolean,
+): RecoveryBannerLadder {
+    val offerPresent = if (diagnostics == null) {
+        false
+    } else {
+        remember(diagnostics) {
+            diagnostics.activeRecovery
+                .map { it != null }
+                .distinctUntilChanged()
+        }.collectAsStateWithLifecycle(initialValue = diagnostics.activeRecovery.value != null).value
+    }
+    return RecoveryBannerLadder(
+        focusRequester = remember { FocusRequester() },
+        isVisible = diagnosticsEnabled && offerPresent,
+        onDismiss = { diagnostics?.dismissRecovery() },
+    )
+}
+
+/**
  * The BACK hide-or-exit ladder + the focus-grab handoff edge — the wiring
  * half of the cluster `VideoPlayerScreen`'s root carried inline (hoisted
  * beside the ladder's exit interposer, the [rememberTrickplayFeeds]
@@ -574,6 +719,7 @@ internal fun rememberPlayerBackLadder(
     chrome: PlayerChromeController,
     controlsVisible: Boolean,
     cinemaIntroVisible: Boolean,
+    recoveryBanner: RecoveryBannerLadder? = null,
     nextEpisodeVisible: Boolean,
     skipSegmentVisible: Boolean,
     closeSheet: () -> Unit,
@@ -584,32 +730,44 @@ internal fun rememberPlayerBackLadder(
     tvSkipSegmentFocusRequester: FocusRequester,
     keyboardFocusRequester: FocusRequester,
 ): PlayerExitConfirmController {
+    val recoveryBannerVisible = recoveryBanner?.isVisible == true
+    // Composition-tracked sheet term (the chrome's reader lambda reads the
+    // screen's `currentSheet` snapshot state): the hide-edge handoff's guard —
+    // while a sheet is open its modal surface owns focus, and no
+    // behind-the-sheet overlay grab (the recovery banner's included) may fire.
+    val sheetOpen = chrome.sheetOpen
     val exitConfirm = rememberExitConfirmController(confirmExit, onExit)
     JellyPlayBackHandler(enabled = true) {
         when (
             PlayerBackFocusLadder.backAction(
-                chrome.backVerdict(hideArm = PlayerBackFocusLadder.systemBackHideArm(isTv)),
+                verdict = chrome.backVerdict(hideArm = PlayerBackFocusLadder.systemBackHideArm(isTv)),
+                recoveryBannerVisible = recoveryBannerVisible,
             )
         ) {
             PlayerBackFocusLadder.BackAction.CloseSheet -> closeSheet()
+            PlayerBackFocusLadder.BackAction.DismissRecoveryBanner -> recoveryBanner?.onDismiss?.invoke()
             PlayerBackFocusLadder.BackAction.HideControls -> chrome.hide()
             PlayerBackFocusLadder.BackAction.None -> {}
             PlayerBackFocusLadder.BackAction.ExitIntent -> exitConfirm.onBackPress()
         }
     }
-    LaunchedEffect(controlsVisible, isTv, nextEpisodeVisible, skipSegmentVisible, cinemaIntroVisible) {
+    LaunchedEffect(controlsVisible, isTv, nextEpisodeVisible, skipSegmentVisible, cinemaIntroVisible, recoveryBannerVisible, sheetOpen) {
         when (
             PlayerBackFocusLadder.focusHandoff(
                 isTv = isTv,
                 hasHardwareKeyboard = hasHardwareKeyboard,
                 controlsVisible = controlsVisible,
                 cinemaIntroVisible = cinemaIntroVisible,
+                recoveryBannerVisible = recoveryBannerVisible,
                 nextEpisodeVisible = nextEpisodeVisible,
                 skipSegmentVisible = skipSegmentVisible,
+                sheetOpen = sheetOpen,
             )
         ) {
             PlayerBackFocusLadder.FocusHandoff.CinemaIntro ->
                 tvCinemaIntroFocusRequester.tryRequestFocus("tv_cinema_intro")
+            PlayerBackFocusLadder.FocusHandoff.RecoveryBanner ->
+                recoveryBanner?.focusRequester?.tryRequestFocus("tv_recovery_banner")
             PlayerBackFocusLadder.FocusHandoff.NextEpisode ->
                 tvNextEpisodeFocusRequester.tryRequestFocus("tv_next_episode")
             PlayerBackFocusLadder.FocusHandoff.SkipSegment ->

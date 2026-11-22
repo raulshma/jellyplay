@@ -163,6 +163,7 @@ class VideoPlayerStore constructor(
         val VIDEO_OVERLAY_ANIMATIONS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_OVERLAY_ANIMATIONS.keyName)
         val VIDEO_RESUME_CHIP_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.keyName)
         val VIDEO_SHOW_PREV_NEXT_BUTTONS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.keyName)
+        val VIDEO_PLAYBACK_DIAGNOSTICS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_PLAYBACK_DIAGNOSTICS.keyName)
         val VIDEO_SWIPE_SENSITIVITY = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.keyName)
         val VIDEO_GESTURE_OVERLAY_LINGER_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.keyName)
         val VIDEO_CENTER_DOUBLE_TAP_ACTION = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_CENTER_DOUBLE_TAP_ACTION.keyName)
@@ -263,6 +264,7 @@ class VideoPlayerStore constructor(
         videoResumeChipMs = VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.readFrom(prefs)
             .coerceIn(VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS_BOUNDS),
         videoShowPrevNextButtons = VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.readFrom(prefs),
+        videoPlaybackDiagnostics = VideoPlayerPreferenceSpecs.VIDEO_PLAYBACK_DIAGNOSTICS.readFrom(prefs),
         videoSwipeSensitivity = VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.readFrom(prefs),
         videoGestureOverlayLingerMs = VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.readFrom(prefs)
             .coerceIn(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS_BOUNDS),
@@ -629,6 +631,11 @@ class VideoPlayerStore constructor(
         dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.writeTo(it, enabled) }
     }
 
+    /** In-player playback diagnostics telemetry HUD & buffering pill. Default off. */
+    suspend fun setVideoPlaybackDiagnostics(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_PLAYBACK_DIAGNOSTICS.writeTo(it, enabled) }
+    }
+
     /** Brightness/volume swipe-curve sensitivity (RELAXED / DEFAULT / SENSITIVE). */
     suspend fun setVideoSwipeSensitivity(sensitivity: PlayerSwipeSensitivity) {
         dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.writeTo(it, sensitivity) }
@@ -911,6 +918,7 @@ class VideoPlayerStore constructor(
                 slice.videoResumeChipMs.coerceIn(VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS_BOUNDS),
             )
             VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.writeTo(prefs, slice.videoShowPrevNextButtons)
+            VideoPlayerPreferenceSpecs.VIDEO_PLAYBACK_DIAGNOSTICS.writeTo(prefs, slice.videoPlaybackDiagnostics)
             VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.writeTo(prefs, slice.videoSwipeSensitivity)
             VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.writeTo(
                 prefs,
@@ -1064,6 +1072,8 @@ data class VideoPlayerSlice(
     val videoResumeChipMs: Long = VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.default,
     /** The center prev/play/next cluster. Default **on**. */
     val videoShowPrevNextButtons: Boolean = VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.default,
+    /** In-player playback diagnostics telemetry HUD & buffering pill. Default **off**. */
+    val videoPlaybackDiagnostics: Boolean = VideoPlayerPreferenceSpecs.VIDEO_PLAYBACK_DIAGNOSTICS.default,
     /** Brightness/volume swipe-curve sensitivity. Default DEFAULT (exponent 0.8). */
     val videoSwipeSensitivity: PlayerSwipeSensitivity = VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.default,
     /** Gesture-overlay dismiss delay (200–2 000). */

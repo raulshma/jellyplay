@@ -94,6 +94,8 @@ object MpvLoadOptionsPlan {
         val tls: PlaybackTls? = null,
         /** `null` = the host does not write `demuxer-readahead-secs` per request. */
         val maxBufferMs: Int? = null,
+        /** `null` = the host does not write `demuxer-max-bytes` per request. */
+        val demuxerMaxBytes: Long? = null,
     )
 
     /**
@@ -151,6 +153,9 @@ object MpvLoadOptionsPlan {
         }
         request.maxBufferMs?.let {
             writes += MpvProperties.DEMUXER_READAHEAD_SECS to (it / 1000).toString()
+        }
+        request.demuxerMaxBytes?.let {
+            writes += MpvProperties.DEMUXER_MAX_BYTES to it.toString()
         }
         return Plan(
             optionWrites = writes,

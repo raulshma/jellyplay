@@ -328,6 +328,8 @@
     <string name="settings_video_resume_chip_ms_subtitle">Quanto permanece o chip de “toque para reiniciar” (0 = nunca)</string>
     <string name="settings_video_show_prev_next_buttons">Botões Anterior/Próximo</string>
     <string name="settings_video_show_prev_next_buttons_subtitle">Mostra os botões de pular episódio ao lado de Reproduzir</string>
+    <string name="settings_video_playback_diagnostics">Diagnóstico de reprodução</string>
+    <string name="settings_video_playback_diagnostics_subtitle">Mostra o rendimento da rede e a telemetria de armazenamento em buffer em tempo real</string>
     <string name="settings_video_swipe_sensitivity">Sensibilidade do deslize</string>
     <string name="settings_video_swipe_sensitivity_subtitle">Quão rápido respondem os deslizes de brilho/volume</string>
     <string name="settings_video_gesture_overlay_linger_ms">Permanência da sobreposição de gestos</string>

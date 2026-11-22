@@ -201,6 +201,8 @@ data class PlaybackPreferences(
     val videoResumeChipMs: Long = 3_000L,
     /** The center prev/play/next cluster. Default on. */
     val videoShowPrevNextButtons: Boolean = true,
+    /** In-player playback diagnostics telemetry HUD & buffering pill. Default off. */
+    val videoPlaybackDiagnostics: Boolean = false,
     /** Brightness/volume swipe-curve sensitivity. Default DEFAULT. */
     val videoSwipeSensitivity: PlayerSwipeSensitivity = PlayerSwipeSensitivity.DEFAULT,
     /** Gesture-overlay dismiss delay (200–2 000). Default 800. */

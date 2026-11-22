@@ -465,4 +465,31 @@
     <string name="player_video_stats_buffer_back_keyframes">키프레임 기준</string>
     <string name="player_video_playback_options_level_line">단계: %1$s</string>
     <string name="player_video_playback_options_level_caption">앱 전체 효과 조정 — 전체 조절은 설정 → 성능에서 할 수 있습니다.</string>
+
+    <!-- Progressive Loading HUD (시작 단계, 버퍼 텔레메트리, 느린 로딩 경고). -->
+    <string name="player_video_load_stage_preparing">스트림 준비 중…</string>
+    <string name="player_video_load_stage_fetching_metadata">미디어 정보를 불러오는 중…</string>
+    <string name="player_video_load_stage_resolving_stream">스트림 확인 중…</string>
+    <string name="player_video_load_stage_resolving_stream_slow">스트림 확인 중(서버가 미디어 분석 중)…</string>
+    <string name="player_video_load_stage_initializing_engine">%1$s 초기화 중…</string>
+    <string name="player_video_load_stage_priming_buffer">초기 재생 버퍼링 중…</string>
+    <string name="player_video_load_stage_failed">재생 실패: %1$s</string>
+    <string name="player_video_load_stage_connecting">연결 중…</string>
+    <string name="player_video_load_buffer_progress">버퍼링: %1$s초 / %2$s초 (%3$s)</string>
+    <string name="player_video_load_warning_transcoding">서버가 트랜스코딩된 스트림을 준비 중…</string>
+    <string name="player_video_load_warning_slow_connection">서버 연결이 느린 것으로 감지됨…</string>
+    <string name="player_video_load_warning_slow_server">서버 응답이 느립니다…</string>
+
+    <!-- 복구 배너(느린 재생 복구 조치)와 버퍼링 진단 필. -->
+    <string name="player_video_stall_network_starvation">네트워크 대역 부족</string>
+    <string name="player_video_stall_transcode_lag">트랜스코딩 지연</string>
+    <string name="player_video_stall_decoder_bottleneck">디코더 병목</string>
+    <string name="player_video_pill_stream">스트림: %1$s</string>
+    <string name="player_video_pill_transcode">트랜스코딩: %1$sx</string>
+    <string name="player_video_pill_estimate">≈ %1$s (추정)</string>
+    <string name="player_video_recovery_keep_waiting">계속 기다리기</string>
+    <string name="player_video_recovery_switch_quality">%1$dp(으)로 전환</string>
+    <string name="player_video_recovery_switch_engine">%1$s(으)로 전환</string>
+    <string name="player_video_recovery_switch_engine_generic">엔진 전환</string>
+    <string name="player_video_recovery_boost_buffer">버퍼 증가 (30초)</string>
 </resources>

@@ -34,6 +34,8 @@ import com.raulshma.jellyplay.core.model.ResolvedPerformanceProfile
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
+import com.raulshma.jellyplay.core.model.monotonicNowMillis
 import com.raulshma.jellyplay.core.ui.components.episodePlayerSubtitle
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import org.jetbrains.compose.resources.getString
@@ -42,16 +44,19 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_offline_stream
 
 
+import com.raulshma.jellyplay.feature.player.video.engine.LoadEpochEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -65,19 +70,6 @@ import kotlinx.coroutines.withTimeoutOrNull
  * failure converges on [failLoad] → [Failed]. [Failed] carries the reason so
  * consumers never read it out of a metadata field.
  */
-sealed interface LoadPhase {
-    /** No load has been armed (fresh session, or after [PlayerSessionManager.release]). */
-    data object Idle : LoadPhase
-
-    /** A load is armed and resolving (`loadMedia` start through the success/failure sites). */
-    data object Loading : LoadPhase
-
-    /** The session settled on a playable source (stream or external hand-off). */
-    data object Ready : LoadPhase
-
-    /** The load failed; [message] is the user-facing reason (also sent on the message bus). */
-    data class Failed(val message: String) : LoadPhase
-}
 
 /**
  * Session state for the VOD player: resolved item metadata, stream info, and
@@ -250,6 +242,68 @@ internal class PlayerSessionManager(
      */
     private var sidecarCatchUpJob: Job? = null
 
+    /** Owns stage latency tracking and slow-load watchdog checks during session load. */
+    private val sessionLoadWatchdog = SessionLoadWatchdog(
+        scope = scope,
+        onWarning = { warning -> userMessageBus.info(warning) },
+        onTimeout = { stage -> timeoutLoad(stage) },
+    )
+
+    /**
+     * The terminal timeout fold shared by the PrimingBuffer watchdog's
+     * [SessionLoadWatchdog] callback and the settle gate's expiry
+     * ([awaitLoadReadyOrFailed] / [SessionLoadPipeline]): land Failed AND
+     * stop the engine. A timed-out load may still be priming — a late READY
+     * would start playback while the session sits in Failed with no position
+     * tracking or progress reporting (the pipeline returns early on Failed).
+     * stop() (not release()) keeps the engine instance reusable by the retry
+     * path's load(); failLoad's own cleanup (watchdog + readiness-watcher
+     * cancel) is unchanged.
+     */
+    private fun timeoutLoad(stageName: String) {
+        failLoad("Playback timed out during $stageName")
+        _engine.value?.stop()
+    }
+
+    /**
+     * The settle gate's expiry verb ([SessionLoadPipeline]'s budget): a wait
+     * that ended with the load still [LoadPhase.Loading] must not leave the
+     * engine priming and the readiness watcher armed with nobody left to
+     * complete the load — terminate the attempt through [timeoutLoad]. A
+     * no-op unless the phase is STILL Loading (a settlement that raced the
+     * expiry is honored, never killed).
+     */
+    fun failStalledLoad() {
+        val current = _sessionState.value.loadPhase
+        if (current is LoadPhase.Loading) timeoutLoad(current.stageName)
+    }
+
+    private var engineReadyJob: Job? = null
+
+    /**
+     * Subscription handshake for the readiness watcher: [armEngineReadyWatcher]
+     * completes it once the watcher has captured its engine + baseline AND
+     * entered the playbackState waits (or when it exits without arming) — the
+     * load sites await it before `eng.load`. The guarantee is request-aware
+     * by construction: the current load's request cannot be issued before the
+     * watcher is subscribed, so no state THIS load produces can be conflated
+     * away before observation. A StateFlow keeps only the latest value, so a
+     * READY landing on an un-subscribed watcher — a fast cached same-engine
+     * load can run the whole BUFFERING→READY ladder inside one dispatch
+     * window — would be indistinguishable from the previous item's terminal
+     * baseline and park the baseline drop forever.
+     */
+    private var engineWatcherArmed = CompletableDeferred<Unit>()
+
+    /**
+     * The engine playback state observed JUST before the current load's
+     * `eng.load(request)` — the stale transport value the readiness watcher
+     * must discount (a reused engine keeps the prior item's terminal
+     * READY/ENDED until the new request's first state lands). Written by
+     * [initializeEngine] and [reloadWithEngine], read by [armEngineReadyWatcher].
+     */
+    private var loadBaselinePlaybackState: EnginePlaybackState? = null
+
     /** Owns the in-flight transcode-reason lookup; cancelled/replaced per resolution. */
     private val transcodeReasonsRefresher =
         TranscodeReasonsRefresher(scope, playbackRepository::fetchActiveTranscodeReasons)
@@ -313,10 +367,10 @@ internal class PlayerSessionManager(
 
     /**
      * Publishes the current session's item onto the app-wide now-playing
-     * seam (feature 4.2). Called at every load-ready transition
-     * ([bindReclaimedEngine], [loadOffline], [loadOnline]); a same-item
-     * refresh (subtitle re-attach, engine swap) is a silent state update, a
-     * new item emits [com.raulshma.jellyplay.core.data.playback.NowPlayingReporter.NowPlayingEvent.Started].
+     * seam (feature 4.2). Called by [bindReclaimedEngine], [onEngineReady],
+     * and the external-player settle branches of [loadOffline]/[loadOnline];
+     * a same-item refresh (subtitle re-attach, engine swap) is a silent
+     * state update, a new item emits [com.raulshma.jellyplay.core.data.playback.NowPlayingReporter.NowPlayingEvent.Started].
      * No-op with no loaded detail.
      */
     private fun publishNowPlayingMeta() {
@@ -354,10 +408,136 @@ internal class PlayerSessionManager(
                     episodeNumber = detail.item.episodeNumber,
                 ),
                 transcodeReasons = emptyList(),
-                loadPhase = LoadPhase.Ready,
+                loadPhase = LoadPhase.Ready.Settled(),
             )
         }
         publishNowPlayingMeta()
+    }
+
+    /**
+     * Completes stage latency tracking and lands [LoadPhase.Ready.Settled]
+     * when the media engine reaches [EnginePlaybackState.READY].
+     */
+    fun onEngineReady(bufferedDurationMs: Long = 0L) {
+        val current = _sessionState.value.loadPhase
+        if (current is LoadPhase.Loading) {
+            sessionLoadWatchdog.complete()
+            val totalElapsed = monotonicNowMillis() - current.startedAtMs
+            val latencies = sessionLoadWatchdog.snapshotLatencies()
+            _sessionState.update {
+                it.copy(
+                    loadPhase = LoadPhase.Ready.Settled(
+                        playMethod = it.playMethod,
+                        playerType = lastPlayerType ?: PlayerType.EXO_PLAYER,
+                        totalLoadDurationMs = totalElapsed,
+                        stageLatenciesMs = latencies,
+                    ),
+                )
+            }
+            publishNowPlayingMeta()
+        }
+    }
+
+    /**
+     * The tolerant pre-load transport read behind [loadBaselinePlaybackState]:
+     * an engine that cannot report a state yet (fresh instances, test
+     * doubles) yields null — the watcher then keeps its plain
+     * settle-on-first-terminal semantics.
+     */
+    private fun baselinePlaybackStateOf(eng: MediaEngine): EnginePlaybackState? =
+        try {
+            eng.playbackState.value
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun armEngineReadyWatcher() {
+        engineReadyJob?.cancel()
+        val armed = CompletableDeferred<Unit>()
+        engineWatcherArmed = armed
+        engineReadyJob = scope.launch {
+            try {
+                val eng = _engine.value
+                // A REUSED engine keeps the previous item's terminal
+                // READY/ENDED until this request's first state lands (ExoPlayer's
+                // reuse path deliberately leaves the transport leaf alone; mpv
+                // and libVLC reset it only via async events) — the fast path's
+                // old `value == READY` check settled the new load on the prior
+                // item's READY. Drop exactly [loadBaselinePlaybackState], the
+                // state captured JUST BEFORE eng.load, so the settlement below
+                // can only fire on a state THIS load produced. A fresh engine
+                // (or one that synchronously reset inside load) has a
+                // non-terminal baseline, the drop is skipped, and an
+                // already-READY value still settles immediately as before.
+                val baseline = loadBaselinePlaybackState
+                // Snapshot the per-request epoch BEFORE the handshake: the
+                // moment the handshake completes, the caller may issue
+                // eng.load — and on an unconfined dispatcher that resume even
+                // nests INSIDE the completion call below — so the pre-request
+                // value must be captured before the request can bump it.
+                val armedAtEpoch = (eng as? LoadEpochEngine)?.loadEpoch?.value
+                // Handshake BEFORE any suspension: the moment this completes,
+                // the caller may issue eng.load, so the baseline-drop wait
+                // below must be entered before the request can emit.
+                armed.complete(Unit)
+                if (eng == null) return@launch
+                if (baseline == EnginePlaybackState.READY || baseline == EnginePlaybackState.ENDED) {
+                    val epochFlow = (eng as? LoadEpochEngine)?.loadEpoch
+                    if (epochFlow != null && armedAtEpoch != null) {
+                        // Request-aware drop: the epoch bumps at eng.load entry
+                        // and NEVER returns to the pre-request value, so this
+                        // wait ALWAYS completes (it cannot conflate the way a
+                        // repeated value can). It marks the request issued; the
+                        // bounded departure wait below then keeps provenance —
+                        // an engine that has begun the request shows a
+                        // non-terminal state, so settling on a value that still
+                        // EQUALS the stale baseline happens only once this
+                        // load's whole BUFFERING→READY ladder has already
+                        // conflated into a terminal value EQUAL to the baseline
+                        // (READY(old) → READY(new), indistinguishable by value
+                        // — at that point the published READY is THIS
+                        // request's, never the prior item's).
+                        epochFlow.first { it > armedAtEpoch }
+                        withTimeoutOrNull(REUSED_ENGINE_BASELINE_GRACE_MS) {
+                            eng.playbackState.first { it != baseline }
+                        }
+                    } else {
+                        // Engines without the epoch capability (NoOpEngine,
+                        // bare test doubles): the value-based departure wait.
+                        eng.playbackState.first { it != baseline }
+                    }
+                }
+                eng.playbackState.first { it == EnginePlaybackState.READY || it == EnginePlaybackState.ENDED }
+                onEngineReady()
+            } catch (_: Exception) {
+                // Ignore cancellation
+            } finally {
+                // The caller's await must never hang — including the no-engine
+                // exit and a cancel racing a failLoad/release.
+                armed.complete(Unit)
+            }
+        }
+    }
+
+    /**
+     * Suspends until the session's active load settles on [LoadPhase.Ready]
+     * or fails into [LoadPhase.Failed]. The wait's own expiry CANNOT return a
+     * still-[LoadPhase.Loading] phase: a timeout with the engine able to
+     * become Ready later would leave the gate's caller with a live engine and
+     * an armed readiness watcher and nobody left to complete the load — the
+     * expiry terminates the attempt through [timeoutLoad] instead (fail +
+     * engine stop, the PrimingBuffer watchdog's terminal semantics), so
+     * media-session creation, playback-start reporting and tracking are never
+     * silently skipped for a load that is dead, and never raced by a late
+     * READY for one that timed out.
+     */
+    suspend fun awaitLoadReadyOrFailed(timeoutMs: Long = 20_000L): LoadPhase {
+        val settled = withTimeoutOrNull(timeoutMs) {
+            _sessionState.map { it.loadPhase }.first { it !is LoadPhase.Loading }
+        }
+        if (settled != null) return settled
+        failStalledLoad()
+        return _sessionState.value.loadPhase
     }
 
     /**
@@ -391,8 +571,11 @@ internal class PlayerSessionManager(
         // the fresh session before the resolve path re-arms or clears them.
         transcodeReasonsRefresher.cancel()
         sidecarCatchUpJob?.cancel()
+        engineReadyJob?.cancel()
+        val startMs = monotonicNowMillis()
+        sessionLoadWatchdog.start("Preparing")
         lastLoadStartPositionMs = startPositionTicks / 10_000
-        _sessionState.update { it.copy(currentItemId = itemId, loadPhase = LoadPhase.Loading) }
+        _sessionState.update { it.copy(currentItemId = itemId, loadPhase = LoadPhase.Loading.Preparing(startMs)) }
 
         // The download lookup is needed both for Auto resolution and for
         // metadata enrichment during offline playback, so it is performed
@@ -460,7 +643,13 @@ internal class PlayerSessionManager(
      * keeps whatever the item metadata had (blank for a never-resolved item).
      */
     private fun failLoad(message: String) {
-        _sessionState.update { it.copy(loadPhase = LoadPhase.Failed(message)) }
+        val current = _sessionState.value.loadPhase
+        val startMs = (current as? LoadPhase.Loading)?.startedAtMs ?: monotonicNowMillis()
+        val failedStage = (current as? LoadPhase.Loading)?.stageName
+        val elapsed = monotonicNowMillis() - startMs
+        sessionLoadWatchdog.cancel()
+        engineReadyJob?.cancel()
+        _sessionState.update { it.copy(loadPhase = LoadPhase.Failed(message = message, failedStage = failedStage, totalElapsedMs = elapsed)) }
         userMessageBus.error(message)
     }
 
@@ -558,10 +747,39 @@ internal class PlayerSessionManager(
             base.copy(item = base.item.copy(runTimeTicks = runTimeTicks))
         }
 
+        val startMs = (sessionState.value.loadPhase as? LoadPhase.Loading)?.startedAtMs ?: monotonicNowMillis()
         if (playerType == PlayerType.EXTERNAL) {
-            _sessionState.update { it.copy(loadPhase = LoadPhase.Ready, mediaDetail = detail, isOffline = true) }
+            sessionLoadWatchdog.complete()
+            val totalElapsed = monotonicNowMillis() - startMs
+            _sessionState.update {
+                it.copy(
+                    loadPhase = LoadPhase.Ready.Settled(
+                        playMethod = PlayMethod.DIRECT_PLAY,
+                        playerType = playerType,
+                        totalLoadDurationMs = totalElapsed,
+                        stageLatenciesMs = sessionLoadWatchdog.snapshotLatencies(),
+                    ),
+                    mediaDetail = detail,
+                    isOffline = true,
+                )
+            }
             publishNowPlayingMeta()
             return
+        }
+
+        sessionLoadWatchdog.recordStage("InitializingEngine")
+        _sessionState.update {
+            it.copy(
+                mediaDetail = detail,
+                isOffline = true,
+                loadPhase = LoadPhase.Loading.InitializingEngine(
+                    startedAtMs = startMs,
+                    stageStartedAtMs = monotonicNowMillis(),
+                    playerType = playerType,
+                    playMethod = PlayMethod.DIRECT_PLAY,
+                    streamUrl = url,
+                ),
+            )
         }
 
         // The #198 regression: this call is the ONLY thing that builds the
@@ -618,12 +836,28 @@ internal class PlayerSessionManager(
             }
         }
 
-        _sessionState.update { it.copy(
-            loadPhase = LoadPhase.Ready,
-            mediaDetail = detail,
-            isOffline = true,
-        ) }
-        publishNowPlayingMeta()
+        // The engine may still be IDLE/buffering at this point: mirror
+        // loadOnline's tail — publish the PrimingBuffer stage; the readiness
+        // watcher armed in initializeEngine (before eng.load, so no READY
+        // this request emits can be lost to StateFlow conflation) settles
+        // the load when the engine reaches READY. The external-player
+        // hand-off above keeps its synchronous settle.
+        sessionLoadWatchdog.recordStage("PrimingBuffer")
+        _sessionState.update {
+            it.copy(
+                // A READY settled before this tail runs must not be demoted back to priming.
+                loadPhase = if (it.loadPhase is LoadPhase.Loading) {
+                    LoadPhase.Loading.PrimingBuffer(
+                        startedAtMs = startMs,
+                        stageStartedAtMs = monotonicNowMillis(),
+                        playerType = playerType,
+                        playMethod = PlayMethod.DIRECT_PLAY,
+                    )
+                } else {
+                    it.loadPhase
+                },
+            )
+        }
     }
 
     // ── Next-episode warm resolve ────────────────────────────────────────────
@@ -831,6 +1065,12 @@ internal class PlayerSessionManager(
         mediaSourceId: String?,
         startPositionTicks: Long,
     ) {
+        val startMs = (sessionState.value.loadPhase as? LoadPhase.Loading)?.startedAtMs ?: monotonicNowMillis()
+        sessionLoadWatchdog.recordStage("FetchingMetadata")
+        _sessionState.update {
+            it.copy(loadPhase = LoadPhase.Loading.FetchingMetadata(startMs, monotonicNowMillis(), itemId))
+        }
+
         val detailResult = detailFeed.getMediaDetail(itemId, force = false)
         val detail = detailResult.getOrElse {
             // Surface the failure rather than leaving the user staring
@@ -839,6 +1079,20 @@ internal class PlayerSessionManager(
             // context.getString (loadOnline is suspend).
             failLoad(getString(Res.string.player_video_error_loading_media))
             return
+        }
+
+        val warmHit = warmNextResolution?.first?.itemId == itemId
+        sessionLoadWatchdog.recordStage("ResolvingStream")
+        _sessionState.update {
+            it.copy(
+                loadPhase = LoadPhase.Loading.ResolvingStream(
+                    startedAtMs = startMs,
+                    stageStartedAtMs = monotonicNowMillis(),
+                    itemId = itemId,
+                    mediaSourceId = mediaSourceId,
+                    isWarmHit = warmHit,
+                ),
+            )
         }
 
         val source = if (mediaSourceId != null) {
@@ -885,6 +1139,7 @@ internal class PlayerSessionManager(
             ?: ""
         val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
 
+        sessionLoadWatchdog.recordStage("InitializingEngine")
         _sessionState.update {
             it.copy(
                 title = detail.item.name,
@@ -902,12 +1157,30 @@ internal class PlayerSessionManager(
                 isDirectPlayForced = agg.playback.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY,
                 playSessionId = resolved?.playSessionId,
                 streamUrl = url,
+                loadPhase = LoadPhase.Loading.InitializingEngine(
+                    startedAtMs = startMs,
+                    stageStartedAtMs = monotonicNowMillis(),
+                    playerType = playerType,
+                    playMethod = playMethod,
+                    streamUrl = url,
+                ),
             )
         }
         scheduleTranscodeReasonsRefresh(itemId, playMethod)
 
         if (playerType == PlayerType.EXTERNAL) {
-            _sessionState.update { it.copy(loadPhase = LoadPhase.Ready) }
+            sessionLoadWatchdog.complete()
+            val totalElapsed = monotonicNowMillis() - startMs
+            _sessionState.update {
+                it.copy(
+                    loadPhase = LoadPhase.Ready.Settled(
+                        playMethod = playMethod,
+                        playerType = playerType,
+                        totalLoadDurationMs = totalElapsed,
+                        stageLatenciesMs = sessionLoadWatchdog.snapshotLatencies(),
+                    )
+                )
+            }
             publishNowPlayingMeta()
             return
         }
@@ -928,8 +1201,22 @@ internal class PlayerSessionManager(
             persistedSubtitleStreams = streams,
         )
 
-        _sessionState.update { it.copy(loadPhase = LoadPhase.Ready) }
-        publishNowPlayingMeta()
+        sessionLoadWatchdog.recordStage("PrimingBuffer")
+        _sessionState.update {
+            it.copy(
+                // A READY settled before this tail runs must not be demoted back to priming.
+                loadPhase = if (it.loadPhase is LoadPhase.Loading) {
+                    LoadPhase.Loading.PrimingBuffer(
+                        startedAtMs = startMs,
+                        stageStartedAtMs = monotonicNowMillis(),
+                        playerType = playerType,
+                        playMethod = playMethod,
+                    )
+                } else {
+                    it.loadPhase
+                }
+            )
+        }
     }
 
     private suspend fun initializeEngine(
@@ -1035,6 +1322,21 @@ internal class PlayerSessionManager(
 
         maybeNotifyVlcClientCertificateUnsupported(playerType)
         lastPlaybackRequest = request
+        loadBaselinePlaybackState = baselinePlaybackStateOf(eng)
+        // Arm the readiness watcher BEFORE eng.load: the watcher must be
+        // subscribed to playbackState before the request can emit so no READY
+        // this load produces — including one landing while a caller's
+        // offline subtitle loading suspends after initializeEngine — can be
+        // missed by StateFlow conflation. The baseline snapshot above still
+        // discounts a previous item's terminal READY/ENDED on a reused engine.
+        // Arming alone only QUEUES the watcher; the handshake await below
+        // holds the request until the subscription is real (see
+        // [engineWatcherArmed]) — a cached same-engine load can otherwise run
+        // its whole BUFFERING→READY ladder before the watcher's first
+        // dispatch, and the conflated-away intermediate would park the
+        // baseline drop on the prior item's READY forever.
+        armEngineReadyWatcher()
+        engineWatcherArmed.await()
         eng.load(request)
 
         // Non-Exo engines keep the incremental side-load path, post-load as
@@ -1080,6 +1382,19 @@ internal class PlayerSessionManager(
      * [initializeEngine] and [reloadWithEngine]'s unconditional swap.
      */
     private suspend fun createReplacementEngine(playerType: PlayerType): MediaEngine {
+        // A stale READY/ENDED from the outgoing engine must not settle the
+        // replacement's session or complete its watchdog during the
+        // release/factory suspend window below.
+        engineReadyJob?.cancel()
+        // The OUTGOING load's watchdog schedule dies here, BEFORE the first
+        // suspension: a PrimingBuffer deadline expiring mid-swap would land
+        // Failed and stop() whatever engine is live at that moment — the
+        // replacement itself once the factory returns. Schedule-only
+        // invalidation (not cancel()): the replacement's fresh PrimingBuffer
+        // ladder re-arms through recordStage at the reloadWithEngine tail,
+        // which isCancelled would block, and the load's stage latencies
+        // survive for the settled snapshot.
+        sessionLoadWatchdog.cancelSchedule()
         try {
             _engine.value?.release()
         } finally {
@@ -1389,6 +1704,50 @@ internal class PlayerSessionManager(
             playMethod = playMethodOverride ?: last.playMethod,
         )
         lastPlaybackRequest = request
+        loadBaselinePlaybackState = baselinePlaybackStateOf(eng)
+        // Tracking for the replacement, decided BEFORE eng.load (the watcher
+        // arming + handshake below must precede the request) and independent
+        // of one another:
+        //  - a retry landing on a TERMINAL phase (the priming-timeout
+        //    failure) starts a FRESH load lifecycle: restore Loading and
+        //    restart the priming watchdog from scratch — onEngineReady only
+        //    settles a Loading phase, so without the restore the replacement's
+        //    READY would land on a forever-Failed session, and without the
+        //    fresh watchdog (start() re-arms after failLoad's cancel, which
+        //    recordStage cannot) nothing would guard the new window;
+        //  - a reload DURING the initial priming window (the error dialog's
+        //    engine retry, a recovery switch) re-arms the priming ladder so
+        //    the original load's in-flight timeout can neither fail the
+        //    session nor stop() this replacement engine — the outgoing
+        //    schedule was already invalidated in createReplacementEngine, and
+        //    the re-entered PrimingBuffer stage ACCUMULATES its latency;
+        //  - a mid-playback swap (Ready) arms only the readiness watcher:
+        //    onEngineReady no-ops there and no fresh timeout guard exists
+        //    (as before — the settle completed the watchdog).
+        when (_sessionState.value.loadPhase) {
+            is LoadPhase.Loading -> sessionLoadWatchdog.recordStage("PrimingBuffer")
+            is LoadPhase.Failed -> {
+                val startMs = monotonicNowMillis()
+                sessionLoadWatchdog.start("PrimingBuffer")
+                _sessionState.update {
+                    it.copy(
+                        loadPhase = LoadPhase.Loading.PrimingBuffer(
+                            startedAtMs = startMs,
+                            stageStartedAtMs = startMs,
+                            playerType = playerType,
+                            playMethod = it.playMethod,
+                        ),
+                    )
+                }
+            }
+            else -> {}
+        }
+        // (createReplacementEngine always yields a fresh engine, never READY,
+        // so the watcher's baseline drop is a no-op here.) Readiness and
+        // settlement come from THIS engine — never the released engine's
+        // terminal state.
+        armEngineReadyWatcher()
+        engineWatcherArmed.await()
         eng.load(request)
     }
 
@@ -1490,6 +1849,8 @@ internal class PlayerSessionManager(
     }
 
     fun release() {
+        sessionLoadWatchdog.cancel()
+        engineReadyJob?.cancel()
         transcodeReasonsRefresher.cancel()
         sidecarCatchUpJob?.cancel()
         _engine.value?.release()
@@ -1511,6 +1872,18 @@ internal class PlayerSessionManager(
          * (the AUTO/MEDIUM seed) carries the request.
          */
         const val PROFILE_RESOLVE_TIMEOUT_MS = 1_000L
+
+        /**
+         * How long the readiness watcher keeps looking for a departure from a
+         * reused engine's stale terminal baseline after the request epoch has
+         * marked the request issued. Every real engine dispatches its load
+         * asynchronously and writes a non-terminal state well inside this
+         * window; expiry means the load's whole BUFFERING→READY ladder has
+         * already conflated into the currently-published terminal value, so
+         * the settlement below reads THIS request's READY (see
+         * [armEngineReadyWatcher]). Invisible under the load veil.
+         */
+        const val REUSED_ENGINE_BASELINE_GRACE_MS = 500L
     }
 }
 

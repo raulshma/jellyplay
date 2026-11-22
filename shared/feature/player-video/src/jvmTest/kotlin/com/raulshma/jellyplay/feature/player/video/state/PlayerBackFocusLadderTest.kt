@@ -67,6 +67,23 @@ class PlayerBackFocusLadderTest {
     }
 
     @Test
+    fun `recovery banner dismiss takes precedence over hide or exit`() {
+        assertEquals(
+            PlayerBackFocusLadder.BackAction.DismissRecoveryBanner,
+            PlayerBackFocusLadder.backAction(PlayerChromeBackVerdict.Exit, recoveryBannerVisible = true),
+        )
+        assertEquals(
+            PlayerBackFocusLadder.BackAction.DismissRecoveryBanner,
+            PlayerBackFocusLadder.backAction(PlayerChromeBackVerdict.HideControls, recoveryBannerVisible = true),
+        )
+        // Sheet closure still wins over recovery banner
+        assertEquals(
+            PlayerBackFocusLadder.BackAction.CloseSheet,
+            PlayerBackFocusLadder.backAction(PlayerChromeBackVerdict.CloseSheet, recoveryBannerVisible = true),
+        )
+    }
+
+    @Test
     fun `the summon verdict is a no-op on the system handler`() {
         // The system handler never arms the summon arm, so a SummonControls
         // verdict (defensive) must not hide OR exit — the press is ignored.
@@ -124,6 +141,19 @@ class PlayerBackFocusLadderTest {
                 hasHardwareKeyboard = false,
                 controlsVisible = false,
                 cinemaIntroVisible = true,
+                recoveryBannerVisible = true,
+                nextEpisodeVisible = true,
+                skipSegmentVisible = true,
+            ),
+        )
+        assertEquals(
+            PlayerBackFocusLadder.FocusHandoff.RecoveryBanner,
+            PlayerBackFocusLadder.focusHandoff(
+                isTv = true,
+                hasHardwareKeyboard = false,
+                controlsVisible = false,
+                cinemaIntroVisible = false,
+                recoveryBannerVisible = true,
                 nextEpisodeVisible = true,
                 skipSegmentVisible = true,
             ),
@@ -220,5 +250,78 @@ class PlayerBackFocusLadderTest {
         assertEquals(PlayerBackFocusLadder.FocusHandoff.NextEpisode, ladder(false, true, true))
         assertEquals(PlayerBackFocusLadder.FocusHandoff.NextEpisode, ladder(false, true, false))
         assertEquals(PlayerBackFocusLadder.FocusHandoff.SkipSegment, ladder(false, false, true))
+    }
+
+    // ---- focusHandoff: the sheet-open guard ----
+
+    @Test
+    fun `an open sheet stands the whole handoff down - no behind-the-sheet grab`() {
+        // The sheet's modal surface owns focus while up, and the boundary does
+        // not reliably reject a stray request (TV sheets are Dialog windows
+        // whose focus scope excludes the player's nodes; the non-TV sheet is
+        // in-window with no boundary at all) — so EVERY overlay arm,
+        // the recovery banner's included, must stand down.
+        assertEquals(
+            PlayerBackFocusLadder.FocusHandoff.None,
+            PlayerBackFocusLadder.focusHandoff(
+                isTv = true,
+                hasHardwareKeyboard = false,
+                controlsVisible = false,
+                cinemaIntroVisible = true,
+                recoveryBannerVisible = true,
+                nextEpisodeVisible = true,
+                skipSegmentVisible = true,
+                sheetOpen = true,
+            ),
+        )
+        // The banner alone: visible + a sheet up means NO banner grab — the
+        // defect where a recovery offer stole focus from an open TV settings
+        // sheet.
+        assertEquals(
+            PlayerBackFocusLadder.FocusHandoff.None,
+            PlayerBackFocusLadder.focusHandoff(
+                isTv = true,
+                hasHardwareKeyboard = false,
+                controlsVisible = false,
+                cinemaIntroVisible = false,
+                recoveryBannerVisible = true,
+                nextEpisodeVisible = false,
+                skipSegmentVisible = false,
+                sheetOpen = true,
+            ),
+        )
+        // Off-TV, the keyboard regrab is suppressed the same way (the sheet
+        // owns the keys).
+        assertEquals(
+            PlayerBackFocusLadder.FocusHandoff.None,
+            PlayerBackFocusLadder.focusHandoff(
+                isTv = false,
+                hasHardwareKeyboard = true,
+                controlsVisible = false,
+                cinemaIntroVisible = false,
+                nextEpisodeVisible = false,
+                skipSegmentVisible = false,
+                sheetOpen = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `a closed sheet leaves the handoff ladder unchanged`() {
+        // The guard's default (sheetOpen = false) is a no-op: every prior
+        // arm still fires.
+        assertEquals(
+            PlayerBackFocusLadder.FocusHandoff.RecoveryBanner,
+            PlayerBackFocusLadder.focusHandoff(
+                isTv = true,
+                hasHardwareKeyboard = false,
+                controlsVisible = false,
+                cinemaIntroVisible = false,
+                recoveryBannerVisible = true,
+                nextEpisodeVisible = true,
+                skipSegmentVisible = true,
+                sheetOpen = false,
+            ),
+        )
     }
 }

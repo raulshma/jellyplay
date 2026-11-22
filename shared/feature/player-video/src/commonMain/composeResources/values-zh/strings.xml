@@ -465,4 +465,31 @@
     <string name="player_video_stats_buffer_back_keyframes">按关键帧截断</string>
     <string name="player_video_playback_options_level_line">级别：%1$s</string>
     <string name="player_video_playback_options_level_caption">应用全局效果调节 — 完整控制见 设置 → 性能。</string>
+
+    <!-- Progressive Loading HUD（启动阶段、缓冲遥测与慢速加载警告）。 -->
+    <string name="player_video_load_stage_preparing">正在准备视频流…</string>
+    <string name="player_video_load_stage_fetching_metadata">正在加载媒体详情…</string>
+    <string name="player_video_load_stage_resolving_stream">正在解析视频流…</string>
+    <string name="player_video_load_stage_resolving_stream_slow">正在解析视频流（服务器正在分析媒体）…</string>
+    <string name="player_video_load_stage_initializing_engine">正在初始化 %1$s…</string>
+    <string name="player_video_load_stage_priming_buffer">正在缓冲以开始播放…</string>
+    <string name="player_video_load_stage_failed">播放失败：%1$s</string>
+    <string name="player_video_load_stage_connecting">正在连接…</string>
+    <string name="player_video_load_buffer_progress">缓冲：%1$s秒 / %2$s秒（%3$s）</string>
+    <string name="player_video_load_warning_transcoding">服务器正在准备转码的视频流…</string>
+    <string name="player_video_load_warning_slow_connection">检测到与服务器的连接缓慢…</string>
+    <string name="player_video_load_warning_slow_server">服务器响应缓慢…</string>
+
+    <!-- 恢复横幅（慢速播放的补救操作）与缓冲诊断胶囊。 -->
+    <string name="player_video_stall_network_starvation">网络带宽不足</string>
+    <string name="player_video_stall_transcode_lag">转码延迟</string>
+    <string name="player_video_stall_decoder_bottleneck">解码器瓶颈</string>
+    <string name="player_video_pill_stream">串流：%1$s</string>
+    <string name="player_video_pill_transcode">转码：%1$sx</string>
+    <string name="player_video_pill_estimate">≈ %1$s (估计)</string>
+    <string name="player_video_recovery_keep_waiting">继续等待</string>
+    <string name="player_video_recovery_switch_quality">切换到 %1$dp</string>
+    <string name="player_video_recovery_switch_engine">切换到 %1$s</string>
+    <string name="player_video_recovery_switch_engine_generic">切换引擎</string>
+    <string name="player_video_recovery_boost_buffer">增大缓冲（30 秒）</string>
 </resources>

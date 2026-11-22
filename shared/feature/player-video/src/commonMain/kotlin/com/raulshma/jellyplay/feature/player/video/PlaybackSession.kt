@@ -2408,6 +2408,22 @@ internal class PlaybackSession(
     }
 
     /**
+     * Session-owned cancel for an abandoned in-flight load (the diagnostics
+     * cancel path): the release path's ledger teardown bracket
+     * ([SessionPositionLedger.onTeardown]) — it snapshots the outgoing Stop
+     * inputs before [releaseInternalsSessionPart]'s PSM release clears the
+     * session state, and runs the paired VM half
+     * ([SessionLifecycleHooks.releaseInternalsVmPart]), matching [release]'s
+     * bracket.
+     */
+    internal fun cancelActiveLoad() {
+        positionLedger.onTeardown {
+            releaseInternalsSessionPart()
+            lifecycleHooks.releaseInternalsVmPart()
+        }
+    }
+
+    /**
      * The FULL teardown behind the owner's `release()` dispose hook: the
      * now-playing Stopped event, the collector/engine teardown ordering, the
      * audio-lifecycle + sleep-timer release, the session-owned release split

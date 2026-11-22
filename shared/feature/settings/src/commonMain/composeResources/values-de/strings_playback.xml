@@ -328,6 +328,8 @@
     <string name="settings_video_resume_chip_ms_subtitle">Wie lange der „Antippen zum Neustart“-Chip bleibt (0 = nie)</string>
     <string name="settings_video_show_prev_next_buttons">Zurück-/Vor-Buttons</string>
     <string name="settings_video_show_prev_next_buttons_subtitle">Zeigt die Episoden-Skip-Buttons neben Play</string>
+    <string name="settings_video_playback_diagnostics">Wiedergabediagnostik</string>
+    <string name="settings_video_playback_diagnostics_subtitle">Netzwerkdurchsatz und Pufferungs-Telemetrie in Echtzeit anzeigen</string>
     <string name="settings_video_swipe_sensitivity">Wisch-Empfindlichkeit</string>
     <string name="settings_video_swipe_sensitivity_subtitle">Wie schnell die Helligkeits-/Volumen-Wische reagieren</string>
     <string name="settings_video_gesture_overlay_linger_ms">Verweildauer der Gesten-Overlays</string>

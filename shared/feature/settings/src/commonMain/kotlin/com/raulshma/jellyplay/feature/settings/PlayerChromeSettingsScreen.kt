@@ -499,6 +499,16 @@ internal fun PlaybackPlayerChromeGroup(
                     )
                 },
             )
+            SettingToggleItem(
+                icon = rowIcon(PlaybackRows.PlaybackDiagnostics),
+                title = rowTitle(PlaybackRows.PlaybackDiagnostics),
+                subtitle = rowSubtitle(PlaybackRows.PlaybackDiagnostics),
+                checked = preferences.videoPlaybackDiagnostics,
+                highlighted = highlightSettingId == PlaybackRows.PlaybackDiagnostics.id,
+                onCheckedChange = { enabled ->
+                    viewModel.edit { scope -> scope.videoPlayer.setVideoPlaybackDiagnostics(enabled) }
+                },
+            )
         }
     }
 }

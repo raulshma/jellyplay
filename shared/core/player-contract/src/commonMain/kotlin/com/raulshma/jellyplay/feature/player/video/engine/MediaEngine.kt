@@ -399,6 +399,24 @@ enum class EnginePlaybackState {
 }
 
 /**
+ * Optional engine capability: a monotonic per-request epoch that changes at
+ * every [MediaEngine.load] entry. Implemented by [EngineStateChassis]-based
+ * engines (bumped as the first statement of their `load`), so a session-side
+ * watcher can distinguish THIS request's playbackState landing from the
+ * previous item's stale terminal value even when the two states are EQUAL
+ * and every intermediate emission was conflated away — a reused engine's
+ * `READY(old) → BUFFERING → READY(new)` ladder can collapse to a bare
+ * `READY == READY` for a slow collector, against which value-based
+ * observation can never prove provenance; the epoch never returns to its
+ * pre-request value, so it cannot conflate. Consumers MUST fall back to
+ * plain state observation when the engine does not implement this.
+ */
+interface LoadEpochEngine {
+    /** Monotonic counter; bumped exactly once per [MediaEngine.load] call. */
+    val loadEpoch: StateFlow<Long>
+}
+
+/**
  * How an engine keeps subtitles visible under pinch-zoom / crop. Declared by
  * [MediaEngine.zoomSafeSubtitleStrategy]; the screen dispatches its zoom-safe
  * subtitle rendering on this value rather than on a pair of capability booleans.
@@ -678,6 +696,14 @@ interface MediaEngine :
     // ── Speed control ──
     fun setPlaybackSpeed(speed: Float)
     val playbackSpeed: Float
+
+    /**
+     * Re-tunes the engine's buffering window in milliseconds. Engines whose
+     * buffer is configured at construction time (ExoPlayer's LoadControl) may
+     * only apply this on the next load; engines with live buffer properties
+     * (mpv's demuxer readahead) apply it immediately.
+     */
+    fun setBufferConfiguration(minBufferMs: Int, maxBufferMs: Int) {}
 
     // ── Reactive, hot state surface: playback state, duration, position/
     //    buffering/video-stats flows, and the adaptive polling knobs that drive

@@ -44,6 +44,8 @@ internal object PlayerBackFocusLadder {
     enum class BackAction {
         /** Fold the open modal away first (the sheet arm). */
         CloseSheet,
+        /** Dismiss an active slow-playback recovery banner first without exiting. */
+        DismissRecoveryBanner,
         /** Hide the chrome (the TV hide arm). */
         HideControls,
         /**
@@ -69,17 +71,24 @@ internal object PlayerBackFocusLadder {
      * The screen's dispatch of the chrome module's verdict — exactly the
      * former inline `when` in the root's back handler.
      */
-    fun backAction(verdict: PlayerChromeBackVerdict): BackAction = when (verdict) {
-        PlayerChromeBackVerdict.CloseSheet -> BackAction.CloseSheet
-        PlayerChromeBackVerdict.HideControls -> BackAction.HideControls
-        PlayerChromeBackVerdict.SummonControls -> BackAction.None
-        PlayerChromeBackVerdict.Exit -> BackAction.ExitIntent
+    fun backAction(
+        verdict: PlayerChromeBackVerdict,
+        recoveryBannerVisible: Boolean = false,
+    ): BackAction = when {
+        verdict == PlayerChromeBackVerdict.CloseSheet -> BackAction.CloseSheet
+        recoveryBannerVisible -> BackAction.DismissRecoveryBanner
+        verdict == PlayerChromeBackVerdict.HideControls -> BackAction.HideControls
+        verdict == PlayerChromeBackVerdict.SummonControls -> BackAction.None
+        verdict == PlayerChromeBackVerdict.Exit -> BackAction.ExitIntent
+        else -> BackAction.None
     }
 
     /** Where the hide-edge focus handoff sends focus. */
     enum class FocusHandoff {
         /** The cinema-intro overlay's skip control. */
         CinemaIntro,
+        /** The actionable slow-playback recovery banner. */
+        RecoveryBanner,
         /** The Up Next card's play control. */
         NextEpisode,
         /** The skip-segment button. */
@@ -98,20 +107,31 @@ internal object PlayerBackFocusLadder {
     /**
      * The hide-edge handoff ladder — exactly the former inline arms in the
      * root's `LaunchedEffect(chrome.visible, …)`: on TV the overlay-priority
-     * chain (intro > up-next > skip-segment, else the grab effect), off-TV
-     * the keyboard re-grab, and a visible chrome means no handoff at all.
+     * chain (intro > recovery > up-next > skip-segment, else the grab effect),
+     * off-TV the keyboard re-grab, a visible chrome means no handoff at all,
+     * and an open sheet means no handoff either — the sheet's modal surface
+     * owns focus while up, so no behind-the-sheet grab arm (the recovery
+     * banner included) may fire. The boundary itself does not reliably reject
+     * the request (TV sheets render in a separate Dialog window whose focus
+     * scope excludes the player's nodes; the non-TV PlayerModalBottomSheet is
+     * IN-WINDOW with no boundary at all), so the ladder stands the handoff
+     * down instead of relying on the request failing.
      */
     fun focusHandoff(
         isTv: Boolean,
         hasHardwareKeyboard: Boolean,
         controlsVisible: Boolean,
         cinemaIntroVisible: Boolean,
+        recoveryBannerVisible: Boolean = false,
         nextEpisodeVisible: Boolean,
         skipSegmentVisible: Boolean,
+        sheetOpen: Boolean = false,
     ): FocusHandoff = when {
         controlsVisible -> FocusHandoff.None
+        sheetOpen -> FocusHandoff.None
         isTv -> when {
             cinemaIntroVisible -> FocusHandoff.CinemaIntro
+            recoveryBannerVisible -> FocusHandoff.RecoveryBanner
             nextEpisodeVisible -> FocusHandoff.NextEpisode
             skipSegmentVisible -> FocusHandoff.SkipSegment
             else -> FocusHandoff.DeferToGrabEffect

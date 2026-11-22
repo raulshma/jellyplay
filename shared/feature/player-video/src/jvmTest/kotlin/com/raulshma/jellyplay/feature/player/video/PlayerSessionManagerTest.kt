@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -382,16 +383,27 @@ class PlayerSessionManagerTest {
         tempFile.deleteOnExit()
         val itemId = "item-movie"
         // Offline mode: deterministic (no background sidecar catch-up fetch).
+        // The download carries its container so loadOffline skips the
+        // magic-byte sniff — that withContext(Dispatchers.IO) detour would
+        // resume the load tail off the test dispatcher and strand the
+        // readiness watcher's launch outside the test scheduler.
         every { offlineModeManager.isOffline } returns true
         coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
-            downloadItem(itemId, tempFile.absolutePath)
+            downloadItem(itemId, tempFile.absolutePath).copy(container = "mp4")
         coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
 
         val loaded = mutableListOf<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        // A controllable engine state: the priming-then-settle contract below
+        // needs to drive the engine to READY explicitly (a bare relaxed mock
+        // never reaches READY, so the load would stay in PrimingBuffer).
+        val engineState = MutableStateFlow(EnginePlaybackState.IDLE)
+        val engine = mockk<com.raulshma.jellyplay.feature.player.video.engine.MediaEngine>(relaxed = true) {
+            every { playbackState } returns engineState
+        }
         val manager = offlineEngineSessionManager(
             preferredPlayer = PlayerType.MPV,
             loadedRequests = loaded,
-            PlayerType.MPV to mockk(relaxed = true),
+            PlayerType.MPV to engine,
         )
 
         manager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 15_000_000L)
@@ -406,8 +418,20 @@ class PlayerSessionManagerTest {
         assertEquals(1_500L, request.startPositionMs)
         assertEquals(PlayMethod.DIRECT_PLAY, request.playMethod)
 
+        // The engine is still IDLE (priming): the load lands PrimingBuffer and
+        // the readiness watcher — not an immediate settle — owns the Ready.
+        val priming = manager.sessionState.value
+        assertTrue("Expected PrimingBuffer, got ${priming.loadPhase}", priming.loadPhase is LoadPhase.Loading.PrimingBuffer)
+        assertFalse(priming.isReady)
+        assertTrue(priming.isOffline)
+        assertEquals("Offline", priming.playMethodString)
+        assertEquals(0, messageBus.errors.size)
+
+        // The engine reaches READY → the watcher settles the load
+        // (same non-suspending pattern as the online settle test).
+        engineState.value = EnginePlaybackState.READY
         val state = manager.sessionState.value
-        assertTrue(state.isReady)
+        assertTrue("Expected Ready, got ${state.loadPhase}", state.isReady)
         assertTrue(state.isOffline)
         assertEquals("Offline", state.playMethodString)
         assertEquals(0, messageBus.errors.size)

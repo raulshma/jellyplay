@@ -371,6 +371,12 @@ internal val PLAYER_PREF_LEAVES: List<PlayerPrefLeaf> = listOf(
         write = { v -> copy(uiPrefs = uiPrefs.copy(confirmExit = v)) },
     ),
     prefLeaf(
+        "videoPlaybackDiagnostics",
+        readAggregate = { it.videoPlayer.videoPlaybackDiagnostics },
+        readState = { s -> s.uiPrefs.playbackDiagnostics },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(playbackDiagnostics = v)) },
+    ),
+    prefLeaf(
         "videoHoldSeekCadence",
         readAggregate = { it.videoPlayer.videoHoldSeekCadence },
         readState = { s -> s.gestures.holdSeekCadence },
