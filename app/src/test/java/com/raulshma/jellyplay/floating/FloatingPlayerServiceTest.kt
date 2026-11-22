@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.floating
 
+import android.content.Intent
+import com.raulshma.jellyplay.MainActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -60,6 +62,24 @@ class FloatingPlayerServiceTest {
         assertNotNull(intent)
         assertEquals(FloatingPlayerService::class.java.name, intent?.component?.className)
         assertEquals(FloatingPlayerService.ACTION_STOP, intent?.action)
+    }
+
+    @Test
+    fun `the open-app notification reuses the shell with NEW_TASK and CLEAR_TOP`() {
+        val service = Robolectric.buildService(FloatingPlayerService::class.java).get()
+
+        val notification = service.buildForegroundNotification()
+        val openIntent = Shadows.shadowOf(requireNotNull(notification.contentIntent)).savedIntent
+
+        assertEquals(MainActivity::class.java.name, openIntent.component?.className)
+        assertEquals(
+            "the open-app action must reach the singleTop shell as a reuse start " +
+                "(NEW_TASK|CLEAR_TOP): a callerless PendingIntent start without reuse flags " +
+                "stacks a second MainActivity over PlayerActivity instead of revealing the " +
+                "shell underneath",
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP,
+            openIntent.flags and (Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        )
     }
 
     @Test

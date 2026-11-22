@@ -25,6 +25,23 @@ class AndroidPipController() : PipController {
     private val _isInPipMode = MutableStateFlow(false)
     override val isInPipMode: StateFlow<Boolean> = _isInPipMode.asStateFlow()
 
+    /**
+     * Monotonic id of the current dock session — bumped on each `false → true`
+     * publication of [isInPipMode] (the OEM-repeated entry callbacks read the
+     * already-true flow and do not bump). The shell host records the session
+     * current at its own `onStop`-while-docked so a LATER docked shell resume
+     * can tell "the shell left the foreground during THIS dock session" — a
+     * genuine return whose auto-lock fold must run (ADR 0018, Decision 5) —
+     * apart from the entry reveal of a newer session, which stays exempt
+     * (consuming a fresh entry stamp there would let a later expand skip the
+     * challenge). In-memory identity only: never persisted, reset by process
+     * death like every other member.
+     */
+    private var _pipSession = 0
+
+    /** The current dock-session id; `0` before the first PiP entry. */
+    val pipSession: Int get() = _pipSession
+
     private val _shouldAutoEnterPip = MutableStateFlow(false)
     val shouldAutoEnterPip: StateFlow<Boolean> = _shouldAutoEnterPip.asStateFlow()
 
@@ -91,6 +108,7 @@ class AndroidPipController() : PipController {
     val autoExitPip: StateFlow<Boolean> = _autoExitPip.asStateFlow()
 
     fun setPipMode(inPip: Boolean) {
+        if (inPip && !_isInPipMode.value) _pipSession += 1
         _isInPipMode.value = inPip
     }
 
