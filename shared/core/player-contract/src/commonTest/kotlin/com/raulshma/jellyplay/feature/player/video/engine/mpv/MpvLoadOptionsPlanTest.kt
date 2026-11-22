@@ -29,6 +29,7 @@ class MpvLoadOptionsPlanTest {
         startMs: Long = 0L,
         tls: PlaybackTls? = null,
         maxBufferMs: Int? = null,
+        demuxerMaxBytes: Long? = null,
         spelling: MpvLoadOptionsPlan.HeaderFieldsSpelling =
             MpvLoadOptionsPlan.HeaderFieldsSpelling.RESET_AND_APPEND,
     ): MpvLoadOptionsPlan.Plan = MpvLoadOptionsPlan.plan(
@@ -39,6 +40,7 @@ class MpvLoadOptionsPlanTest {
             startPositionMs = startMs,
             tls = tls,
             maxBufferMs = maxBufferMs,
+            demuxerMaxBytes = demuxerMaxBytes,
         ),
         headerFields = spelling,
     )
@@ -199,6 +201,17 @@ class MpvLoadOptionsPlanTest {
         assertEquals("49", readaheadRow(49_999)?.second)
         // null = the host does not write readahead per request (Android).
         assertEquals(null, readaheadRow(null))
+    }
+
+    @Test
+    fun demuxerMaxBytes_writesOptionWhenSupplied_nullOmits() {
+        fun maxBytesRow(demuxerMaxBytes: Long?) =
+            plan(demuxerMaxBytes = demuxerMaxBytes).optionWrites
+                .lastOrNull { it.first == MpvProperties.DEMUXER_MAX_BYTES }
+
+        assertEquals("157286400", maxBytesRow(150L * 1024L * 1024L)?.second)
+        assertEquals("67108864", maxBytesRow(64L * 1024L * 1024L)?.second)
+        assertEquals(null, maxBytesRow(null))
     }
 
     // ── header-fields spellings ─────────────────────────────────────────────

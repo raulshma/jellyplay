@@ -117,7 +117,7 @@ class SettingsSearchCatalogTest {
         assertEquals(8, SettingsScreenGroups.playbackHub.items.size)
         assertEquals(45, SettingsScreenGroups.playbackBasics.items.size)
         assertEquals(10, SettingsScreenGroups.playbackControls.items.size)
-        assertEquals(28, SettingsScreenGroups.playbackPlayerChrome.items.size)
+        assertEquals(29, SettingsScreenGroups.playbackPlayerChrome.items.size)
         // 26 + the issue #186 pair: the spec-backed performance-profile row
         // beside Streaming Quality and the residual Re-detect action row
         // (admitted only while the profile is AUTO, but always declared).

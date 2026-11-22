@@ -328,6 +328,8 @@
     <string name="settings_video_resume_chip_ms_subtitle">\'탭하여 다시 시작\' 칩이 유지되는 시간(0 = 안 함)</string>
     <string name="settings_video_show_prev_next_buttons">이전/다음 버튼</string>
     <string name="settings_video_show_prev_next_buttons_subtitle">재생 버튼 옆에 에피소드 건너뛰기 버튼을 표시합니다</string>
+    <string name="settings_video_playback_diagnostics">재생 진단</string>
+    <string name="settings_video_playback_diagnostics_subtitle">실시간 네트워크 처리량 및 버퍼링 텔레메트리 표시</string>
     <string name="settings_video_swipe_sensitivity">스와이프 감도</string>
     <string name="settings_video_swipe_sensitivity_subtitle">밝기/볼륨 스와이프의 반응 속도</string>
     <string name="settings_video_gesture_overlay_linger_ms">제스처 오버레이 유지 시간</string>

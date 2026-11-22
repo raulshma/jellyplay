@@ -45,6 +45,8 @@ data class PlayerUiPrefsState(
     val defaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val passOutProtectionHours: Int = 0,
     val showVideoStats: Boolean = false,
+    /** In-player playback diagnostics telemetry HUD & buffering pill. Default off. */
+    val playbackDiagnostics: Boolean = false,
     val showPlaybackMetadata: Boolean = true,
     val showClock: Boolean = false,
     val showTimeRemaining: Boolean = false,

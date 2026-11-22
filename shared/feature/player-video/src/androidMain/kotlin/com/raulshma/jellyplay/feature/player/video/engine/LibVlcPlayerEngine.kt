@@ -461,6 +461,9 @@ class LibVlcPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
+        // Per-request epoch first (see bumpLoadEpoch): the session watcher's
+        // stale-baseline drop reads it, so it must move before any state write.
+        bumpLoadEpoch()
         // Per-media teardown only: the previous item's MediaPlayer dies here;
         // the libVLC handle survives when the option list computed below is
         // unchanged (the common binge advance) — see the cache block comment.

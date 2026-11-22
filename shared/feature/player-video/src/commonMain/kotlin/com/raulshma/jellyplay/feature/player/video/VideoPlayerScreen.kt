@@ -568,14 +568,18 @@ fun VideoPlayerScreen(
     }
 
     // The ladder holder: the back-handler registration + the hide-edge
-    // focus handoff, at the handoff effect's former composition position
-    // (see the pointer above for the cluster's split).
+    // focus handoff (see the split note above). The recovery banner's wiring
+    // rides [RecoveryBannerLadder] — the shared requester AND the folded
+    // render decision (diagnostics pref + distinct offer presence) the BACK
+    // arm, the focus-ownership gates and the overlay tier all read.
+    val recoveryBannerLadder = rememberRecoveryBannerLadder(viewModel.sessionSlices.diagnostics, uiState.uiPrefs.playbackDiagnostics)
     val exitConfirm = rememberPlayerBackLadder(
         isTv = isTv,
         hasHardwareKeyboard = hasHardwareKeyboard,
         chrome = chrome,
         controlsVisible = chrome.visible,
         cinemaIntroVisible = isCinemaIntroVisible,
+        recoveryBanner = recoveryBannerLadder,
         nextEpisodeVisible = isNextEpisodeVisible,
         skipSegmentVisible = isSkipSegmentVisible,
         closeSheet = { currentSheet = PlayerSheet.None },
@@ -603,10 +607,8 @@ fun VideoPlayerScreen(
         val playbackErrorVisible =
             uiState.playbackError != null
         val overlayClaimsFocus =
-            isCinemaIntroVisible ||
-                isNextEpisodeVisible ||
-                isSkipSegmentVisible ||
-                playbackErrorVisible
+            isCinemaIntroVisible || isNextEpisodeVisible || isSkipSegmentVisible ||
+                playbackErrorVisible || recoveryBannerLadder.isVisible
         PlayerTvFocusGrabEffect(
             focusRequester = tvPlayerFocusRequester,
             // The cast branch composes the companion dashboard instead of the
@@ -1368,6 +1370,7 @@ fun VideoPlayerScreen(
                 upNextImageUrl,
                 isNextEpisodeLoading,
                 tvNextEpisodeFocusRequester,
+                recoveryBannerLadder.isVisible,
                 isPlaying,
                 currentSheet != PlayerSheet.None,
                 isScreenLocked,
@@ -1394,6 +1397,7 @@ fun VideoPlayerScreen(
                     upNextImageUrl = upNextImageUrl,
                     isNextEpisodeLoading = isNextEpisodeLoading,
                     tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
+                    recoveryBanner = recoveryBannerLadder,
                     isPlaying = isPlaying,
                     isSheetOpen = currentSheet != PlayerSheet.None,
                     isScreenLocked = isScreenLocked,
@@ -1859,18 +1863,15 @@ fun VideoPlayerScreen(
 
             // Full-screen loading overlay during the initial media load. Covers
             // the surface + controls so the seek bar never paints a transient 0
-            // fraction — its first paint (once this lifts) is the correct resume
-            // fraction. Declared last → drawn on top of every sibling. Lifts
-            // when isInitializing flips false (position & duration seeded).
+            // fraction — declared last → on top of every sibling, lifting when
+            // isInitializing flips false. Cancel = the nav exit: the pop's
+            // dispose runs the FULL release (trace on PlayerInitializingOverlay).
             if (uiState.isInitializing) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    JellyPlayLoadingIndicator(color = playerOnScrim())
-                }
+                PlayerInitializingOverlay(
+                    viewModel = viewModel,
+                    uiState = uiState,
+                    onCancel = { currentOnBack() },
+                )
             }
         }
     }

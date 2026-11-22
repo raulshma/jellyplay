@@ -728,6 +728,9 @@ open class MpvDesktopEngine(
     // ── MediaEngine: source loading & teardown ──────────────────────────────
 
     override fun load(request: PlaybackRequest) {
+        // Per-request epoch first (see bumpLoadEpoch): the session watcher's
+        // stale-baseline drop reads it, so it must move before any state write.
+        bumpLoadEpoch()
         val context = ctx ?: run {
             _errorFlow.tryEmit(EngineError.Render(IllegalStateException("mpv not initialized")))
             return

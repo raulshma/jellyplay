@@ -578,6 +578,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_buff
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_speed_preset_set
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_speed_preset_set_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_speed_preset_set_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_playback_diagnostics
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_playback_diagnostics_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_autoplay_wifi_only
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_autoplay_wifi_only_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_autoplay_wifi_only_subtitle
@@ -2340,6 +2342,15 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_video_speed_preset_set_subtitle,
     )
 
+    val PlaybackDiagnostics = SettingsRow(
+        id = "video_playback_diagnostics",
+        icon = Tabler.Outline.Activity,
+        titleRes = Res.string.settings_video_playback_diagnostics,
+        subtitleRes = Res.string.settings_video_playback_diagnostics_subtitle,
+        searchTitleRes = Res.string.settings_video_playback_diagnostics,
+        searchSubtitleRes = Res.string.settings_video_playback_diagnostics_subtitle,
+    )
+
     val AutoplayWifiOnly = SettingsRow(
         id = "video_autoplay_wifi_only",
         icon = Tabler.Outline.WifiOff,
@@ -2597,6 +2608,7 @@ internal val PlaybackPlayerChromeRows: List<SettingsRow> = listOf(
     PlaybackRows.AmbientUnderFill,
     PlaybackRows.BufferingVeil,
     PlaybackRows.SpeedPresetSet,
+    PlaybackRows.PlaybackDiagnostics,
 )
 
 internal val PlaybackHubRows: List<SettingsRow> = listOf(

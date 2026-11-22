@@ -467,4 +467,31 @@
     <string name="player_video_stats_buffer_back_keyframes">Limitato ai keyframe</string>
     <string name="player_video_playback_options_level_line">Livello: %1$s</string>
     <string name="player_video_playback_options_level_caption">Regolazione degli effetti per tutta l’app — controlli completi in Impostazioni → Prestazioni.</string>
+
+    <!-- Progressive Loading HUD (fasi di avvio, telemetria del buffer, avvisi di caricamento lento). -->
+    <string name="player_video_load_stage_preparing">Preparazione dello stream…</string>
+    <string name="player_video_load_stage_fetching_metadata">Caricamento dei dettagli del media…</string>
+    <string name="player_video_load_stage_resolving_stream">Risoluzione dello stream…</string>
+    <string name="player_video_load_stage_resolving_stream_slow">Risoluzione dello stream (il server sta analizzando il media)…</string>
+    <string name="player_video_load_stage_initializing_engine">Inizializzazione di %1$s…</string>
+    <string name="player_video_load_stage_priming_buffer">Buffering della riproduzione iniziale…</string>
+    <string name="player_video_load_stage_failed">Riproduzione non riuscita: %1$s</string>
+    <string name="player_video_load_stage_connecting">Connessione…</string>
+    <string name="player_video_load_buffer_progress">Buffering: %1$ss / %2$ss (%3$s)</string>
+    <string name="player_video_load_warning_transcoding">Il server sta preparando lo stream transcodificato…</string>
+    <string name="player_video_load_warning_slow_connection">Rilevata connessione lenta al server…</string>
+    <string name="player_video_load_warning_slow_server">Il server risponde lentamente…</string>
+
+    <!-- Banner di ripristino (rimedi per la riproduzione lenta) e pill diagnostica del buffering. -->
+    <string name="player_video_stall_network_starvation">Saturazione della rete</string>
+    <string name="player_video_stall_transcode_lag">Ritardo di transcodifica</string>
+    <string name="player_video_stall_decoder_bottleneck">Collo di bottiglia del decodificatore</string>
+    <string name="player_video_pill_stream">Stream: %1$s</string>
+    <string name="player_video_pill_transcode">Transcodifica: %1$sx</string>
+    <string name="player_video_pill_estimate">≈ %1$s (stima)</string>
+    <string name="player_video_recovery_keep_waiting">Continua ad attendere</string>
+    <string name="player_video_recovery_switch_quality">Passa a %1$dp</string>
+    <string name="player_video_recovery_switch_engine">Passa a %1$s</string>
+    <string name="player_video_recovery_switch_engine_generic">Cambia motore</string>
+    <string name="player_video_recovery_boost_buffer">Aumenta il buffer (30s)</string>
 </resources>

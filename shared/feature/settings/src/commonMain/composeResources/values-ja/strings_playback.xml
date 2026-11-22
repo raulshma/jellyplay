@@ -328,6 +328,8 @@
     <string name="settings_video_resume_chip_ms_subtitle">「タップして最初から」チップの表示時間（0 = 表示しない）</string>
     <string name="settings_video_show_prev_next_buttons">前へ/次へボタン</string>
     <string name="settings_video_show_prev_next_buttons_subtitle">再生ボタンの横にエピソードスキップボタンを表示します</string>
+    <string name="settings_video_playback_diagnostics">再生診断</string>
+    <string name="settings_video_playback_diagnostics_subtitle">リアルタイムのネットワークスループットとバッファリングのテレメトリーを表示</string>
     <string name="settings_video_swipe_sensitivity">スワイプ感度</string>
     <string name="settings_video_swipe_sensitivity_subtitle">明るさ/音量スワイプの反応の速さ</string>
     <string name="settings_video_gesture_overlay_linger_ms">ジェスチャーオーバーレイの表示時間</string>

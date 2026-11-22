@@ -328,6 +328,8 @@
     <string name="settings_video_resume_chip_ms_subtitle">“点击重新播放”胶囊的停留时长（0 = 不显示）</string>
     <string name="settings_video_show_prev_next_buttons">上一集/下一集按钮</string>
     <string name="settings_video_show_prev_next_buttons_subtitle">在播放按钮旁显示剧集跳转按钮</string>
+    <string name="settings_video_playback_diagnostics">播放诊断</string>
+    <string name="settings_video_playback_diagnostics_subtitle">显示实时网络吞吐量与缓冲遥测数据</string>
     <string name="settings_video_swipe_sensitivity">滑动灵敏度</string>
     <string name="settings_video_swipe_sensitivity_subtitle">亮度/音量滑动的响应速度</string>
     <string name="settings_video_gesture_overlay_linger_ms">手势浮层停留时间</string>

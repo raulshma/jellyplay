@@ -21,7 +21,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -144,6 +146,12 @@ class SessionLoadPipelineTest {
             streamUrl = "https://jellyfin/stream",
             loadPhase = LoadPhase.Ready,
         ),
+        // A LIVE state flow for the settlement-gate pins: the spine parks in
+        // the manager's settle wait while the phase is Loading, and the test
+        // flips the flow to drive the Loading→Ready / Loading→Failed arms.
+        // Also stubs awaitLoadReadyOrFailed to mimic the manager's gate (the
+        // mock would otherwise return a relaxed LoadPhase).
+        liveSessionState: MutableStateFlow<PlayerSessionState>? = null,
         intros: List<MediaItem> = emptyList(),
         aggregate: VideoPlayerAggregate = VideoPlayerAggregate(),
         inSyncPlay: Boolean = false,
@@ -155,7 +163,13 @@ class SessionLoadPipelineTest {
         outputs: SessionLoadOutputs? = null,
     ): Fixture {
         val sessionManager = mockk<PlayerSessionManager>(relaxed = true)
-        every { sessionManager.sessionState } returns MutableStateFlow(sessionState)
+        val publishedState = liveSessionState ?: MutableStateFlow(sessionState)
+        every { sessionManager.sessionState } returns publishedState
+        if (liveSessionState != null) {
+            coEvery { sessionManager.awaitLoadReadyOrFailed(any()) } coAnswers {
+                publishedState.map { it.loadPhase }.first { it !is LoadPhase.Loading }
+            }
+        }
         if (loadMediaBlock != null) {
             coEvery { sessionManager.loadMedia(any(), any(), any()) } coAnswers {
                 stages += "loadMedia"
@@ -266,9 +280,12 @@ class SessionLoadPipelineTest {
                 "loadMedia",
                 "onItemHydrated",
                 "onStreamUrlResolved",
-                "createMediaSession",
                 "onDurationSeeded(1200000)",
                 "applyMediaDetail",
+                // The media session is created AFTER the settlement gate: only
+                // a Ready load ever publishes one — a Failed/timeout wait
+                // returns above, so dead air never gains a media notification.
+                "createMediaSession",
                 "onInitializing(false)",
                 "initializeTrickplay",
                 "startPositionTracking",
@@ -628,6 +645,81 @@ class SessionLoadPipelineTest {
         // finally guarantee: the loading veil still lifts.
         assertEquals("onInitializing(false)", stages.last())
     }
+
+    // ── The settlement gate (7b): park in Loading, continue only on Ready ──
+
+    /**
+     * Loading→Ready: the spine PARKS at the settle gate while the engine is
+     * still priming — no media session exists and no playback-start report is
+     * emitted before readiness — and continues through the ordered tail once
+     * the phase settles Ready. The stage order around the createMediaSession
+     * pin mirrors the happy path (detail apply → media session → veil lift →
+     * tracking → start report).
+     */
+    @Test
+    fun settlementGate_parksWhileLoading_thenContinuesOnReady() = runTest {
+        val stateFlow = MutableStateFlow(primingState())
+        val pipeline = pipeline(stages = stages, hooks = recordingHooks(stages), liveSessionState = stateFlow)
+
+        pipeline.start(this, request())
+        runCurrent()
+
+        assertFalse("no media session before readiness", "createMediaSession" in stages)
+        assertFalse("no start report before readiness", "reportPlaybackStart" in stages)
+        assertFalse("the gate holds the Completed outcome", stages.any { it.startsWith("onOutcome") })
+
+        stateFlow.value = stateFlow.value.copy(loadPhase = LoadPhase.Ready.Settled(playMethod = PlayMethod.DIRECT_PLAY))
+        runCurrent()
+
+        assertTrue("media session created after readiness", "createMediaSession" in stages)
+        assertTrue("start report emitted after readiness", "reportPlaybackStart" in stages)
+        assertTrue("a settled load completes", "onOutcome(Completed)" in stages)
+        // The retained stage order across the settlement gate.
+        assertTrue(stages.indexOf("applyMediaDetail") < stages.indexOf("createMediaSession"))
+        assertTrue(stages.indexOf("createMediaSession") < stages.indexOf("onInitializing(false)"))
+        assertTrue(stages.indexOf("createMediaSession") < stages.indexOf("reportPlaybackStart"))
+    }
+
+    /**
+     * Loading→Failed: the gate's failure arm stops the spine — no media
+     * session, no playback-start report, no tracking — and the finally
+     * guarantee still lifts the loading veil.
+     */
+    @Test
+    fun settlementGate_failedSettlement_createsNoMediaSessionAndReportsNothing() = runTest {
+        val stateFlow = MutableStateFlow(primingState())
+        val pipeline = pipeline(stages = stages, hooks = recordingHooks(stages), liveSessionState = stateFlow)
+
+        pipeline.start(this, request())
+        runCurrent()
+        assertTrue("the spine parks in the settle wait", "createMediaSession" !in stages)
+
+        stateFlow.value = stateFlow.value.copy(
+            loadPhase = LoadPhase.Failed("Playback timed out during PrimingBuffer"),
+        )
+        runCurrent()
+
+        assertFalse("no media session after a failed settlement", "createMediaSession" in stages)
+        assertFalse("no start report after a failed settlement", "reportPlaybackStart" in stages)
+        assertFalse("no tracking after a failed settlement", "startPositionTracking" in stages)
+        assertFalse("a failed settlement is not Completed", stages.any { it.startsWith("onOutcome") })
+        // finally guarantee: the loading veil still lifts.
+        assertEquals("onInitializing(false)", stages.last())
+    }
+
+    /** A mid-priming session state for the live settlement-gate flows. */
+    private fun primingState() = PlayerSessionState(
+        currentItemId = "item-1",
+        mediaDetail = detail(),
+        title = "Test Movie",
+        playMethod = PlayMethod.DIRECT_PLAY,
+        streamUrl = "https://jellyfin/stream",
+        loadPhase = LoadPhase.Loading.PrimingBuffer(
+            startedAtMs = 0L,
+            playerType = PlayerType.EXO_PLAYER,
+            playMethod = PlayMethod.DIRECT_PLAY,
+        ),
+    )
 
     /**
      * Issue #186 §5.8: the prefs-seed stage resolves the effective profile

@@ -99,11 +99,11 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `playback chrome list keeps its 28-row order all-advanced`() {
+    fun `playback chrome list keeps its 29-row order all-advanced`() {
         val items = PlaybackPlayerChromeSearchItems
-        assertEquals(28, items.size)
+        assertEquals(29, items.size)
         assertEquals(PlaybackRows.BitmapSubtitleScale.id, items.first().id)
-        assertEquals(PlaybackRows.SpeedPresetSet.id, items.last().id)
+        assertEquals(PlaybackRows.PlaybackDiagnostics.id, items.last().id)
         // Every row rides the advanced toggle (the group composes only
         // behind it).
         assertTrue(items.all { it.isAdvanced })

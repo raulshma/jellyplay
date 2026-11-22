@@ -48,7 +48,7 @@ abstract class EngineStateChassis(
     errorExtraBufferCapacity: Int = 1,
     /** [subtitleEvents] extra buffer capacity — desktop passes 8, Android default 1. */
     subtitleExtraBufferCapacity: Int = 1,
-) : MediaEngine {
+) : MediaEngine, LoadEpochEngine {
 
     // -------------------------------------------------------------------------------------------
     // StateFlow / SharedFlow backing fields + public exposures.
@@ -59,6 +59,21 @@ abstract class EngineStateChassis(
 
     protected val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
     override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
+
+    // ── Per-request epoch ([LoadEpochEngine]) ──
+    //    Bumped by [bumpLoadEpoch] as the FIRST statement of every subclass's
+    //    load(): the session-side readiness watcher drops a reused engine's
+    //    stale terminal baseline against this counter — it moves even when the
+    //    playbackState value both starts and ends at the same terminal state
+    //    (the conflated READY(old) → READY(new) ladder), which plain value
+    //    observation can never distinguish.
+    private val _loadEpoch = MutableStateFlow(0L)
+    override val loadEpoch: StateFlow<Long> = _loadEpoch.asStateFlow()
+
+    /** Bumps the per-request epoch. Engines call this first in [MediaEngine.load]. */
+    protected fun bumpLoadEpoch() {
+        _loadEpoch.value += 1
+    }
 
     protected val _isPlaying = MutableStateFlow(false)
     override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()

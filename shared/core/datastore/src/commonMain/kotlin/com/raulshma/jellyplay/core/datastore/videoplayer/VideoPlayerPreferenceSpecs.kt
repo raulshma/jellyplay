@@ -295,6 +295,23 @@ object VideoPlayerPreferenceSpecs {
                 isAdvanced = true,
             ),
         ),
+        /*
+         * In-player playback diagnostics telemetry HUD & buffering pill. Default **off**.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "video_playback_diagnostics",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_playback_diagnostics",
+                titleKey = "settings_video_playback_diagnostics",
+                subtitleKey = "settings_video_playback_diagnostics_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("diagnostics", "network", "buffering", "telemetry", "throughput", "hud", "stats"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYER_CHROME_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
     )
 
     /** Orientation / aspect / layout. */
@@ -2098,6 +2115,8 @@ object VideoPlayerPreferenceSpecs {
     val VIDEO_RESUME_CHIP_MS_BOUNDS: ClosedRange<Long> = 0L..10_000L
 
     val VIDEO_SHOW_PREV_NEXT_BUTTONS: PreferenceSpec<Boolean> get() = row("video_show_prev_next_buttons")
+
+    val VIDEO_PLAYBACK_DIAGNOSTICS: PreferenceSpec<Boolean> get() = row("video_playback_diagnostics")
 
     val VIDEO_SWIPE_SENSITIVITY: PreferenceSpec<PlayerSwipeSensitivity> get() = row("video_swipe_sensitivity")
 

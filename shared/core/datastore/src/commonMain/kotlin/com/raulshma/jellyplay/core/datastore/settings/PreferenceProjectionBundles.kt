@@ -105,6 +105,7 @@ internal data class PlaybackCoreBundle(
         videoOverlayAnimations = video.videoOverlayAnimations,
         videoResumeChipMs = video.videoResumeChipMs,
         videoShowPrevNextButtons = video.videoShowPrevNextButtons,
+        videoPlaybackDiagnostics = video.videoPlaybackDiagnostics,
         videoSwipeSensitivity = video.videoSwipeSensitivity,
         videoGestureOverlayLingerMs = video.videoGestureOverlayLingerMs,
         videoCenterDoubleTapAction = video.videoCenterDoubleTapAction,
