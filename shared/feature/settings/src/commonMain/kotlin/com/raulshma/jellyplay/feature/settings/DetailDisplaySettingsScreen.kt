@@ -116,7 +116,7 @@ internal fun AppearanceDetailGroup(
         icon = Tabler.Outline.Photo,
         title = stringResource(Res.string.settings_appearance_entry_detail),
         modifier = Modifier.padding(vertical = 8.dp),
-        initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceDetail.itemIdSet,
+        initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.appearanceDetail.itemIdSet,
     ) {
         // The declared visible detail rows plus the section-order editor's
         // reorderable rows (screen-local) — the admission total beside

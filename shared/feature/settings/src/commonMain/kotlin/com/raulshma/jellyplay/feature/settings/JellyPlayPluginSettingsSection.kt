@@ -195,7 +195,7 @@ internal fun SettingsJellyPlayPluginSection(
         // The deep-link arm: a search hit on a plugin-feature row routes to
         // the plugin screen with the id baked in, so a hit must expand the
         // card for its ids (the system groups' idiom).
-        initiallyExpanded = highlightSettingId in SettingsScreenGroups.jellyplayFeatures.itemIdSet,
+        initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.jellyplayFeatures.itemIdSet,
     ) {
         SettingsItemList(total = rowCount) {
             if (syncVisible) {

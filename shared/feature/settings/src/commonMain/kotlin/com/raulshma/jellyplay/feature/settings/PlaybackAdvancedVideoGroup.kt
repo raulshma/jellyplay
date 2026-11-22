@@ -84,7 +84,7 @@ internal fun PlaybackAdvancedVideoGroup(
                     title = stringResource(Res.string.settings_advanced_video),
                     summary = { stringResource(Res.string.settings_decoder_summary, preferences.decoderMode.displayName) },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackAdvancedVideo.itemIdSet,
+                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.playbackAdvancedVideo.itemIdSet,
                 ) {
                     SettingsItemList(
                         total = rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, rowFlags),

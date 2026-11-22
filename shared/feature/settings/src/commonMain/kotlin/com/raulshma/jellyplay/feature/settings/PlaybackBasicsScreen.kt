@@ -91,7 +91,7 @@ internal fun PlaybackBasicsGroup(
         title = stringResource(Res.string.settings_video_player),
         summary = { stringResource(Res.string.settings_playback_subtitle, preferences.preferredPlayer.displayName) },
         modifier = Modifier.padding(vertical = 8.dp),
-        initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackBasics.itemIdSet,
+        initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.playbackBasics.itemIdSet,
     ) {
         // Derived by rowTotalFor from the basics group declaration (full
         // per-id admission coverage): the platform-gated rows drop where the

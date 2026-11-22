@@ -63,7 +63,7 @@ internal fun PlaybackPlayerChromeGroup(
         icon = Tabler.Outline.Video,
         title = stringResource(Res.string.settings_playback_entry_chrome),
         modifier = Modifier.padding(vertical = 8.dp),
-        initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackPlayerChrome.itemIdSet,
+        initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.playbackPlayerChrome.itemIdSet,
     ) {
         SettingsItemList(
             total = rowTotalFor(SettingsScreenGroups.playbackPlayerChrome, rowFlags),

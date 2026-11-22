@@ -263,7 +263,7 @@ internal fun SettingsScreensaverSection(
                                             cats.joinToString(", ") { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
                                         }
                                     },
-                                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
+                                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
                                 ) {
                                     // Row count derived from the screensaver group
                                     // declaration's row gates — the eight declared
@@ -472,7 +472,7 @@ internal fun SettingsIdleAmbientSection(
                                         if (preferences.idleAmbientEnabled) stringResource(Res.string.settings_idle_ambient_on)
                                         else stringResource(Res.string.settings_idle_ambient_off)
                                     },
-                                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.systemIdleAmbient.itemIdSet,
+                                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.systemIdleAmbient.itemIdSet,
                                 ) {
                                     val idleTotal = rowTotalFor(SettingsScreenGroups.systemIdleAmbient, RowAdmissionFlags())
                                     val idleTimeoutTitle = rowTitle(SystemRows.IdleAmbientTimeout)

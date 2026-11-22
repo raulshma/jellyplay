@@ -55,7 +55,7 @@ internal fun AppearanceLibraryViewsGroup(
         title = stringResource(Res.string.settings_library_cards),
         summary = { appearanceLibrarySummary(preferences) },
         modifier = Modifier.padding(vertical = 8.dp),
-        initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceLibraryViews.itemIdSet,
+        initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.appearanceLibraryViews.itemIdSet,
     ) {
         // The declared library rows plus the confirm-library-reset
         // action row (a screen-local row with no search entry) —

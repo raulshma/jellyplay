@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.subtitle.tester.components
 
+import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -30,7 +31,13 @@ fun PreviewTile(
         contentAlignment = Alignment.Center,
     ) {
         AndroidView(
-            factory = { host.container },
+            factory = {
+                (host.container.parent as? ViewGroup)?.removeView(host.container)
+                host.container
+            },
+            onRelease = {
+                (host.container.parent as? ViewGroup)?.removeView(host.container)
+            },
             // fillMaxSize, not fillMaxWidth: libVLC's VLCVideoLayout hosts a
             // separate Subtitles SurfaceView alongside the video surface, and
             // both surface holders only fire surfaceCreated once the layout

@@ -80,7 +80,7 @@ internal fun PlaybackMediaSegmentsGroup(
                     // its deep-link highlight. The hand prefix/id checks this
                     // replaces drifted the moment a residual row joined the
                     // declaration (skip_prompt_duration never expanded).
-                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackMediaSegments.itemIdSet,
+                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.playbackMediaSegments.itemIdSet,
                 ) {
                     val skipOnSeekOn = stringResource(Res.string.settings_skip_segments_on_seek_on)
                     val skipOnSeekOff = stringResource(Res.string.settings_skip_segments_on_seek_off)
@@ -386,7 +386,7 @@ internal fun PlaybackDvrGroup(
                     title = stringResource(Res.string.settings_live_tv_dvr),
                     summary = { stringResource(Res.string.settings_dvr_padding_summary, preferences.dvrPrePaddingMinutes, preferences.dvrPostPaddingMinutes) },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackDvr.itemIdSet,
+                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.playbackDvr.itemIdSet,
                 ) {
                     SettingsItemList(total = SettingsScreenGroups.playbackDvr.items.size) {
                     val noneLabel = stringResource(Res.string.settings_none)

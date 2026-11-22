@@ -59,7 +59,7 @@ internal fun PlaybackControlsGroup(
         icon = Tabler.Outline.HandMove,
         title = stringResource(Res.string.settings_playback_entry_controls),
         modifier = Modifier.padding(vertical = 8.dp),
-        initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackControls.itemIdSet,
+        initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.playbackControls.itemIdSet,
     ) {
         SettingsItemList(
             total = rowTotalFor(SettingsScreenGroups.playbackControls, rowFlags),
