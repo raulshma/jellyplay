@@ -206,9 +206,12 @@ class PlayerSessionManagerTest {
         val tempFile = Files.createTempFile("test-video", ".mp4").toFile()
         tempFile.deleteOnExit()
         val itemId = "item-movie"
+        // The download carries its container so loadOffline skips the
+        // magic-byte sniff (withContext(Dispatchers.IO)), keeping the load
+        // tail on the test dispatcher/scheduler.
         every { offlineModeManager.isOffline } returns true
         coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
-            downloadItem(itemId, tempFile.absolutePath)
+            downloadItem(itemId, tempFile.absolutePath).copy(container = "mp4")
         coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
 
         sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
@@ -442,9 +445,12 @@ class PlayerSessionManagerTest {
         val tempFile = Files.createTempFile("test-video", ".mp4").toFile()
         tempFile.deleteOnExit()
         val itemId = "item-movie"
+        // The download carries its container so loadOffline skips the
+        // magic-byte sniff (withContext(Dispatchers.IO)), keeping the load
+        // tail on the test dispatcher/scheduler.
         every { offlineModeManager.isOffline } returns true
         coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
-            downloadItem(itemId, tempFile.absolutePath)
+            downloadItem(itemId, tempFile.absolutePath).copy(container = "mp4")
         coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
 
         val loaded = mutableListOf<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
