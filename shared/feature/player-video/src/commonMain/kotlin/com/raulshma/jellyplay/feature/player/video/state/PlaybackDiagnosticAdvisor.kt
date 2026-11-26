@@ -277,8 +277,8 @@ object PlaybackDiagnosticAdvisor {
 
     /**
      * The step-down ladder, highest tier first, with each tier's bitrate
-     * ceiling (mirroring the adaptive-bitrate caps — 4K has no ceiling in
-     * that ladder, so it is no step-down candidate here either).
+     * ceiling (mirroring the adaptive-bitrate caps — 4K sits above 1080p and
+     * ORIGINAL has no ceiling, so neither is a step-down candidate here).
      */
     private val STEP_DOWN_LADDER = listOf(
         QualityTier(StreamingQuality.FHD_1080P, 8_000_000L),

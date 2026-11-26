@@ -110,14 +110,37 @@ class AdaptiveBitrateManagerTest {
 
     @Test
     fun `remote host ignores the home tier and uses the network ladder`() {
-        // Metered fake + the cellular tier (4K) → the cellular tier's cap
-        // (null — 4K is uncapped): the point is the home tier's 8 Mbps 1080p
-        // ceiling is NOT applied to a remote host.
+        // Metered fake + the cellular ORIGINAL tier (uncapped): the point is
+        // the home tier's 8 Mbps 1080p ceiling is NOT applied to a remote host.
         val manager = createManager(
             homeStreamingQuality = StreamingQuality.FHD_1080P.name,
-            cellularQuality = StreamingQuality.UHD_4K,
+            cellularQuality = StreamingQuality.ORIGINAL,
         )
         assertNull(manager.resolveEffectiveMaxBitrate("jellyfin.example.com"))
+    }
+
+    @Test
+    fun `UHD_4K tier caps at 40 Mbps`() {
+        val manager = createManager(cellularQuality = StreamingQuality.UHD_4K)
+        assertEquals(40_000_000L, manager.resolveEffectiveMaxBitrate("jellyfin.example.com"))
+    }
+
+    @Test
+    fun `local host with ORIGINAL home tier resolves uncapped`() {
+        val manager = createManager(homeStreamingQuality = StreamingQuality.ORIGINAL.name)
+        assertNull(manager.resolveEffectiveMaxBitrate("192.168.1.10"))
+    }
+
+    @Test
+    fun `ORIGINAL still honours the manual bandwidth cap`() {
+        val manager = createManager(manualBandwidthCap = 5_000_000L)
+        assertEquals(5_000_000L, manager.resolveMaxBitrate(StreamingQuality.ORIGINAL))
+    }
+
+    @Test
+    fun `ORIGINAL is still clamped by data saver`() {
+        val manager = managerWithDataSaver(homeStreamingQuality = StreamingQuality.ORIGINAL.name)
+        assertEquals(1_500_000L, manager.resolveEffectiveMaxBitrate("10.0.0.5"))
     }
 
     @Test

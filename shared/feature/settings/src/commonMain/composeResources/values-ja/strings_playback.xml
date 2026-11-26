@@ -76,6 +76,8 @@
     <string name="settings_quality_720p">720p</string>
     <string name="settings_quality_1080p">1080p</string>
     <string name="settings_quality_4k">4K</string>
+    <string name="settings_quality_original_uncapped">オリジナル（ビットレート無制限）</string>
+    <string name="settings_quality_original">オリジナル</string>
     <string name="settings_network_timeouts">ネットワークタイムアウト</string>
     <string name="settings_network_timeouts_subtitle">接続/読み取り/書き込みタイムアウトのプリセット（適用には再起動）</string>
     <string name="settings_dialogue_boost">ダイアログブースト</string>

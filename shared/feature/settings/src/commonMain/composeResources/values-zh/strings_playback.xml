@@ -76,6 +76,8 @@
     <string name="settings_quality_720p">720p</string>
     <string name="settings_quality_1080p">1080p</string>
     <string name="settings_quality_4k">4K</string>
+    <string name="settings_quality_original_uncapped">原画（不限码率）</string>
+    <string name="settings_quality_original">原画</string>
     <string name="settings_network_timeouts">网络超时</string>
     <string name="settings_network_timeouts_subtitle">连接/读取/写入超时预设（重启后生效）</string>
     <string name="settings_dialogue_boost">对白增强</string>

@@ -153,6 +153,7 @@ class AdaptiveBitrateSelectorTest {
         assertEquals(AudioBitrateTier.MEDIUM, selector.resolveBitrate(StreamingQuality.HD_720P))
         assertEquals(AudioBitrateTier.HIGH, selector.resolveBitrate(StreamingQuality.FHD_1080P))
         assertEquals(AudioBitrateTier.LOSSLESS, selector.resolveBitrate(StreamingQuality.UHD_4K))
+        assertEquals(AudioBitrateTier.LOSSLESS, selector.resolveBitrate(StreamingQuality.ORIGINAL))
     }
 
     @Test
@@ -160,6 +161,7 @@ class AdaptiveBitrateSelectorTest {
         val selector = selector()
 
         assertEquals(AudioBitrateTier.MEDIUM, selector.resolveBitrate(StreamingQuality.UHD_4K, maxAllowed = AudioBitrateTier.MEDIUM))
+        assertEquals(AudioBitrateTier.MEDIUM, selector.resolveBitrate(StreamingQuality.ORIGINAL, maxAllowed = AudioBitrateTier.MEDIUM))
         assertEquals(AudioBitrateTier.HIGH, selector.resolveBitrate(StreamingQuality.FHD_1080P, maxAllowed = AudioBitrateTier.HIGH))
         assertEquals(AudioBitrateTier.LOW, selector.resolveBitrate(StreamingQuality.HD_720P, maxAllowed = AudioBitrateTier.LOW))
     }

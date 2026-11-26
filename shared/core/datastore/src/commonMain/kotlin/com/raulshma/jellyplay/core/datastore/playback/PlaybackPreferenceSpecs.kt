@@ -209,7 +209,7 @@ object PlaybackPreferenceSpecs {
                 titleKey = "ss_streaming_quality_title",
                 subtitleKey = "ss_streaming_quality_subtitle",
                 categoryKey = "ss_cat_playback",
-                keywords = listOf("quality", "streaming", "resolution", "4k", "1080p", "sd"),
+                keywords = listOf("quality", "streaming", "resolution", "4k", "1080p", "sd", "original", "uncapped"),
                 routeKind = ROUTE_PLAYBACK_VIDEO_QUALITY,
                 isAdvanced = true,
             ),

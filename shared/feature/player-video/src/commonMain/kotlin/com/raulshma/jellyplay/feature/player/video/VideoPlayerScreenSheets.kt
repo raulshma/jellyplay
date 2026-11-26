@@ -347,6 +347,10 @@ internal fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.Quality -> {
+            // The active-cap caveats (manual bandwidth cap / Data Saver) are
+            // sheet-local reads: only this open picker consumes them, and a
+            // Settings change updates it live.
+            val networkOffline by sheets.networkOffline.collectAsStateWithLifecycle()
             QualityPickerSheet(
                 currentQuality = uiState.uiPrefs.streamingQuality,
                 adaptiveBitrateEnabled = uiState.uiPrefs.adaptiveBitrateEnabled,
@@ -354,7 +358,9 @@ internal fun PlayerSheetRouter(
                 onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetStreamingQuality(it)) },
                 onDismiss = inputs.dismissSheet,
                 sourceWidth = uiState.media.sourceVideoWidth,
-sourceHeight = uiState.media.sourceVideoHeight,
+                sourceHeight = uiState.media.sourceVideoHeight,
+                manualBandwidthCap = networkOffline.manualBandwidthCap,
+                dataSaverEnabled = networkOffline.dataSaverEnabled,
             )
         }
         is PlayerSheet.PlaybackMode ->

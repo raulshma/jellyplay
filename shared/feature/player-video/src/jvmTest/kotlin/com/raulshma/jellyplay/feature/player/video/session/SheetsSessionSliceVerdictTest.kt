@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.session
 
 import com.raulshma.jellyplay.core.data.playback.VideoQueueController
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.PlayerCastController
@@ -171,6 +172,7 @@ class SheetsSessionSliceVerdictTest {
             uiCommands = mockk<PlayerUiCommands>(relaxed = true),
             subtitlePreferences = MutableStateFlow(SubtitleSlice()),
             availablePlayerTypes = availablePlayerTypes,
+            networkOffline = MutableStateFlow(NetworkOfflineSlice()),
         )
     }
 }

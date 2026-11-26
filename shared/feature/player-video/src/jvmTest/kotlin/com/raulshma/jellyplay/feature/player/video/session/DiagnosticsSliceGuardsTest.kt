@@ -44,7 +44,9 @@ class DiagnosticsSliceGuardsTest {
     )
 
     private fun diagnostics(g: PlaybackSessionTestGraph): DiagnosticsSessionSlice =
-        g.session.createSessionSlices().diagnostics ?: error("diagnostics slice missing")
+        g.session.createSessionSlices(
+            networkOffline = g.stores.networkOffline.networkOffline,
+        ).diagnostics ?: error("diagnostics slice missing")
 
     /** One stall edge: BUFFERING classifies, READY clears (the pair records one stall). */
     private fun stall(g: PlaybackSessionTestGraph) {

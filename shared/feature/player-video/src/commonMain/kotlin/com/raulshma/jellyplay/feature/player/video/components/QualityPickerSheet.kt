@@ -36,7 +36,9 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_adaptive_bitrate_cap
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_adaptive_bitrate_off
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_adaptive_bitrate_on
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_data_saver_caveat
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_description
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_manual_cap_caveat
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_original_uncapped
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_source
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_title
@@ -54,6 +56,8 @@ fun QualityPickerSheet(
     onDismiss: () -> Unit,
     sourceWidth: Int? = null,
     sourceHeight: Int? = null,
+    manualBandwidthCap: Long = 0L,
+    dataSaverEnabled: Boolean = false,
 ) {
     PickerSheetScaffold(
         title = stringResource(Res.string.player_video_quality_title),
@@ -76,6 +80,8 @@ fun QualityPickerSheet(
             tvFocusRequester = focusRequester,
             sourceWidth = sourceWidth,
             sourceHeight = sourceHeight,
+            manualBandwidthCap = manualBandwidthCap,
+            dataSaverEnabled = dataSaverEnabled,
         )
     }
 }
@@ -89,11 +95,9 @@ fun QualityPickerSheet(
  * height — a scope master (1920x800) still counts as 1080p. Unknown source
  * dimensions keep every tier; [StreamingQuality.AUTO] always stays.
  *
- * One tier is exempt from disappearing outright: the bitrate map resolves
- * [StreamingQuality.UHD_4K] to *no* bitrate cap, so on a metered connection
- * it is the only uncapped choice and dropping it would leave high-bitrate
- * playback unreachable from the picker. [offersOriginalUncapped] flags that
- * case and the UI keeps the tier as "Original (uncapped)" instead.
+ * [StreamingQuality.ORIGINAL] has no height (`maxHeight == null`) and is
+ * therefore always offered: it is the bitrate/direct-quality choice, not a
+ * resolution tier, so it stays reachable on every source size.
  */
 internal fun offeredQualities(sourceWidth: Int?, sourceHeight: Int?): List<StreamingQuality> =
     StreamingQuality.entries.filter { quality ->
@@ -102,22 +106,6 @@ internal fun offeredQualities(sourceWidth: Int?, sourceHeight: Int?): List<Strea
         val widthClassHeight = (sourceWidth ?: 0) * 9 / 16
         cap <= maxOf(sourceHeight ?: 0, widthClassHeight)
     }
-
-/**
- * True when the source cannot deliver 4K: the resolution rule above filters
- * [StreamingQuality.UHD_4K] out, and the UI keeps it offered under its other
- * identity — the never-quality-capped bitrate choice — labeled "Original
- * (uncapped)". "Uncapped" means no tier-derived cap: a manually configured
- * bandwidth cap still applies (see [com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager]).
- * Unknown dimensions keep every tier as plain resolution tiers, and a source
- * at or above 4K shows the tier as plain "4K" (the meanings coincide there).
- */
-internal fun offersOriginalUncapped(sourceWidth: Int?, sourceHeight: Int?): Boolean {
-    if (sourceWidth == null && sourceHeight == null) return false
-    val cap = StreamingQuality.UHD_4K.maxHeight ?: return false
-    val widthClassHeight = (sourceWidth ?: 0) * 9 / 16
-    return cap > maxOf(sourceHeight ?: 0, widthClassHeight)
-}
 
 /**
  * The quality chip row + adaptive-bitrate toggle, shared by the standalone
@@ -145,6 +133,14 @@ fun QualityPickerOptions(
     tvLazyRows: Boolean = true,
     sourceWidth: Int? = null,
     sourceHeight: Int? = null,
+    /**
+     * The active manual bandwidth cap in bits per second (0 = no cap). The
+     * picker states it as a caveat so "Original (uncapped)" is not mistaken
+     * for a way around a user-configured limit.
+     */
+    manualBandwidthCap: Long = 0L,
+    /** Data Saver's 1.5 Mbps ceiling is active — same caveat rationale. */
+    dataSaverEnabled: Boolean = false,
 ) {
     if (!enabled) {
         Text(
@@ -155,11 +151,7 @@ fun QualityPickerOptions(
         )
         return
     }
-    val offered = offeredQualities(sourceWidth, sourceHeight)
-    // Below-4K sources keep the never-capped tier, relabeled "Original
-    // (uncapped)", so metered playback always has a one-tap uncapped choice.
-    val originalUncapped = offersOriginalUncapped(sourceWidth, sourceHeight)
-    val rows = if (originalUncapped) offered + StreamingQuality.UHD_4K else offered
+    val rows = offeredQualities(sourceWidth, sourceHeight)
     // The "Source: WxH" line: tiers key on the source's coded resolution, and
     // on scope masters the width-matched tiers (1080p on a 1920x800 file)
     // only make sense once the real frame size is visible.
@@ -176,7 +168,6 @@ fun QualityPickerOptions(
                             quality = quality,
                             currentQuality = currentQuality,
                             offered = rows,
-                            originalUncapped = originalUncapped,
                             onSelect = onSelect,
                             tvFocusRequester = tvFocusRequester,
                         )
@@ -193,7 +184,6 @@ fun QualityPickerOptions(
                         quality = quality,
                         currentQuality = currentQuality,
                         offered = rows,
-                        originalUncapped = originalUncapped,
                         onSelect = onSelect,
                         tvFocusRequester = tvFocusRequester,
                     )
@@ -219,7 +209,7 @@ fun QualityPickerOptions(
                         onClick = { onSelect(quality) },
                         label = {
                             Text(
-                                qualityOptionLabel(quality, originalUncapped),
+                                qualityOptionLabel(quality),
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             )
                         },
@@ -239,6 +229,8 @@ fun QualityPickerOptions(
             }
         }
     }
+
+    QualityCapCaveats(manualBandwidthCap, dataSaverEnabled)
 
     Spacer(Modifier.height(20.dp))
 
@@ -265,19 +257,62 @@ private fun QualitySourceCaption(sourceWidth: Int?, sourceHeight: Int?) {
 }
 
 /**
- * The row label for a quality tier. Below-4K sources present the never-capped
- * tier under its other identity — "Original (uncapped)" — instead of a
- * resolution the source can't deliver.
+ * The row label for a quality tier. [StreamingQuality.ORIGINAL] is the
+ * bitrate/direct-quality choice, not a resolution tier, so it reads "Original
+ * (uncapped)" — no TIER-derived cap; the active-cap caveats below state any
+ * manual cap / Data Saver that still applies.
  */
 @Composable
-private fun qualityOptionLabel(
-    quality: StreamingQuality,
-    originalUncapped: Boolean,
-): String =
-    if (originalUncapped && quality == StreamingQuality.UHD_4K) {
+private fun qualityOptionLabel(quality: StreamingQuality): String =
+    if (quality == StreamingQuality.ORIGINAL) {
         stringResource(Res.string.player_video_quality_original_uncapped)
     } else {
         quality.displayName
+    }
+
+/**
+ * The active-cap caveats beneath the tier chips: "Original (uncapped)" means
+ * no TIER-derived bitrate ceiling, while a manual bandwidth cap or Data Saver
+ * still bounds playback. Stating the active ceilings keeps the label honest.
+ */
+@Composable
+private fun QualityCapCaveats(
+    manualBandwidthCap: Long,
+    dataSaverEnabled: Boolean,
+) {
+    if (manualBandwidthCap <= 0L && !dataSaverEnabled) return
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (manualBandwidthCap > 0L) {
+            Text(
+                text = stringResource(
+                    Res.string.player_video_quality_manual_cap_caveat,
+                    mbpsLabel(manualBandwidthCap),
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (dataSaverEnabled) {
+            Text(
+                text = stringResource(Res.string.player_video_quality_data_saver_caveat),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Whole Mbps without a trailing ".0" (1.5 stays 1.5). */
+private fun mbpsLabel(bitsPerSecond: Long): String =
+    if (bitsPerSecond % 1_000_000L == 0L) {
+        (bitsPerSecond / 1_000_000L).toString()
+    } else {
+        (bitsPerSecond / 1_000_000.0).toString()
     }
 
 /**
@@ -291,7 +326,6 @@ private fun QualityTvOptionRow(
     quality: StreamingQuality,
     currentQuality: StreamingQuality,
     offered: List<StreamingQuality>,
-    originalUncapped: Boolean,
     onSelect: (StreamingQuality) -> Unit,
     tvFocusRequester: FocusRequester,
 ) {
@@ -310,7 +344,7 @@ private fun QualityTvOptionRow(
         trailingCheck = true,
     ) {
         TvOptionRowLabel(
-            text = qualityOptionLabel(quality, originalUncapped),
+            text = qualityOptionLabel(quality),
             selected = isSelected,
         )
     }

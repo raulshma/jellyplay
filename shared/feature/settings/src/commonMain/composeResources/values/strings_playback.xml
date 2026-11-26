@@ -107,6 +107,8 @@
     <string name="settings_quality_720p">720p</string>
     <string name="settings_quality_1080p">1080p</string>
     <string name="settings_quality_4k">4K</string>
+    <string name="settings_quality_original_uncapped">Original (uncapped)</string>
+    <string name="settings_quality_original">Original</string>
     <string name="settings_network_timeouts">Network Timeouts</string>
     <string name="settings_network_timeouts_subtitle">Connect/read/write timeout preset (restart to apply)</string>
     <string name="settings_dialogue_boost">Dialogue Boost</string>

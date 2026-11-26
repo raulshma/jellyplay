@@ -76,6 +76,8 @@
     <string name="settings_quality_720p">720p</string>
     <string name="settings_quality_1080p">1080p</string>
     <string name="settings_quality_4k">4K</string>
+    <string name="settings_quality_original_uncapped">Original (sin límite)</string>
+    <string name="settings_quality_original">Original</string>
     <string name="settings_network_timeouts">Tiempos de espera de red</string>
     <string name="settings_network_timeouts_subtitle">Ajuste preestablecido de conexión/lectura/escritura (reiniciar para aplicar)</string>
     <string name="settings_dialogue_boost">Mejora de diálogo</string>

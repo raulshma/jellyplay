@@ -345,6 +345,8 @@
     <string name="player_video_quality_description">As alteracoes se aplicam imediatamente para streams adaptativos. Para reproducao direta, isso define a taxa de bits maxima de reproducao.</string>
     <string name="player_video_quality_source">Origem: %1$dx%2$d</string>
     <string name="player_video_quality_original_uncapped">Original (sem limite)</string>
+    <string name="player_video_quality_manual_cap_caveat">O limite manual de largura de banda (%1$s Mbps) continua a aplicar-se a todas as qualidades.</string>
+    <string name="player_video_quality_data_saver_caveat">A Poupança de dados limita a reprodução automática a 1,5 Mbps.</string>
     <string name="player_video_adaptive_bitrate_cap">Limite de bitrate adaptativo</string>
     <string name="player_video_adaptive_bitrate_on">Limita a qualidade em redes limitadas</string>
     <string name="player_video_adaptive_bitrate_off">Desativado - qualidade total (reproducao direta)</string>

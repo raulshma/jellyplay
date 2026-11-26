@@ -1,13 +1,21 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -57,28 +65,34 @@ internal fun PlayerQualityButton(
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.08f)
     val isActive = quality != StreamingQuality.AUTO
-    FilledTonalIconButton(
+    Surface(
         onClick = onClick,
         modifier = modifier
+            .semantics { role = Role.Button }
+            .defaultMinSize(minWidth = 40.dp, minHeight = 40.dp)
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, IconButtonDefaults.smallRoundShape),
         shape = IconButtonDefaults.smallRoundShape,
-        colors = IconButtonDefaults.filledTonalIconButtonColors(
-            containerColor = if (isActive) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-            } else {
-                playerOnScrim().copy(alpha = 0.1f)
-            },
-            contentColor = if (isActive) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-        ),
+        color = if (isActive) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        } else {
+            playerOnScrim().copy(alpha = 0.1f)
+        },
+        contentColor = if (isActive) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
     ) {
-        Text(
-            quality.displayName,
-            style = MaterialTheme.typography.labelMedium,
-        )
+        Box(
+            modifier = Modifier.padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                quality.displayName,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+        }
     }
 }

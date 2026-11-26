@@ -104,6 +104,10 @@ fun PlaybackModeSheet(
     performanceLevel: com.raulshma.jellyplay.core.model.PerformanceLevel? = null,
     sourceWidth: Int? = null,
     sourceHeight: Int? = null,
+    /** The active manual bandwidth cap (bits/s, 0 = none) — quality-picker caveat. */
+    manualBandwidthCap: Long = 0L,
+    /** Data Saver's 1.5 Mbps ceiling is active — quality-picker caveat. */
+    dataSaverEnabled: Boolean = false,
 ) {
     val tvMode = LocalTvMode.current
     PickerSheetScaffold(
@@ -199,6 +203,8 @@ fun PlaybackModeSheet(
                         tvLazyRows = false,
                         sourceWidth = sourceWidth,
                         sourceHeight = sourceHeight,
+                        manualBandwidthCap = manualBandwidthCap,
+                        dataSaverEnabled = dataSaverEnabled,
                     )
                 }
 
@@ -332,6 +338,8 @@ fun PlaybackModeSheet(
                     enabled = qualityAvailable,
                     sourceWidth = sourceWidth,
                     sourceHeight = sourceHeight,
+                    manualBandwidthCap = manualBandwidthCap,
+                    dataSaverEnabled = dataSaverEnabled,
                 )
 
                 // The Performance section (issue #186 §5.11): Android-only in

@@ -207,6 +207,15 @@ class SettingsSummariesTest {
         )
     }
 
+    @Test
+    fun `playback root surfaces ORIGINAL without collapsing to auto`() {
+        val original = PlaybackPreferences(streamingQuality = StreamingQuality.ORIGINAL)
+        assertEquals(
+            "settings_default_speed_value(1x), Original",
+            render(playbackSummaryParts(original)),
+        )
+    }
+
     // ------------------------------------------------------ the playback hub
     // The eight leaf entrances (PlaybackSettingsRows.playback*SummaryParts).
 

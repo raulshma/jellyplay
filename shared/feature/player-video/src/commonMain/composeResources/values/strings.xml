@@ -423,6 +423,8 @@
          once the real resolution is visible. -->
     <string name="player_video_quality_source">Source: %1$dx%2$d</string>
     <string name="player_video_quality_original_uncapped">Original (uncapped)</string>
+    <string name="player_video_quality_manual_cap_caveat">Manual bandwidth cap (%1$s Mbps) still applies to every quality.</string>
+    <string name="player_video_quality_data_saver_caveat">Data Saver caps automatic playback at 1.5 Mbps.</string>
     <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate Cap</string>
     <string name="player_video_adaptive_bitrate_on">Caps quality on metered networks</string>
     <string name="player_video_adaptive_bitrate_off">Off - full quality (direct play)</string>

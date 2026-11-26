@@ -76,6 +76,8 @@
     <string name="settings_quality_720p">720p</string>
     <string name="settings_quality_1080p">1080p</string>
     <string name="settings_quality_4k">4K</string>
+    <string name="settings_quality_original_uncapped">원본(비트레이트 무제한)</string>
+    <string name="settings_quality_original">원본</string>
     <string name="settings_network_timeouts">네트워크 시간 초과</string>
     <string name="settings_network_timeouts_subtitle">연결/읽기/쓰기 시간 초과 사전 설정(적용하려면 재시작)</string>
     <string name="settings_dialogue_boost">대화 부스트</string>

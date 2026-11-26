@@ -345,6 +345,8 @@
     <string name="player_video_quality_description">Aenderungen gelten sofort fuer adaptive Streams. Bei Direct Play wird die maximale Wiedergabe-Bitrate festgelegt.</string>
     <string name="player_video_quality_source">Quelle: %1$dx%2$d</string>
     <string name="player_video_quality_original_uncapped">Original (ohne Bitraten-Limit)</string>
+    <string name="player_video_quality_manual_cap_caveat">Die manuelle Bandbreiten-Obergrenze (%1$s Mbit/s) gilt weiterhin für jede Qualitätsstufe.</string>
+    <string name="player_video_quality_data_saver_caveat">Der Datensparmodus begrenzt die automatische Wiedergabe auf 1,5 Mbit/s.</string>
     <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate-Obergrenze</string>
     <string name="player_video_adaptive_bitrate_on">Begrenzt Qualitaet in getakteten Netzwerken</string>
     <string name="player_video_adaptive_bitrate_off">Aus - volle Qualitaet (Direct Play)</string>

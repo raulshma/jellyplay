@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.session
 
 import com.raulshma.jellyplay.core.data.playback.VideoQueueController
 import com.raulshma.jellyplay.core.data.playback.VideoQueueItem
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -425,6 +426,12 @@ internal class SheetsSessionSlice(
     subtitlePreferences: StateFlow<SubtitleSlice>,
     /** The engines this platform can construct (the engine-swap verdict's universe). */
     private val availablePlayerTypes: List<PlayerType>,
+    /**
+     * The network/offline preference slice the quality picker reads for its
+     * active-cap caveats (manual bandwidth cap + Data Saver). Collected
+     * sheet-locally so a Settings change updates the open picker live.
+     */
+    val networkOffline: StateFlow<NetworkOfflineSlice>,
 ) {
     /** Reactive engine handle — the hub's custom-mpv-config ownership snapshot. */
     val engineFlow: StateFlow<MediaEngine?> = playerSessionManager.engineFlow
@@ -620,6 +627,12 @@ internal class SheetsSessionSlice(
  */
 internal fun PlaybackSession.createSessionSlices(
     routeButton: CastRouteButton? = null,
+    /**
+     * The network/offline preference flow (the quality picker's active-cap
+     * caveats). The VM passes `stores.networkOffline.networkOffline`; the
+     * session keeps its stores bundle private.
+     */
+    networkOffline: StateFlow<NetworkOfflineSlice>,
 ): PlayerSessionSlices {
     val loadPhaseFlow = playerSessionManager.sessionState
         .map { it.loadPhase }
@@ -650,6 +663,7 @@ internal fun PlaybackSession.createSessionSlices(
         uiCommands = uiCommands,
         subtitlePreferences = subtitlePreferences,
         availablePlayerTypes = availablePlayerTypes,
+        networkOffline = networkOffline,
     )
     // The diagnostics telemetry pump: the ACTIVE engine's live telemetry →
     // slice flows, subscriptions replaced on every engine swap (only the
