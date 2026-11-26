@@ -86,6 +86,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
+import com.raulshma.jellyplay.core.ui.components.ArtworkIconScrim
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -1145,7 +1146,10 @@ private fun OverlayIconButton(
             .size(44.dp)
             .focusIndicator(CircleShape)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.15f))
+            // White icon chrome over an arbitrary photo — the dark scrim circle
+            // keeps it legible over white photos, where the raw image offers no
+            // contrast (the top-edge gradient only covers the title row).
+            .background(ArtworkIconScrim)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1168,7 +1172,7 @@ private fun OverlayActionButton(
             .size(44.dp)
             .focusIndicator(CircleShape)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.15f))
+            .background(ArtworkIconScrim)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

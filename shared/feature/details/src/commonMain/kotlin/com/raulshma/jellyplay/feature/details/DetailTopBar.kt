@@ -46,6 +46,7 @@ import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.Volume2
 import com.composables.icons.tabler.outline.VolumeOff
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.ArtworkIconScrim
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -136,7 +137,7 @@ internal fun DetailTopBar(
                             .padding(8.dp)
                             .clip(CircleShape)
                             .background(
-                                color = if (iconsOnBackdrop) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent,
+                                color = if (iconsOnBackdrop) ArtworkIconScrim else Color.Transparent,
                             ),
                     ) {
                         Icon(
@@ -167,7 +168,7 @@ internal fun DetailTopBar(
                             .padding(8.dp)
                             .clip(CircleShape)
                             .background(
-                                color = if (iconsOnBackdrop) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent,
+                                color = if (iconsOnBackdrop) ArtworkIconScrim else Color.Transparent,
                             ),
                     ) {
                         Icon(
