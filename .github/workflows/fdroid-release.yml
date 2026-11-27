@@ -134,7 +134,7 @@ jobs:
         # in 4 minutes. Cross-run cache must never leak in. The LOCAL cache
         # within this job is the opposite: c2's R8 MUST hit c1's cache entry
         # (see the c2 step) — that is the buildserver's actual topology.
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-disabled: true
 
@@ -260,7 +260,7 @@ jobs:
           sha256sum "/job/out/$DEST"
 
       - name: Upload APK Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fdroid-apks
           path: /job/out/jellyplay-*-fdroid-*.apk
@@ -274,7 +274,7 @@ jobs:
       contents: write
     steps:
       - name: Download APK Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

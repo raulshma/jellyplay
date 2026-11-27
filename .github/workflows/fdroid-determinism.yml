@@ -61,7 +61,7 @@ jobs:
         run: git clone --depth 1 https://github.com/raulshma/jellyplay b
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Set buildserver environment
         # A separate step: GITHUB_ENV writes apply to SUBSEQUENT steps only,
@@ -111,7 +111,7 @@ jobs:
 
       - name: Upload differing APKs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nondeterministic-apks
           path: nondeterminism/*.apk
