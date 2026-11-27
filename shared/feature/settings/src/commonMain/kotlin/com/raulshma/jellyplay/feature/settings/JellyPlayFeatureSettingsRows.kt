@@ -11,6 +11,7 @@ import com.composables.icons.tabler.outline.Inbox
 import com.composables.icons.tabler.outline.LayoutRows
 import com.composables.icons.tabler.outline.News
 import com.composables.icons.tabler.outline.Plant
+import com.composables.icons.tabler.outline.PlugConnected
 import com.composables.icons.tabler.outline.Radar
 import com.composables.icons.tabler.outline.Star
 import com.composables.icons.tabler.outline.Stars
@@ -21,6 +22,7 @@ import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_system
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_feature_analytics
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_plugin_entry
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_feature_anime_markers
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_feature_bookmarks
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_feature_custom_rows
@@ -34,6 +36,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jell
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_feature_seasonal_rows
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_feature_transcodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_feature_user_ratings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_features_enabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_plugin_sync_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_plugin_sync_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_feature_analytics_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_feature_anime_markers_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_feature_bookmarks_subtitle
@@ -61,9 +66,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_
  * (`pluginFeature.<featureKey>.enabled`, absent = enabled) read and written
  * through [com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate] —
  * the residual-row shape (no datastore spec): hand search faces + `route =
- * Route.Settings`, so a search hit resolves to the root screen's own rows
- * (the NoOp+highlight arm of `settingsResultClickAction`, the
- * JellyPlaySyncRows precedent).
+ * Route.JellyPlayPluginSettings`, so a search hit deep-links into the plugin
+ * screen with the row id baked in as the highlight target (ADR-0017 moved
+ * the root's inline plugin section onto that screen).
  */
 internal object JellyPlayFeatureRows {
 
@@ -81,7 +86,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_events,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_events_subtitle,
         keywords = listOf("events", "live", "broadcast", "notifications", "sse", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val Messages = SettingsRow(
@@ -90,7 +95,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_messages,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_messages_subtitle,
         keywords = listOf("messages", "inbox", "unread", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val SeerrBridge = SettingsRow(
@@ -99,7 +104,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_seerr_bridge,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_seerr_bridge_subtitle,
         keywords = listOf("seerr", "bridge", "proxy", "via server", "jellyplay", "plugin", "seerr-bridge"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val Ratings = SettingsRow(
@@ -108,7 +113,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_ratings,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_ratings_subtitle,
         keywords = listOf("ratings", "mdblist", "scores", "detail", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val CustomRows = SettingsRow(
@@ -117,7 +122,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_custom_rows,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_custom_rows_subtitle,
         keywords = listOf("custom", "home", "rows", "admin", "jellyplay", "plugin", "custom-rows"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val SeasonalRows = SettingsRow(
@@ -126,7 +131,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_seasonal_rows,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_seasonal_rows_subtitle,
         keywords = listOf("seasonal", "season", "home", "row", "jellyplay", "plugin", "seasonal-rows"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val AnimeMarkers = SettingsRow(
@@ -135,7 +140,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_anime_markers,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_anime_markers_subtitle,
         keywords = listOf("anime", "filler", "recap", "markers", "episodes", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val Recommendations = SettingsRow(
@@ -144,7 +149,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_recommendations,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_recommendations_subtitle,
         keywords = listOf("recommendations", "similar", "more like this", "detail", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val UserRatings = SettingsRow(
@@ -153,7 +158,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_user_ratings,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_user_ratings_subtitle,
         keywords = listOf("user", "ratings", "sync", "jellyplay", "plugin", "user-ratings"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val Bookmarks = SettingsRow(
@@ -162,7 +167,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_bookmarks,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_bookmarks_subtitle,
         keywords = listOf("bookmarks", "reader", "books", "sync", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val Newsletter = SettingsRow(
@@ -171,7 +176,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_newsletter,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_newsletter_subtitle,
         keywords = listOf("newsletter", "digest", "entry", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     val Transcodes = SettingsRow(
@@ -180,7 +185,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_transcodes,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_transcodes_subtitle,
         keywords = listOf("transcodes", "transcoding", "admin", "monitor", "dashboard", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     /**
@@ -196,7 +201,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_push,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_push_subtitle,
         keywords = listOf("push", "notifications", "unifiedpush", "ntfy", "distributor", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     /**
@@ -210,7 +215,7 @@ internal object JellyPlayFeatureRows {
         titleRes = Res.string.settings_jellyplay_feature_analytics,
         searchSubtitleRes = Res.string.ss_jellyplay_feature_analytics_subtitle,
         keywords = listOf("analytics", "statistics", "plays", "watch time", "dashboard", "admin", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlayPluginSettings(),
     )
 
     /** The whole declaration, in emission order — the section's vocabulary. */
@@ -236,8 +241,50 @@ internal object JellyPlayFeatureRows {
 }
 
 private val jellyPlayFeatureSearchRoutes: Map<String, Route> =
-    JellyPlayFeatureRows.all.associate { it.id to Route.Settings }
+    JellyPlayFeatureRows.all.associate { it.id to Route.JellyPlayPluginSettings() }
 
-/** One on-screen group beside the sync groups (probe-gated at emission). */
+/** One on-screen group on the plugin screen (probe-gated at emission). */
 internal val JellyPlayFeaturesGroup =
     JellyPlayFeatureRows.all.asRowGroup("jellyplay.features", emptyList(), jellyPlayFeatureSearchRoutes, CoreUiRes.string.ss_cat_system)
+
+// ── The domain's root-screen entrance declaration ────────────────────────
+
+/**
+ * The JellyPlay companion-plugin domain's root-screen entrance (ADR-0017):
+ * the root's former inline plugin section is now ONE screen
+ * ([Route.JellyPlayPluginSettings]) behind this entrance — the ONE ordered
+ * declaration that drives the root's `item_jellyplay_plugin` section
+ * emission and its entrance-step index. The row's probe gate (AVAILABLE)
+ * stays at the emission site.
+ */
+internal val JellyPlayPluginEntrance = SettingsEntranceSectionRow(
+    key = "item_jellyplay_plugin",
+    rowId = "jellyplay_plugin",
+    icon = Tabler.Outline.PlugConnected,
+    titleRes = Res.string.settings_jellyplay_plugin_entry,
+)
+
+// ── Entrance summary (ADR-0017 decision 3) ──────────────────────────────
+
+/**
+ * The root JellyPlay-plugin entrance's summary: the settings-sync posture
+ * plus the enabled-feature count (the "%d feature(s) enabled" plural — the
+ * experimental fold's resource, one vocabulary for "how much of the plugin is
+ * on"). The probe-gated row composes only while the plugin is AVAILABLE (the
+ * emission site's gate), so the values are always live when shown; the sync
+ * flag and the enabled count ride the root VM's existing plugin flows, passed
+ * in as slice values to keep this fold pure. Pinned by SettingsSummariesTest.
+ */
+internal fun jellyPlayPluginSummaryParts(
+    syncEnabled: Boolean,
+    enabledFeatureCount: Int,
+): List<SettingsSummaryPart> = buildList {
+    add(
+        SettingsSummaryPart.Token(
+            if (syncEnabled) Res.string.settings_sum_plugin_sync_on else Res.string.settings_sum_plugin_sync_off,
+        ),
+    )
+    if (enabledFeatureCount > 0) {
+        add(SettingsSummaryPart.Plural(Res.plurals.settings_features_enabled, enabledFeatureCount))
+    }
+}

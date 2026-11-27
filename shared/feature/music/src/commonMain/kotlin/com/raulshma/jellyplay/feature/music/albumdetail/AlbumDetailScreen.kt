@@ -241,10 +241,12 @@ private fun AlbumDetailContent(
                 .background(headerScrimBrush)
         )
 
+        // No explicit iconColor: the default hero path (white icon + the
+        // ArtworkIconScrim chip) keeps the arrow legible over bright artwork,
+        // where the surface-based header gradient offers no contrast.
         CircleBgBackButton(
             onClick = onBack,
             modifier = Modifier.statusBarsPadding(),
-            iconColor = Color.White,
         )
 
         LazyColumn(

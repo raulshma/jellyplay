@@ -55,10 +55,26 @@
         android:theme="@style/Theme.JellyPlay"
         android:usesCleartextTraffic="true"
         tools:targetApi="37">
+        <!-- Launcher root. singleTop, NOT singleTask: a singleTask root
+             destroys every activity above it whenever the launcher intent is
+             re-delivered, so tapping the app icon from the home screen while
+             PlayerActivity was on top (fullscreen playback, or the PiP task
+             behind it) closed the player and revealed the originating browse
+             screen. Under singleTop the launcher contract holds instead — the
+             task comes to the front and its top activity resumes
+             (PlayerActivity included); when this activity is already the task
+             top the launcher intent arrives via onNewIntent, which classifies
+             as None (no-op). In-app shell handoffs therefore carry CLEAR_TOP
+             explicitly (plus SINGLE_TOP where the shell may already be top):
+             tile, widgets, media/session notifications, shortcuts and
+             PlayerActivity's lock-gate redirect.
+             alwaysRetainTaskState stops the system's timed (~30 min) reset from
+             clearing the player above this root after a long pause. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
+            android:alwaysRetainTaskState="true"
             android:theme="@style/Theme.JellyPlay.Starting"
             android:windowSoftInputMode="adjustResize"
             android:resizeableActivity="true"

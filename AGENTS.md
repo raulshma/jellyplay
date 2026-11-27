@@ -18,6 +18,10 @@ inline their content here.
   placing a new test.
 - **Companion plugin vocabulary** → `jellyfin-plugin-jellyplay/GLOSSARY.md`
   (separate file, not duplicated into the client glossary).
+- **Git ops in `jellyfin-plugin-jellyplay/`**: separate git repo (submodule) —
+  scope commands with `git -C jellyfin-plugin-jellyplay …`; check
+  `git stash list` before any parent-repo `stash pop` (a pre-existing stash
+  sits there and pops into the tree).
 
 ## Verify locally before claiming done
 
@@ -30,6 +34,9 @@ branches are unverified**, so run the touched modules' lanes yourself:
 - App unit suites: `:app:testPhoneStoreDebugUnitTest :app:testTvStoreDebugUnitTest`
   plus the `testAndroidHostTest` lanes CI names.
 - Desktop: `./gradlew :apps:desktop:test`.
+
+Run lanes sequentially, or at most two heavy ones together — four heavy
+lanes at once OOM-kills the Gradle daemon on this 15 GB box (exit 137).
 
 The full CI lane list is derived from `settings.gradle.kts` in
 `.github/workflows/kmp-build.yml` ("Derive shared module lanes") and

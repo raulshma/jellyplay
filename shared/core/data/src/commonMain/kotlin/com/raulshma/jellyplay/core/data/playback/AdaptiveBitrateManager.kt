@@ -58,7 +58,10 @@ class AdaptiveBitrateManager(
             StreamingQuality.SD_480P -> MAX_BITRATE_480P
             StreamingQuality.HD_720P -> MAX_BITRATE_720P
             StreamingQuality.FHD_1080P -> MAX_BITRATE_1080P
-            StreamingQuality.UHD_4K -> null
+            StreamingQuality.UHD_4K -> MAX_BITRATE_4K
+            // ORIGINAL is the uncapped bitrate/direct-quality choice; the
+            // manual bandwidth cap below still applies.
+            StreamingQuality.ORIGINAL -> null
         }
 
         val cap = net.manualBandwidthCap
@@ -136,6 +139,9 @@ class AdaptiveBitrateManager(
         private const val MAX_BITRATE_480P = 1_500_000L
         private const val MAX_BITRATE_720P = 3_000_000L
         private const val MAX_BITRATE_1080P = 8_000_000L
+        // The explicit 4K tier ceiling. ORIGINAL (not UHD_4K) is the uncapped
+        // choice, so a sub-4K source still sees 4K as a resolution tier.
+        private const val MAX_BITRATE_4K = 40_000_000L
         // Data-saver ceiling: targets ~480p to minimise mobile data usage
         // while keeping the stream watchable. Aligned with MAX_BITRATE_480P.
         private const val MAX_BITRATE_DATASAVER = 1_500_000L

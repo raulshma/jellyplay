@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.worker
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.sortedByPlaybackOrder
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.download.ArrAutoArmSync
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -16,7 +17,6 @@ import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.resolveAgainst
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
 
 /**
  * The auto-download check choreography: one pass that finds new episodes of
@@ -48,12 +48,22 @@ import kotlinx.coroutines.flow.firstOrNull
  *    ([DownloadRepository.sweepExpiredAutoDownloads]) runs at the start of
  *    every pass so the pipeline stays self-cleaning (watched-only; unwatched
  *    downloads are never reclaimed).
+ *  - **arr auto-arm** — the [ArrAutoArmSync] stage runs right after the sweep
+ *    and before the universe derivation (gh-225 follow-up): gated on the
+ *    `autoArmFromArr` pref + the Direct *arr flag + a configured Sonarr, it
+ *    arms Sonarr-monitored series the Jellyfin library contains (add-only,
+ *    insert-if-absent — an explicit NEVER tombstone is never re-armed), so the
+ *    union below picks them up the same pass. Failures skip the stage, never
+ *    the pass; arming never consumes the maxPerPass budget.
  *  - **Lookahead** — instead of every not-yet-downloaded episode of a season,
  *    the pass enqueues only the [DownloadsSlice.autoDownloadLookahead] episodes
  *    that follow the season's highest **downloaded or watched** episode in
  *    playback order (watched = the server played flag the catalogue snapshot's
  *    episodes carry — the same userData surface `PlayedStateSync` reconciles
- *    against). `0` restores the legacy take-them-all behavior.
+ *    against). A season with no downloaded and no watched episode falls back
+ *    to the season head (the first lookahead real episodes), so an arr- or
+ *    picker-armed series the user never engaged with starts at episode 1.
+ *    `0` restores the legacy take-them-all behavior.
  *  - **Max-per-pass** — a global enqueue budget across every series in the
  *    pass ([DownloadsSlice.autoDownloadMaxPerPass], 0 = unlimited); once hit,
  *    the pass stops and the remaining series are picked up next pass.
@@ -95,6 +105,13 @@ class AutoDownloadCheck(
     private val policyStore: SeriesDownloadPolicyStore,
     private val downloadIntake: DownloadIntake,
     private val episodeCatalogue: EpisodeCatalogue,
+    /**
+     * The arr auto-arm stage (gh-225 follow-up): Sonarr-monitored series that
+     * exist in the Jellyfin library get armed before the universe derivation,
+     * so they join THIS pass. Its failures never fail the pass (stage-skipped,
+     * below) and it enqueues nothing (no maxPerPass consumption).
+     */
+    private val arrAutoArmSync: ArrAutoArmSync,
     /** Active-server identity for the per-user allow-list gate. */
     private val serverIdentityStore: ServerIdentityStore,
     /**
@@ -117,7 +134,32 @@ class AutoDownloadCheck(
         // No global gate: a global NEVER with per-series overrides must still
         // reach those series (the schedulers keep the pass alive via
         // hasSeriesPolicies); series resolution below skips NEVER ones.
-        val prefs = downloadsStore.downloads.firstOrNull() ?: return Outcome.Complete()
+        // Disk-backed one-shot read, not the eagerly-shared [DownloadsStore.downloads]
+        // projection (the same reasoning as the scheduler's keep-alive gate in
+        // [DownloadsStore.readDownloadsOrNull]): the projection has no happens-before
+        // edge against a pass launched right after a write, so a just-enabled
+        // `autoArmFromArr` (or mode/lookahead change) could be observed at its
+        // pre-write value and the pass would skip arming. The raw cold read
+        // suspends until the persisted snapshot arrives.
+        //
+        // Failure-surfacing on purpose ([DownloadsStore.readDownloadsOrNull],
+        // not the degrading [DownloadsStore.readDownloads]): the degrading read
+        // answers the all-defaults slice on a failed read, whose EMPTY
+        // `autoDownloadServers` allow-list reads as "every server allowed" —
+        // the gate below would then run the sweep and intake for a server the
+        // user excluded (the persisted restriction silently lifted by an IO
+        // failure). A failed read must fail the pass instead: null rides the
+        // retry budget (the same escalation as the catalogue failures below),
+        // and the next pass re-reads disk.
+        val prefs = runCatchingRethrowingCancellation { downloadsStore.readDownloadsOrNull() }
+            .getOrNull()
+        if (prefs == null) {
+            // The wrap folds any contract-violating throw into the same
+            // fail-closed arm (the scheduler gate's runCatching idiom);
+            // readDownloadsOrNull's contract is null-on-failure.
+            Log.w(TAG, "AutoDownload pass skipped: reading the persisted downloads slice failed")
+            return retryOutcome(attempt)
+        }
 
         // Per-server allow-list: empty = all servers; a non-empty set that does
         // not contain the active server no-ops the whole pass (the download
@@ -144,6 +186,17 @@ class AutoDownloadCheck(
         // would let a stopped worker keep enqueueing past the stop).
         runCatchingRethrowingCancellation { downloadRepository.sweepExpiredAutoDownloads() }
             .onFailure { Log.w(TAG, "Retention sweep failed", it) }
+
+        // The arr auto-arm stage runs between the sweep and the universe
+        // derivation so newly armed series join THIS pass's universe below
+        // (the same sweep-first-then-widen ordering as the retention half).
+        // Best-effort like the sweep: any stage failure (arr down, Jellyfin
+        // enumeration failing) is swallowed — arr being down must never break
+        // auto-download — and the stage is a policy-row writer only, so it
+        // never consumes the INSTANT maxPerPass budget (arming enqueues
+        // nothing; the enqueues happen in this pass's own loop).
+        runCatchingRethrowingCancellation { arrAutoArmSync.sync(prefs) }
+            .onFailure { Log.w(TAG, "arr auto-arm stage failed; stage skipped", it) }
 
         // The universe union (ADR-0015 decision 4): the disk-derived coverage
         // series half (the folded getDownloadedSeriesIds read — same DAO
@@ -270,22 +323,35 @@ class AutoDownloadCheck(
         }
 
         if (!hadTransientFailure) return Outcome.Complete(newSuggestions)
-        return if (attempt < MAX_RETRIES) {
-            Outcome.RetriesPending
-        } else {
-            Log.w(TAG, "AutoDownload exhausted $MAX_RETRIES retries")
-            Outcome.Exhausted
-        }
+        return retryOutcome(attempt)
     }
+
+    /**
+     * The ONE transient-failure escalation fold (the [WorkerRetryVerdict]
+     * budget applied to [attempt]) — shared by the persisted-slice read's
+     * fail-closed arm above and the per-series catalogue failures, so a new
+     * transient source maps onto the same Retry/Exhausted ladder instead of
+     * re-folding the verdict.
+     */
+    private fun retryOutcome(attempt: Int): Outcome =
+        when (WorkerRetryVerdict.of(attempt, MAX_RETRIES)) {
+            WorkerRetryVerdict.Retry -> Outcome.RetriesPending
+            WorkerRetryVerdict.Exhausted -> {
+                Log.w(TAG, "AutoDownload exhausted $MAX_RETRIES retries")
+                Outcome.Exhausted
+            }
+        }
 
     /**
      * The lookahead window for one season: the [lookahead] episodes that
      * follow the season's highest downloaded-or-watched episode in playback
      * order. The anchor is positional (an index in the ordered list, not an
      * episode-number arithmetic), so gapped numbering and a mid-season start
-     * (an anchor that is not the first episode) both resolve naturally; a
+     * (an anchor that is not the first episode) both resolve naturally. A
      * season with no downloaded and no watched episode has no anchor and
-     * enqueues nothing — the user has not engaged with it. For an
+     * falls back to the season head — the first [lookahead] real episodes
+     * (ADR-0016's amendment: an arr- or picker-armed series the user never
+     * engaged with must start at episode 1, not enqueue nothing). For an
      * armed-then-hygiene-emptied series the anchor sits on the last watched
      * episode alone (the ADR-0015 resume mechanics).
      *
@@ -302,7 +368,6 @@ class AutoDownloadCheck(
     ): List<String> {
         val ordered = seasonEpisodes.sortedByPlaybackOrder()
         val anchorIndex = ordered.indexOfLast { it.id in alreadyDownloaded || it.isPlayed }
-        if (anchorIndex < 0) return emptyList()
         return ordered
             .drop(anchorIndex + 1)
             .filter { !it.isPlayed && !it.isVirtual }

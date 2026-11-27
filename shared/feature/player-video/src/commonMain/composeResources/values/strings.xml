@@ -423,6 +423,8 @@
          once the real resolution is visible. -->
     <string name="player_video_quality_source">Source: %1$dx%2$d</string>
     <string name="player_video_quality_original_uncapped">Original (uncapped)</string>
+    <string name="player_video_quality_manual_cap_caveat">Manual bandwidth cap (%1$s Mbps) still applies to every quality.</string>
+    <string name="player_video_quality_data_saver_caveat">Data Saver caps automatic playback at 1.5 Mbps.</string>
     <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate Cap</string>
     <string name="player_video_adaptive_bitrate_on">Caps quality on metered networks</string>
     <string name="player_video_adaptive_bitrate_off">Off - full quality (direct play)</string>
@@ -506,4 +508,31 @@
     <string name="player_video_exit_confirm_message">Press back again — or confirm — to close the player.</string>
     <string name="player_video_exit_confirm_confirm">Close</string>
     <string name="player_video_exit_confirm_stay">Stay</string>
+
+    <!-- Progressive Loading HUD (initial-startup stages, buffer telemetry, slow-load warnings). -->
+    <string name="player_video_load_stage_preparing">Preparing stream…</string>
+    <string name="player_video_load_stage_fetching_metadata">Loading media details…</string>
+    <string name="player_video_load_stage_resolving_stream">Resolving stream…</string>
+    <string name="player_video_load_stage_resolving_stream_slow">Resolving stream (server analyzing media)…</string>
+    <string name="player_video_load_stage_initializing_engine">Initializing %1$s…</string>
+    <string name="player_video_load_stage_priming_buffer">Buffering initial playback…</string>
+    <string name="player_video_load_stage_failed">Playback failed: %1$s</string>
+    <string name="player_video_load_stage_connecting">Connecting…</string>
+    <string name="player_video_load_buffer_progress">Buffering: %1$ss / %2$ss (%3$s)</string>
+    <string name="player_video_load_warning_transcoding">Server is preparing transcoded stream…</string>
+    <string name="player_video_load_warning_slow_connection">Slow connection to server detected…</string>
+    <string name="player_video_load_warning_slow_server">Server connection responding slowly…</string>
+
+    <!-- Recovery banner (actionable slow-playback remediation) and buffering diagnostics pill. -->
+    <string name="player_video_stall_network_starvation">Network Starvation</string>
+    <string name="player_video_stall_transcode_lag">Transcode Lag</string>
+    <string name="player_video_stall_decoder_bottleneck">Decoder Bottleneck</string>
+    <string name="player_video_pill_stream">Stream: %1$s</string>
+    <string name="player_video_pill_transcode">Transcode: %1$sx</string>
+    <string name="player_video_pill_estimate">≈ %1$s (est.)</string>
+    <string name="player_video_recovery_keep_waiting">Keep Waiting</string>
+    <string name="player_video_recovery_switch_quality">Switch to %1$dp</string>
+    <string name="player_video_recovery_switch_engine">Switch to %1$s</string>
+    <string name="player_video_recovery_switch_engine_generic">Switch Engine</string>
+    <string name="player_video_recovery_boost_buffer">Boost Buffer (30s)</string>
 </resources>

@@ -92,6 +92,14 @@
     <string name="settings_home_screen_layout">Startbildschirm-Layout</string>
     <string name="settings_home_sections_visible">%1$d von %2$d Bereichen sichtbar</string>
     <string name="settings_home_title">Startbildschirm</string>
+    <string name="settings_home_entry_display">Startseiten-Anzeige</string>
+    <string name="settings_home_entry_display_subtitle">Hero, Uhr, Dock &amp; Hauptbildschirm-Darstellung</string>
+    <string name="settings_home_entry_rows">Reihen &amp; Layout</string>
+    <string name="settings_home_entry_rows_subtitle">Next Up, Bereichslayout &amp; ausgeblendete Elemente</string>
+    <string name="settings_home_entry_cards">Karten &amp; Badges</string>
+    <string name="settings_home_entry_cards_subtitle">Badges, Bewertungen, Spoiler &amp; Kartenstil</string>
+    <string name="settings_home_tuning">Feineinstellung</string>
+    <string name="settings_home_curation">Ausgeblendet &amp; Wiederherstellen</string>
     <string name="settings_home_cards">Karten</string>
     <string name="settings_home_display">Startbildschirm-Anzeige</string>
     <string name="settings_continue_next_up">Weitersehen &amp; Next Up</string>

@@ -31,81 +31,11 @@ fun EntryProviderScope<NavKey>.homeSection(
         // the Compose compiler) instead of fresh lambda allocations on every
         // recomposition — eliminates cascading recompositions of the home content.
         val callbacks = remember(navigator, onShortcutAction) {
-            HomeCallbacks(
-                onItemClick = { itemId, mediaType, parentId, itemName ->
-                    navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
-                },
-                onPlayClick = { itemId, mediaSourceId, startPosition, mediaType, parentId, itemName ->
-                    if (mediaType.isPhotoType) {
-                        navigator.navigatePhotoAware(itemId, mediaType, parentId, "")
-                    } else if (playOnStrategy?.playOn(
-                            itemId = itemId,
-                            startPositionMs = startPosition / 10_000,
-                        ) == true
-                    ) {
-                        // "Play On" active: fling to the connected remote session
-                        // instead of opening the local video player. Mirrors
-                        // jellyfin-web's "remote is current player" routing.
-                        // (Probe + fling live behind the HomePlayOnRedirect
-                        // seam — see its KDoc.)
-                    } else if (mediaType == MediaType.CHANNEL || mediaType == MediaType.LIVE_TV) {
-                        // Live channels must go through the live TV player (tuner
-                        // playback), not the generic video player. Mirrors the
-                        // dedicated LiveTvScreen's onChannelClick routing.
-                        navigator.navigate(Route.LiveTvChannelPlayer(itemId, itemName))
-                    } else if (mediaType == MediaType.BOOK) {
-                        // Books ride the reader, never the video player — the
-                        // same fork the downloads screen's play button makes.
-                        navigator.navigate(Route.BookReader(itemId))
-                    } else {
-                        navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
-                    }
-                },
-                onOfflineLibraryClick = { navigator.navigate(Route.OfflineLibrary) },
-                onDownloadDetailClick = { itemId, openDownloadSheet ->
-                    navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
-                },
-                onSeerrItemClick = { tmdbId, mediaType ->
-                    navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
-                },
+            homeCallbacks(
+                navigator = navigator,
                 onModeChange = onModeChange,
-                onSearchSeerrClick = { tmdbId, mediaType ->
-                    navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
-                },
-                onSettingsSearchItemClick = { route -> navigator.navigate(route) },
-                // In-feature routing (stats card → admin user detail,
-                // genre chips → filtered library section) — one generic
-                // Route-carrier beside the settings-search carrier above.
-                onOpenRoute = { route -> navigator.navigate(route) },
+                playOnStrategy = playOnStrategy,
                 onShortcutAction = onShortcutAction,
-                onNewsletterClick = { navigator.navigate(Route.Newsletter) },
-                onConfigureHomeLayout = { navigator.navigate(Route.HomeSettings("pinned_home_sections")) },
-                onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
-                // The announcement snackbar's Customize — Home Settings root.
-                onCustomizeHome = { navigator.navigate(Route.HomeSettings()) },
-                onSeeAllClick = { _, libraryId, collectionType, title ->
-                    // Per-library "Latest X" sorts by DateLastContentAdded so a
-                    // compound item that just gained a child (a TV series with a
-                    // new episode) rises to the top — the user's mental model of
-                    // "Latest" (#113). The global Recently Added row
-                    // (libraryId == null) is reproduced by the library VM via a
-                    // per-folder /Items/Latest aggregation, so the DateCreated
-                    // sortBy here is ignored for that branch — kept only so the
-                    // route stays self-describing if the branch is removed.
-                    val sortBy = if (libraryId != null) {
-                        SortOption.DATE_LAST_CONTENT_ADDED.apiValue
-                    } else {
-                        SortOption.DATE_ADDED.apiValue
-                    }
-                    navigator.navigate(
-                        Route.LibrarySection(
-                            title = title,
-                            parentId = libraryId,
-                            collectionType = collectionType,
-                            sortBy = sortBy,
-                        )
-                    )
-                },
             )
         }
         HomeScreen(
@@ -123,4 +53,103 @@ fun EntryProviderScope<NavKey>.homeSection(
     entry<Route.MyMediaHidden> {
         MyMediaHiddenScreen(onBack = { navigator.goBack() })
     }
+}
+
+/**
+ * The home entry's ONE production [HomeCallbacks] binding, extracted off the
+ * composable body (plain function, no composition) so the navigation tests
+ * invoke THESE lambdas — a routing change here fails its test instead of
+ * drifting silently against a hand-rolled test copy.
+ */
+internal fun homeCallbacks(
+    navigator: Navigator,
+    onModeChange: (HomeMode) -> Unit,
+    playOnStrategy: HomePlayOnRedirect? = null,
+    onShortcutAction: (com.raulshma.jellyplay.core.ui.navigation.ShortcutAction) -> Unit = {},
+): HomeCallbacks {
+    return HomeCallbacks(
+        onItemClick = { itemId, mediaType, parentId, itemName ->
+            navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
+        },
+        onPlayClick = { itemId, mediaSourceId, startPosition, mediaType, parentId, itemName ->
+            if (mediaType.isPhotoType) {
+                navigator.navigatePhotoAware(itemId, mediaType, parentId, "")
+            } else if (playOnStrategy?.playOn(
+                    itemId = itemId,
+                    startPositionMs = startPosition / 10_000,
+                ) == true
+            ) {
+                // "Play On" active: fling to the connected remote session
+                // instead of opening the local video player. Mirrors
+                // jellyfin-web's "remote is current player" routing.
+                // (Probe + fling live behind the HomePlayOnRedirect
+                // seam — see its KDoc.)
+            } else if (mediaType == MediaType.CHANNEL || mediaType == MediaType.LIVE_TV) {
+                // Live channels must go through the live TV player (tuner
+                // playback), not the generic video player. Mirrors the
+                // dedicated LiveTvScreen's onChannelClick routing.
+                navigator.navigate(Route.LiveTvChannelPlayer(itemId, itemName))
+            } else if (mediaType == MediaType.BOOK) {
+                // Books ride the reader, never the video player — the
+                // same fork the downloads screen's play button makes.
+                navigator.navigate(Route.BookReader(itemId))
+            } else {
+                navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
+            }
+        },
+        onOfflineLibraryClick = { navigator.navigate(Route.OfflineLibrary) },
+        onDownloadDetailClick = { itemId, openDownloadSheet ->
+            navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
+        },
+        onSeerrItemClick = { tmdbId, mediaType ->
+            navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
+        },
+        onModeChange = onModeChange,
+        onSearchSeerrClick = { tmdbId, mediaType ->
+            navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
+        },
+        onSettingsSearchItemClick = { route -> navigator.navigate(route) },
+        // In-feature routing (stats card → admin user detail,
+        // genre chips → filtered library section) — one generic
+        // Route-carrier beside the settings-search carrier above.
+        onOpenRoute = { route -> navigator.navigate(route) },
+        onShortcutAction = onShortcutAction,
+        onNewsletterClick = { navigator.navigate(Route.Newsletter) },
+        // The shortcut opens the row the highlight names — after
+        // ADR-0017's split, pinned_home_sections lives on the
+        // Rows & layout leaf, not the hub (the hub would land with
+        // no highlight).
+        onConfigureHomeLayout = { navigator.navigate(Route.HomeRowsSettings("pinned_home_sections")) },
+        onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
+        // The announcement snackbar's Customize — the Rows & layout
+        // leaf with the Home Screen Layout group open on arrival: the
+        // highlight id names a home.layout row, so the group arrives
+        // expanded (the same destination-state carrier the shortcut
+        // above uses). The hub route stays the ordinary Home settings
+        // entrance.
+        onCustomizeHome = { navigator.navigate(Route.HomeRowsSettings("pinned_home_sections")) },
+        onSeeAllClick = { _, libraryId, collectionType, title ->
+            // Per-library "Latest X" sorts by DateLastContentAdded so a
+            // compound item that just gained a child (a TV series with a
+            // new episode) rises to the top — the user's mental model of
+            // "Latest" (#113). The global Recently Added row
+            // (libraryId == null) is reproduced by the library VM via a
+            // per-folder /Items/Latest aggregation, so the DateCreated
+            // sortBy here is ignored for that branch — kept only so the
+            // route stays self-describing if the branch is removed.
+            val sortBy = if (libraryId != null) {
+                SortOption.DATE_LAST_CONTENT_ADDED.apiValue
+            } else {
+                SortOption.DATE_ADDED.apiValue
+            }
+            navigator.navigate(
+                Route.LibrarySection(
+                    title = title,
+                    parentId = libraryId,
+                    collectionType = collectionType,
+                    sortBy = sortBy,
+                )
+            )
+        },
+    )
 }

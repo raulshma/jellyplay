@@ -2,13 +2,16 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_notifications
+import com.raulshma.jellyplay.core.ui.model.labelResource
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_check_frequency
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_check_frequency_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_notifications
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_notifications_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_libraries
@@ -16,6 +19,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_per_check_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_hours
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notification_lights
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notification_lights_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notifications
@@ -341,3 +345,24 @@ internal val NotificationEntrance = SettingsEntranceSectionRow(
     icon = Tabler.Outline.Bell,
     titleRes = Res.string.settings_notifications,
 )
+
+// ── Entrance summary (ADR-0017 decision 3) ──────────────────────────────
+
+/**
+ * The root Notifications entrance's summary: the Disabled face while the
+ * master is off, otherwise the check frequency (the [CheckFrequency.labelResource]
+ * seam's own faces) plus the Quiet Hours marker while it is on. Reads the
+ * root slice's [com.raulshma.jellyplay.core.model.NotificationPreferences]
+ * (already projected there); pure, pinned by SettingsSummariesTest.
+ */
+internal fun notificationsSummaryParts(preferences: NotificationPreferences): List<SettingsSummaryPart> =
+    if (!preferences.enabled) {
+        listOf(SettingsSummaryPart.Token(Res.string.settings_disabled))
+    } else {
+        buildList {
+            add(SettingsSummaryPart.Token(preferences.checkFrequency.labelResource()))
+            if (preferences.quietHoursEnabled) {
+                add(SettingsSummaryPart.Token(Res.string.settings_quiet_hours))
+            }
+        }
+    }

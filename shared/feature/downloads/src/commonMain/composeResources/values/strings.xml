@@ -77,6 +77,17 @@
     <string name="downloads_armed_series_subtitle">Auto-download keeps watching these series for new episodes, even with nothing downloaded.</string>
     <string name="downloads_armed_series_mode_follow_global">Follows global</string>
     <string name="downloads_armed_series_unarm">Stop auto-download</string>
+    <string name="downloads_armed_series_rearm">Auto-download</string>
+
+    <!-- Arm a series (gh-225 follow-up): the manual arm picker — arm a series
+         for auto-download without enqueueing episodes -->
+    <string name="downloads_arm_series_title">Arm a series</string>
+    <string name="downloads_arm_series_subtitle">Watch a series for new episodes without downloading them now. New episodes follow your auto-download setting.</string>
+    <string name="downloads_arm_series_query_label">Search series</string>
+    <string name="downloads_arm_series_empty">No series found</string>
+    <string name="downloads_arm_series_search_error">Search failed. Check your connection and try again.</string>
+    <string name="downloads_arm_series_action">Arm</string>
+    <string name="downloads_arm_series_armed">Series armed — new episodes will follow your auto-download setting.</string>
 
     <!-- Download statuses -->
     <string name="downloads_status_queued">Queued</string>

@@ -99,10 +99,11 @@ class BaselineProfileGenerator {
      * - Home feed scroll — LazyColumn row composables, MediaImage + Coil
      *   decode pipeline, home ViewModel state machine.
      * - Deep-link circuit — library (with a grid scroll), search, settings,
-     *   downloads (with a grid scroll). MainActivity is singleTask, so each
-     *   link lands as onNewIntent + pending-route navigation in the same
-     *   live process; backing out returns to the launcher and the next link
-     *   warms the app again.
+     *   downloads (with a grid scroll). MainActivity is singleTop and stays
+     *   the task top (root launcher back backgrounds the task rather than
+     *   finishing it), so each link lands as onNewIntent + pending-route
+     *   navigation in the same live process; backing out returns to the
+     *   launcher and the next link warms the app again.
      * - Labeled surfaces with no deep-link host — Live TV (nav drawer /
      *   bottom bar) and the music-mode "Browse" tab, via guarded taps after
      *   a shell relaunch.
@@ -190,8 +191,8 @@ class BaselineProfileGenerator {
 /**
  * Launches a `jellyplay://` deep link through the app's own VIEW intent
  * filter and waits for the destination to settle. MainActivity is
- * singleTask, so this lands as onNewIntent + pending-route navigation when
- * the process is alive — both paths are profile-worthy.
+ * singleTop, so this lands as onNewIntent + pending-route navigation when
+ * the shell is alive at the task top — both paths are profile-worthy.
  */
 private fun MacrobenchmarkScope.startDeepLinkAndWait(uri: String) {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(TARGET_PACKAGE)

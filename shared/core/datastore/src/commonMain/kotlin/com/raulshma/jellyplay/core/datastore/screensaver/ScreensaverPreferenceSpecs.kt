@@ -69,12 +69,29 @@ private var cachedDreamImageCategories: ParsedCache<Set<DreamImageCategory>> =
 object ScreensaverPreferenceSpecs {
 
     /**
-     * Route kind shared by every settings-search row that deep-links into the
-     * main settings screen (this domain's whole catalog: the dream group
-     * renders there, and the desktop shell rows beside it) — the plain id the
-     * feature layer maps to `Route.Settings`.
+     * Route kind shared by the settings-search rows that deep-link into the
+     * main settings screen — the plain id the feature layer maps to
+     * `Route.Settings`. (After ADR-0017 the dream/idle rows moved to the
+     * Ambient screen and the desktop shell rows to Integrations — see
+     * [ROUTE_AMBIENT_SETTINGS] / [ROUTE_INTEGRATIONS]; the constant stays for
+     * the domain's remaining main-screen rows.)
      */
     const val ROUTE_SETTINGS = "settings"
+
+    /**
+     * Route kind of the dream (screensaver) + desktop idle-ambient rows:
+     * ADR-0017 moved both groups onto ONE capability-gated Ambient screen
+     * (`Route.AmbientSettings`) behind the Look & feel entrance — the feature
+     * layer maps this id to that route.
+     */
+    const val ROUTE_AMBIENT_SETTINGS = "ambient_settings"
+
+    /**
+     * Route kind of the desktop Discord-presence + shell-hook rows: ADR-0017
+     * moved both groups onto the Integrations screen (`Route.Integrations`) —
+     * the feature layer maps this id to that route.
+     */
+    const val ROUTE_INTEGRATIONS = "integrations"
 
     // ------------------------------------------------------------------
     // Dream (Android screensaver)
@@ -108,7 +125,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "settings_categories_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "categories", "tv", "movies", "music", "content"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -124,7 +141,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "settings_slideshow_interval_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "slideshow", "interval", "tv", "duration", "seconds"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -140,7 +157,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "settings_ken_burns_on",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "ken burns", "pan", "zoom", "animation", "tv"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -155,7 +172,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "ss_screensaver_transition_style_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "transition", "style", "crossfade", "slide", "tv"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -171,7 +188,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "settings_display_media_title",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "title", "tv", "show", "media title", "display"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -196,7 +213,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "settings_dream_max_parental_rating_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "parental", "rating", "mature", "adult", "kids", "family", "filter"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -214,7 +231,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "settings_dream_dim_after_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "dim", "fade", "dark", "night", "delay", "timer", "tv"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -232,7 +249,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "settings_dream_dim_percent_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "dim", "brightness", "dark", "opacity", "percent", "tv"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -253,7 +270,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "settings_idle_ambient_enabled_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("idle", "ambient", "ready to play", "screensaver", "desktop", "standby"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -270,7 +287,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "settings_idle_ambient_timeout_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("idle", "ambient", "timeout", "minutes", "screensaver", "desktop", "standby"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_AMBIENT_SETTINGS,
         ),
     )
 
@@ -287,7 +304,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "ss_discord_presence_enabled_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("discord", "rich presence", "rpc", "activity", "watching", "listening", "status", "syncplay", "join"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_INTEGRATIONS,
             platformRule = PreferencePlatformRule.DESKTOP_ONLY,
         ),
     )
@@ -305,7 +322,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "ss_hooks_enabled_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("hooks", "command", "script", "automation", "shell", "mpv", "event", "run"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_INTEGRATIONS,
             platformRule = PreferencePlatformRule.DESKTOP_ONLY,
         ),
     )
@@ -323,7 +340,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "ss_hooks_play_cmd_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("hooks", "on_play_started", "play", "start", "command", "script"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_INTEGRATIONS,
             platformRule = PreferencePlatformRule.DESKTOP_ONLY,
         ),
     )
@@ -336,7 +353,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "ss_hooks_stop_cmd_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("hooks", "on_play_stopped", "stop", "quit", "command", "script"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_INTEGRATIONS,
             platformRule = PreferencePlatformRule.DESKTOP_ONLY,
         ),
     )
@@ -349,7 +366,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "ss_hooks_ended_cmd_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("hooks", "on_media_ended", "end", "finished", "eof", "command", "script"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_INTEGRATIONS,
             platformRule = PreferencePlatformRule.DESKTOP_ONLY,
         ),
     )
@@ -362,7 +379,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "ss_hooks_idle_cmd_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("hooks", "on_idle_enter", "idle", "standby", "command", "script"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_INTEGRATIONS,
             platformRule = PreferencePlatformRule.DESKTOP_ONLY,
         ),
     )
@@ -375,7 +392,7 @@ object ScreensaverPreferenceSpecs {
             subtitleKey = "ss_hooks_idle_ended_cmd_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("hooks", "on_idle_exit", "idle", "wake", "resume", "command", "script"),
-            routeKind = ROUTE_SETTINGS,
+            routeKind = ROUTE_INTEGRATIONS,
             platformRule = PreferencePlatformRule.DESKTOP_ONLY,
         ),
     )

@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import org.jetbrains.compose.resources.StringResource
 
 /**
  * One screen group of settings rows: the declaration-list identity a
@@ -43,12 +45,96 @@ internal class SettingsSearchItemGroup(
      * `when` arms / inline capability checks this replaces).
      */
     val admissions: Map<String, RowAdmission> = emptyMap(),
+    /**
+     * The group-card search face (ADR-0017's group-grain rule): the title the
+     * group's rendered card carries on its hosting screen, turning the card
+     * itself into ONE searchable item — today declared only on the
+     * advancedOnly groups (the "hidden" labeled cards the power-user gate
+     * hides whole). Null on every group that renders no labeled card face.
+     * The [cardItem] derivation makes the search hit land on the group's
+     * first member row (expand + scroll + glow through the existing
+     * row-id highlight path); the faces reuse the screen-emission strings —
+     * no catalog twin keys.
+     */
+    val cardTitleRes: StringResource? = null,
+    /**
+     * The card hit's subtitle resource — the hosting screen's title, so the
+     * two same-labeled "Fine-tuning" cards disambiguate in the hit list.
+     * Required beside [cardTitleRes] (the search item's subtitle slot is
+     * non-nullable) and, like it, reuses an existing screen string.
+     */
+    val cardSubtitleRes: StringResource? = null,
+    /** Fuzzy-match keywords for the card hit — required (the catalog ratchet). */
+    val cardKeywords: List<String> = emptyList(),
 ) {
     /** The declared ids, in catalog order — the derivation source for scroll lists. */
     val itemIds: List<String> = items.map { it.id }
 
     /** [itemIds] as a set — the derivation source for expand checks. */
     val itemIdSet: Set<String> = itemIds.toSet()
+
+    /**
+     * The group's card search hit, derived once at group init — null on
+     * every group without a [cardTitleRes]. GROUP-grain: the id IS the
+     * group's id (never a row id — the collision leg below dies loudly), it
+     * enters no [itemIds]/admissions (the screens' scroll, expand and count
+     * derivations stay row-id-shaped), and the hit lands on the group's
+     * FIRST member row id baked into its route — zero new landing machinery.
+     * The group derives honestly or dies at init, in
+     * [SettingsSearchBinding] culture.
+     */
+    val cardItem: SettingsSearchItem? = deriveCardItem()
+
+    private fun deriveCardItem(): SettingsSearchItem? {
+        if (cardTitleRes == null) {
+            require(cardSubtitleRes == null && cardKeywords.isEmpty()) {
+                "settings group \"$id\" declares card faces without a card title"
+            }
+            return null
+        }
+        require(cardSubtitleRes != null) {
+            "settings group \"$id\" declares a card title without a card subtitle"
+        }
+        require(cardKeywords.isNotEmpty()) {
+            "settings group \"$id\" declares a card face without keywords (the catalog ratchet requires them)"
+        }
+        require(items.isNotEmpty()) {
+            "settings group \"$id\" declares a card face with no member rows"
+        }
+        require(id !in itemIdSet) {
+            "settings group \"$id\" declares a card face whose card id collides with a member row id"
+        }
+        val routeClasses = items.map { it.route::class }.toSet()
+        require(routeClasses.size == 1) {
+            "settings group \"$id\" declares a card face whose member rows do not share one " +
+                "hosting route: " + items.map { "${it.id}→${it.route::class.simpleName}" }
+        }
+        val platforms = items.map { it.platforms }.toSet()
+        require(platforms.size == 1) {
+            "settings group \"$id\" declares a card face whose member rows disagree on platforms"
+        }
+        val categories = items.map { it.categoryRes }.toSet()
+        require(categories.size == 1) {
+            "settings group \"$id\" declares a card face whose member rows disagree on category"
+        }
+        val first = items.first()
+        // Faces from the members' shared facts (category/platform/icon/route
+        // class), isAdvanced from the declared slot shape: card faces are
+        // declared ONLY on advancedOnly groups — the advancedOnly flag the
+        // hosting screen's asScreenGroup slot carries — so the hit always
+        // auto-arms the power-user gate, exactly like its member rows' hits.
+        return SettingsSearchItem(
+            id = id,
+            titleRes = cardTitleRes,
+            subtitleRes = cardSubtitleRes,
+            categoryRes = first.categoryRes,
+            keywords = cardKeywords,
+            route = first.route.withHighlightSettingId(first.id),
+            icon = first.icon,
+            isAdvanced = true,
+            platforms = first.platforms,
+        )
+    }
 
     /** The declared admission of one row id — null where no gate is declared. */
     fun admissionOf(id: String): RowAdmission? = admissions[id]
@@ -68,6 +154,17 @@ internal fun List<SettingsSearchItem>.asSearchGroup(
     id: String,
     admissions: Map<String, RowAdmission> = emptyMap(),
 ): SettingsSearchItemGroup = SettingsSearchItemGroup(id, this, admissions)
+
+/**
+ * The landing row id a catalog id deep-links to: a group-card search item's
+ * id lands on its group's FIRST member row id (the [SettingsSearchItemGroup.cardItem]
+ * route's baked highlight — the expand + scroll + glow path is the existing
+ * row-id machinery), every row id lands on itself. Null when the id is no
+ * card id — the callers fold with identity.
+ */
+internal fun groupCardLandingRowId(itemId: String): String? =
+    SettingsScreenGroups.all.firstOrNull { group -> group.cardItem?.id == itemId }
+        ?.itemIds?.firstOrNull()
 
 /**
  * The aggregation decoration: every domain's declaration becomes the named
@@ -100,68 +197,90 @@ internal object SettingsScreenGroups {
 
     /**
      * the desktop idle "Ready to play" ambient screen rows — their own
-     * screen group (rendered by a capability-gated block beside the TV dream
-     * group, so neither group's row totals entangle).
+     * screen group, hosted on the Ambient screen beside the TV dream group
+     * (ADR-0017), so neither group's row totals entangle.
      */
     val systemIdleAmbient = SystemIdleAmbientGroup
 
     /**
      * the desktop Discord Rich Presence toggle (feature 4.2) — its own
-     * capability-gated group beside the idle-ambient one, same shape.
+     * capability-gated group, hosted on the Integrations screen (ADR-0017).
      */
     val systemDiscordPresence = SystemDiscordPresenceGroup
 
     /**
      * the desktop playback-event shell-hook rows (feature 4.3) — the master
-     * toggle plus the five mpv-shim-named commands, one group.
+     * toggle plus the five mpv-shim-named commands, one group, hosted on the
+     * Integrations screen (ADR-0017).
      */
     val systemHooks = SystemHooksGroup
 
     /**
      * the JellyPlay companion-plugin settings-sync rows — the
-     * opt-in toggle + sync-now action, one capability-gated on-screen group
-     * (emitted only where the plugin's capabilities probe reports AVAILABLE).
+     * opt-in toggle + sync-now action, hosted on the plugin's sync screen
+     * ([Route.JellyPlaySync]).
      */
     val jellyplaySync = JellyPlaySyncGroup
 
     /**
-     * the JellyPlay companion-plugin per-feature switches ("Server plugin")
-     * — one toggle row per user-facing capability, emitted only
-     * where the probe exposes it (the whole group hides when the plugin is
-     * UNAVAILABLE/UNKNOWN; `transcodes` additionally only for admins).
+     * the JellyPlay companion-plugin per-feature switches — one toggle row
+     * per user-facing capability, hosted on the plugin screen
+     * ([Route.JellyPlayPluginSettings], ADR-0017: the root's inline plugin
+     * section became one entrance + this screen). The whole group hides when
+     * the plugin is UNAVAILABLE/UNKNOWN; `transcodes` additionally only for
+     * admins.
      */
     val jellyplayFeatures = JellyPlayFeaturesGroup
 
-    // ── HomeSettingsScreen ─────────────────────────────────────────────
-    /**
-     * The home config hub's four screen groups — the home display rows, the
-     * Next Up behavior rows, the `appearance.homeLayout` drill-in group, and
-     * the "Library & Cards" card-display quartet. Ids are stable, so persisted
-     * deep-links/recents keep resolving.
-     */
-    val homeDisplay = HomeDisplayGroup
+    // ── The home domain (ADR-0017's hub + three leaves) ────────────────
+    // The former `home.display` group's id retired with the split (the
+    // phase-2/3 pattern): its mainstream remainder derives as
+    // `home.displayMain`, its tuning subset as the hub's advanced-gated
+    // `home.tuning` (the glossary's declared hub exception, the appearance
+    // newsletter precedent), and its hidden/restore trio as the new
+    // `home.curation`. `home.nextUp`/`home.layout`/`home.cards` moved whole
+    // (the cards group gaining its card-chrome siblings from the display
+    // remainder).
+
+    /** The hub screen's one group: the three composite entrance rows. */
+    val homeHub = HomeHubGroup
+    /** Derives from [HomeTuningRows]: the eight tuning rows — the hub's advanced-gated Fine-tuning group. */
+    val homeTuning = HomeTuningGroup
+    /** Derives from [HomeDisplayMainRows]: the mainstream presentation rows — the Home display leaf. */
+    val homeDisplayMain = HomeDisplayMainGroup
     val homeNextUp = HomeNextUpGroup
     val homeLayout = HomeLayoutGroup
+    /** Derives from [HomeCurationRows]: the rows-style toggle + the hidden/exclusion restore trio — a Rows & layout leaf group. */
+    val homeCuration = HomeCurationGroup
+    /** Derives from [HomeCardsRows]: the badge/spoiler/trickplay toggles + the card-chrome trio — the Cards & badges leaf. */
     val homeCards = HomeCardsGroup
 
-    // ── AppearanceSettingsScreen ────────────────────────────────────────
+    // ── The appearance domain (ADR-0017's hub + four leaves) ────────────
     // The appearance domain converted to the fused rows
-    // (AppearanceSettingsRows.kt): the six groups derive items AND
-    // admissions from the row lists in one act ([List.asRowGroup]) — the
-    // per-domain admissions maps collapse as each domain converts (see
-    // [AppearanceThemeGroup]).
+    // (AppearanceSettingsRows.kt): the hub's entrance group, the
+    // former "Library & Cards" group's split (library views + detail
+    // screen), and the theme/performance/eye-care/navigation/newsletter
+    // groups all derive items AND admissions from the row lists in one act
+    // ([List.asRowGroup]). The hub keeps the advanced-gated newsletter group
+    // on the hub screen — the glossary's declared hub exception.
 
-    /** Derives from [AppearanceThemeRows]: 17 spec-backed rows + 2 residuals. */
+    /** The hub screen's one group: the four composite entrance rows. */
+    val appearanceHub = AppearanceHubGroup
+    /** Derives from [AppearanceThemeRows]: 17 spec-backed rows + 2 residuals — the Theme & display leaf's main group. */
     val appearanceTheme = AppearanceThemeGroup
-    /** Derives from [AppearanceNavigationRows]: spec-less residual rows + the spec-backed global-chrome seven. */
+    /** Derives from [AppearanceNavigationRows]: spec-less residual rows + the spec-backed global-chrome seven — the Navigation & haptics leaf. */
     val appearanceNavigation = AppearanceNavigationGroup
-    /** Derives from [AppearanceLibraryRows]: 3 spec-backed rows + 5 residuals, every row [RowAdmission.Always]. */
-    val appearanceLibrary = AppearanceLibraryGroup
-    /** Derives from [AppearancePerformanceRows]: both rows ride the advanced toggle. */
+    /** Derives from [AppearanceLibraryViewsRows]: the library/card browsing rows — the Library views leaf. */
+    val appearanceLibraryViews = AppearanceLibraryViewsGroup
+    /** Derives from [AppearanceDetailRows]: the detail behavior/display rows — the Detail screen leaf's visible group. */
+    val appearanceDetail = AppearanceDetailGroup
+    /** Derives from [AppearanceDetailTuningRows]: the density/limit tuning rows — the Detail leaf's advanced trailing group. */
+    val appearanceDetailTuning = AppearanceDetailTuningGroup
+    /** Derives from [AppearancePerformanceRows]: the Reduce Motion row rides the advanced toggle — a Theme & display leaf group. */
     val appearancePerformance = AppearancePerformanceGroup
-    /** Derives from [AppearanceEyeCareRows]: both rows ride the advanced toggle. */
+    /** Derives from [AppearanceEyeCareRows]: both rows ride the advanced toggle — a Theme & display leaf group. */
     val appearanceEyeCare = AppearanceEyeCareGroup
-    /** Derives from [AppearanceNewsletterRows]: three advanced residual rows. */
+    /** Derives from [AppearanceNewsletterRows]: three advanced residual rows — rendered on the HUB (the declared hub exception). */
     val appearanceNewsletter = AppearanceNewsletterGroup
 
     // ── PerformanceSettingsScreen (the Performance hub) ────────────────
@@ -185,8 +304,24 @@ internal object SettingsScreenGroups {
     /** Derives from [PlaybackBufferRows]: the ExoPlayer buffer quartet (playback-domain specs), advanced-gated. */
     val playbackBuffers = PlaybackBufferGroup
 
-    // ── PlaybackSettingsScreen ──────────────────────────────────────────
-    val playbackPlayer = PlaybackPlayerGroup
+    // ── The playback domain (ADR-0017's hub + eight leaves) ─────────────
+    // The hub's entrance group, then the former `playback.player` group's
+    // three leaves, then the domain groups that moved whole onto their leaf
+    // screens (advanced video, engines, segments) or the SyncPlay/casting
+    // pair's shared leaf.
+
+    /** The hub screen's one group: the eight composite entrance rows. */
+    val playbackHub = PlaybackHubGroup
+
+    /** Derives from [PlaybackBasicsRows]: the mainstream playback-behavior leaf. */
+    val playbackBasics = PlaybackBasicsGroup
+
+    /** Derives from [PlaybackControlsRows]: the orientation/gesture/input leaf. */
+    val playbackControls = PlaybackControlsGroup
+
+    /** Derives from [PlaybackPlayerChromeRows]: the advanced video_* customization cluster. */
+    val playbackPlayerChrome = PlaybackPlayerChromeGroup
+
     val playbackAdvancedVideo = PlaybackAdvancedVideoGroup
 
     /**
@@ -217,6 +352,8 @@ internal object SettingsScreenGroups {
 
     // ── AudioSettingsScreen ─────────────────────────────────────────────
     val audio = AudioGroup
+    /** Derives from [AudioFineTuningRows]: the gain/buffer fine-tuning — the audio screen's advanced trailing group. */
+    val audioFineTuning = AudioFineTuningGroup
 
     /**
      * The nested audio-cache group — the whole group only exists where
@@ -251,6 +388,8 @@ internal object SettingsScreenGroups {
     // ── StorageSettingsScreen ───────────────────────────────────────────
     val storageCache = StorageCacheGroup
     val storageNetwork = StorageNetworkGroup
+    /** Derives from [StorageNetworkTuningRows]: the diagnostics fine-tuning — the storage screen's advanced trailing group. */
+    val storageNetworkTuning = StorageNetworkTuningGroup
     val storageDownloads = StorageDownloadsGroup
 
     val security = SecurityGroup
@@ -274,13 +413,19 @@ internal object SettingsScreenGroups {
         systemHooks,
         jellyplaySync,
         jellyplayFeatures,
-        homeDisplay,
+        homeHub,
+        homeTuning,
+        homeDisplayMain,
         homeNextUp,
         homeLayout,
+        homeCuration,
         homeCards,
+        appearanceHub,
         appearanceTheme,
         appearanceNavigation,
-        appearanceLibrary,
+        appearanceLibraryViews,
+        appearanceDetail,
+        appearanceDetailTuning,
         appearancePerformance,
         appearanceEyeCare,
         appearanceNewsletter,
@@ -289,7 +434,10 @@ internal object SettingsScreenGroups {
         performanceImages,
         performanceAmbient,
         playbackBuffers,
-        playbackPlayer,
+        playbackHub,
+        playbackBasics,
+        playbackControls,
+        playbackPlayerChrome,
         playbackAdvancedVideo,
         playbackEngine,
         playbackSyncPlay,
@@ -298,12 +446,14 @@ internal object SettingsScreenGroups {
         playbackMediaSegments,
         audio,
         audioCache,
+        audioFineTuning,
         languageGeneral,
         languageTrackSelection,
         languageSubtitles,
         notifications,
         storageCache,
         storageNetwork,
+        storageNetworkTuning,
         storageDownloads,
         security,
         backup,
@@ -329,28 +479,4 @@ internal object SettingsScreenGroups {
 
     /** Prefix shared by every shell-hook id in the system declaration. */
     internal const val HOOKS_ID_PREFIX = "hooks_"
-
-    /**
-     * The root settings screen's ON-SCREEN reveal groups: every group whose
-     * rows are search-reveal targets (catalog `route == Route.Settings`, the
-     * NoOp arm of `settingsResultClickAction`) — the row is revealed by the
-     * pending highlight alone, so the group MUST auto-expand for it. Each
-     * member's rendering site derives its `SettingsGroup` expansion from
-     * `lastClickedSettingId in <group>.itemIdSet` (the four system groups in
-     * SettingsSections.kt, the plugin section in
-     * JellyPlayPluginSettingsSection.kt). The destructive account actions
-     * (`logout`, `sign_out_from_server`) route bare-Settings too but resolve
-     * to confirm dialogs before the reveal arm, so their group correctly
-     * stays manual. Pinned by `SettingsCatalogScreenContractTest`'s
-     * reveal-coverage tests: a new `Route.Settings` row landing in a group
-     * outside this declaration (or a group here whose ids stop routing
-     * bare-Settings) fails the build.
-     */
-    val rootRevealGroups: List<SettingsSearchItemGroup> = listOf(
-        systemScreensaver,
-        systemIdleAmbient,
-        systemDiscordPresence,
-        systemHooks,
-        jellyplayFeatures,
-    )
 }

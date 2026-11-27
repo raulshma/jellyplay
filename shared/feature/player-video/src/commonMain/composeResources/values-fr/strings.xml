@@ -345,6 +345,8 @@
     <string name="player_video_quality_description">Les modifications s appliquent immediatement pour les flux adaptatifs. Pour la lecture directe, cela definit le debit binaire maximal de lecture.</string>
     <string name="player_video_quality_source">Source : %1$dx%2$d</string>
     <string name="player_video_quality_original_uncapped">Original (sans limite de debit)</string>
+    <string name="player_video_quality_manual_cap_caveat">Le plafond de bande passante manuel (%1$s Mbit/s) s\'applique toujours à toutes les qualités.</string>
+    <string name="player_video_quality_data_saver_caveat">L\'économie de données limite la lecture automatique à 1,5 Mbit/s.</string>
     <string name="player_video_adaptive_bitrate_cap">Plafond de debit adaptatif</string>
     <string name="player_video_adaptive_bitrate_on">Limite la qualite sur les reseaux limites</string>
     <string name="player_video_adaptive_bitrate_off">Desactive - qualite maximale (lecture directe)</string>
@@ -467,4 +469,31 @@
     <string name="player_video_stats_buffer_back_keyframes">Limité aux images clés</string>
     <string name="player_video_playback_options_level_line">Niveau : %1$s</string>
     <string name="player_video_playback_options_level_caption">Réglage des effets pour toute l’application — tous les réglages dans Paramètres → Performances.</string>
+
+    <!-- Progressive Loading HUD (étapes de démarrage, télémétrie de tampon, alertes de chargement lent). -->
+    <string name="player_video_load_stage_preparing">Préparation du flux…</string>
+    <string name="player_video_load_stage_fetching_metadata">Chargement des détails du média…</string>
+    <string name="player_video_load_stage_resolving_stream">Résolution du flux…</string>
+    <string name="player_video_load_stage_resolving_stream_slow">Résolution du flux (le serveur analyse le média)…</string>
+    <string name="player_video_load_stage_initializing_engine">Initialisation de %1$s…</string>
+    <string name="player_video_load_stage_priming_buffer">Mise en mémoire tampon du démarrage de la lecture…</string>
+    <string name="player_video_load_stage_failed">Échec de la lecture : %1$s</string>
+    <string name="player_video_load_stage_connecting">Connexion…</string>
+    <string name="player_video_load_buffer_progress">Tampon : %1$ss / %2$ss (%3$s)</string>
+    <string name="player_video_load_warning_transcoding">Le serveur prépare le flux transcodé…</string>
+    <string name="player_video_load_warning_slow_connection">Connexion lente au serveur détectée…</string>
+    <string name="player_video_load_warning_slow_server">Le serveur répond lentement…</string>
+
+    <!-- Bannière de récupération (remédiation de lecture lente) et pastille de diagnostic de mise en mémoire tampon. -->
+    <string name="player_video_stall_network_starvation">Saturation du réseau</string>
+    <string name="player_video_stall_transcode_lag">Retard de transcodage</string>
+    <string name="player_video_stall_decoder_bottleneck">Goulot d’étranglement du décodeur</string>
+    <string name="player_video_pill_stream">Flux : %1$s</string>
+    <string name="player_video_pill_transcode">Transcodage : %1$sx</string>
+    <string name="player_video_pill_estimate">≈ %1$s (est.)</string>
+    <string name="player_video_recovery_keep_waiting">Continuer d’attendre</string>
+    <string name="player_video_recovery_switch_quality">Passer en %1$dp</string>
+    <string name="player_video_recovery_switch_engine">Passer à %1$s</string>
+    <string name="player_video_recovery_switch_engine_generic">Changer de moteur</string>
+    <string name="player_video_recovery_boost_buffer">Augmenter le tampon (30 s)</string>
 </resources>

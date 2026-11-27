@@ -53,10 +53,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_start_early
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_stop_on_time
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_stop_late
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_quality_auto
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_quality_high
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_quality_medium
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_quality_low
 
 /** The `playback.mediaSegments` group: the skip-on-seek toggle plus the per-type behavior rows. */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -84,7 +80,7 @@ internal fun PlaybackMediaSegmentsGroup(
                     // its deep-link highlight. The hand prefix/id checks this
                     // replaces drifted the moment a residual row joined the
                     // declaration (skip_prompt_duration never expanded).
-                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackMediaSegments.itemIdSet,
+                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.playbackMediaSegments.itemIdSet,
                 ) {
                     val skipOnSeekOn = stringResource(Res.string.settings_skip_segments_on_seek_on)
                     val skipOnSeekOff = stringResource(Res.string.settings_skip_segments_on_seek_off)
@@ -390,7 +386,7 @@ internal fun PlaybackDvrGroup(
                     title = stringResource(Res.string.settings_live_tv_dvr),
                     summary = { stringResource(Res.string.settings_dvr_padding_summary, preferences.dvrPrePaddingMinutes, preferences.dvrPostPaddingMinutes) },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackDvr.itemIdSet,
+                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.playbackDvr.itemIdSet,
                 ) {
                     SettingsItemList(total = SettingsScreenGroups.playbackDvr.items.size) {
                     val noneLabel = stringResource(Res.string.settings_none)
@@ -441,17 +437,18 @@ internal fun PlaybackDvrGroup(
                     )
 
                     val dvrRecordingQualityTitle = rowTitle(PlaybackRows.DvrRecordingQuality)
-                    val dvrQualityDescs = mapOf(
-                        "AUTO" to stringResource(Res.string.settings_dvr_quality_auto),
-                        "HIGH" to stringResource(Res.string.settings_dvr_quality_high),
-                        "MEDIUM" to stringResource(Res.string.settings_dvr_quality_medium),
-                        "LOW" to stringResource(Res.string.settings_dvr_quality_low),
-                    )
+                    // The picker's faces resolve outside its plain (non-composable)
+                    // lambda; they derive from the ONE shared recording-quality
+                    // mapping ([dvrRecordingQualityLabelRes]) the hub's DVR
+                    // entrance summary reads too.
+                    val dvrQualityDescs = listOf("AUTO", "HIGH", "MEDIUM", "LOW")
+                        .mapNotNull { quality -> dvrRecordingQualityLabelRes(quality)?.let { quality to stringResource(it) } }
+                        .toMap()
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.DvrRecordingQuality),
                         title = dvrRecordingQualityTitle,
                         subtitle = rowSubtitle(PlaybackRows.DvrRecordingQuality),
-                        trailingText = preferences.dvrRecordingQuality,
+                        trailingText = dvrQualityDescs[preferences.dvrRecordingQuality] ?: preferences.dvrRecordingQuality,
                         highlighted = highlightSettingId == PlaybackRows.DvrRecordingQuality.id,
                         onClick = {
                             val options = listOf("AUTO", "HIGH", "MEDIUM", "LOW")

@@ -151,4 +151,12 @@
     <string name="downloads_armed_series_subtitle">何もダウンロードされていなくても、自動ダウンロードはこれらのシリーズの新しいエピソードを引き続き監視します。</string>
     <string name="downloads_armed_series_mode_follow_global">グローバル設定に従う</string>
     <string name="downloads_armed_series_unarm">自動ダウンロードを停止</string>
+    <string name="downloads_arm_series_title">シリーズを追加</string>
+    <string name="downloads_arm_series_subtitle">今すぐダウンロードせずに、新しいエピソードを自動ダウンロードするシリーズを追加します。新しいエピソードは自動ダウンロード設定に従います。</string>
+    <string name="downloads_arm_series_query_label">シリーズを検索</string>
+    <string name="downloads_arm_series_empty">シリーズが見つかりません</string>
+    <string name="downloads_arm_series_search_error">検索に失敗しました。接続を確認してもう一度お試しください。</string>
+    <string name="downloads_arm_series_action">追加</string>
+    <string name="downloads_arm_series_armed">シリーズを自動ダウンロードの対象にしました。新しいエピソードは自動ダウンロード設定に従います。</string>
+    <string name="downloads_armed_series_rearm">自動ダウンロードを再開</string>
 </resources>

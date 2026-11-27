@@ -39,6 +39,7 @@ class AdaptiveBitrateSelector(
             StreamingQuality.HD_720P -> AudioBitrateTier.MEDIUM
             StreamingQuality.FHD_1080P -> AudioBitrateTier.HIGH
             StreamingQuality.UHD_4K -> AudioBitrateTier.LOSSLESS
+            StreamingQuality.ORIGINAL -> AudioBitrateTier.LOSSLESS
         }.coerceAtMost(maxAllowed)
     }
 }

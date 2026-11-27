@@ -92,6 +92,14 @@
     <string name="settings_home_screen_layout">Layout schermata Home</string>
     <string name="settings_home_sections_visible">%1$d di %2$d sezioni visibili</string>
     <string name="settings_home_title">Schermata Home</string>
+    <string name="settings_home_entry_display">Schermata Home</string>
+    <string name="settings_home_entry_display_subtitle">Hero, orologio, dock e presentazione della schermata principale</string>
+    <string name="settings_home_entry_rows">Righe e layout</string>
+    <string name="settings_home_entry_rows_subtitle">Prossimo, layout delle sezioni ed elementi nascosti</string>
+    <string name="settings_home_entry_cards">Card e badge</string>
+    <string name="settings_home_entry_cards_subtitle">Badge, valutazioni, spoiler e stile delle card</string>
+    <string name="settings_home_tuning">Regolazioni fini</string>
+    <string name="settings_home_curation">Nascosti e ripristino</string>
     <string name="settings_home_cards">Card</string>
     <string name="settings_home_display">Visualizzazione Home</string>
     <string name="settings_continue_next_up">Continua a guardare e Prossimo</string>

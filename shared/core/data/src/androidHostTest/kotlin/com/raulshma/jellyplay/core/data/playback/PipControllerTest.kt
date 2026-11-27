@@ -131,6 +131,32 @@ class PipControllerTest {
     }
 
     @Test
+    fun `pip session ids each dock session exactly once`() {
+        // MainActivity's onStop records this id while the window is docked so
+        // a later docked shell resume can tell "backgrounded during THIS
+        // session" from a newer session's entry reveal (AppLockReturn
+        // .isGenuineShellReturn). The id must move on every entry and only on
+        // every entry: the OEM-repeated entry callbacks re-publish true (no
+        // bump), exits and reset() do not hand out ids.
+        val pip = AndroidPipController()
+
+        assertEquals(0, pip.pipSession)
+
+        pip.setPipMode(true)
+        val first = pip.pipSession
+        assertEquals(1, first)
+
+        pip.setPipMode(true) // repeated OEM entry callback: no bump
+        assertEquals(first, pip.pipSession)
+
+        pip.setPipMode(false)
+        assertEquals(first, pip.pipSession)
+
+        pip.setPipMode(true) // a NEW dock session
+        assertEquals(first + 1, pip.pipSession)
+    }
+
+    @Test
     fun `reset clears every piece of state including the transport`() {
         val pip = AndroidPipController()
         val dispatched = mutableListOf<PipAction>()

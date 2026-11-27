@@ -209,6 +209,7 @@
     <string name="detail_error_download_failed">下载失败</string>
     <string name="detail_error_not_a_series">这不是剧集</string>
     <string name="detail_error_queue_failed">加入下载队列失败</string>
+    <string name="detail_error_arm_failed">无法启用该剧集</string>
     <string name="detail_error_unavailable_offline">此项目离线不可用。</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
@@ -513,4 +514,8 @@
     <string name="detail_option_stop_notify_new_episodes">停止通知新剧集</string>
     <string name="detail_msg_series_notifications_on">新剧集通知已开启</string>
     <string name="detail_msg_series_notifications_off">新剧集通知已关闭</string>
+    <string name="detail_download_series_arm">自动下载</string>
+    <string name="detail_download_series_arm_hint">在不下载剧集的情况下将其加入自动下载。新剧集将跟随自动下载设置。</string>
+    <string name="detail_download_series_arm_action">添加</string>
+    <string name="detail_download_series_armed">剧集已加入自动下载，新剧集将跟随自动下载设置。</string>
 </resources>

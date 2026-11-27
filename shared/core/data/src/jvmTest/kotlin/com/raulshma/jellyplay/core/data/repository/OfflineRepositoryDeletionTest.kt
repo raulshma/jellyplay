@@ -3,9 +3,11 @@ package com.raulshma.jellyplay.core.data.repository
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
+import com.raulshma.jellyplay.core.database.entity.AutoDownloadSuggestionEntity
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
+import com.raulshma.jellyplay.core.database.entity.SeriesDownloadPolicyEntity
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import io.mockk.mockk
@@ -36,7 +38,11 @@ import kotlin.test.assertTrue
  *  - the deleted leaf's media file and per-item artifacts are gone;
  *  - the one per-scope divergence: series-scoped artwork
  *    (`${seriesId}_poster/backdrop.jpg` beside the episodes) is removed by the
- *    SERIES scope only — item/season deletes keep it for the surviving rows.
+ *    SERIES scope only — item/season deletes keep it for the surviving rows;
+ *  - the ADR-0015 un-arm rule: every scope runs the zero-rows clear on the
+ *    policy store's single member — the arm row and its pending Ask prompts
+ *    die at zero remaining download rows, and not before (an item/season
+ *    remove that leaves the series rows keeps the arm).
  */
 class OfflineRepositoryDeletionTest {
 
@@ -63,9 +69,34 @@ class OfflineRepositoryDeletionTest {
             database.downloadDao(),
             database,
             timeSource = SystemTimeSource(),
-            downloadPolicyDao = mockk(relaxed = true),
+            policyStore = lazy { realPolicyStore() },
         )
     }
+
+    /**
+     * The store edge exactly as Koin wires it (the single
+     * `SeriesDownloadPolicyStore` binding resolves DownloadRepositoryImpl): a
+     * real impl over the SAME database this test's repository writes, so the
+     * un-arm reads/writes land in the test's tables. The never-consulted seams
+     * stay relaxed mocks (the DownloadRepositoryImplPolicyTest idiom).
+     */
+    private fun realPolicyStore(): SeriesDownloadPolicyStore =
+        DownloadRepositoryImpl(
+            downloadDao = database.downloadDao(),
+            offlineMediaDao = database.offlineMediaDao(),
+            playbackStateDao = database.playbackStateDao(),
+            syncBaselineDao = database.syncBaselineDao(),
+            database = database,
+            mediaRepository = MediaRepositoryAccess { mockk(relaxed = true) },
+            episodeCatalogue = mockk(relaxed = true),
+            imageUrlProvider = mockk(relaxed = true),
+            downloadsStore = mockk(relaxed = true),
+            storagePolicy = mockk(relaxed = true),
+            downloadEnqueuer = mockk(relaxed = true),
+            timeSource = SystemTimeSource(),
+            writer = mockk(relaxed = true),
+            downloadDelegate = mockk(relaxed = true),
+        )
 
     @AfterTest
     fun teardown() {
@@ -328,5 +359,102 @@ class OfflineRepositoryDeletionTest {
     @Test
     fun `deleteOfflineSeries removes series-scoped artwork`() = runTest {
         runSeriesArtworkScenario(Scope.SERIES)
+    }
+
+    // ── ADR-0015: the delete scopes' zero-rows un-arm rule ───────────────────
+    // Every scope routes through the policy store's clearSeriesArmIfNoDownloads:
+    // the arm row (an implicit FOLLOW_GLOBAL arm here) and its pending Ask
+    // prompts die when the series reaches zero download rows, and only then.
+
+    /** Seeds the series' arm row plus one pending Ask prompt against it. */
+    private suspend fun seedArm(seriesId: String, promptEpisodeId: String) {
+        database.downloadPolicyDao().upsertPolicy(
+            SeriesDownloadPolicyEntity(seriesId = seriesId, mode = "FOLLOW_GLOBAL"),
+        )
+        database.downloadPolicyDao().upsertSuggestions(
+            listOf(
+                AutoDownloadSuggestionEntity(
+                    episodeId = promptEpisodeId,
+                    seriesId = seriesId,
+                    seriesName = "Series",
+                    seasonId = "season-prompt",
+                    seasonName = "Season 1",
+                    seasonNumber = 1,
+                    episodeNumber = 1,
+                    name = "Prompt episode",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `deleteOfflineSeries clears the arm and its pending prompts`() = runTest {
+        val dir = newFolder("arm-series")
+        seedRow(metadata("series-1", "SERIES"))
+        seedRow(metadata("season-1", "SEASON", seriesId = "series-1"))
+        seedRow(metadata("ep-1", "EPISODE", seriesId = "series-1", seasonId = "season-1"))
+        database.downloadDao().insertDownload(
+            downloadRow("ep-1", dir, seriesId = "series-1", seasonId = "season-1"),
+        )
+        seedArm("series-1", promptEpisodeId = "ep-prompt-1")
+
+        repository.deleteOfflineSeries("series-1")
+
+        // The removal empties the series, so the zero-rows clear is trivially
+        // true: arm row gone, its pending Ask prompt gone with it.
+        assertNull(database.downloadPolicyDao().getPolicyBySeriesId("series-1"))
+        assertTrue(database.downloadPolicyDao().getPendingSuggestionsByIds(listOf("ep-prompt-1")).isEmpty())
+    }
+
+    @Test
+    fun `deleteOfflineItem un-arms its series only at zero rows`() = runTest {
+        val dir1 = newFolder("arm-item-1")
+        val dir2 = newFolder("arm-item-2")
+        seedRow(metadata("series-1", "SERIES"))
+        seedRow(metadata("ep-1", "EPISODE", seriesId = "series-1"))
+        seedRow(metadata("ep-2", "EPISODE", seriesId = "series-1"))
+        database.downloadDao().insertDownload(downloadRow("ep-1", dir1, seriesId = "series-1"))
+        database.downloadDao().insertDownload(downloadRow("ep-2", dir2, seriesId = "series-1"))
+        seedArm("series-1", promptEpisodeId = "ep-prompt-1")
+
+        repository.deleteOfflineItem("ep-1")
+
+        // Rows remain → the series stays armed, prompt alive.
+        assertNotNull(database.downloadPolicyDao().getPolicyBySeriesId("series-1"))
+
+        repository.deleteOfflineItem("ep-2")
+
+        // Zero rows → the arm row and its pending Ask prompt are gone.
+        assertNull(database.downloadPolicyDao().getPolicyBySeriesId("series-1"))
+        assertTrue(database.downloadPolicyDao().getPendingSuggestionsByIds(listOf("ep-prompt-1")).isEmpty())
+    }
+
+    @Test
+    fun `deleteOfflineSeason un-arms its series only at zero rows`() = runTest {
+        val dir1 = newFolder("arm-season-1")
+        val dir2 = newFolder("arm-season-2")
+        seedRow(metadata("series-1", "SERIES"))
+        seedRow(metadata("season-1", "SEASON", seriesId = "series-1"))
+        seedRow(metadata("season-2", "SEASON", seriesId = "series-1"))
+        seedRow(metadata("ep-1", "EPISODE", seriesId = "series-1", seasonId = "season-1"))
+        seedRow(metadata("ep-2", "EPISODE", seriesId = "series-1", seasonId = "season-2"))
+        database.downloadDao().insertDownload(
+            downloadRow("ep-1", dir1, seriesId = "series-1", seasonId = "season-1"),
+        )
+        database.downloadDao().insertDownload(
+            downloadRow("ep-2", dir2, seriesId = "series-1", seasonId = "season-2"),
+        )
+        seedArm("series-1", promptEpisodeId = "ep-prompt-1")
+
+        repository.deleteOfflineSeason("season-1")
+
+        // The other season still has rows → the series stays armed.
+        assertNotNull(database.downloadPolicyDao().getPolicyBySeriesId("series-1"))
+
+        repository.deleteOfflineSeason("season-2")
+
+        // Zero rows → the arm row and its pending Ask prompt are gone.
+        assertNull(database.downloadPolicyDao().getPolicyBySeriesId("series-1"))
+        assertTrue(database.downloadPolicyDao().getPendingSuggestionsByIds(listOf("ep-prompt-1")).isEmpty())
     }
 }

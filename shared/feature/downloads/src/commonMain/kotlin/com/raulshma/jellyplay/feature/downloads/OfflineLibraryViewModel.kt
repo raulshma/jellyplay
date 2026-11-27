@@ -34,6 +34,9 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_so
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_recent
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_size
 
+/** Typing-settle window shared by the library query debounce and the arm picker's search delay. */
+internal const val SEARCH_DEBOUNCE_MS = 180L
+
 /** How the downloaded library is sorted. */
 enum class OfflineLibrarySort(val labelRes: StringResource) {
     RECENT(Res.string.downloads_sort_recent),
@@ -100,7 +103,7 @@ class OfflineLibraryViewModel(
     val offlineLibrary: StateFlow<List<OfflineMediaItem>> =
         combine(
             rawLibrary,
-            _query.debounce(180),
+            _query.debounce(SEARCH_DEBOUNCE_MS),
             combine(_sort, _filter) { s, f -> s to f },
         ) { items, query, (sort, filter) ->
             _isLoading.value = false

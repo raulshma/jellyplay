@@ -5,12 +5,23 @@
     <!-- care and the newsletter groups. -->
     <string name="settings_newsletter_cd">简报</string>
     <string name="settings_appearance_title">外观</string>
+    <string name="settings_appearance_sections">外观分区</string>
+    <string name="settings_appearance_entry_theme">主题 &amp; 显示</string>
+    <string name="settings_appearance_entry_theme_subtitle">颜色、字体、媒体库视图模式、无障碍与护眼</string>
+    <string name="settings_appearance_entry_library_views">媒体库视图</string>
+    <string name="settings_appearance_entry_library_views_subtitle">徽标、剧集列表与浏览显示</string>
+    <string name="settings_appearance_entry_detail">详情页</string>
+    <string name="settings_appearance_entry_detail_subtitle">演职员栏、标签、分区与上限</string>
+    <string name="settings_appearance_detail_tuning">密度与上限</string>
+    <string name="settings_appearance_entry_navigation">导航 &amp; 触感反馈</string>
+    <string name="settings_appearance_entry_navigation_subtitle">底部栏、密度与反馈</string>
     <string name="settings_theme">主题</string>
     <string name="settings_artwork_dynamic">艺术图动态</string>
     <string name="settings_theme_mode">主题模式</string>
     <string name="settings_theme_follow_system">跟随系统设置</string>
     <string name="settings_theme_always_light">始终浅色</string>
     <string name="settings_theme_always_dark">始终深色</string>
+    <string name="settings_theme_scheduled_label">定时</string>
     <string name="settings_theme_scheduled">自动日/夜 (%1$d:00\u2013%2$d:00)</string>
     <string name="settings_dynamic_theming">动态主题</string>
     <string name="settings_dynamic_theming_subtitle">从艺术图中提取颜色</string>
@@ -23,6 +34,7 @@
     <string name="settings_oled_token">OLED</string>
     <string name="settings_performance_token">性能</string>
     <string name="settings_contrast_suffix">%1$s 对比度</string>
+    <string name="settings_accent_suffix">%1$s 强调色</string>
     <string name="settings_library_view_mode">媒体库视图模式</string>
     <string name="settings_layout_mode">布局</string>
     <string name="settings_layout_mode_subtitle">选择自动、手机或平板布局</string>

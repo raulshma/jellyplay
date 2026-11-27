@@ -30,9 +30,9 @@
     <string name="settings_perf_group_buffers">Playback Buffers</string>
     <!-- Cross-reference rows (the engine-lane knobs the hub links to instead of duplicating). -->
     <string name="settings_perf_crossref_profile_title">Device Profile &amp; Re-detect</string>
-    <string name="settings_perf_crossref_profile_subtitle">The detected device tier and its Re-detect action live in Playback → Advanced Video</string>
+    <string name="settings_perf_crossref_profile_subtitle">The detected device tier and its Re-detect action live in Playback → Video &amp; transcoding</string>
     <string name="settings_perf_crossref_back_buffer_title">Back-Buffer Duration</string>
-    <string name="settings_perf_crossref_back_buffer_subtitle">The engine-domain back-buffer row lives in Playback → Engine Config (ExoPlayer)</string>
+    <string name="settings_perf_crossref_back_buffer_subtitle">The engine-domain back-buffer row lives in Playback → Player engines (ExoPlayer)</string>
     <!-- The appearance screen's quick picker row: the deep-link into the hub. -->
     <string name="settings_perf_customize">Customize…</string>
     <string name="settings_perf_customize_subtitle">All granular performance rows live in the Performance hub</string>

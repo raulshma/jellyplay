@@ -30,13 +30,16 @@ class ModelSerializationTest {
     @Test
     fun `streaming quality enum values`() {
         val qualities = StreamingQuality.entries
-        assertEquals(6, qualities.size)
+        assertEquals(7, qualities.size)
         assertEquals(StreamingQuality.AUTO, qualities[0])
         assertEquals(StreamingQuality.LOW_360P, qualities[1])
         assertEquals(StreamingQuality.SD_480P, qualities[2])
         assertEquals(StreamingQuality.HD_720P, qualities[3])
         assertEquals(StreamingQuality.FHD_1080P, qualities[4])
         assertEquals(StreamingQuality.UHD_4K, qualities[5])
+        // ORIGINAL is appended LAST so the existing ordinals never shift.
+        assertEquals(StreamingQuality.ORIGINAL, qualities[6])
+        assertEquals(null, StreamingQuality.ORIGINAL.maxHeight)
     }
 
     @Test

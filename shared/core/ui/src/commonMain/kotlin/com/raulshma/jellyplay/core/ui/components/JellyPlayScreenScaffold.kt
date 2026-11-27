@@ -241,6 +241,16 @@ private fun ScreenTitle(text: String, isCollapsing: Boolean = false) {
     )
 }
 
+/**
+ * The translucent circle behind white icon chrome that floats over arbitrary
+ * artwork (hero back buttons, overflow menus, pager arrows). Deliberately a
+ * constant DARK color in every theme: a `surface`-based scrim turns white in
+ * light themes and erases the icon exactly when there is no artwork behind it
+ * (gh-228). Paired with white icon tints; theme-owned `onSurface` chrome
+ * (solid-background screens) must not use it.
+ */
+val ArtworkIconScrim: Color = Color.Black.copy(alpha = 0.3f)
+
 @Composable
 fun CircleBgBackButton(
     onClick: () -> Unit,
@@ -254,14 +264,13 @@ fun CircleBgBackButton(
 
     val resolvedIconColor = iconColor
         ?: lerp(Color.White, MaterialTheme.colorScheme.onSurface, scrollCollapsed)
-    // The translucent scrim only helps a white icon over arbitrary artwork. When a caller passes
+    // The scrim only helps a white icon over arbitrary artwork. When a caller passes
     // an explicit iconColor (e.g. a solid-background screen) they own contrast, so drop the scrim.
-    val bgAlpha = when {
-        iconColor != null -> 0f
-        scrollCollapsed < 0.5f -> 0.3f
-        else -> 0f
+    val bgColor = when {
+        iconColor != null -> Color.Transparent
+        scrollCollapsed < 0.5f -> ArtworkIconScrim
+        else -> Color.Transparent
     }
-    val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = bgAlpha)
 
     IconButton(
         onClick = onClick,

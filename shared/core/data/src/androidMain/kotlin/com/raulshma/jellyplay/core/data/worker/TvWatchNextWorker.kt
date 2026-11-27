@@ -48,7 +48,11 @@ class TvWatchNextWorker(
         return publisher.publish().fold(
             onSuccess = { Result.success() },
             onFailure = {
-                if (runAttemptCount < MAX_RETRIES) Result.retry() else Result.failure()
+                if (WorkerRetryVerdict.of(runAttemptCount, MAX_RETRIES).shouldRetry) {
+                    Result.retry()
+                } else {
+                    Result.failure()
+                }
             },
         )
     }

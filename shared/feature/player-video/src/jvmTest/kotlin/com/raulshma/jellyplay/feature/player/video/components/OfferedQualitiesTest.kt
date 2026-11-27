@@ -7,41 +7,40 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the quality-tier offer rule (the F-Droid review's 4K-on-1080p report):
- * transcoding never upscales, so a tier above the source does not render as a
- * resolution tier. One exception keeps playback options complete: 4K resolves
- * to *no* bitrate cap, so below-4K sources keep it as "Original (uncapped)"
- * ([offersOriginalUncapped]) and metered playback never loses the one-tap
- * uncapped choice. Quality classes are width-conventional though, so the cap
- * is judged against the 16:9 height the source's width implies too — a scope
- * master (1920x800) still counts as 1080p. Unknown source dimensions keep
- * every tier; AUTO always stays.
+ * transcoding never upscales, so a resolution tier above the source does not
+ * render as one. [StreamingQuality.ORIGINAL] is exempt by construction — it is
+ * the bitrate/direct-quality choice with no height (`maxHeight == null`), so
+ * it is always offered and metered playback never loses the one-tap uncapped
+ * choice. Quality classes are width-conventional though, so the cap is judged
+ * against the 16:9 height the source's width implies too — a scope master
+ * (1920x800) still counts as 1080p. Unknown source dimensions keep every
+ * tier; AUTO always stays.
  */
 class OfferedQualitiesTest {
 
     @Test
-    fun unknownDimensionsShowPlainTiers() {
-        assertTrue(!offersOriginalUncapped(null, null))
-    }
-
-    @Test
-    fun below4kSourcePresentsOriginalUncapped() {
-        assertTrue(offersOriginalUncapped(null, 1080))
-        assertTrue(offersOriginalUncapped(1920, 800))
-        assertTrue(offersOriginalUncapped(1920, null))
-        assertTrue(offersOriginalUncapped(null, 360))
-    }
-
-    @Test
-    fun sourceAt4kShowsPlainTier() {
-        assertTrue(!offersOriginalUncapped(null, 2160))
-        assertTrue(!offersOriginalUncapped(3840, 1600))
-        assertTrue(!offersOriginalUncapped(null, 3000))
-    }
-
-
-    @Test
     fun unknownSourceOffersEveryTier() {
         assertEquals(StreamingQuality.entries, offeredQualities(null, null))
+    }
+
+    @Test
+    fun originalIsAlwaysOffered() {
+        val sources = listOf(
+            null to null,
+            null to 144,
+            null to 360,
+            null to 720,
+            null to 900,
+            null to 1080,
+            1920 to 800,
+            null to 2160,
+        )
+        for ((width, height) in sources) {
+            assertTrue(
+                StreamingQuality.ORIGINAL in offeredQualities(width, height),
+                "ORIGINAL must stay offered for ${width}x$height",
+            )
+        }
     }
 
     @Test
@@ -54,9 +53,11 @@ class OfferedQualitiesTest {
                 StreamingQuality.SD_480P,
                 StreamingQuality.HD_720P,
                 StreamingQuality.FHD_1080P,
+                StreamingQuality.ORIGINAL,
             ),
             offered,
         )
+        assertTrue(StreamingQuality.UHD_4K !in offered)
     }
 
     @Test
@@ -72,6 +73,7 @@ class OfferedQualitiesTest {
                 StreamingQuality.LOW_360P,
                 StreamingQuality.SD_480P,
                 StreamingQuality.HD_720P,
+                StreamingQuality.ORIGINAL,
             ),
             offeredQualities(null, 720),
         )
@@ -80,7 +82,7 @@ class OfferedQualitiesTest {
     @Test
     fun source360pKeepsOnlyAutoAnd360() {
         assertEquals(
-            listOf(StreamingQuality.AUTO, StreamingQuality.LOW_360P),
+            listOf(StreamingQuality.AUTO, StreamingQuality.LOW_360P, StreamingQuality.ORIGINAL),
             offeredQualities(null, 360),
         )
     }
@@ -91,11 +93,15 @@ class OfferedQualitiesTest {
         assertTrue(StreamingQuality.HD_720P in offered)
         assertTrue(StreamingQuality.FHD_1080P !in offered)
         assertTrue(StreamingQuality.UHD_4K !in offered)
+        assertTrue(StreamingQuality.ORIGINAL in offered)
     }
 
     @Test
-    fun autoAlwaysOfferedEvenForTinySources() {
-        assertEquals(listOf(StreamingQuality.AUTO), offeredQualities(null, 144))
+    fun autoAndOriginalAlwaysOfferedEvenForTinySources() {
+        assertEquals(
+            listOf(StreamingQuality.AUTO, StreamingQuality.ORIGINAL),
+            offeredQualities(null, 144),
+        )
     }
 
     /** The review follow-up: "1080p" = 1920 across, so a scope master keeps the tier. */
@@ -111,6 +117,7 @@ class OfferedQualitiesTest {
                 StreamingQuality.SD_480P,
                 StreamingQuality.HD_720P,
                 StreamingQuality.FHD_1080P,
+                StreamingQuality.ORIGINAL,
             ),
             offered,
         )
@@ -127,6 +134,7 @@ class OfferedQualitiesTest {
         assertTrue(StreamingQuality.HD_720P in offered)
         assertTrue(StreamingQuality.FHD_1080P !in offered)
         assertTrue(StreamingQuality.UHD_4K !in offered)
+        assertTrue(StreamingQuality.ORIGINAL in offered)
     }
 
     /** A 4:3 frame is judged by its coded height — 1440-wide implies only 810. */
@@ -135,6 +143,7 @@ class OfferedQualitiesTest {
         val offered = offeredQualities(1440, 1080)
         assertTrue(StreamingQuality.FHD_1080P in offered)
         assertTrue(StreamingQuality.UHD_4K !in offered)
+        assertTrue(StreamingQuality.ORIGINAL in offered)
     }
 
     @Test
@@ -142,6 +151,7 @@ class OfferedQualitiesTest {
         val offered = offeredQualities(1920, null)
         assertTrue(StreamingQuality.FHD_1080P in offered)
         assertTrue(StreamingQuality.UHD_4K !in offered)
+        assertTrue(StreamingQuality.ORIGINAL in offered)
     }
 
     @Test
@@ -149,5 +159,6 @@ class OfferedQualitiesTest {
         val offered = offeredQualities(null, 800)
         assertTrue(StreamingQuality.HD_720P in offered)
         assertTrue(StreamingQuality.FHD_1080P !in offered)
+        assertTrue(StreamingQuality.ORIGINAL in offered)
     }
 }

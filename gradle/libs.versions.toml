@@ -1,11 +1,27 @@
 [versions]
-agp = "9.5.1"
+agp = "9.5.3"
 kotlin = "2.4.21"
-ksp = "2.3.13"
+ksp = "2.3.14"
 kover = "0.9.11"
 # Gradle official test-retry plugin — CI-only flake absorption (root build gate).
 test-retry = "1.6.6"
+# 2026.11.01 exists (compose 1.13.0 + material3 1.5.0 stable, Nov 18 2026) but
+# pins the compose 1.13 line — mixed into a graph whose JB CMP side still sits
+# on 1.12.x it is exactly the AbstractMethodError class of break the
+# composeMultiplatformMaterial3 note warns about. This BOM and the CMP train
+# move TOGETHER when CMP 1.13 goes stable (currently 1.13.0-rc01).
 composeBom = "2026.09.00"
+# 1.5.0-rc01/stable are on the compose 1.13 pairing (BOM 2026.11.01); beta02
+# stays the newest 1.5-line artifact on the current compose 1.12.1 BOM.
+# ALIGNMENT RULE: KmpLibraryComposePlugin constrains every graph that contains
+# androidx.compose.material3:material3 to THIS version, so shared-module
+# compile classpaths resolve the same material3 the app ships (the JB CMP
+# redirect otherwise pins its own older androidx material3 — the
+# compile-vs-runtime drift behind the user-detail tab-switch NoSuchMethodError
+# crash). Bumping composeMaterial3 therefore moves every shared module's
+# compile graph: expect API-removal compile breaks (not silent crashes) here
+# first. Cross-train API divergences compile through core:ui's
+# *Seam expect/actuals (ExposedDropdownMenuSeam, ToggleButtonColorsSeam).
 composeMaterial3 = "1.5.0-beta02"
 composeMaterial3Adaptive = "1.3.0"
 # material3-adaptive-navigation-suite lives in the androidx.compose.material3
@@ -28,13 +44,13 @@ composeMultiplatformMaterial3 = "1.12.0-alpha03"
 # Koin: shared-module DI. Hand-written DSL modules — koin-annotations
 # deferred until its KSP line settles.
 koin = "4.2.2"
-navigation3 = "1.2.0"
+navigation3 = "1.2.2"
 # JetBrains fork of navigation3-ui: google's -ui artifact ships Android plus
 # jvm/linux STUBS only (runtime throws "Implemented only in JetBrains fork");
 # the fork holds the real desktop NavDisplay. Runtime stays on the google
 # artifact — the fork's POM depends on it too, so only -ui needs swapping.
 jbNavigation3Ui = "1.2.0"
-lifecycleViewmodelNav3 = "2.11.0"
+lifecycleViewmodelNav3 = "2.11.1"
 # HELD at 1.8.12: the 1.9.x line is a BREAKING release — built on the Jellyfin
 # 12.0 API and drops every older server (10.11 included). Bumping means
 # requiring Jellyfin Server 12+ from all users; that is a product decision for
@@ -71,13 +87,13 @@ androidxSqlite = "2.7.1"
 paging = "3.5.3"
 pagingCompose = "3.5.3"
 workManager = "2.12.0"
-kotlinxSerialization = "1.12.0"
+kotlinxSerialization = "1.13.0"
 kotlinxCoroutines = "1.11.0"
 # kotlinx.collections.immutable — the persistent collections behind the
 # @Immutable state bags' list fields (skippability without unstable List
-# params). 0.4.0 is the line the Compose runtime already resolves into the
+# params). Same artifact family the Compose runtime already resolves into the
 # graph transitively, so no new artifact family enters.
-kotlinxCollectionsImmutable = "0.4.0"
+kotlinxCollectionsImmutable = "0.5.2"
 # kotlinx-datetime 0.8.0 is the newest release line and is ABI-safe for this
 # repo's Kotlin pin: its Gradle module metadata, fetched 2026-08-27, declares
 # kotlin-stdlib 2.1.20 on the metadataApiElements variant — i.e. the klibs were
@@ -87,45 +103,45 @@ kotlinxCollectionsImmutable = "0.4.0"
 # kotlinx-serialization-core stays older than the repo-wide serialization pin —
 # no new serialization version enters the graph.
 kotlinxDatetime = "0.8.0"
-palette = "1.0.0"
+palette = "1.1.0"
 coreKtx = "1.19.1"
 collection = "1.7.0"
 activityCompose = "1.13.0"
 coreSplashScreen = "1.2.0"
-lifecycle = "2.11.0"
+lifecycle = "2.11.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
-mockk = "1.14.11"
+mockk = "1.14.12"
 # org.json for the jvmShared websocket-event path (android resolves the same
 # classes from android.jar). The 2026 line carries two years of parser fixes;
 # both consumers get it via this ref.
 orgJson = "20260814"
 coroutinesTest = "1.11.0"
-# HELD at 4.16.1: 4.17's AndroidInterceptors fd shadowing breaks on this
-# build's JDK 21 daemon — "Failed to interact with raw FileDescriptor
-# internals" (IllegalAccessException deep-reflecting java.io.FileDescriptor)
-# across the core:data / core:ui androidHostTest lanes (Robolectric bug,
-# reprobed 2026-11-02). Revisit when a 4.17.x patch fixes the interceptor.
-robolectric = "4.16.1"
+# 4.16.1 was held over 4.17's AndroidInterceptors fd-shadowing break ("Failed
+# to interact with raw FileDescriptor internals" on the JDK 21 daemon). The
+# hold was re-probed 2026-11-26 at 4.18.1: the androidHostTest lanes pass, so
+# the interceptor issue is gone on the 4.18 line.
+robolectric = "4.18.1"
 androidxTestCore = "1.7.0"
-uiautomator = "2.4.0"
+uiautomator = "2.4.1"
 playServicesCast = "23.0.0"
-mediarouter = "1.9.0-rc01"
+mediarouter = "1.9.0"
 slf4j = "2.0.20"
-libmpv = "0.1.12"
+libmpv = "0.2.2"
 # JNA for the desktop libmpv binding (MpvDesktopEngine)
 jna = "5.19.1"
 # libvlc pinned to the 3.x line — the 4.x entries on Maven are EAP builds.
-libvlc = "3.7.7"
+libvlc = "3.7.8"
 assMedia = "0.5.1"
 truetypeParser = "2.1.4"
 okhttp = "5.5.1"
 tvMaterial = "1.1.0"
 tvprovider = "1.1.0"
 tablerIcons = "2.2.1"
-biometric = "1.4.0-alpha07"
-# androidx.biometric: still pre-release-only beyond 1.1.0; 1.4.0-alpha07 is latest.
+biometric = "1.4.0-rc01"
+# androidx.biometric: 1.4.0-rc01 is the latest release (1.1.0 remains the last
+# stable line).
 # androidx.security:security-crypto graduated to 1.1.0 stable (2025).
 # Used only by SeerrSecureCredentialsStore (AES256-GCM + AES256-SIV via Keystore-backed MasterKey).
 security = "1.1.0"
@@ -152,10 +168,10 @@ aboutLibraries = "15.3.0"
 leakcanary = "2.14"
 # UnifiedPush android connector — the client half of the jellyplay plugin:
 # registers against the user's chosen UnifiedPush distributor app
-# (e.g. ntfy) and delivers NEW_ENDPOINT/MESSAGE/UNREGISTERED events. 3.3.5 is
-# the latest stable (2026-08-22). Android-only: the connector ships no
+# (e.g. ntfy) and delivers NEW_ENDPOINT/MESSAGE/UNREGISTERED events. 3.3.6 is
+# the latest stable. Android-only: the connector ships no
 # JVM/desktop artifacts, so only core:data's androidMain consumes it.
-unifiedpush = "3.3.5"
+unifiedpush = "3.3.6"
 
 [libraries]
 # AndroidX Core
@@ -337,7 +353,7 @@ okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-i
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
 # Test-only: HandshakeCertificates/HeldCertificate for the self-signed-trust
 # TLS integration tests (mockwebserver 5.x does not pull okhttp-tls in
-# transitively). Same version.ref as the OkHttp 5.4 pin.
+# transitively). Same version.ref as the OkHttp pin.
 okhttp-tls = { group = "com.squareup.okhttp3", name = "okhttp-tls", version.ref = "okhttp" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 

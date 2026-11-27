@@ -70,6 +70,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_qual
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_720p_hd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_1080p
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_1080p_full_hd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_original
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_original_uncapped
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_session_restore_ask
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_session_restore_auto
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_session_restore_off
@@ -109,6 +111,7 @@ internal fun streamingQualityLabelRes(quality: StreamingQuality): StringResource
     StreamingQuality.HD_720P -> Res.string.settings_quality_720p_hd
     StreamingQuality.FHD_1080P -> Res.string.settings_quality_1080p_full_hd
     StreamingQuality.UHD_4K -> Res.string.settings_quality_4k_ultra_hd
+    StreamingQuality.ORIGINAL -> Res.string.settings_quality_original_uncapped
 }
 
 internal fun streamingQualityShortRes(quality: StreamingQuality): StringResource = when (quality) {
@@ -118,6 +121,7 @@ internal fun streamingQualityShortRes(quality: StreamingQuality): StringResource
     StreamingQuality.HD_720P -> Res.string.settings_quality_720p
     StreamingQuality.FHD_1080P -> Res.string.settings_quality_1080p
     StreamingQuality.UHD_4K -> Res.string.settings_quality_4k
+    StreamingQuality.ORIGINAL -> Res.string.settings_quality_original
 }
 
 internal fun liveStreamOptionLabelRes(option: LiveStreamOption): StringResource = when (option) {

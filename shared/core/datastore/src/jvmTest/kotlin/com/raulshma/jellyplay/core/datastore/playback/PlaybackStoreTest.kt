@@ -367,4 +367,22 @@ class PlaybackStoreTest {
 
         assertEquals(slice, settledSlice())
     }
+
+    @Test
+    fun `restore(slice) round-trips the ORIGINAL streaming quality by name`() = runTest {
+        store.restore(
+            PlaybackSlice(
+                streamingQuality = StreamingQuality.ORIGINAL,
+                cellularStreamingQuality = StreamingQuality.ORIGINAL,
+            ),
+        )
+
+        val slice = settledSlice()
+        assertEquals(StreamingQuality.ORIGINAL, slice.streamingQuality)
+        assertEquals(StreamingQuality.ORIGINAL, slice.cellularStreamingQuality)
+        assertEquals(
+            StreamingQuality.ORIGINAL.name,
+            dataStore.data.first()[stringPreferencesKey("streaming_quality")],
+        )
+    }
 }

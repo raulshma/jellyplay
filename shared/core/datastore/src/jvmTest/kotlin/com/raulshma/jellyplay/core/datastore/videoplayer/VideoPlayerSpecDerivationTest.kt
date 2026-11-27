@@ -106,6 +106,7 @@ class VideoPlayerSpecDerivationTest {
         "video_overlay_animations" to Boolean::class,
         "video_resume_chip_ms" to Long::class,
         "video_show_prev_next_buttons" to Boolean::class,
+        "video_playback_diagnostics" to Boolean::class,
         "video_swipe_sensitivity" to String::class,
         "video_gesture_overlay_linger_ms" to Long::class,
         "video_center_double_tap_action" to String::class,
@@ -294,6 +295,7 @@ class VideoPlayerSpecDerivationTest {
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_OVERLAY_ANIMATIONS.default, slice.videoOverlayAnimations)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.default, slice.videoResumeChipMs)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.default, slice.videoShowPrevNextButtons)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_PLAYBACK_DIAGNOSTICS.default, slice.videoPlaybackDiagnostics)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.default, slice.videoSwipeSensitivity)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.default, slice.videoGestureOverlayLingerMs)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_CENTER_DOUBLE_TAP_ACTION.default, slice.videoCenterDoubleTapAction)
@@ -328,7 +330,7 @@ class VideoPlayerSpecDerivationTest {
         // (the @Serializable Companion, Compose's $stable) don't count.
         val instanceFields = VideoPlayerSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(86, instanceFields)
+        assertEquals(87, instanceFields)
     }
 
     @Test

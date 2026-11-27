@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.subtitle.tester.preview.PlaybackRequestFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Koin-owned (androidSubtitleTesterModule in this module's androidMain — the
@@ -66,7 +68,7 @@ class SubtitleTesterViewModel(
 
     init {
         // Seed working copies from current prefs once, then load the preview engine.
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.Main.immediate) {
             subtitleLanguageStore.subtitle.collect { prefs ->
                 if (!seeded) {
                     seeded = true
@@ -137,7 +139,7 @@ class SubtitleTesterViewModel(
      * leave a dead PlayerView showing nothing.
      */
     private fun relaunchEngine() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.Main.immediate) {
             releaseEngine()
             ensureEngineLoaded()
         }
@@ -161,25 +163,28 @@ class SubtitleTesterViewModel(
 
     private suspend fun ensureEngineLoaded() {
         val state = _uiState.value
-        val newEngine = engineFactory.create(state.previewEngine)
-        engine = newEngine
         val preset = SampleSubtitlePresets.byId(state.samplePresetId)
         val useAssTrack = state.activeWorkingStyle.assOverride == AssOverrideMode.FORCE
         val request = playbackRequestFactory.forPreview(preset, useAssTrack)
-        newEngine.load(request)
-        _activeEngine.value = newEngine
-        // The host clip is short (a few seconds); loop it so subtitle cues keep
-        // rendering instead of freezing on ENDED. See [loopJob] comment.
-        loopJob = viewModelScope.launch {
-            newEngine.playbackState
-                .filter { it == EnginePlaybackState.ENDED }
-                .collect {
-                    newEngine.seekTo(0)
-                    newEngine.play()
-                }
+
+        withContext(Dispatchers.Main.immediate) {
+            val newEngine = engineFactory.create(state.previewEngine)
+            engine = newEngine
+            newEngine.load(request)
+            _activeEngine.value = newEngine
+            // The host clip is short (a few seconds); loop it so subtitle cues keep
+            // rendering instead of freezing on ENDED. See [loopJob] comment.
+            loopJob = viewModelScope.launch(Dispatchers.Main.immediate) {
+                newEngine.playbackState
+                    .filter { it == EnginePlaybackState.ENDED }
+                    .collect {
+                        newEngine.seekTo(0)
+                        newEngine.play()
+                    }
+            }
+            pushConfigToEngine()
+            _uiState.update { it.copy(isApplying = false) }
         }
-        pushConfigToEngine()
-        _uiState.update { it.copy(isApplying = false) }
     }
 
     private fun pushConfigToEngine() {
@@ -205,8 +210,15 @@ class SubtitleTesterViewModel(
         loopJob?.cancel()
         loopJob = null
         _activeEngine.value = null
-        engine?.release()
+        val eng = engine
         engine = null
+        if (eng != null) {
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                eng.release()
+            } else {
+                android.os.Handler(android.os.Looper.getMainLooper()).post { eng.release() }
+            }
+        }
     }
 
     override fun onCleared() {

@@ -341,6 +341,9 @@ internal object PlaybackModeSheetModule : PlayerSheetModule {
         // The master LEVEL mirror (the Performance section's read-only Level
         // line) — sheet-local like the verdicts above.
         val performanceLevel by scope.viewModel.performanceLevel.collectAsStateWithLifecycle()
+        // The quality picker's active-cap caveats (manual cap / Data Saver) —
+        // sheet-local like the verdicts above.
+        val networkOffline by sheets.networkOffline.collectAsStateWithLifecycle()
         val uiState = scope.uiState
         PlaybackModeSheet(
             currentMode = uiState.uiPrefs.playbackMode,
@@ -374,7 +377,9 @@ internal object PlaybackModeSheetModule : PlayerSheetModule {
             // "Profile" chips above (issue #186's device-tier system).
             performanceLevel = performanceLevel,
             sourceWidth = uiState.media.sourceVideoWidth,
-sourceHeight = uiState.media.sourceVideoHeight,
+            sourceHeight = uiState.media.sourceVideoHeight,
+            manualBandwidthCap = networkOffline.manualBandwidthCap,
+            dataSaverEnabled = networkOffline.dataSaverEnabled,
         )
     }
 }

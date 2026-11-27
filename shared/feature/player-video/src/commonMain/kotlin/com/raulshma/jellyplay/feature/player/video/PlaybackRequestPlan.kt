@@ -7,10 +7,12 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
 import com.raulshma.jellyplay.core.model.PlaybackTls
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
 
 /**
  * Pure plan for the engine load request — the decision half of
@@ -167,6 +169,9 @@ internal object PlaybackRequestPlan {
                 normalizationGain = inputs.detail.item.normalizationGain,
                 mimeType = inputs.mimeType,
                 tls = inputs.clientTls,
+                hasEmbeddedAssSubtitles = inputs.streams.any { stream ->
+                    stream.type == StreamType.SUBTITLE && AssSupport.isAssCodec(stream.codec)
+                },
             ),
         )
     }

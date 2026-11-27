@@ -75,11 +75,12 @@ class UserDataSyncWorker(
                 // still fires and will try again. Previously this returned
                 // Result.success() after MAX_RETRIES, hiding persistent
                 // failures from operators.
-                if (runAttemptCount < MAX_RETRIES) {
-                    Result.retry()
-                } else {
-                    Log.w(TAG, "UserDataSync exhausted $MAX_RETRIES retries", error)
-                    Result.failure()
+                when (WorkerRetryVerdict.of(runAttemptCount, MAX_RETRIES)) {
+                    WorkerRetryVerdict.Retry -> Result.retry()
+                    WorkerRetryVerdict.Exhausted -> {
+                        Log.w(TAG, "UserDataSync exhausted $MAX_RETRIES retries", error)
+                        Result.failure()
+                    }
                 }
             },
         )

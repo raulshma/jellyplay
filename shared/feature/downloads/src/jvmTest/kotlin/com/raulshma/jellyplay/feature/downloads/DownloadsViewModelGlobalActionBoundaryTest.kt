@@ -60,6 +60,10 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     private lateinit var seriesArt: SeriesArtReads
     private lateinit var syncManager: OfflineResync
     private lateinit var downloadsStore: DownloadsStore
+    /** The arm picker's series-search seam (forwarded to the policy holder; unused here). */
+    private lateinit var libraryFeed: com.raulshma.jellyplay.core.data.repository.LibraryFeed
+    /** The manual arm's schedule reconcile (forwarded to the policy holder; unused here). */
+    private lateinit var autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
     private lateinit var viewModel: DownloadsViewModel
 
     private lateinit var downloadsFlow: MutableStateFlow<List<DownloadItem>>
@@ -72,6 +76,8 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         offlineRepository = mockk(relaxed = true)
         seriesArt = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
+        autoDownloadScheduler = mockk(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         every { downloadRepository.getAllDownloads() } returns downloadsFlow
         every { downloadRepository.getActiveDownloadProgress() } returns MutableStateFlow(emptyMap())
@@ -81,7 +87,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         every { offlineRepository.getItemsWithUpdates() } returns MutableStateFlow(emptyList())
         downloadsStore = mockk(relaxed = true)
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake, libraryFeed, autoDownloadScheduler)
     }
 
     private fun item(

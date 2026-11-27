@@ -60,6 +60,5 @@ object SampleSubtitlePresets {
     val DEFAULT: SampleSubtitlePreset = dialogue
 
     fun byId(id: String): SampleSubtitlePreset =
-        ALL.firstOrNull { it.id == id }
-            ?: throw IllegalArgumentException("Unknown sample preset id: $id")
+        ALL.firstOrNull { it.id == id } ?: DEFAULT
 }

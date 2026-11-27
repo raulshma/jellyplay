@@ -62,13 +62,11 @@ internal data class SettingsScreenSection(
  * always-visible groups at and after `i` up by one — i.e. `i` minus the count
  * of hidden groups declared before it. The two shipped shapes are special
  * cases of that fold:
- *  - the contiguous-middle shape (PlaybackSettingsScreen: advanced groups at
- *    declared indices 1-3, always-visible groups trailing) — the hidden middle
- *    groups return `-1` and the trailing groups shift up by exactly those
- *    three slots;
- *  - the trailing shape (AppearanceSettingsScreen: expert groups at declared
- *    indices 3-5) — the hidden trailing groups return `-1` and nothing trails
- *    them, so the leading groups keep their indices.
+ *  - the trailing shape (ThemeSettingsScreen: the advanced-only expert
+ *    groups at declared indices 1-2) — the hidden trailing groups return
+ *    `-1` and nothing trails them, so the leading groups keep their indices;
+ *  - single-advanced-group screens (the playback domain's advanced-only
+ *    leaves) — the lone hidden group returns `-1` and nothing shifts.
  *
  * Pure (and internal) so `SettingsCatalogScreenContractTest` can pin both
  * shipped shapes against the same derivation the screens consume.

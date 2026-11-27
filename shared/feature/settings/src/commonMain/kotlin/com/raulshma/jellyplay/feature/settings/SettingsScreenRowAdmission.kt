@@ -221,22 +221,76 @@ internal fun playbackEngineScreenRowTotal(
     return rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith(idPrefix) } + 1
 }
 
-// ── AppearanceSettingsScreen ────────────────────────────────────────────
+// ── The home domain's leaves + hub (ADR-0017's home split) ──────────────
 
 /**
- * The appearance screen's "Library & Cards" group: the declared library rows
- * — every one gated [RowAdmission.Always] on its fused row (the shipped
- * always-on rows; several carry an advanced tag the screen never honored) —
- * plus the confirm-library-reset action row (a screen-local row with no
- * search entry — the explicit +1 term) and the detail section-order editor's
- * reorderable rows (screen-local rows below the declared
- * `detail_section_order` header — the [DETAIL_SECTION_ORDER_EDITOR_ROWS]
- * explicit term).
+ * The cards group's `SettingsItemList(total = …)` row count: the
+ * badge/spoiler/trickplay toggles plus the card-chrome trio.
+ * Every row is declared [RowAdmission.Always] except the TV-only trickplay
+ * pair ([RowAdmission.Tv]), so the strict derivation counts all rows on TV and
+ * all but the trickplay pair off it.
  */
-internal fun appearanceLibraryScreenRowTotal(): Int =
-    rowTotalFor(SettingsScreenGroups.appearanceLibrary, RowAdmissionFlags()) +
-        1 +
+internal fun homeCardsScreenRowTotal(isTv: Boolean): Int =
+    rowTotalFor(SettingsScreenGroups.homeCards, RowAdmissionFlags(isTv = isTv))
+
+/**
+ * The Home display leaf's group total: the declared mainstream rows — the
+ * slideshow-interval row only while its WhenOn parent (style = slideshow) is
+ * on (the screen feeds "style is slideshow" as that parent's on-state). Pure
+ * (and internal) so the contract test pins every term.
+ */
+internal fun homeDisplayMainScreenRowTotal(heroSlideshowOn: Boolean): Int =
+    rowTotalFor(
+        SettingsScreenGroups.homeDisplayMain,
+        RowAdmissionFlags(parentsOn = rowParentsOn(HomeRows.HomeHeroStyle.id to heroSlideshowOn)),
+    )
+
+/**
+ * The Rows & layout leaf's curation-group total: the declared curation rows
+ * plus the conditional unhide action row, which renders only while hidden
+ * continue-watching items exist — a content-state condition with no admission
+ * vocabulary ([HomeRows.UnhideCw] is declared [RowAdmission.ContentGated], so
+ * the strict derivation excludes it) — the screen adds the +1 explicitly.
+ */
+internal fun homeCurationScreenRowTotal(hiddenCwItems: Int): Int =
+    rowTotalFor(SettingsScreenGroups.homeCuration, RowAdmissionFlags()) +
+        if (hiddenCwItems > 0) 1 else 0
+
+/**
+ * The home hub's Fine-tuning group total: the whole declared tuning set — the
+ * group only composes behind the advanced toggle ([HomeSettingsScreenSlots]),
+ * so the screen feeds the advanced leg directly.
+ */
+internal fun homeTuningScreenRowTotal(): Int =
+    rowTotalFor(SettingsScreenGroups.homeTuning, RowAdmissionFlags(showAdvanced = true))
+
+// ── The appearance domain's leaves (ADR-0017's appearance split) ────────
+
+/**
+ * The Library views leaf's group: the declared library rows — every one gated
+ * [RowAdmission.Always] on its fused row (the shipped always-on rows; several
+ * carry an advanced tag the screen never honored) — plus the
+ * confirm-library-reset action row (a screen-local row with no search entry —
+ * the explicit +1 term).
+ */
+internal fun appearanceLibraryViewsScreenRowTotal(): Int =
+    rowTotalFor(SettingsScreenGroups.appearanceLibraryViews, RowAdmissionFlags()) + 1
+
+/**
+ * The Detail screen leaf's group: the declared detail_* rows (plus the
+ * filmography pair) — every one gated [RowAdmission.Always] — plus the
+ * section-order editor's reorderable rows (screen-local rows below the
+ * declared `detail_section_order` header — the
+ * [DETAIL_SECTION_ORDER_EDITOR_ROWS] explicit term).
+ */
+internal fun appearanceDetailScreenRowTotal(): Int =
+    rowTotalFor(SettingsScreenGroups.appearanceDetail, RowAdmissionFlags()) +
         DETAIL_SECTION_ORDER_EDITOR_ROWS
 
-/** The section-order editor's reorderable row count — ALWAYS rendered (the nav-customization precedent). */
-internal const val DETAIL_SECTION_ORDER_EDITOR_ROWS = 10
+/**
+ * The section-order editor's reorderable row count — ALWAYS rendered (the
+ * nav-customization precedent). Derived from the editor's own section
+ * declaration ([DETAIL_SECTION_ORDER_SECTIONS]) instead of a hand-counted
+ * literal, so the total cannot drift from the rendered rows.
+ */
+internal val DETAIL_SECTION_ORDER_EDITOR_ROWS: Int = DETAIL_SECTION_ORDER_SECTIONS.size

@@ -1019,6 +1019,9 @@ class MpvPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
+        // Per-request epoch first (see bumpLoadEpoch): the session watcher's
+        // stale-baseline drop reads it, so it must move before any state write.
+        bumpLoadEpoch()
         pauseRequested = false
         startWatchdogTicker()
         // Engine may have been release()d and is being reused — beginLoad
@@ -1269,6 +1272,17 @@ class MpvPlayerEngine(
     override fun setPlaybackSpeed(speed: Float) {
         requestedPlaybackSpeed = speed
         core.setPlaybackSpeed(speed)
+    }
+
+    /**
+     * Live demuxer retune: mpv has no min-buffer surface, so the boost maps
+     * `maxBufferMs` onto `demuxer-readahead-secs` (seconds) and lands it on
+     * the live handle through the absorbing binding write. Android never
+     * writes this property per request (see [configureMpvForRequest]), so the
+     * write is a pure raise from mpv's own default.
+     */
+    override fun setBufferConfiguration(minBufferMs: Int, maxBufferMs: Int) {
+        binding.setPropertyDouble(MpvProperties.DEMUXER_READAHEAD_SECS, maxBufferMs / 1000.0)
     }
 
     // The structured-config runtime diff cache lives on the shared

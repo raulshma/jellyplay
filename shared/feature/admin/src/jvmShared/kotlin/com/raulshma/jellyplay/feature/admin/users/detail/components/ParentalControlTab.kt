@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
+import com.raulshma.jellyplay.core.ui.components.jellyPlayExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -154,9 +156,16 @@ private fun MaxParentalRatingField(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(),
+                // Typed overload, not the deprecated no-arg menuAnchor(): the
+                // no-arg form compiled against the material3 this module
+                // resolves via the JB compose-multiplatform redirect
+                // (1.5.0-alpha22) but was removed by the 1.5.0-beta02 the app
+                // ships — NoSuchMethodError on Android at first composition,
+                // and the pager's prefetcher composes this page during every
+                // tab switch, so Access/Parental/Account all crashed.
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        jellyPlayExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(if (option.name == "No limit") stringResource(Res.string.admin_no_limit) else option.name) },

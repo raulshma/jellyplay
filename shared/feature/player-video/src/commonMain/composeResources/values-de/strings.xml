@@ -345,6 +345,8 @@
     <string name="player_video_quality_description">Aenderungen gelten sofort fuer adaptive Streams. Bei Direct Play wird die maximale Wiedergabe-Bitrate festgelegt.</string>
     <string name="player_video_quality_source">Quelle: %1$dx%2$d</string>
     <string name="player_video_quality_original_uncapped">Original (ohne Bitraten-Limit)</string>
+    <string name="player_video_quality_manual_cap_caveat">Die manuelle Bandbreiten-Obergrenze (%1$s Mbit/s) gilt weiterhin für jede Qualitätsstufe.</string>
+    <string name="player_video_quality_data_saver_caveat">Der Datensparmodus begrenzt die automatische Wiedergabe auf 1,5 Mbit/s.</string>
     <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate-Obergrenze</string>
     <string name="player_video_adaptive_bitrate_on">Begrenzt Qualitaet in getakteten Netzwerken</string>
     <string name="player_video_adaptive_bitrate_off">Aus - volle Qualitaet (Direct Play)</string>
@@ -466,4 +468,31 @@
     <string name="player_video_stats_buffer_back_keyframes">Keyframe-gebunden</string>
     <string name="player_video_playback_options_level_line">Stufe: %1$s</string>
     <string name="player_video_playback_options_level_caption">App-weite Effekt-Abstimmung — vollständige Einstellungen unter Einstellungen → Leistung.</string>
+
+    <!-- Progressive Loading HUD (Startphasen, Puffer-Telemetrie, Warnungen bei langsamem Laden). -->
+    <string name="player_video_load_stage_preparing">Stream wird vorbereitet …</string>
+    <string name="player_video_load_stage_fetching_metadata">Mediendetails werden geladen …</string>
+    <string name="player_video_load_stage_resolving_stream">Stream wird aufgelöst …</string>
+    <string name="player_video_load_stage_resolving_stream_slow">Stream wird aufgelöst (Server analysiert das Medium) …</string>
+    <string name="player_video_load_stage_initializing_engine">%1$s wird initialisiert …</string>
+    <string name="player_video_load_stage_priming_buffer">Erste Wiedergabe wird gepuffert …</string>
+    <string name="player_video_load_stage_failed">Wiedergabe fehlgeschlagen: %1$s</string>
+    <string name="player_video_load_stage_connecting">Verbindung wird hergestellt …</string>
+    <string name="player_video_load_buffer_progress">Pufferung: %1$ss / %2$ss (%3$s)</string>
+    <string name="player_video_load_warning_transcoding">Server bereitet transkodierten Stream vor …</string>
+    <string name="player_video_load_warning_slow_connection">Langsame Verbindung zum Server erkannt …</string>
+    <string name="player_video_load_warning_slow_server">Serververbindung reagiert langsam …</string>
+
+    <!-- Recovery-Banner (umsetzbare Empfehlungen bei langsamer Wiedergabe) und Diagnose-Pill bei Pufferung. -->
+    <string name="player_video_stall_network_starvation">Netzwerk-Engpass</string>
+    <string name="player_video_stall_transcode_lag">Transkodierungs-Verzögerung</string>
+    <string name="player_video_stall_decoder_bottleneck">Decoder-Engpass</string>
+    <string name="player_video_pill_stream">Stream: %1$s</string>
+    <string name="player_video_pill_transcode">Transkodierung: %1$sx</string>
+    <string name="player_video_pill_estimate">≈ %1$s (gesch.)</string>
+    <string name="player_video_recovery_keep_waiting">Weiter warten</string>
+    <string name="player_video_recovery_switch_quality">Zu %1$dp wechseln</string>
+    <string name="player_video_recovery_switch_engine">Zu %1$s wechseln</string>
+    <string name="player_video_recovery_switch_engine_generic">Engine wechseln</string>
+    <string name="player_video_recovery_boost_buffer">Puffer erhöhen (30s)</string>
 </resources>

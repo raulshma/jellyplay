@@ -28,13 +28,14 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import com.raulshma.jellyplay.core.ui.components.jellyPlayExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusGroupRestorer
@@ -541,10 +542,10 @@ private fun ImageBrowseSheet(
                         readOnly = true,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
                     )
-                    ExposedDropdownMenu(
+                    jellyPlayExposedDropdownMenu(
                         expanded = providerExpanded,
                         onDismissRequest = { providerExpanded = false },
                     ) {
@@ -775,11 +776,11 @@ private fun ImageTypeSelector(
             readOnly = true,
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             label = { Text(stringResource(Res.string.editor_images_image_type)) },
         )
-        ExposedDropdownMenu(
+        jellyPlayExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {

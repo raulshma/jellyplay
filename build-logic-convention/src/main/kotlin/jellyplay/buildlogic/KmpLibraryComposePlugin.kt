@@ -142,6 +142,53 @@ class KmpLibraryComposePlugin : Plugin<Project> {
                 .extensions.getByName("resources") as ResourcesExtension
             composeResources.packageOfResClass = jelly.resPackage.get()
         }
+
+        installMaterial3AlignmentConstraint(project, libs)
+    }
+
+    /**
+     * Drags the androidx material3 lineage in EVERY graph of this project
+     * onto the catalog's `composeMaterial3` pin, so compile, runtime, and
+     * test lanes all resolve the same version.
+     *
+     * WHY: shared modules reach material3 through the JB CMP distribution
+     * (`org.jetbrains.compose.material3`), whose android redirect carries ITS
+     * OWN androidx material3 version — currently 1.5.0-alpha22, older than
+     * the androidx material3 `:app` declares (catalog pin, highest-wins) and
+     * therefore what the APK actually ships. Gradle resolves per graph, so
+     * module compile classpaths sat on the alpha train while the app shipped
+     * beta: deprecated APIs removed in between compiled clean and crashed
+     * with NoSuchMethodError at runtime (the user-detail tab-switch crash —
+     * no-arg `Modifier.menuAnchor()` was exactly that API). The constraint
+     * closes the drift: what compiles is what ships.
+     *
+     * Constraints never ADD a module to a graph — they only adjust the
+     * version when the module is already resolved — so desktop resolutions
+     * (the real JB material3 jar, no androidx module present) are untouched,
+     * and graphs without compose never see it. Applied to every mutable
+     * configuration via configureEach because KMP/AGP create the lane
+     * configurations after plugin application (androidHostTest materializes
+     * only in afterEvaluate).
+     */
+    private fun installMaterial3AlignmentConstraint(
+        project: Project,
+        libs: org.gradle.api.artifacts.VersionCatalog,
+    ) {
+        val notation = "androidx.compose.material3:material3:" +
+            libs.findVersion("composeMaterial3").get().requiredVersion
+        project.configurations.configureEach {
+            // Gradle 9 role-based configurations: only declarable ones accept
+            // constraints (buckets like <sourceSet>Implementation). The
+            // resolvable classpath configurations extend these buckets, so
+            // every graph that resolves androidx material3 inherits the
+            // pin — compile, runtime, and both test lanes.
+            if (!isCanBeDeclared) return@configureEach
+            val constraint = project.dependencies.constraints.add(name, notation)
+            constraint.because(
+                "material3 compile/runtime alignment — shared modules must compile " +
+                    "against the version the app ships (catalog composeMaterial3)"
+            )
+        }
     }
 
     /**

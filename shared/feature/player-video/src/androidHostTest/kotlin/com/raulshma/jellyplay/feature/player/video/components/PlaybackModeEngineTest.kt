@@ -36,6 +36,11 @@ class PlaybackModeEngineTest {
         onDismiss: () -> Unit = {},
         isTv: Boolean = false,
         performanceAvailable: Boolean = false,
+        currentQuality: StreamingQuality = StreamingQuality.HD_720P,
+        sourceWidth: Int? = null,
+        sourceHeight: Int? = null,
+        manualBandwidthCap: Long = 0L,
+        dataSaverEnabled: Boolean = false,
     ) {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalTvMode provides isTv) {
@@ -45,7 +50,7 @@ class PlaybackModeEngineTest {
                         currentPlayMethod = "Transcode",
                         onSelect = {},
                         onDismiss = onDismiss,
-                        currentQuality = StreamingQuality.HD_720P,
+                        currentQuality = currentQuality,
                         adaptiveBitrateEnabled = true,
                         onQualitySelect = onQualitySelect,
                         onToggleAdaptiveBitrate = {},
@@ -55,6 +60,10 @@ class PlaybackModeEngineTest {
                         onPlayerSelect = onPlayerSelect,
                         performanceAvailable = performanceAvailable,
                         performanceLevel = if (performanceAvailable) PerformanceLevel.BALANCED else null,
+                        sourceWidth = sourceWidth,
+                        sourceHeight = sourceHeight,
+                        manualBandwidthCap = manualBandwidthCap,
+                        dataSaverEnabled = dataSaverEnabled,
                     )
                 }
             }
@@ -98,6 +107,63 @@ class PlaybackModeEngineTest {
         setContent(onDismiss = { dismissed = true })
         composeTestRule.onNodeWithText("Force Direct Play").performScrollTo().performClick()
         assertFalse(dismissed)
+    }
+
+    @Test
+    fun originalUncappedRendersOnSub4kSource_while4kDoesNot() {
+        setContent(
+            currentQuality = StreamingQuality.ORIGINAL,
+            sourceWidth = 1920,
+            sourceHeight = 1080,
+        )
+
+        composeTestRule.onNodeWithText("Original (uncapped)").assertExists()
+        composeTestRule.onNodeWithText("4K").assertDoesNotExist()
+    }
+
+    @Test
+    fun manualBandwidthCapRendersTheCaveat() {
+        setContent(manualBandwidthCap = 5_000_000L)
+
+        composeTestRule.onNodeWithText(
+            "Manual bandwidth cap (5 Mbps) still applies to every quality.",
+        ).assertExists()
+    }
+
+    @Test
+    fun dataSaverRendersTheCaveat() {
+        setContent(dataSaverEnabled = true)
+
+        composeTestRule.onNodeWithText("Data Saver caps automatic playback at 1.5 Mbps.").assertExists()
+    }
+
+    @Test
+    fun inactiveCapsHideTheCaveats() {
+        setContent()
+
+        composeTestRule.onNodeWithText("Manual bandwidth cap", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Data Saver caps automatic playback", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun tvMode_rendersOriginalUncappedAndActiveCapCaveats() {
+        setContent(
+            isTv = true,
+            currentQuality = StreamingQuality.ORIGINAL,
+            sourceWidth = 1920,
+            sourceHeight = 1080,
+            manualBandwidthCap = 5_000_000L,
+            dataSaverEnabled = true,
+        )
+
+        composeTestRule.onNodeWithText("Original (uncapped)").performScrollTo().assertExists()
+        composeTestRule.onNodeWithText("4K").assertDoesNotExist()
+        composeTestRule.onNodeWithText(
+            "Manual bandwidth cap (5 Mbps) still applies to every quality.",
+        ).performScrollTo().assertExists()
+        composeTestRule.onNodeWithText(
+            "Data Saver caps automatic playback at 1.5 Mbps.",
+        ).performScrollTo().assertExists()
     }
 
     /**

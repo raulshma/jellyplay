@@ -39,6 +39,8 @@
     <string name="settings_notifications">通知</string>
     <string name="settings_notifications_checking">正在检查 %1$s</string>
     <string name="settings_downloads_storage">下载 &amp; 存储</string>
+    <string name="settings_storage_network">存储 &amp; 网络</string>
+    <string name="settings_downloads_subtitle">下载画质、智能自动下载与计划</string>
     <string name="settings_cache_subtitle">缓存：%1$d MB</string>
     <string name="settings_security">安全</string>
     <string name="settings_pin_biometric_on">PIN + 生物识别锁：开</string>
@@ -48,6 +50,11 @@
     <string name="settings_backup_restore">备份 &amp; 恢复</string>
     <string name="settings_backup_restore_subtitle">导出或导入应用设置</string>
     <string name="settings_screensaver">屏保</string>
+    <string name="settings_ambient">氛围模式</string>
+    <string name="settings_ambient_subtitle">屏保 &amp; 闲置屏幕</string>
+    <string name="settings_cat_media_playback">媒体 &amp; 播放</string>
+    <string name="settings_cat_look_and_feel">外观 &amp; 体验</string>
+    <string name="settings_cat_system_data">系统 &amp; 数据</string>
     <string name="settings_show_title">显示标题</string>
     <string name="settings_display_media_title">显示媒体标题</string>
     <string name="settings_hide_media_title">隐藏媒体标题</string>
@@ -298,6 +305,7 @@
     <string name="settings_max_cache_size_subtitle">用于缓存的最大磁盘空间</string>
     <string name="settings_unlimited">无限制</string>
     <string name="settings_network_offline">网络 &amp; 离线</string>
+    <string name="settings_network_diagnostics">网络诊断</string>
     <string name="settings_status_value">状态：%1$s</string>
     <string name="settings_offline_mode">离线模式</string>
     <string name="settings_online">在线</string>
@@ -370,6 +378,27 @@
     <string name="settings_custom_options">自定义选项</string>
     <string name="settings_reset_to_defaults">重置为默认</string>
     <string name="settings_living_room_tv">客厅电视</string>
+
+    <!-- Entrance-summary tokens (ADR-0017 decision 3): the short faces the
+         per-domain *SummaryParts folds emit where no row face exists. -->
+    <string name="settings_subtitle_label">字幕：%1$s</string>
+    <string name="settings_sum_chrome_chapters_off">无章节标记</string>
+    <string name="settings_sum_chrome_buffer_off">无缓冲区间</string>
+    <string name="settings_sum_plugin_sync_on">同步已开启</string>
+    <string name="settings_sum_plugin_sync_off">同步已关闭</string>
+    <string name="settings_sum_quality_badges_off">无画质徽标</string>
+    <string name="settings_sum_new_badges_off">无 NEW 徽标</string>
+    <string name="settings_sum_detail_hide_watched">隐藏已看剧集</string>
+    <string name="settings_sum_detail_confirm_played">标记已看前确认</string>
+    <string name="settings_sum_haptics_off">触感反馈已关闭</string>
+    <plurals name="settings_sum_pinned_sections">
+        <item quantity="one">%1$d 个已固定分区</item>
+        <item quantity="other">%1$d 个已固定分区</item>
+    </plurals>
+    <plurals name="settings_sum_badges_on">
+        <item quantity="one">%1$d 个徽标集已开启</item>
+        <item quantity="other">%1$d 个徽标集已开启</item>
+    </plurals>
 
     <!-- Streaming quality labels -->
 
@@ -493,7 +522,6 @@
     <string name="settings_show_advanced">显示高级设置</string>
     <string name="settings_advanced_hidden">已隐藏高级设置</string>
     <string name="settings_advanced_shown">已显示高级设置</string>
-
 
     <plurals name="settings_advanced_settings_hidden">
         <item quantity="one">%1$d 项高级设置已隐藏</item>
@@ -849,6 +877,8 @@
 
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">服务器插件</string>
+    <string name="settings_jellyplay_plugin_entry">JellyPlay 插件</string>
+    <string name="settings_jellyplay_plugin_entry_subtitle">服务器插件功能与设置同步</string>
     <string name="settings_jellyplay_plugin_section_summary">选择由 JellyPlay 插件提供的功能</string>
     <string name="settings_jellyplay_plugin_version_summary">服务器插件 v%1$s</string>
     <string name="settings_jellyplay_contract_mismatch_title">需要更新插件</string>
@@ -1268,9 +1298,9 @@
     <string name="settings_perf_group_ambient">环境效果</string>
     <string name="settings_perf_group_buffers">播放缓冲</string>
     <string name="settings_perf_crossref_profile_title">设备配置与重新检测</string>
-    <string name="settings_perf_crossref_profile_subtitle">检测到的设备档位和重新检测操作位于 播放 → 高级视频</string>
+    <string name="settings_perf_crossref_profile_subtitle">检测到的设备档位和重新检测操作位于 播放 → 视频 &amp; 转码</string>
     <string name="settings_perf_crossref_back_buffer_title">后缓冲时长</string>
-    <string name="settings_perf_crossref_back_buffer_subtitle">引擎域的后缓冲行位于 播放 → 引擎配置（ExoPlayer）</string>
+    <string name="settings_perf_crossref_back_buffer_subtitle">引擎域的后缓冲行位于 播放 → 播放引擎（ExoPlayer）</string>
     <string name="settings_perf_customize">自定义…</string>
     <string name="settings_perf_customize_subtitle">所有细粒度性能行都位于性能中心</string>
     <string name="settings_perf_animations">动画</string>
@@ -1318,4 +1348,8 @@
     <string name="ss_exo_target_buffer_mb_subtitle">前向缓冲总量，单位 MB（0 = 引擎推导自动，5–512 为显式值）</string>
     <string name="ss_exo_retain_back_buffer_title">保留后缓冲</string>
     <string name="ss_exo_retain_back_buffer_subtitle">无论关键帧边界如何都保留后缓冲（即时回退，内存占用更高）</string>
+    <string name="settings_auto_arm_from_arr">自动添加Sonarr关注的剧集</string>
+    <string name="settings_auto_arm_from_arr_subtitle">将Sonarr关注的剧集加入自动下载，即使尚未下载任何剧集（实验性功能）</string>
+    <string name="ss_auto_arm_from_arr_title">自动添加Sonarr关注的剧集</string>
+    <string name="ss_auto_arm_from_arr_subtitle">将Sonarr关注的剧集加入自动下载，即使尚未下载任何剧集</string>
 </resources>

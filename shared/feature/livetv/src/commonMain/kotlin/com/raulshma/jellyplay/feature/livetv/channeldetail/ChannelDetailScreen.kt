@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -18,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -27,6 +30,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
+import com.raulshma.jellyplay.core.ui.components.ArtworkIconScrim
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -111,6 +115,11 @@ fun ChannelDetailScreen(
             modifier = Modifier
                 .statusBarsPadding()
                 .padding(start = 8.dp, top = 8.dp)
+                // White icon over arbitrary artwork (or the bare background when
+                // the channel ships no image) — the dark scrim circle keeps it
+                // legible in every theme.
+                .clip(CircleShape)
+                .background(ArtworkIconScrim)
                 .focusRequester(backFocusRequester)
                 .focusIndicator(),
         ) {

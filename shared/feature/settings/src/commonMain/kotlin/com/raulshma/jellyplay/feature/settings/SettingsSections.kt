@@ -246,12 +246,12 @@ internal fun SettingsSystemSection(
                             }
 }
 
-/** The `group_screensaver` section: the TV dream SettingsGroup (records: SystemRowRecords screensaver rows). */
+/** The TV dream (screensaver) SettingsGroup — hosted on the Ambient screen (ADR-0017; records: SystemRowRecords screensaver rows). */
 @Composable
 internal fun SettingsScreensaverSection(
     preferences: SettingsScreenPreferences,
     viewModel: SettingsViewModel,
-    lastClickedSettingId: String?,
+    highlightSettingId: String?,
     activeDialog: MutableState<PickerState<*>?>
 ) {
                                 SettingsGroup(
@@ -263,7 +263,7 @@ internal fun SettingsScreensaverSection(
                                             cats.joinToString(", ") { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
                                         }
                                     },
-                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
+                                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
                                 ) {
                                     // Row count derived from the screensaver group
                                     // declaration's row gates — the eight declared
@@ -280,7 +280,7 @@ internal fun SettingsScreensaverSection(
                                         subtitle = if (preferences.dreamShowTitle) stringResource(Res.string.settings_display_media_title) else stringResource(Res.string.settings_hide_media_title),
                                         checked = preferences.dreamShowTitle,
                                         index = 0, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverShowTitle.id,
+                                        highlighted = highlightSettingId == SystemRows.ScreensaverShowTitle.id,
                                         onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamShowTitle(it) } },
                                     )
                                     val categoryMovies = stringResource(Res.string.settings_category_movies)
@@ -302,7 +302,7 @@ internal fun SettingsScreensaverSection(
                                             }
                                         },
                                         index = 1, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverCategories.id,
+                                        highlighted = highlightSettingId == SystemRows.ScreensaverCategories.id,
                                         onClick = {
                                             val allCats = DreamImageCategory.entries.toSet()
                                             val current = preferences.dreamImageCategories
@@ -322,7 +322,7 @@ internal fun SettingsScreensaverSection(
                                         subtitle = rowSubtitle(SystemRows.ScreensaverSlideshowInterval),
                                         trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
                                         index = 2, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverSlideshowInterval.id,
+                                        highlighted = highlightSettingId == SystemRows.ScreensaverSlideshowInterval.id,
                                         onClick = {
                                             activeDialog.value = PickerState.List(
                                                 title = slideshowIntervalTitle,
@@ -339,7 +339,7 @@ internal fun SettingsScreensaverSection(
                                         subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(Res.string.settings_ken_burns_on) else stringResource(Res.string.settings_ken_burns_off),
                                         checked = preferences.dreamKenBurnsEnabled,
                                         index = 3, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverKenBurns.id,
+                                        highlighted = highlightSettingId == SystemRows.ScreensaverKenBurns.id,
                                         onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamKenBurnsEnabled(it) } },
                                     )
                                     SettingListItem(
@@ -348,7 +348,7 @@ internal fun SettingsScreensaverSection(
                                         subtitle = preferences.dreamTransitionStyle.name,
                                         trailingText = preferences.dreamTransitionStyle.name,
                                         index = 4, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverTransitionStyle.id,
+                                        highlighted = highlightSettingId == SystemRows.ScreensaverTransitionStyle.id,
                                         onClick = {
                                             val labels = mapOf(
                                                 DreamTransitionStyle.CROSSFADE to transitionCrossfadeLabel,
@@ -386,7 +386,7 @@ internal fun SettingsScreensaverSection(
                                             .firstOrNull { it.first == preferences.dreamMaxParentalRating }
                                             ?.second ?: maxRatingNoneLabel,
                                         index = 5, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverMaxParentalRating.id,
+                                        highlighted = highlightSettingId == SystemRows.ScreensaverMaxParentalRating.id,
                                         onClick = {
                                             activeDialog.value = PickerState.List(
                                                 title = maxRatingTitle,
@@ -422,7 +422,7 @@ internal fun SettingsScreensaverSection(
                                         subtitle = rowSubtitle(SystemRows.ScreensaverDimAfter),
                                         trailingText = dimAfterLabel(preferences.dreamDimAfterMs),
                                         index = 6, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverDimAfter.id,
+                                        highlighted = highlightSettingId == SystemRows.ScreensaverDimAfter.id,
                                         onClick = {
                                             activeDialog.value = PickerState.List(
                                                 title = dimAfterTitle,
@@ -440,7 +440,7 @@ internal fun SettingsScreensaverSection(
                                         subtitle = rowSubtitle(SystemRows.ScreensaverDimPercent),
                                         trailingText = "${preferences.dreamDimPercent}%",
                                         index = 7, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverDimPercent.id,
+                                        highlighted = highlightSettingId == SystemRows.ScreensaverDimPercent.id,
                                         onClick = {
                                             activeDialog.value = PickerState.Slider(
                                                 title = dimPercentTitle,
@@ -457,12 +457,12 @@ internal fun SettingsScreensaverSection(
                                 }
 }
 
-/** The `group_idle_ambient` section: the desktop idle-ambient SettingsGroup (records: SystemRowRecords idle rows). */
+/** The desktop idle-ambient SettingsGroup — hosted on the Ambient screen beside the TV dream group (ADR-0017; records: SystemRowRecords idle rows). */
 @Composable
 internal fun SettingsIdleAmbientSection(
     preferences: SettingsScreenPreferences,
     viewModel: SettingsViewModel,
-    lastClickedSettingId: String?,
+    highlightSettingId: String?,
     activeDialog: MutableState<PickerState<*>?>
 ) {
                                 SettingsGroup(
@@ -472,7 +472,7 @@ internal fun SettingsIdleAmbientSection(
                                         if (preferences.idleAmbientEnabled) stringResource(Res.string.settings_idle_ambient_on)
                                         else stringResource(Res.string.settings_idle_ambient_off)
                                     },
-                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemIdleAmbient.itemIdSet,
+                                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.systemIdleAmbient.itemIdSet,
                                 ) {
                                     val idleTotal = rowTotalFor(SettingsScreenGroups.systemIdleAmbient, RowAdmissionFlags())
                                     val idleTimeoutTitle = rowTitle(SystemRows.IdleAmbientTimeout)
@@ -491,7 +491,7 @@ internal fun SettingsIdleAmbientSection(
                                         subtitle = rowSubtitle(SystemRows.IdleAmbientEnabled),
                                         checked = preferences.idleAmbientEnabled,
                                         index = 0, count = idleTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.IdleAmbientEnabled.id,
+                                        highlighted = highlightSettingId == SystemRows.IdleAmbientEnabled.id,
                                         onCheckedChange = { enabled ->
                                             viewModel.edit { scope -> scope.screensaver.setIdleAmbientEnabled(enabled) }
                                         },
@@ -505,7 +505,7 @@ internal fun SettingsIdleAmbientSection(
                                                 .coerceAtMost(idleTimeoutLabels.lastIndex),
                                         ],
                                         index = 1, count = idleTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.IdleAmbientTimeout.id,
+                                        highlighted = highlightSettingId == SystemRows.IdleAmbientTimeout.id,
                                         onClick = {
                                             activeDialog.value = PickerState.List(
                                                 title = idleTimeoutTitle,
@@ -521,12 +521,12 @@ internal fun SettingsIdleAmbientSection(
                                 }
 }
 
-/** The `group_discord_presence` section: the Discord Rich Presence toggle (SystemRowRecords discord_ rows). */
+/** The Discord Rich Presence toggle — hosted on the Integrations screen (ADR-0017; SystemRowRecords discord_ rows). */
 @Composable
 internal fun SettingsDiscordPresenceSection(
     preferences: SettingsScreenPreferences,
     viewModel: SettingsViewModel,
-    lastClickedSettingId: String?,
+    highlightSettingId: String?,
 ) {
                                 SettingsGroup(
                                     icon = Tabler.Outline.BrandDiscord,
@@ -538,7 +538,7 @@ internal fun SettingsDiscordPresenceSection(
                                             stringResource(Res.string.settings_discord_presence_off)
                                         }
                                     },
-                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemDiscordPresence.itemIdSet,
+                                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.systemDiscordPresence.itemIdSet,
                                 ) {
                                     val discordTotal = rowTotalFor(SettingsScreenGroups.systemDiscordPresence, RowAdmissionFlags())
                                     SettingToggleItem(
@@ -547,7 +547,7 @@ internal fun SettingsDiscordPresenceSection(
                                         subtitle = rowSubtitle(SystemRows.DiscordPresenceEnabled),
                                         checked = preferences.discordPresenceEnabled,
                                         index = 0, count = discordTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.DiscordPresenceEnabled.id,
+                                        highlighted = highlightSettingId == SystemRows.DiscordPresenceEnabled.id,
                                         onCheckedChange = { enabled ->
                                             viewModel.edit { scope -> scope.screensaver.setDiscordPresenceEnabled(enabled) }
                                         },
@@ -556,16 +556,16 @@ internal fun SettingsDiscordPresenceSection(
 }
 
 /**
- * The `group_shell_hooks` section: the playback-event shell hooks (feature
- * 4.3) — the master toggle (whose subtitle carries the safety copy) plus the
- * five mpv-shim-named command rows, each opened in the shared free-form text
- * editor with the placeholder hint as its helper text.
+ * The playback-event shell hooks (feature 4.3) — the master toggle (whose
+ * subtitle carries the safety copy) plus the five mpv-shim-named command
+ * rows, each opened in the shared free-form text editor with the placeholder
+ * hint as its helper text. Hosted on the Integrations screen (ADR-0017).
  */
 @Composable
 internal fun SettingsShellHooksSection(
     preferences: SettingsScreenPreferences,
     viewModel: SettingsViewModel,
-    lastClickedSettingId: String?,
+    highlightSettingId: String?,
     activeDialog: MutableState<PickerState<*>?>,
 ) {
                                 SettingsGroup(
@@ -578,7 +578,7 @@ internal fun SettingsShellHooksSection(
                                             stringResource(Res.string.settings_hooks_off)
                                         }
                                     },
-                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemHooks.itemIdSet,
+                                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.systemHooks.itemIdSet,
                                 ) {
                                     val hooksTotal = rowTotalFor(SettingsScreenGroups.systemHooks, RowAdmissionFlags())
                                     val placeholderHint = stringResource(Res.string.settings_hooks_placeholder_hint)
@@ -588,7 +588,7 @@ internal fun SettingsShellHooksSection(
                                         subtitle = rowSubtitle(SystemRows.HooksEnabled),
                                         checked = preferences.hooksEnabled,
                                         index = 0, count = hooksTotal,
-                                        highlighted = lastClickedSettingId == SystemRows.HooksEnabled.id,
+                                        highlighted = highlightSettingId == SystemRows.HooksEnabled.id,
                                         onCheckedChange = { enabled ->
                                             viewModel.edit { scope -> scope.screensaver.setHooksEnabled(enabled) }
                                         },
@@ -597,7 +597,7 @@ internal fun SettingsShellHooksSection(
                                         row = SystemRows.HooksPlayCmd,
                                         command = preferences.hooksPlayCmd,
                                         index = 1, count = hooksTotal,
-                                        lastClickedSettingId = lastClickedSettingId,
+                                        highlightSettingId = highlightSettingId,
                                         placeholderHint = placeholderHint,
                                         activeDialog = activeDialog,
                                         onSave = { viewModel.edit { scope -> scope.screensaver.setHooksPlayCmd(it) } },
@@ -606,7 +606,7 @@ internal fun SettingsShellHooksSection(
                                         row = SystemRows.HooksStopCmd,
                                         command = preferences.hooksStopCmd,
                                         index = 2, count = hooksTotal,
-                                        lastClickedSettingId = lastClickedSettingId,
+                                        highlightSettingId = highlightSettingId,
                                         placeholderHint = placeholderHint,
                                         activeDialog = activeDialog,
                                         onSave = { viewModel.edit { scope -> scope.screensaver.setHooksStopCmd(it) } },
@@ -615,7 +615,7 @@ internal fun SettingsShellHooksSection(
                                         row = SystemRows.HooksEndedCmd,
                                         command = preferences.hooksEndedCmd,
                                         index = 3, count = hooksTotal,
-                                        lastClickedSettingId = lastClickedSettingId,
+                                        highlightSettingId = highlightSettingId,
                                         placeholderHint = placeholderHint,
                                         activeDialog = activeDialog,
                                         onSave = { viewModel.edit { scope -> scope.screensaver.setHooksEndedCmd(it) } },
@@ -624,7 +624,7 @@ internal fun SettingsShellHooksSection(
                                         row = SystemRows.HooksIdleCmd,
                                         command = preferences.hooksIdleCmd,
                                         index = 4, count = hooksTotal,
-                                        lastClickedSettingId = lastClickedSettingId,
+                                        highlightSettingId = highlightSettingId,
                                         placeholderHint = placeholderHint,
                                         activeDialog = activeDialog,
                                         onSave = { viewModel.edit { scope -> scope.screensaver.setHooksIdleCmd(it) } },
@@ -633,7 +633,7 @@ internal fun SettingsShellHooksSection(
                                         row = SystemRows.HooksIdleEndedCmd,
                                         command = preferences.hooksIdleEndedCmd,
                                         index = 5, count = hooksTotal,
-                                        lastClickedSettingId = lastClickedSettingId,
+                                        highlightSettingId = highlightSettingId,
                                         placeholderHint = placeholderHint,
                                         activeDialog = activeDialog,
                                         onSave = { viewModel.edit { scope -> scope.screensaver.setHooksIdleEndedCmd(it) } },
@@ -648,7 +648,7 @@ private fun hooksCommandRow(
     command: String,
     index: Int,
     count: Int,
-    lastClickedSettingId: String?,
+    highlightSettingId: String?,
     placeholderHint: String,
     activeDialog: MutableState<PickerState<*>?>,
     onSave: (String) -> Unit,
@@ -660,7 +660,7 @@ private fun hooksCommandRow(
         title = title,
         subtitle = command.ifBlank { notSet },
         index = index, count = count,
-        highlighted = lastClickedSettingId == row.id,
+        highlighted = highlightSettingId == row.id,
         onClick = {
             activeDialog.value = PickerState.Text(
                 title = title,

@@ -383,6 +383,7 @@ class VideoPlayerStoreTest {
         store.setVideoOverlayAnimations(false)
         store.setVideoResumeChipMs(5_000L)
         store.setVideoShowPrevNextButtons(false)
+        store.setVideoPlaybackDiagnostics(true)
         store.setVideoSwipeSensitivity(PlayerSwipeSensitivity.SENSITIVE)
         store.setVideoGestureOverlayLingerMs(1_200L)
         store.setVideoCenterDoubleTapAction(PlayerCenterDoubleTapAction.PLAY_PAUSE)
@@ -415,6 +416,7 @@ class VideoPlayerStoreTest {
             assertFalse(videoOverlayAnimations)
             assertEquals(5_000L, videoResumeChipMs)
             assertFalse(videoShowPrevNextButtons)
+            assertTrue(videoPlaybackDiagnostics)
             assertEquals(PlayerSwipeSensitivity.SENSITIVE, videoSwipeSensitivity)
             assertEquals(1_200L, videoGestureOverlayLingerMs)
             assertEquals(PlayerCenterDoubleTapAction.PLAY_PAUSE, videoCenterDoubleTapAction)
@@ -475,6 +477,7 @@ class VideoPlayerStoreTest {
         store.setVideoOverlayAnimations(true)
         store.setVideoResumeChipMs(3_000L)
         store.setVideoShowPrevNextButtons(true)
+        store.setVideoPlaybackDiagnostics(false)
         store.setVideoSwipeSensitivity(PlayerSwipeSensitivity.DEFAULT)
         store.setVideoGestureOverlayLingerMs(800L)
         store.setVideoCenterDoubleTapAction(PlayerCenterDoubleTapAction.AUTO)
@@ -559,6 +562,7 @@ class VideoPlayerStoreTest {
             videoSpeedPresetSet = SpeedPresetSet.COMPACT,
             videoAutoplayWifiOnly = true,
             videoConfirmExit = true,
+            videoPlaybackDiagnostics = true,
         )
 
         store.restore(slice)

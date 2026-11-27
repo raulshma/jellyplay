@@ -624,6 +624,7 @@ private val playbackDiffFields: List<DiffField<*>> = diffRows(
     spec("ss_video_ambient_under_fill_title", { it.videoPlayer.videoAmbientUnderFill }, Boolean::onOff)
     spec("ss_video_buffering_veil_title", { it.videoPlayer.videoBufferingVeil }, { v -> v.enumDisplay() })
     spec("ss_video_speed_preset_set_title", { it.videoPlayer.videoSpeedPresetSet }, { v -> v.enumDisplay() })
+    spec("settings_video_playback_diagnostics", { it.videoPlayer.videoPlaybackDiagnostics }, Boolean::onOff)
     spec("ss_video_autoplay_wifi_only_title", { it.videoPlayer.videoAutoplayWifiOnly }, Boolean::onOff)
     spec("ss_video_confirm_exit_title", { it.videoPlayer.videoConfirmExit }, Boolean::onOff)
     // The Performance hub's ExoPlayer load-control quartet (the

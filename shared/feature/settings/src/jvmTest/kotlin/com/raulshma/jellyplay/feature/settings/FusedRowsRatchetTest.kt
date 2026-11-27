@@ -148,10 +148,15 @@ class FusedRowsRatchetTest {
      * (its id appears in [SettingsScreenGroups.all] but in no spine entry).
      */
     private val spine: List<Pair<String, List<SettingsRow>>> = listOf(
-        // appearance
+        // appearance (ADR-0017: the hub's entrance group + the four leaves;
+        // the newsletter group renders on the hub — the declared hub
+        // exception)
+        "appearance.hub" to AppearanceHubRows,
         "appearance.theme" to AppearanceThemeRows,
         "appearance.navigation" to AppearanceNavigationRows,
-        "appearance.library" to AppearanceLibraryRows,
+        "appearance.libraryViews" to AppearanceLibraryViewsRows,
+        "appearance.detail" to AppearanceDetailRows,
+        "appearance.detailTuning" to AppearanceDetailTuningRows,
         "appearance.performance" to AppearancePerformanceRows,
         "appearance.eyeCare" to AppearanceEyeCareRows,
         "appearance.newsletter" to AppearanceNewsletterRows,
@@ -161,13 +166,22 @@ class FusedRowsRatchetTest {
         "performance.images" to PerformanceImageRows,
         "performance.ambient" to PerformanceAmbientRows,
         "performance.buffers" to PlaybackBufferRows,
-        // home
-        "home.display" to HomeDisplayRows,
+        // home (ADR-0017: the hub's entrance group + the advanced Fine-tuning
+        // exception + the three leaves; the former home.display id retired
+        // with the split)
+        "home.hub" to HomeHubRows,
+        "home.tuning" to HomeTuningRows,
+        "home.displayMain" to HomeDisplayMainRows,
         "home.nextUp" to HomeNextUpRows,
         "home.layout" to HomeLayoutRows,
+        "home.curation" to HomeCurationRows,
         "home.cards" to HomeCardsRows,
-        // playback/video
-        "playback.player" to PlaybackPlayerRows,
+        // playback/video (ADR-0017: the hub's entrance group + the former
+        // playback.player group's three leaves)
+        "playback.hub" to PlaybackHubRows,
+        "playback.basics" to PlaybackBasicsRows,
+        "playback.controls" to PlaybackControlsRows,
+        "playback.playerChrome" to PlaybackPlayerChromeRows,
         "playback.advancedVideo" to PlaybackAdvancedVideoRows,
         "playback.engine" to PlaybackEngineRows,
         "playback.syncPlay" to PlaybackSyncPlayRows,
@@ -176,6 +190,7 @@ class FusedRowsRatchetTest {
         "playback.mediaSegments" to PlaybackMediaSegmentsRows,
         // audio
         "audio" to AudioPlayerRows,
+        "audio.fineTuning" to AudioFineTuningRows,
         "audio.cache" to AudioCacheRows,
         // language
         "language.general" to LanguageGeneralRows,
@@ -186,6 +201,7 @@ class FusedRowsRatchetTest {
         // storage
         "storage.cache" to StorageCacheRows,
         "storage.network" to StorageNetworkRows,
+        "storage.networkTuning" to StorageNetworkTuningRows,
         "storage.downloads" to StorageDownloadsRows,
         // security
         "security" to SecurityRowsList,
@@ -358,29 +374,31 @@ class FusedRowsRatchetTest {
      */
     @Test
     fun `every converted domain's entrance section is the one declaration driving emission and step index`() {
+        // ADR-0017's media-first order: ONE step axis (the separate phone/TV
+        // step lists are converged onto the single declaration).
         listOf(
-            HomeEntrance to (7 to 7),
-            AppearanceEntrance to (8 to 8),
-            PerformanceEntrance to (9 to 9),
-            PlaybackEntrance to (10 to 10),
-            AudioEntrance to (11 to 11),
-            LanguageEntrance to (12 to 12),
-            NotificationEntrance to (13 to 13),
-            StorageEntrance to (14 to 14),
-            SecurityEntrance to (15 to 15),
-            BackupEntrance to (17 to 17),
-            // HEAD's SettingsEntranceStepsTest literals: item_integrations
-            // (22,23), item_about (23,24) — the tv side spans the whatsnew
-            // slot that phone lacks.
-            IntegrationsEntrance to (22 to 23),
-            AboutEntrance to (23 to 24),
-        ).forEach { (entrance, expectedSteps) ->
+            PlaybackEntrance to 5,
+            AudioEntrance to 6,
+            LanguageEntrance to 7,
+            AppearanceEntrance to 8,
+            HomeEntrance to 9,
+            PerformanceEntrance to 10,
+            AmbientEntrance to 11,
+            StorageEntrance to 12,
+            DownloadsEntrance to 13,
+            NotificationEntrance to 14,
+            SecurityEntrance to 15,
+            BackupEntrance to 17,
+            JellyPlayPluginEntrance to 19,
+            IntegrationsEntrance to 20,
+            AboutEntrance to 22,
+        ).forEach { (entrance, expectedStep) ->
             val occurrences = SETTINGS_ENTRANCE_SECTIONS.count { it.key == entrance.key }
             assertEquals(1, occurrences, "${entrance.key} is missing from (or duplicated in) SETTINGS_ENTRANCE_SECTIONS")
             val index = SETTINGS_ENTRANCE_SECTIONS.indexOfFirst { it.key == entrance.key }
-            assertEquals(expectedSteps.second, index, "the ${entrance.key} entrance slot moved")
-            val steps = settingsEntranceStep(entrance.key) ?: fail("section '${entrance.key}' not derivable")
-            assertEquals(expectedSteps, steps.phone to steps.tv, "the ${entrance.key} entrance steps drifted")
+            assertEquals(expectedStep, index, "the ${entrance.key} entrance slot moved")
+            val step = settingsEntranceStep(entrance.key) ?: fail("section '${entrance.key}' not derivable")
+            assertEquals(expectedStep, step, "the ${entrance.key} entrance step drifted")
             // every face the root screen's emission needs is declared, not
             // hand-typed beside the call site.
             assertTrue(entrance.rowId.isNotEmpty(), "${entrance.key} declares no deep-link row id")
@@ -434,27 +452,59 @@ class FusedRowsRatchetTest {
      */
     @Test
     fun `the hidden-settings hint counts derive from the row declarations`() {
-        // Appearance: the theme group's nine advanced rows (the NotTv-forked
+        // Appearance (ADR-0017's split): the Theme & display leaf's three
+        // groups — the theme group's nine advanced rows (the NotTv-forked
         // layout row included off-TV) + 1 performance (the master level row
         // moved to the hub; Reduce Motion is the group's only declared row) +
-        // 2 eye-care + 3 newsletter; on TV the fork drops one.
-        val appearanceGroups = listOf(
+        // 2 eye-care; on TV the fork drops one. The hub's hint is exactly the
+        // newsletter trio (the declared hub exception). The library-views
+        // leaf carries no advanced rows (every row declares Always); the
+        // Detail leaf's hint is exactly the advanced "Density & limits"
+        // thirteen (the phase-5 reclassification).
+        val themeLeafGroups = listOf(
             SettingsScreenGroups.appearanceTheme,
-            SettingsScreenGroups.appearanceNavigation,
-            SettingsScreenGroups.appearanceLibrary,
             SettingsScreenGroups.appearancePerformance,
             SettingsScreenGroups.appearanceEyeCare,
+        )
+        assertEquals(
+            12,
+            hiddenRowsFor(themeLeafGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            "appearance theme-leaf phone hint drifted",
+        )
+        assertEquals(
+            11,
+            hiddenRowsFor(themeLeafGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+            "appearance theme-leaf tv hint drifted",
+        )
+        val appearanceHubGroups = listOf(
+            SettingsScreenGroups.appearanceHub,
             SettingsScreenGroups.appearanceNewsletter,
         )
         assertEquals(
-            15,
-            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
-            "appearance phone hint drifted",
+            3,
+            hiddenRowsFor(appearanceHubGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            "appearance hub hint drifted",
         )
         assertEquals(
-            14,
-            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
-            "appearance tv hint drifted",
+            3,
+            hiddenRowsFor(appearanceHubGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+            "appearance hub tv hint drifted",
+        )
+        assertEquals(
+            13,
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.appearanceDetailTuning),
+                RowAdmissionFlags(showAdvanced = false, isTv = false),
+            ),
+            "appearance detail-leaf hint drifted",
+        )
+        assertEquals(
+            0,
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.appearanceLibraryViews),
+                RowAdmissionFlags(showAdvanced = false, isTv = false),
+            ),
+            "the library-views leaf grew an advanced row",
         )
 
         // Performance hub: the master level row declares Always (counts
@@ -478,19 +528,29 @@ class FusedRowsRatchetTest {
             "performance hub tv hint drifted",
         )
 
-        // Audio: 17 plain-advanced rows at the default preferences (every
-        // effect parent off — the All(Advanced, WhenOn) strength rows count
-        // nothing until their parent toggles on), plus the cache group's
-        // three advanced rows where that group composes.
+        // Audio: the main group's 12 plain-advanced rows at the default
+        // preferences (every effect parent off — the All(Advanced, WhenOn)
+        // strength rows count nothing until their parent toggles on), the
+        // Fine-tuning group's 5 unconditional rows there (its two
+        // parent-gated gain rows count nothing until their toggles on), and
+        // the cache group's three advanced rows where that group composes.
         val audioFlags = audioRowAdmissionFlags(showAdvanced = false, AudioPreferences())
         assertEquals(
-            17,
+            12,
             hiddenRowsFor(listOf(SettingsScreenGroups.audio), audioFlags),
-            "audio hint (no cache group) drifted",
+            "audio hint (main group only) drifted",
+        )
+        assertEquals(
+            17,
+            hiddenRowsFor(listOf(SettingsScreenGroups.audio, SettingsScreenGroups.audioFineTuning), audioFlags),
+            "audio hint (main + fine-tuning) drifted",
         )
         assertEquals(
             20,
-            hiddenRowsFor(listOf(SettingsScreenGroups.audio, SettingsScreenGroups.audioCache), audioFlags),
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.audio, SettingsScreenGroups.audioCache, SettingsScreenGroups.audioFineTuning),
+                audioFlags,
+            ),
             "audio hint (with cache group) drifted",
         )
 
@@ -540,20 +600,57 @@ class FusedRowsRatchetTest {
         assertEquals(5, hiddenRowsFor(notifications, notificationFlags(enable = true, quiet = false, sysSettings = false)), "notifications hint (no system-settings row) drifted")
         assertEquals(8, hiddenRowsFor(notifications, notificationFlags(enable = true, quiet = true, sysSettings = true)), "notifications hint (quiet hours on) drifted")
 
-        // Storage: the cache group's five advanced tuning rows; network and
-        // downloads carry no advanced gates (the WhenOn rows count nothing —
-        // hidden under both evaluations).
+        // Home (ADR-0017's split): the hub's eight tuning rows carry their
+        // declared advanced gates (the phase-5 spec-flag flip closed the
+        // derivation anomaly — group-level derivation and search faces
+        // agree), so the group-level derivation counts all 8. The three
+        // leaves carry no advanced rows.
         assertEquals(
-            5,
+            8,
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.homeHub, SettingsScreenGroups.homeTuning),
+                RowAdmissionFlags(showAdvanced = false),
+            ),
+            "home hub hint drifted",
+        )
+        listOf(
+            SettingsScreenGroups.homeDisplayMain,
+            SettingsScreenGroups.homeNextUp,
+            SettingsScreenGroups.homeLayout,
+            SettingsScreenGroups.homeCuration,
+            SettingsScreenGroups.homeCards,
+        ).forEach { group ->
+            assertEquals(
+                0,
+                hiddenRowsFor(listOf(group), RowAdmissionFlags(showAdvanced = false)),
+                "${group.id} grew an advanced row",
+            )
+        }
+
+        // Storage (ADR-0017's split): the cache group's five advanced tuning
+        // rows plus the Network diagnostics group's four (the phase-5
+        // reclassification) on the storage screen; the visible network group
+        // and downloads carry no advanced gates (the WhenOn rows count
+        // nothing — hidden under both evaluations).
+        assertEquals(
+            9,
             hiddenRowsFor(
                 listOf(
                     SettingsScreenGroups.storageCache,
                     SettingsScreenGroups.storageNetwork,
-                    SettingsScreenGroups.storageDownloads,
+                    SettingsScreenGroups.storageNetworkTuning,
                 ),
                 RowAdmissionFlags(showAdvanced = false),
             ),
             "storage hint drifted",
+        )
+        assertEquals(
+            0,
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.storageDownloads),
+                RowAdmissionFlags(showAdvanced = false),
+            ),
+            "downloads hint drifted",
         )
 
         // Security: the auto-lock timer's All(AppLock, Advanced) gate — 1

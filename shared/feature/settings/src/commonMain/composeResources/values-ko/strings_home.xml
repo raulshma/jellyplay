@@ -92,6 +92,14 @@
     <string name="settings_home_screen_layout">홈 화면 레이아웃</string>
     <string name="settings_home_sections_visible">%2$d개 섹션 중 %1$d개 표시</string>
     <string name="settings_home_title">홈 화면</string>
+    <string name="settings_home_entry_display">홈 화면</string>
+    <string name="settings_home_entry_display_subtitle">히어로, 시계, 독 및 메인 화면 표시</string>
+    <string name="settings_home_entry_rows">행 &amp; 레이아웃</string>
+    <string name="settings_home_entry_rows_subtitle">다음 작품, 섹션 레이아웃 및 숨긴 항목</string>
+    <string name="settings_home_entry_cards">카드 &amp; 배지</string>
+    <string name="settings_home_entry_cards_subtitle">배지, 평점, 스포일러 및 카드 스타일</string>
+    <string name="settings_home_tuning">미세 조정</string>
+    <string name="settings_home_curation">숨김 &amp; 복원</string>
     <string name="settings_home_cards">카드</string>
     <string name="settings_home_display">홈 화면 표시</string>
     <string name="settings_continue_next_up">계속 시청과 다음 작품</string>

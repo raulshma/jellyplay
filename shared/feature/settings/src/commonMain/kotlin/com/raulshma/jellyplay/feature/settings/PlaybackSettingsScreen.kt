@@ -1,169 +1,35 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
-import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
-import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import kotlinx.coroutines.CoroutineScope
-import org.koin.compose.viewmodel.koinViewModel
-import org.jetbrains.compose.resources.getString
+import com.raulshma.jellyplay.core.ui.components.SettingListItem
+import com.raulshma.jellyplay.core.ui.components.SettingsItemList
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.PlayerPlay
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_sections
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_done
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_failed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_playback_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_playback_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_playback_message
+import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The playback screen's ONE ordered group declaration — parameterized by the
- * preferred player because the engine slot's content-count hook is the one
- * runtime-keyed shape the flags vocabulary cannot express (only the preferred
- * player's rows exist at runtime, so the declared all-engines group
- * contributes its delta for that prefix alone; the screen-local reset row
- * cancels in the delta). The screen passes the live preference, and the
- * contract test pins the shipped JVM shape (LIBVLC — the desktop seam backs
- * the mpv device rows) plus the MPV honesty pin against the SAME
- * declaration, so the per-engine hook is stated exactly once (ADR-0009's
- * amendment). Per-group row emission stays hand-written: the screen maps
- * each slot to its body inline in [playbackScreenGroups].
- */
-internal fun PlaybackSettingsScreenSlots(
-    preferredPlayer: PlayerType,
-): List<PreferenceScreenGroup> = listOf(
-    SettingsScreenGroups.playbackPlayer.asScreenGroup(),
-    SettingsScreenGroups.playbackAdvancedVideo.asScreenGroup(advancedOnly = true),
-    SettingsScreenGroups.playbackEngine.asScreenGroup(
-        advancedOnly = true,
-        emittedRows = { flags ->
-            when (preferredPlayer) {
-                PlayerType.MPV -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("mpv_") }
-                PlayerType.LIBVLC -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("vlc_") }
-                PlayerType.EXO_PLAYER -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("exo_") }
-                PlayerType.EXTERNAL -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id == PlaybackRows.ExternalPlayerApp.id }
-                else -> 0
-            }
-        },
-    ),
-    SettingsScreenGroups.playbackMediaSegments.asScreenGroup(advancedOnly = true),
-    SettingsScreenGroups.playbackSyncPlay.asScreenGroup(),
-    SettingsScreenGroups.playbackCasting.asScreenGroup(),
-    SettingsScreenGroups.playbackDvr.asScreenGroup(),
-)
-
-/**
- * The playback screen's group bodies, mapped onto the ONE ordered
- * declaration ([PlaybackSettingsScreenSlots], in LazyColumn order — the
- * shell derives the deep-link scroll resolution, the whole-group advanced
- * gating (indices 1-3: advanced video, engine config, media segments only
- * compose behind the advanced toggle) and the hidden-settings hint count
- * from it, and the contract test pins the same declaration, so the scroll
- * target and the hint can never drift from the UI. The advanced shape folds
- * into the scroll adjust in the shell) with each slot's hand-written body
- * attached inline — the bodies close over the screen's state (preferences,
- * flags, view model) and the shell only reads the derived shape (ADR-0009:
- * per-row emission stays hand-written).
- */
-@Composable
-private fun playbackScreenGroups(
-    preferences: PlaybackPreferences,
-    rowFlags: RowAdmissionFlags,
-    highlightSettingId: String?,
-    viewModel: PlaybackSettingsViewModel,
-    scope: CoroutineScope,
-    navActions: SettingsNavActions,
-): List<PreferenceScreenGroup> {
-    val slots = PlaybackSettingsScreenSlots(preferredPlayer = preferences.preferredPlayer)
-    return slots.withContent(
-        bodies = listOf(
-        { activePicker ->
-            PlaybackPlayerGroup(
-                preferences = preferences,
-                showAdvanced = rowFlags.showAdvanced,
-                rowFlags = rowFlags,
-                highlightSettingId = highlightSettingId,
-                viewModel = viewModel,
-                scope = scope,
-                activePicker = activePicker,
-                navActions = navActions,
-            )
-        },
-        { activePicker ->
-            PlaybackAdvancedVideoGroup(
-                preferences = preferences,
-                rowFlags = rowFlags,
-                highlightSettingId = highlightSettingId,
-                viewModel = viewModel,
-                scope = scope,
-                activePicker = activePicker,
-            )
-        },
-        { activePicker ->
-            PlaybackEngineGroup(
-                preferences = preferences,
-                rowFlags = rowFlags,
-                highlightSettingId = highlightSettingId,
-                viewModel = viewModel,
-                scope = scope,
-                activePicker = activePicker,
-            )
-        },
-        { activePicker ->
-            PlaybackMediaSegmentsGroup(
-                preferences = preferences,
-                highlightSettingId = highlightSettingId,
-                viewModel = viewModel,
-                scope = scope,
-                activePicker = activePicker,
-            )
-        },
-        { activePicker ->
-            PlaybackSyncPlayGroup(
-                preferences = preferences,
-                highlightSettingId = highlightSettingId,
-                viewModel = viewModel,
-                scope = scope,
-                activePicker = activePicker,
-            )
-        },
-        { activePicker ->
-            PlaybackCastingGroup(
-                preferences = preferences,
-                highlightSettingId = highlightSettingId,
-                viewModel = viewModel,
-                scope = scope,
-                activePicker = activePicker,
-            )
-        },
-        { activePicker ->
-            PlaybackDvrGroup(
-                preferences = preferences,
-                highlightSettingId = highlightSettingId,
-                viewModel = viewModel,
-                scope = scope,
-                activePicker = activePicker,
-            )
-        },
-        ),
-    )
-}
-
-/**
- * The playback screen's admission flags — the declared row admissions both
- * the SettingsItemList totals and the emission `if`s read. Pure (and
- * internal) so the contract test can pin every WhenOn parent the playback
- * search groups declare against this wiring: the AUDIO_PASSTHROUGH pair
- * dropping out of it is exactly how the five per-codec rows went
- * permanently invisible.
+ * The playback domain's admission flags — the declared row admissions both
+ * the SettingsItemList totals and the emission `if`s on every playback leaf
+ * read. Pure (and internal) so the contract test can pin every WhenOn parent
+ * the playback search groups declare against this wiring: the
+ * AUDIO_PASSTHROUGH pair dropping out of it is exactly how the five
+ * per-codec rows went permanently invisible.
  */
 internal fun playbackRowAdmissionFlags(
     isTv: Boolean,
@@ -187,71 +53,123 @@ internal fun playbackRowAdmissionFlags(
     ),
 )
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+/**
+ * The playback hub's ONE ordered slot declaration (ADR-0009 amendment): the
+ * single entrance group, no advanced gating, the default admission-derived
+ * content count (the entrance rows declare Always — the hub's derived hint
+ * is flat zero). The screen attaches its hand-written body via
+ * [withContent]; the contract test pins the slot/group parity against this
+ * same declaration.
+ */
+internal val PlaybackHubSlots: List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.playbackHub.asScreenGroup(),
+)
+
+/**
+ * The playback hub's ONE entrance group body (ADR-0017): the eight composite
+ * entrance rows in [PlaybackRows]'s declared order, each deep-linking the
+ * leaf screen it opens (the drill-in-row shape — the route lives on the row).
+ * Each subtitle is the leaf's live current-value summary — the per-domain
+ * `*SummaryParts` folds over [PlaybackPreferences] (ADR-0017 decision 3,
+ * pinned by SettingsSummariesTest), resolved part-by-part at composition.
+ * The group stays open — the entrances are the screen's whole body — and a
+ * deep-linked entrance id highlights its row (the catalog routes entrance ids
+ * to their leaf, so this only fires for a hand-built link).
+ */
+@Composable
+private fun PlaybackHubSection(
+    preferences: PlaybackPreferences,
+    highlightSettingId: String?,
+    navActions: SettingsNavActions,
+) {
+    SettingsGroup(
+        icon = Tabler.Outline.PlayerPlay,
+        title = stringResource(Res.string.settings_playback_sections),
+        modifier = Modifier.padding(vertical = 8.dp),
+        initiallyExpanded = true,
+    ) {
+        SettingsItemList(total = SettingsScreenGroups.playbackHub.items.size) {
+            // (row, summary parts) in the hub's declared order — the row's
+            // declared route IS the destination (never reconstructed here, the
+            // appearance/home hubs' shape), so hub links and search hits stay
+            // on the same destination through one declaration. Each row's live
+            // summary is selected by row id (the folds read the ONE
+            // [PlaybackPreferences] slice all eight leaves render from), so a
+            // row added to the declaration surfaces here (or the selection
+            // fails loudly) instead of dropping off a hand-maintained parallel
+            // list.
+            val summaries = mapOf(
+                PlaybackRows.BasicsEntrance.id to playbackBasicsSummaryParts(preferences),
+                PlaybackRows.ControlsEntrance.id to playbackControlsSummaryParts(preferences),
+                PlaybackRows.PlayerChromeEntrance.id to playbackPlayerChromeSummaryParts(preferences),
+                PlaybackRows.VideoQualityEntrance.id to playbackVideoQualitySummaryParts(preferences),
+                PlaybackRows.PlayerEnginesEntrance.id to playbackEnginesSummaryParts(preferences),
+                PlaybackRows.SegmentsEntrance.id to playbackSegmentsSummaryParts(preferences),
+                PlaybackRows.SyncPlayCastingEntrance.id to playbackSyncPlayCastingSummaryParts(preferences),
+                PlaybackRows.LiveTvDvrEntrance.id to playbackLiveTvDvrSummaryParts(preferences),
+            )
+            PlaybackHubRows.forEach { row ->
+                SettingListItem(
+                    icon = rowIcon(row),
+                    title = rowTitle(row),
+                    subtitle = joinSummaryTokens(summaries.getValue(row.id).map { it.resolveAtComposition() }),
+                    highlighted = highlightSettingId == row.id,
+                    onClick = { navActions.onNavigate(requireNotNull(row.route) { "hub entrance ${row.id} declares no route" }) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The playback settings HUB (ADR-0017's domain hub split): one group of the
+ * eight composite entrance rows ([PlaybackHubSection]), each navigating a
+ * leaf screen. The domain's settings rows live on the leaves
+ * ([Route.PlaybackBasics] et al. — their spec route kinds re-pointed, so
+ * search/deep-link/highlight resolution lands on the owning leaf); this
+ * screen keeps the domain root's faces: the settings root's Playback
+ * entrance, the search pane's quick category, and the domain-wide reset
+ * action ([PlaybackSettingsViewModel.resetPlaybackSettings] — the reset
+ * spans both categories the domain owns, exactly as on the former combined
+ * screen). The hub itself declares no advanced rows, so it carries no
+ * advanced tier; a stale deep-link into a moved row id resolves to -1 here
+ * and lands on the owning leaf through the catalog instead.
+ */
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PlaybackSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
-    /** Drill-ins (the "Customize controls" row) ride the shared nav facade. */
+    /** The entrances navigate through the shared nav facade. */
     navActions: SettingsNavActions,
     viewModel: PlaybackSettingsViewModel = koinViewModel(),
 ) {
+    // The entrance summaries read the same slice the leaves render from.
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-    val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
-    val isTv = LocalTvMode.current
-    val rowFlags = playbackRowAdmissionFlags(isTv = isTv, showAdvanced = showAdvanced, preferences = preferences)
-    // Picker payloads built off suspend work (the desktop audio-device
-    // enumeration) launch here.
-    val scope = rememberCoroutineScope()
 
-    // One-shot Re-detect confirmations (issue #186 §5.10, the PrivacyData
-    // screen-forward pattern): resolve the resource text here — the tier
-    // label is the enum's displayName, the same face the row subtitles use —
-    // and post each emitted message through the app-wide UserMessageBus.
-    val bus = LocalUserMessageBus.current
-    LaunchedEffect(bus) {
-        viewModel.redetectMessages.collect { message ->
-            when (message) {
-                is PerformanceRedetectMessage.Detected ->
-                    bus.info(getString(Res.string.settings_redetect_done, message.tier.displayName))
-                PerformanceRedetectMessage.Failed ->
-                    bus.info(getString(Res.string.settings_redetect_failed))
-            }
-        }
-    }
+    val hubGroups = PlaybackHubSlots.withContent(
+        bodies = listOf(
+            { _ ->
+                PlaybackHubSection(
+                    preferences = preferences,
+                    highlightSettingId = highlightSettingId,
+                    navActions = navActions,
+                )
+            },
+        ),
+    )
 
     PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_playback_title),
         onBack = onBack,
         focusTag = "playback_init",
         highlightSettingId = highlightSettingId,
-        groups = playbackScreenGroups(
-            preferences = preferences,
-            rowFlags = rowFlags,
-            highlightSettingId = highlightSettingId,
-            viewModel = viewModel,
-            scope = scope,
-            navActions = navActions,
-        ),
-        advancedToggle = PreferenceAdvancedToggle(
-            showAdvanced = showAdvanced,
-            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-        ),
-        hiddenHint = PreferenceHiddenHint(
-            // Derived in the shell from the declaration above: the player
-            // group's advanced rows, the advanced-video group, the preferred
-            // engine's branch rows and the media-segments group — honest
-            // across the (isTv, engine, parent-toggle) combos the frozen
-            // literal silently approximated.
-            rowFlags = rowFlags,
-            onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
-        ),
+        groups = hubGroups,
         reset = PreferenceResetAction(
             iconContentDescription = stringResource(Res.string.settings_reset_playback_cd),
             dialogTitle = stringResource(Res.string.settings_reset_playback_title),
             dialogMessage = stringResource(Res.string.settings_reset_playback_message),
             onReset = { viewModel.resetPlaybackSettings() },
         ),
-        pickerHost = true,
     )
 }

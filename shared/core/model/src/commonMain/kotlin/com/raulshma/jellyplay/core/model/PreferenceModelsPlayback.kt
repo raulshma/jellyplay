@@ -43,6 +43,14 @@ enum class StreamingQuality(override val displayName: String, val maxHeight: Int
     HD_720P("720p", 720),
     FHD_1080P("1080p", 1080),
     UHD_4K("4K", 2160),
+
+    /**
+     * The bitrate/direct-quality choice: no tier-derived bitrate ceiling and
+     * no height cap. A manual bandwidth cap or Data Saver still applies (the
+     * player picker surfaces that caveat). Appended LAST so every existing
+     * ordinal stays stable; persistence is the enum NAME.
+     */
+    ORIGINAL("Original"),
 }
 
 @Immutable

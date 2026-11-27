@@ -48,14 +48,14 @@ jobs:
       # pre-installing it is faster and works fully offline.
       - name: Set up JDK 17
         if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        uses: github/codeql-action/init@bf58c2ac1f8060aa73f1225f461c80391348076a # v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -78,6 +78,6 @@ jobs:
             "-Pkotlin.daemon.jvmargs=-Xmx3g -XX:+UseParallelGC"
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@988661ebb5e81487b3fb31b2185d2856c0a10679 # v4
+        uses: github/codeql-action/analyze@bf58c2ac1f8060aa73f1225f461c80391348076a # v4
         with:
           category: "/language:${{ matrix.language }}"

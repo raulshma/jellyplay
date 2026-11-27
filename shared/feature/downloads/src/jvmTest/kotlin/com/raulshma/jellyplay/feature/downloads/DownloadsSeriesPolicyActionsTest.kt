@@ -1,15 +1,21 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.SeriesDownloadArm
 import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
+import com.raulshma.jellyplay.core.model.LibraryFilters
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.testfixtures.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -42,14 +48,21 @@ import org.junit.Rule
  * 2. The nameless arm (a sheet-written row before its first episode download
  *    backfills the name) falls back to the series id.
  * 3. Deterministic display order (name case-insensitive, id tiebreaker).
- * 4. `unArmSeries` dispatches THE disarm verb — `setSeriesPolicy(id, null)` —
- *    and nothing else (the sheet's Default chip never writes it).
+ * 4. `unArmSeries` dispatches THE disarm verb — the NEVER tombstone
+ *    (`setSeriesPolicy(id, NEVER)`: the row must survive the arr auto-arm
+ *    sync's re-arm-any-rowless-series pass), never a row deletion; the fold's
+ *    [ArmedSeriesRow.reArmable] flag keys on that RAW row mode (a
+ *    FOLLOW_GLOBAL row under a global NEVER must NOT offer re-arm);
+ *    `reArmSeries` flips the tombstone back with `setSeriesPolicy(id,
+ *    FOLLOW_GLOBAL)` — never [armSeries], which would no-op on the row — and
+ *    `armSeries` is the [SeriesDownloadPolicyStore.manualArmSeries]
+ *    passthrough behind the picker (the tombstone-rearming manual verb).
  * 5. The relocated gh-181 suggestion confirm/dismiss still pass through the
  *    holder (the same behavior the pre-relocation suites reached via the VM,
  *    pinned here now that the members moved).
  *
  * Drives the holder DIRECTLY (the DownloadsResyncActions extraction
- * precedent): the policy/intake/store doubles are enough — no full-VM
+ * precedent): the policy/intake/store/library doubles are enough — no full-VM
  * construction.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -61,6 +74,9 @@ class DownloadsSeriesPolicyActionsTest {
     private lateinit var policyRepository: SeriesDownloadPolicyStore
     private lateinit var intake: DownloadIntake
     private lateinit var downloadsStore: DownloadsStore
+    private lateinit var libraryFeed: LibraryFeed
+    /** The manual arm's schedule reconcile seam. */
+    private lateinit var autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 
     /** Test-owned holder scope (the resync mirror test's mechanics). */
     private var holderScope: CoroutineScope? = null
@@ -78,6 +94,8 @@ class DownloadsSeriesPolicyActionsTest {
     fun setUp() {
         policyRepository = mockk(relaxed = true)
         intake = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
+        autoDownloadScheduler = mockk(relaxed = true)
         armedFlow = MutableStateFlow(emptyList())
         storeSliceFlow = MutableStateFlow(DownloadsSlice())
         every { policyRepository.observeArmedSeries() } returns armedFlow
@@ -104,6 +122,8 @@ class DownloadsSeriesPolicyActionsTest {
         policyStore = policyRepository,
         intake = intake,
         downloadsStore = downloadsStore,
+        libraryFeed = libraryFeed,
+        autoDownloadScheduler = autoDownloadScheduler,
         postMessage = { sentMessages += it },
     )
 
@@ -143,6 +163,41 @@ class DownloadsSeriesPolicyActionsTest {
         // and not dressed up as a follows-global row.
         val never = rows.single { it.seriesId == "s3" }
         assertFalse(never.followsGlobal)
+    }
+
+    @Test
+    fun reArmable_keys_on_the_raw_row_mode_never_the_resolved_mode() {
+        // The NEVER tombstone (what unArmSeries writes) carries the re-arm
+        // affordance data; a FOLLOW_GLOBAL row under a global NEVER also
+        // RESOLVES to Never but is an ARMED row — its button must stay
+        // "Stop auto-download" (re-arming it would be a no-op write on a
+        // row that already follows the global preference).
+        val rows = armedSeriesRows(
+            listOf(
+                arm("tombstone", AutoDownloadMode.NEVER),
+                arm("follower", AutoDownloadMode.FOLLOW_GLOBAL),
+            ),
+            AutoDownloadMode.NEVER,
+        )
+        assertEquals(listOf(AutoDownloadMode.NEVER, AutoDownloadMode.NEVER), rows.map { it.resolvedMode })
+        assertTrue(rows.single { it.seriesId == "tombstone" }.reArmable)
+        assertFalse(rows.single { it.seriesId == "follower" }.reArmable)
+        assertTrue(rows.single { it.seriesId == "follower" }.followsGlobal)
+    }
+
+    @Test
+    fun sort_and_name_fallback_survive_the_tombstone_flag() {
+        val rows = armedSeriesRows(
+            listOf(
+                arm("b", AutoDownloadMode.NEVER, seriesName = ""),
+                arm("a", AutoDownloadMode.NEVER, seriesName = "Alpha"),
+            ),
+            AutoDownloadMode.ASK,
+        )
+        // The fold's display contract is untouched by the new flag: the
+        // nameless tombstone falls back to its id, name-first order holds.
+        assertEquals("b", rows.single { it.seriesId == "b" }.displayName)
+        assertEquals(listOf("a", "b"), rows.map { it.seriesId })
     }
 
     @Test
@@ -201,15 +256,106 @@ class DownloadsSeriesPolicyActionsTest {
         }
 
     @Test
-    fun unArmSeries_dispatches_the_disarm_verb() = runTest(mainDispatcherRule.testDispatcher) {
+    fun unArmSeries_writes_the_never_tombstone_and_never_a_row_deletion() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            holderScope = CoroutineScope(mainDispatcherRule.testDispatcher)
+            val actions = holderScope!!.policyActions()
+
+            actions.unArmSeries("s1")
+            advanceUntilIdle()
+
+            // The gh-225 follow-up's disarm tombstone: the row survives as
+            // NEVER so the arr auto-arm sync cannot resurrect the series, and
+            // the armed card keeps it listed with the re-arm affordance. A
+            // null write (the old row deletion) is exactly the shape the sync
+            // re-arms — never written again.
+            coVerify(exactly = 1) { policyRepository.setSeriesPolicy("s1", AutoDownloadMode.NEVER) }
+            coVerify(exactly = 0) { policyRepository.setSeriesPolicy("s1", null) }
+        }
+
+    @Test
+    fun reArmSeries_flips_the_tombstone_through_setSeriesPolicy_not_armSeries() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            holderScope = CoroutineScope(mainDispatcherRule.testDispatcher)
+            val actions = holderScope!!.policyActions()
+
+            actions.reArmSeries("s1")
+            advanceUntilIdle()
+
+            // The row exists — armSeries' insert-if-absent would no-op on it,
+            // so re-arm must be the setSeriesPolicy write.
+            coVerify(exactly = 1) { policyRepository.setSeriesPolicy("s1", AutoDownloadMode.FOLLOW_GLOBAL) }
+            coVerify(exactly = 0) { policyRepository.armSeries(any(), any()) }
+        }
+
+    @Test
+    fun armSeries_is_the_manualArmSeries_passthrough() = runTest(mainDispatcherRule.testDispatcher) {
         holderScope = CoroutineScope(mainDispatcherRule.testDispatcher)
         val actions = holderScope!!.policyActions()
 
-        actions.unArmSeries("s1")
+        actions.armSeries("s7", "Show Seven")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { policyRepository.setSeriesPolicy("s1", null) }
+        // The picker rides the manual verb (tombstone re-arm included), not
+        // the arr sync's add-only armSeries.
+        coVerify(exactly = 1) { policyRepository.manualArmSeries("s7", "Show Seven") }
+        coVerify(exactly = 0) { policyRepository.armSeries(any(), any()) }
+        coVerify(exactly = 0) { policyRepository.setSeriesPolicy(any<String>(), any<AutoDownloadMode>()) }
+        // The first arm row is a keep-alive term of its own: the write pokes
+        // the schedule reconcile in the same launch, so the pass this arm
+        // exists for is scheduled even under a global-off configuration —
+        // and the reconcile runs only AFTER the write completed (a sync that
+        // raced the write could read a stale hasSeriesPolicies gate).
+        coVerify(exactly = 1) { autoDownloadScheduler.sync() }
+        coVerifyOrder {
+            policyRepository.manualArmSeries("s7", "Show Seven")
+            autoDownloadScheduler.sync()
+        }
+        // The landed arm is confirmed through the sink (the picker's sheet
+        // closes on the same tap — the bus message outlives it).
+        assertEquals(listOf<DownloadsUserMessage>(DownloadsUserMessage.SeriesArmed), sentMessages)
     }
+
+    @Test
+    fun searchArmCandidates_queries_series_only_through_the_library_seam() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            holderScope = CoroutineScope(mainDispatcherRule.testDispatcher)
+            val actions = holderScope!!.policyActions()
+            val series = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES)
+            coEvery {
+                libraryFeed.search(any(), any(), any(), any())
+            } returns Result.success(SearchResult(items = listOf(series), totalRecordCount = 1, startIndex = 0))
+
+            val results = actions.searchArmCandidates("  show  ")
+
+            // The query is trimmed; the filter restricts the request to SERIES
+            // items (the picker has no movie rows to arm). All-matcher
+            // verify: MockK forbids mixing bare values with `any()`.
+            assertEquals(listOf(series), results.getOrThrow())
+            coVerify {
+                libraryFeed.search(
+                    eq("show"),
+                    eq(LibraryFilters(mediaTypes = listOf(MediaType.SERIES))),
+                    any(),
+                    eq(0),
+                )
+            }
+        }
+
+    @Test
+    fun searchArmCandidates_skips_blank_queries_and_propagates_failures() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            holderScope = CoroutineScope(mainDispatcherRule.testDispatcher)
+            val actions = holderScope!!.policyActions()
+            coEvery { libraryFeed.search(any(), any(), any(), any()) } returns Result.failure(IllegalStateException("offline"))
+
+            assertTrue(actions.searchArmCandidates("   ").getOrThrow().isEmpty())
+            coVerify(exactly = 0) { libraryFeed.search(any(), any(), any(), any()) }
+
+            // The failure travels to the picker (its error line), never
+            // folded into an empty success that reads as "no matches".
+            assertTrue(actions.searchArmCandidates("dune").isFailure)
+        }
 
     // ── the relocated suggestion family (gh-181) ──────────────────────────
 

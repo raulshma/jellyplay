@@ -45,6 +45,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 downloadsStore = koin().get(),
                 serverIdentityStore = koin().get(),
                 suggestionNotifier = koin().get(),
+                arrAutoArmSync = koin().get(),
             )
             UserDataSyncWorker::class.simpleName -> UserDataSyncWorker(
                 context, workerParameters,

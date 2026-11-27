@@ -232,12 +232,23 @@ private fun verifyRowResourceKey(id: String, field: String, declaredKey: String?
  * declaration you read is the single home of the group's order, faces and
  * gates. Decorating and aggregating stay the same act (see
  * [SettingsScreenGroups]).
+ *
+ * The optional card face (`cardTitleRes`/`cardSubtitleRes`/`cardKeywords`)
+ * turns the group's rendered card itself into ONE searchable item — declared
+ * only on the advancedOnly groups that render a labeled card (the derivation
+ * in [SettingsSearchItemGroup.cardItem] makes the hit land on the group's
+ * first member row). All three faces are hand-written at the group site and
+ * reuse the screen-emission strings; the derivation dies at init on any
+ * partial face or non-uniform member route set.
  */
 internal fun List<SettingsRow>.asRowGroup(
     id: String,
     specEntries: List<PreferenceSearchSpec>,
     routes: Map<String, Route>,
     categoryRes: StringResource,
+    cardTitleRes: StringResource? = null,
+    cardSubtitleRes: StringResource? = null,
+    cardKeywords: List<String> = emptyList(),
 ): SettingsSearchItemGroup {
     val items = toSearchItems(specEntries, routes, categoryRes)
     val specAdvancedOfId = specEntries.associate { it.id to it.isAdvanced }
@@ -245,7 +256,14 @@ internal fun List<SettingsRow>.asRowGroup(
         val effectiveAdvanced = specAdvancedOfId[row.id] ?: row.isAdvanced
         row.id to (row.gate ?: if (effectiveAdvanced) RowAdmission.Advanced else RowAdmission.Always)
     }
-    return SettingsSearchItemGroup(id, items, admissions)
+    return SettingsSearchItemGroup(
+        id,
+        items,
+        admissions,
+        cardTitleRes,
+        cardSubtitleRes,
+        cardKeywords,
+    )
 }
 
 /**

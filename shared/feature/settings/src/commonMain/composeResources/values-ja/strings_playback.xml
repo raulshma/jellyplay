@@ -76,6 +76,8 @@
     <string name="settings_quality_720p">720p</string>
     <string name="settings_quality_1080p">1080p</string>
     <string name="settings_quality_4k">4K</string>
+    <string name="settings_quality_original_uncapped">オリジナル（ビットレート無制限）</string>
+    <string name="settings_quality_original">オリジナル</string>
     <string name="settings_network_timeouts">ネットワークタイムアウト</string>
     <string name="settings_network_timeouts_subtitle">接続/読み取り/書き込みタイムアウトのプリセット（適用には再起動）</string>
     <string name="settings_dialogue_boost">ダイアログブースト</string>
@@ -247,6 +249,23 @@
     <string name="settings_dvr_quality_medium">中品質にトランスコード（720p）</string>
     <string name="settings_dvr_quality_low">低品質にトランスコード（480p）</string>
     <string name="settings_playback_subtitle">プレーヤーエンジン: %1$s</string>
+    <string name="settings_playback_sections">再生セクション</string>
+    <string name="settings_playback_entry_basics">基本</string>
+    <string name="settings_playback_entry_basics_subtitle">エンジン、自動再生、再開とプレーヤーの動作</string>
+    <string name="settings_playback_entry_controls">操作 &amp; ジェスチャー</string>
+    <string name="settings_playback_entry_controls_subtitle">タッチ、向き、ジェスチャーと入力割り当て</string>
+    <string name="settings_playback_entry_chrome">プレーヤー表示</string>
+    <string name="settings_playback_entry_chrome_subtitle">オーバーレイ、シークバー、ボタンとHUDレイアウト</string>
+    <string name="settings_playback_entry_video_quality">動画 &amp; トランスコード</string>
+    <string name="settings_playback_entry_video_quality_subtitle">品質、デコーダー、パススルーとトランスコード上限</string>
+    <string name="settings_playback_entry_engines">プレーヤーエンジン</string>
+    <string name="settings_playback_entry_engines_subtitle">MPV・VLC・ExoPlayer・外部プレーヤーの調整</string>
+    <string name="settings_playback_entry_segments">スキップ &amp; セグメント</string>
+    <string name="settings_playback_entry_segments_subtitle">イントロ/アウトロスキップ、リキャップと次に視聴のプレロール</string>
+    <string name="settings_playback_entry_syncplay_casting">SyncPlay &amp; キャスト</string>
+    <string name="settings_playback_entry_syncplay_casting_subtitle">視聴パーティー、DLNAとレンダラーの選択</string>
+    <string name="settings_playback_entry_live_tv">ライブTV &amp; DVR</string>
+    <string name="settings_playback_entry_live_tv_subtitle">録画の前後マージンと品質</string>
     <string name="settings_player_engine">プレーヤーエンジン</string>
     <string name="settings_player_engine_subtitle">メディア再生エンジンを選択</string>
     <string name="settings_shader_pack">シェーダーパック</string>
@@ -311,6 +330,8 @@
     <string name="settings_video_resume_chip_ms_subtitle">「タップして最初から」チップの表示時間（0 = 表示しない）</string>
     <string name="settings_video_show_prev_next_buttons">前へ/次へボタン</string>
     <string name="settings_video_show_prev_next_buttons_subtitle">再生ボタンの横にエピソードスキップボタンを表示します</string>
+    <string name="settings_video_playback_diagnostics">再生診断</string>
+    <string name="settings_video_playback_diagnostics_subtitle">リアルタイムのネットワークスループットとバッファリングのテレメトリーを表示</string>
     <string name="settings_video_swipe_sensitivity">スワイプ感度</string>
     <string name="settings_video_swipe_sensitivity_subtitle">明るさ/音量スワイプの反応の速さ</string>
     <string name="settings_video_gesture_overlay_linger_ms">ジェスチャーオーバーレイの表示時間</string>

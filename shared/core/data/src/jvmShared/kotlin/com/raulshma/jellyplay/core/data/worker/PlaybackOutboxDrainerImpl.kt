@@ -277,17 +277,18 @@ class PlaybackOutboxDrainerImpl(
                 reconciledItems.add(entry.itemId)
             } else {
                 val budget = if (entry.eventType in USER_INTENT_EVENT_TYPES) MAX_INTENT_RETRIES else MAX_RETRIES
-                if (attempt >= budget) {
-                    Log.w(
-                        TAG,
-                        "Dead-lettering outbox entry ${entry.id} " +
-                            "(item=${entry.itemId}, type=${entry.eventType}) " +
-                            "after $budget attempts",
-                    )
-                    outbox.markDeadLetter(entry.id)
-                    deadLetteredCount++
-                } else {
-                    anyFailure = true
+                when (WorkerRetryVerdict.of(attempt, budget)) {
+                    WorkerRetryVerdict.Exhausted -> {
+                        Log.w(
+                            TAG,
+                            "Dead-lettering outbox entry ${entry.id} " +
+                                "(item=${entry.itemId}, type=${entry.eventType}) " +
+                                "after $budget attempts",
+                        )
+                        outbox.markDeadLetter(entry.id)
+                        deadLetteredCount++
+                    }
+                    WorkerRetryVerdict.Retry -> anyFailure = true
                 }
             }
             remaining--

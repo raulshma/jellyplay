@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.FetchFailureCause
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -23,6 +24,7 @@ import com.raulshma.jellyplay.core.model.ResyncStep
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SyncStatus
 import com.raulshma.jellyplay.core.model.TrickplayInfo
+import com.raulshma.jellyplay.core.network.api.ApiException
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
@@ -48,6 +50,9 @@ import kotlin.test.assertTrue
  * signature rules are exercised separately in [OfflineSyncComparatorTest]; the
  * decision/persistence orchestration lives in [OfflineSyncManagerTest]. Here we
  * assert the manager wires options -> writer calls -> baseline persistence.
+ * The fetch-failure classification pins (auth vs network vs server vs parse
+ * distinguishability at the two `getMediaDetail` folds, user-facing step
+ * message untouched) live here too.
  *
  * Ported verbatim from the legacy :core:data Robolectric-free suite (same
  * package) so the coverage survives the legacy shim's deletion. Kept as a
@@ -458,6 +463,118 @@ class OfflineSyncManagerResyncTest {
         val slot = slot<SyncBaselineEntity>()
         coVerify { syncBaselineDao.upsert(capture(slot)) }
         assertEquals(1, slot.captured.syncSubtitlesPending)
+    }
+
+    // ── Fetch-failure classification (the offline freshness fold) ───────────
+
+    @Test
+    fun `resyncItem fetch failures classify into distinguishable causes without touching the step message`() = runTest {
+        // Auth revocation (401): the network layer pre-classifies it as
+        // access-denied — the case that used to be indistinguishable from a
+        // DNS failure or a server 500.
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns Result.failure(
+            ApiException(
+                isRetryable = false,
+                httpCode = 401,
+                isAccessDenied = true,
+                message = "Authentication required. Please sign in again.",
+            ),
+        )
+        val authStep = manager.resyncItem(itemId).steps.single { it.step == ResyncStep.FETCH_DETAIL }
+        assertEquals(FetchFailureCause.AUTH, authStep.failureCause)
+        // The step message stays the user-facing literal it always was —
+        // ResyncActions surfaces it verbatim — so the cause rides the field.
+        assertEquals("Fetch failed", authStep.message)
+
+        // DNS/network failure: raw IO.
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns
+            Result.failure(java.io.IOException("unable to resolve host"))
+        val networkStep = manager.resyncItem(itemId).steps.single { it.step == ResyncStep.FETCH_DETAIL }
+        assertEquals(FetchFailureCause.NETWORK, networkStep.failureCause)
+
+        // The realistic wrapped shape: fromNetwork keeps the IO throwable as
+        // the ApiException's cause, so the classifier must walk the chain.
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns Result.failure(
+            ApiException(
+                isRetryable = true,
+                message = "Network error. Check your connection and try again.",
+                cause = java.io.IOException("connection reset"),
+            ),
+        )
+        val wrappedStep = manager.resyncItem(itemId).steps.single { it.step == ResyncStep.FETCH_DETAIL }
+        assertEquals(FetchFailureCause.NETWORK, wrappedStep.failureCause)
+
+        // The server answered with an error status.
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns
+            Result.failure(ApiException.fromHttp(500, "Server error (500). Please try again later."))
+        val serverStep = manager.resyncItem(itemId).steps.single { it.step == ResyncStep.FETCH_DETAIL }
+        assertEquals(FetchFailureCause.SERVER, serverStep.failureCause)
+
+        // A response arrived but could not be parsed into the model.
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns Result.failure(
+            ApiException(
+                isRetryable = false,
+                message = "Bad payload",
+                cause = kotlinx.serialization.SerializationException("malformed detail"),
+            ),
+        )
+        val parseStep = manager.resyncItem(itemId).steps.single { it.step == ResyncStep.FETCH_DETAIL }
+        assertEquals(FetchFailureCause.PARSE, parseStep.failureCause)
+    }
+
+    @Test
+    fun `resyncItem classifies an unrecognized failure as OTHER`() = runTest {
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns
+            Result.failure(IllegalStateException("weird"))
+
+        val step = manager.resyncItem(itemId).steps.single { it.step == ResyncStep.FETCH_DETAIL }
+
+        assertEquals(FetchFailureCause.OTHER, step.failureCause)
+    }
+
+    @Test
+    fun `checkForUpdates auth-shaped and network-shaped failures stay distinguishable on the result`() = runTest {
+        // Auth revocation (401) vs network failure: distinguishable as data on
+        // the returned record — the badge text they light up is identical.
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns Result.failure(
+            ApiException(
+                isRetryable = false,
+                httpCode = 401,
+                isAccessDenied = true,
+                message = "Authentication required. Please sign in again.",
+            ),
+        )
+        val authCheck = manager.checkForUpdates(itemId)
+        assertEquals(SyncStatus.ERROR, authCheck.state.status)
+        assertEquals(FetchFailureCause.AUTH, authCheck.failureCause)
+
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns
+            Result.failure(java.io.IOException("connection reset"))
+        val networkCheck = manager.checkForUpdates(itemId)
+        assertEquals(FetchFailureCause.NETWORK, networkCheck.failureCause)
+        assertTrue(authCheck.failureCause != networkCheck.failureCause, "auth and network shapes must stay distinguishable")
+    }
+
+    @Test
+    fun `a classified check failure persists the pre-classification record shape`() = runTest {
+        // The persisted row stays cause-less (no cause column; the projection
+        // stays lossless): classification changes only the returned record +
+        // log, never the recordError upsert.
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns Result.failure(
+            ApiException(
+                isRetryable = false,
+                httpCode = 401,
+                isAccessDenied = true,
+                message = "Authentication required. Please sign in again.",
+            ),
+        )
+
+        manager.checkForUpdates(itemId)
+
+        val slot = slot<SyncBaselineEntity>()
+        coVerify(exactly = 1) { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(1, slot.captured.syncError)
+        assertEquals("poster-1", slot.captured.syncedPosterTag, "the prior baseline survives unchanged")
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

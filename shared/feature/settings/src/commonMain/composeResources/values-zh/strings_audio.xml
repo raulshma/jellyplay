@@ -3,6 +3,7 @@
     <!-- The Audio settings screen family. -->
     <string name="settings_audio_player">音频播放器</string>
     <string name="settings_audio_player_title">音频播放器</string>
+    <string name="settings_audio_fine_tuning">微调</string>
     <string name="settings_audio_default_speed">默认速度</string>
     <string name="settings_audio_default_speed_normal">正常播放速度</string>
     <string name="settings_audio_default_speed_value">%1$sx 播放</string>

@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
-import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
 import android.view.View
@@ -46,6 +45,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import com.raulshma.jellyplay.core.data.playback.BassBoostHelper
@@ -76,6 +76,7 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.AssStyleOverridePars
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssStyleOverrideExtractorsFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.ExoCueCollisionResolver
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 import io.github.peerless2012.ass.media.AssHandler
@@ -118,6 +119,7 @@ private const val TAG = "ExoPlayerEngine"
  * a start move smaller than this keeps the previous band published.
  */
 private const val BUFFERED_BAND_START_STEP_MS = 500L
+private const val SUBTITLE_STACK_GAP_DP = 4f
 
 class ExoPlayerEngine(
     private val context: Context,
@@ -163,6 +165,14 @@ class ExoPlayerEngine(
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
     private var frameSizeListener: android.view.View.OnLayoutChangeListener? = null
+    // Engine-owned SubtitleView receiving collision-resolved cues (PlayerView's
+    // built-in SubtitleView stays View.GONE so simultaneous cues never draw on
+    // top of one another).
+    private var managedSubtitleView: SubtitleView? = null
+    private var subtitleViewSizeListener: android.view.View.OnLayoutChangeListener? = null
+    private var latestRawCues: List<Cue> = emptyList()
+    private val cueCollisionResolver = ExoCueCollisionResolver(context)
+    private var lastLoadedRequest: PlaybackRequest? = null
     // Optional screen-pinned host. When non-null, [reparentSubtitleViews]
     // parents the SubtitleView/AssSubtitleView here (a sibling of the zoomed
     // video surface, outside the pinch/crop transform) instead of the
@@ -398,6 +408,8 @@ class ExoPlayerEngine(
             if (currentTextId != lastSelectedTextTrackId) {
                 lastSelectedTextTrackId = currentTextId
                 _currentCues.value = emptyList()
+                latestRawCues = emptyList()
+                managedSubtitleView?.setCues(emptyList())
                 // Clear the malformed-track latch only when a subtitle track
                 // becomes *selected* (null → non-null). The auto-disable path
                 // sets TRACK_TYPE_TEXT disabled, which itself fires this
@@ -431,6 +443,8 @@ class ExoPlayerEngine(
 
         override fun onCues(cueGroup: CueGroup) {
             accumulateCues(cueGroup)
+            latestRawCues = if (subtitleTrackAutoDisabled) emptyList() else cueGroup.cues
+            publishResolvedCuesToView()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -516,58 +530,13 @@ class ExoPlayerEngine(
     private val currentExoConfig: ExoPlayerEngineConfig
         get() = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
 
-    // ── Dedicated background thread for the player teardown ────────────────
-    // Same shape as the mpv/libVLC release threads in this package: the
-    // blocking final teardown of the native handle runs off the main looper.
-    //
-    // ExoPlayerImpl.release() blocks the CALLING thread — up to its release
-    // timeout — while the internal playback thread runs resetInternal +
-    // renderer/codec teardown (a ConditionVariable join). On the main looper
-    // (which invokes release() from the Compose onDispose, and from load()'s
-    // teardown-as-reset before a rebuild) that join is a frame stall sized
-    // by codec release. The instance handed to this thread is fully
-    // detached first — both listeners removed, PlayerView cleared, engine
-    // field nulled, all on main BEFORE the post — so the posted release is
-    // the final operation on it and no callback can observe the teardown
-    // (callback delivery stops at the listener removal, which happens on
-    // the same main looper that would have received them). Media3 enforces
-    // its application-thread contract with a log line (the throwing variant
-    // is a debug opt-in), so the posted release surfaces one
-    // "player-accessed-on-wrong-thread" warning per teardown — the accepted
-    // cost of keeping the join off main.
-    //
-    // The in-sink AudioProcessor instances are the one shared resource the
-    // draining player still touches during this window (the old sink's
-    // reset() resets them from the old playback thread); [load]'s rebuild
-    // path installs a fresh set into the new player (see
-    // [rebuildAudioEffectSet]) so the drain and the new pipeline never race
-    // one.
-    //
-    // Self-healing like [BasePlayerEngine.engineScope]: every release quits
-    // the thread, so each read must return a live generation — a Handler
-    // cached across releases would post into the quit looper, which
-    // silently discards the message and skips the release entirely.
-    private var releaseThreadGeneration: HandlerThread? = null
-
-    private val releaseThread: HandlerThread
-        get() = releaseThreadGeneration
-            ?.takeIf { it.isAlive }
-            ?: HandlerThread("ExoRelease", android.os.Process.THREAD_PRIORITY_BACKGROUND)
-                .also { it.start() }
-                .also { releaseThreadGeneration = it }
-    private val releaseHandler: Handler get() = Handler(releaseThread.looper)
-
     /**
      * Fresh in-sink processor instances (and the chain/dialogue-boost
      * wrappers that hold them) for a rebuilt player. Called on the full
-     * rebuild path of [load] AFTER the old player's release has been handed
-     * to the release thread: the old player's drain resets the OLD
-     * processors on the old playback thread while the new player's playback
-     * thread configures the NEW ones — unsynchronized `AudioProcessor`
-     * implementations must never be shared across those two threads. Every
-     * processor knob is config-derived ([AudioEffectChain.apply] re-applies
-     * the full surface from `currentConfig` at the end of [load]), so the
-     * fresh instances need no state carried over.
+     * rebuild path of [load] after [release] tears down the previous player.
+     * Every processor knob is config-derived ([AudioEffectChain.apply]
+     * re-applies the full surface from `currentConfig` at the end of [load]),
+     * so the fresh instances need no state carried over.
      */
     private fun rebuildAudioEffectSet() {
         highPassFilter = HighPassFilterAudioProcessor()
@@ -590,6 +559,9 @@ class ExoPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
+        // Per-request epoch first (see bumpLoadEpoch): the session watcher's
+        // stale-baseline drop reads it, so it must move before any state write.
+        bumpLoadEpoch()
         ensurePlayerThread("load")
 
         currentNormalizationGain = request.requestSpecific?.normalizationGain
@@ -628,6 +600,7 @@ class ExoPlayerEngine(
                 newInputs = inputs,
             )
         ) {
+            lastLoadedRequest = request
             reusePlayerForRequest(existingPlayer, request, exoCfg, assForRequest)
             return
         }
@@ -661,10 +634,11 @@ class ExoPlayerEngine(
             externalSubtitleHost = preservedSubtitleHost
             preservedListener?.let { preservedView.addOnLayoutChangeListener(it) }
         }
-        // The released player's release() is draining on the release thread;
-        // the rebuild below must not share the in-sink processors with it.
+        // Rebuild audio-effect set + store the active request for mid-session
+        // side-loaded ASS rebuilds after release() clears the prior one.
         rebuildAudioEffectSet()
         lastRebuildInputs = inputs
+        lastLoadedRequest = request
 
         // The rebuild's ordered build decisions, folded once (the plan owns
         // the DECISIONS — sink shape, ASS session, extractor pairing, buffer
@@ -946,6 +920,9 @@ class ExoPlayerEngine(
                 }
             }
         }
+        // Attach/re-create subtitle overlays when PlayerView survived a rebuild
+        // (createSurfaceView does not re-run when preservedView was reused).
+        playerView?.let { pv -> ensureSubtitleViews(pv) }
 
         // Build media item
         val subtitleConfigs = buildSubtitleConfigurations(request)
@@ -1003,6 +980,8 @@ class ExoPlayerEngine(
     override fun onResetItemScopedState() {
         lastSelectedTextTrackId = null
         subtitleTrackAutoDisabled = false
+        latestRawCues = emptyList()
+        managedSubtitleView?.setCues(emptyList())
         resetStatsGuard()
         // The change-guard's sample dies with the item too — the new item's
         // first stats tick must never be suppressed by the previous one.
@@ -1371,17 +1350,15 @@ class ExoPlayerEngine(
         playerView?.player = null
         playerView = null
         releasedPlayer?.let { exo ->
-            // The codec/renderer teardown joins the internal playback thread
-            // (blocking the caller for up to the release timeout) — the same
-            // blocking-native-destroy shape mpv/libVLC post to their release
-            // threads. The instance is fully detached at this point; this is
-            // its final operation.
-            releaseHandler.post {
-                try {
-                    exo.release()
-                } catch (e: Exception) {
-                    Log.w(TAG, "ExoPlayer release failed", e)
-                }
+            // Media3 1.11.1 defaults ExoPlayerImpl.throwsWhenUsingWrongThread to
+            // true, so calling release() on a background thread aborts in
+            // verifyApplicationThread() before tearing down internalPlayer,
+            // codecs, or wakelocks. release() already asserts main-thread entry
+            // via ensurePlayerThread("release"), matching exo.applicationLooper.
+            try {
+                exo.release()
+            } catch (e: Exception) {
+                Log.w(TAG, "ExoPlayer release failed", e)
             }
         }
         trackSelector = null
@@ -1407,26 +1384,21 @@ class ExoPlayerEngine(
         volumeChassis.resetUnmuteMemory()
         resetPublishedEngineState()
 
-        // Drop the libass overlay + handler so the next load() rebuilds them
-        // fresh. The AssSubtitleView is a child of the (now-cleared) subtitle
-        // target, which was torn down with playerView above; nulling the
-        // references avoids leaks and lets the GC reclaim the native
-        // Ass/AssRender handles the handler owns. (ass-media has no explicit
-        // release() on AssHandler; it relies on the player release propagating
-        // to the renderer it injected.)
+        // Drop the libass overlay + handler and the managed SubtitleView so
+        // the next load() rebuilds them fresh (including detaching from any
+        // preserved PlayerView contentFrame / externalSubtitleHost).
+        (assOverlayView?.parent as? ViewGroup)?.removeView(assOverlayView)
         assOverlayView = null
         assHandler = null
         assEnabledForSession = false
         activeTrackIsAss = false
-        // The post scheduled above is already due — quitSafely dispatches due
-        // messages before the looper dies, so the release runs to completion
-        // while no new work can be enqueued onto a dying thread. The
-        // self-healing accessor resurrects the thread if the engine is ever
-        // re-used.
-        val releaseThread = releaseThreadGeneration
-        if (releaseThread?.isAlive == true) {
-            runCatching { releaseThread.quitSafely() }
-        }
+
+        subtitleViewSizeListener?.let { managedSubtitleView?.removeOnLayoutChangeListener(it) }
+        subtitleViewSizeListener = null
+        (managedSubtitleView?.parent as? ViewGroup)?.removeView(managedSubtitleView)
+        managedSubtitleView = null
+        latestRawCues = emptyList()
+        lastLoadedRequest = null
     }
 
     override fun play() = runOnPlayerThread {
@@ -1670,6 +1642,12 @@ class ExoPlayerEngine(
             frameSizeListener?.let { old.removeOnLayoutChangeListener(it) }
         }
         frameSizeListener = null
+        subtitleViewSizeListener?.let { managedSubtitleView?.removeOnLayoutChangeListener(it) }
+        subtitleViewSizeListener = null
+        (managedSubtitleView?.parent as? ViewGroup)?.removeView(managedSubtitleView)
+        managedSubtitleView = null
+        (assOverlayView?.parent as? ViewGroup)?.removeView(assOverlayView)
+        assOverlayView = null
 
         val pv = PlayerView(context).apply {
             this.player = this@ExoPlayerEngine.player
@@ -1678,6 +1656,10 @@ class ExoPlayerEngine(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
+            // Keep PlayerView's built-in SubtitleView hidden: it receives raw
+            // unstacked cues directly from PlayerView.ComponentListener, while
+            // managedSubtitleView renders collision-resolved cues.
+            subtitleView?.visibility = View.GONE
         }
         pv.post { reparentSubtitleViews(pv) }
         // Re-parent the subtitle views into the (re-laid-out) target after every
@@ -1712,12 +1694,45 @@ class ExoPlayerEngine(
         pv.addOnLayoutChangeListener(layoutListener)
         playerView = pv
 
+        ensureSubtitleViews(pv)
+        return pv
+    }
+
+    /**
+     * Ensures [managedSubtitleView] and (for ASS sessions) [assOverlayView] exist
+     * for [pv], are parented into their targets, and carry the current style.
+     * Shared by [createSurfaceView] and [load]'s preserved-view rebuild path.
+     */
+    private fun ensureSubtitleViews(pv: PlayerView) {
+        pv.subtitleView?.visibility = View.GONE
+        if (managedSubtitleView == null) {
+            var lastSubW = -1
+            var lastSubH = -1
+            val subView = SubtitleView(pv.context).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+            }
+            val sizeListener = android.view.View.OnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+                val w = right - left
+                val h = bottom - top
+                if (w == lastSubW && h == lastSubH) return@OnLayoutChangeListener
+                lastSubW = w
+                lastSubH = h
+                subView.post { publishResolvedCuesToView() }
+            }
+            subView.addOnLayoutChangeListener(sizeListener)
+            subtitleViewSizeListener = sizeListener
+            managedSubtitleView = subView
+        }
+
         // libass overlay: only created for ASS-enabled sessions. Inserted into
         // the content frame alongside the native SubtitleView so ASS coordinates
         // map to the letterboxed video rectangle, not the full screen.
-        if (assEnabledForSession && assHandler != null) {
+        if (assEnabledForSession && assHandler != null && assOverlayView == null) {
             val handler = assHandler!!
-            val assView = AssSubtitleView(context, handler).apply {
+            val assView = AssSubtitleView(pv.context, handler).apply {
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1727,16 +1742,45 @@ class ExoPlayerEngine(
                 visibility = if (activeTrackIsAss) View.VISIBLE else View.GONE
             }
             assOverlayView = assView
-            // Parent the ASS overlay via the unified reparent path — which
-            // pins it to the content frame (the letterboxed video rectangle)
-            // so libass's video-space coordinates map 1:1 onto the surface,
-            // regardless of any screen-pinned host. Idempotent, so the initial
-            // reparent above plus this one collapse to a single add.
-            pv.post { reparentSubtitleViews(pv) }
         }
 
+        pv.post { reparentSubtitleViews(pv) }
         applySubtitleStyle(currentConfig.subtitleStyle)
-        return pv
+    }
+
+    private fun publishResolvedCuesToView() {
+        val sv = managedSubtitleView ?: return
+        val raw = latestRawCues
+        if (raw.size < 2) {
+            sv.setCues(raw)
+            return
+        }
+        val style = currentConfig.subtitleStyle
+        val contentW = sv.width - sv.paddingLeft - sv.paddingRight
+        val contentH = sv.height - sv.paddingTop - sv.paddingBottom
+        val fontSizeSp = if (style.applyCustomStyle) {
+            style.fontSize.toFloat()
+        } else {
+            DEFAULT_SUBTITLE_SIZE_SP
+        }
+        val typeface = if (style.applyCustomStyle) {
+            fontProvider.typefaceFor(style)
+        } else {
+            android.graphics.Typeface.SANS_SERIF
+        }
+        val metrics = sv.resources.displayMetrics
+        val gapPx = (SUBTITLE_STACK_GAP_DP * metrics.density).toInt()
+        val resolved = cueCollisionResolver.resolve(
+            cues = raw,
+            parentWidth = contentW,
+            parentHeight = contentH,
+            fontSizeSp = fontSizeSp,
+            typeface = typeface,
+            bottomPaddingFraction = style.verticalPosition,
+            displayMetrics = metrics,
+            gapPx = gapPx,
+        )
+        sv.setCues(resolved)
     }
 
     /**
@@ -1767,10 +1811,11 @@ class ExoPlayerEngine(
      * in [createSurfaceView]).
      */
     private fun reparentSubtitleViews(pv: PlayerView) {
+        pv.subtitleView?.visibility = View.GONE
         val contentFrame: android.view.ViewGroup =
             pv.findViewById(androidx.media3.ui.R.id.exo_content_frame) ?: return
         val nativeTarget: android.view.ViewGroup = externalSubtitleHost ?: contentFrame
-        reparentInto(pv.subtitleView, nativeTarget)
+        reparentInto(managedSubtitleView, nativeTarget)
         reparentInto(assOverlayView, contentFrame)
     }
 
@@ -1824,7 +1869,8 @@ class ExoPlayerEngine(
         val bgAlpha = (style.backgroundOpacity * 255).toInt()
         val bgColorWithAlpha = (bgAlpha shl 24) or
             (com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver.resolveBackgroundColor(style) and 0x00FFFFFF)
-        pv.subtitleView?.let { sv ->
+        pv.subtitleView?.visibility = View.GONE
+        managedSubtitleView?.let { sv ->
             if (style.applyCustomStyle) {
                 sv.setApplyEmbeddedStyles(false)
                 sv.setStyle(
@@ -1881,6 +1927,7 @@ class ExoPlayerEngine(
             // sessions without an ASS handler always show the native view.
             sv.setVisibility(if (activeTrackIsAss && assOverlayView != null) View.GONE else View.VISIBLE)
         }
+        publishResolvedCuesToView()
 
         // libass (AssSubtitleView) styling — two mechanisms, per override mode.
         //
@@ -2312,6 +2359,8 @@ class ExoPlayerEngine(
         Log.w(TAG, "Disabling subtitle track: malformed cue batch detected (${">"}$MAX_INCOMING_CUES_PER_BATCH simultaneous cues)")
         subtitleTrackAutoDisabled = true
         _currentCues.value = emptyList()
+        latestRawCues = emptyList()
+        managedSubtitleView?.setCues(emptyList())
         try {
             val params = selector.buildUponParameters()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
@@ -2422,6 +2471,25 @@ class ExoPlayerEngine(
                 Log.w(TAG, "Dropping external subtitle with unmappable codec: codec=${source.codec}, label=${source.label}")
                 return@runOnPlayerThread
             }
+
+        val updatedRequest = lastLoadedRequest?.let { req ->
+            req.copy(
+                externalSubtitles = req.externalSubtitles + source,
+                startPositionMs = currentPositionMs,
+            )
+        }
+        lastLoadedRequest = updatedRequest
+
+        // Side-loading an ASS/SSA subtitle onto a session built without
+        // libass requires rebuilding ExoPlayer with AssHandler/AssSubtitleView.
+        if ((AssSupport.isAssCodec(source.codec) || mimeType == MimeTypes.TEXT_SSA) &&
+            !assEnabledForSession &&
+            updatedRequest != null
+        ) {
+            Log.d("SubtitleUse", "exo side-load ASS requires libass rebuild: id=${source.id}")
+            load(updatedRequest)
+            return@runOnPlayerThread
+        }
 
         val newSubConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(source.url))
             .setId(source.id)

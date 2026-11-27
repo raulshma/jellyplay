@@ -3,6 +3,7 @@
     <!-- The Audio settings screen family. -->
     <string name="settings_audio_player">オーディオプレーヤー</string>
     <string name="settings_audio_player_title">オーディオプレーヤー</string>
+    <string name="settings_audio_fine_tuning">微調整</string>
     <string name="settings_audio_default_speed">デフォルトの速度</string>
     <string name="settings_audio_default_speed_normal">通常の再生速度</string>
     <string name="settings_audio_default_speed_value">%1$s倍速で再生</string>

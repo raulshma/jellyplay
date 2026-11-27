@@ -1174,10 +1174,14 @@ private fun HomeDockArea(
         { item: com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem ->
             closeSearch()
             viewModel.onEvent(HomeUiEvent.SettingsResultClicked(item))
-            // Inject the matched setting's id as the deep-link scroll/
-            // focus target so the destination screen scrolls to and
-            // highlights it — same behavior as the in-settings search.
-            callbacks.onSettingsSearchItemClick(item.route.withHighlightSettingId(item.id))
+            // Inject the matched setting's LANDING id as the deep-link
+            // scroll/focus target so the destination screen scrolls to and
+            // highlights it — same behavior as the in-settings search. A
+            // group-card hit's landing id is its group's first member row
+            // (the id its route already bakes); every row id lands on itself.
+            callbacks.onSettingsSearchItemClick(
+                item.route.withHighlightSettingId(viewModel.settingsLandingRowId(item.id)),
+            )
         }
     }
 

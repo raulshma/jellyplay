@@ -262,11 +262,19 @@ class FloatingPlayerService : Service() {
         }
     }
 
-    private fun buildForegroundNotification(): Notification {
+    internal fun buildForegroundNotification(): Notification {
+        // MainActivity is the task's singleTop root (ADR 0018): a callerless
+        // PendingIntent start forces NEW_TASK, and without CLEAR_TOP a task
+        // topped by PlayerActivity would get a SECOND shell stacked over the
+        // player instead of reusing the one underneath. Carry the reuse flags
+        // explicitly like every other in-app shell handoff
+        // (WidgetOpenApp.openAppIntent is the widget twin).
         val openIntent = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val stopIntent = PendingIntent.getService(

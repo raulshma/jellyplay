@@ -1,10 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The Appearance settings screen family: theme, style, -->
-    <!-- navigation, the Library & Cards group, performance, eye -->
-    <!-- care and the newsletter groups. -->
+    <!-- The Appearance settings screen family: the hub and its four -->
+    <!-- leaves (theme & display, library views, detail screen, -->
+    <!-- navigation & haptics), plus the performance, eye care and -->
+    <!-- newsletter groups. -->
     <string name="settings_newsletter_cd">Newsletter</string>
     <string name="settings_appearance_title">Appearance</string>
+    <string name="settings_appearance_sections">Appearance sections</string>
+    <string name="settings_appearance_entry_theme">Theme &amp; display</string>
+    <string name="settings_appearance_entry_theme_subtitle">Colors, fonts, library view mode, accessibility &amp; eye care</string>
+    <string name="settings_appearance_entry_library_views">Library views</string>
+    <string name="settings_appearance_entry_library_views_subtitle">Badges, episode lists &amp; browsing display</string>
+    <string name="settings_appearance_entry_detail">Detail screen</string>
+    <string name="settings_appearance_entry_detail_subtitle">Cast rails, chips, sections &amp; limits</string>
+    <string name="settings_appearance_detail_tuning">Density &amp; limits</string>
+    <string name="settings_appearance_entry_navigation">Navigation &amp; haptics</string>
+    <string name="settings_appearance_entry_navigation_subtitle">Bottom bar, density &amp; feedback</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_style_summary">%1$s (%2$s)</string>
     <string name="settings_artwork_dynamic">Artwork dynamic</string>
@@ -13,6 +24,7 @@
     <string name="settings_theme_follow_system">Follow system setting</string>
     <string name="settings_theme_always_light">Always light</string>
     <string name="settings_theme_always_dark">Always dark</string>
+    <string name="settings_theme_scheduled_label">Scheduled</string>
     <string name="settings_theme_scheduled">Auto day/night (%1$d:00\u2013%2$d:00)</string>
     <string name="settings_theme_style">Theme Style</string>
     <string name="settings_theme_style_subtitle">Choose a full themed look — Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura, or Vector Pop</string>
@@ -26,6 +38,7 @@
     <string name="settings_contrast_high">High contrast</string>
     <string name="settings_oled_token">OLED</string>
     <string name="settings_contrast_suffix">%1$s contrast</string>
+    <string name="settings_accent_suffix">%1$s accent</string>
     <string name="settings_library_view_mode">Library View Mode</string>
     <string name="settings_layout_mode">Layout</string>
     <string name="settings_layout_mode_subtitle">Choose auto, phone, or tablet layout</string>

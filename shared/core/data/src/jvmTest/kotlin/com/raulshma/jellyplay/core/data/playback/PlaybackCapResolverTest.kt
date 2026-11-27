@@ -114,12 +114,43 @@ class PlaybackCapResolverTest {
     }
 
     @Test
-    fun `user 4K with LOW is pulled down to 1080p and 8 Mbps`() {
+    fun `user 4K tier with LOW is pulled down to 1080p and 8 Mbps`() {
+        // UHD_4K now carries an explicit 40 Mbps tier ceiling; LOW's 8 Mbps
+        // profile cap is still the stricter value.
         val caps = resolvedByUser(StreamingQuality.UHD_4K)
         assertEquals(8_000_000L, caps.maxBitrate)
         assertEquals(1080, caps.maxHeight)
         assertTrue(caps.profileCappedBitrate)
         assertTrue(caps.profileCappedHeight)
+    }
+
+    @Test
+    fun `user ORIGINAL with LOW falls to the profile cap`() {
+        // ORIGINAL has no tier bitrate/height ceiling, so the profile IS the
+        // effective cap on LOW.
+        val caps = resolvedByUser(StreamingQuality.ORIGINAL)
+        assertEquals(8_000_000L, caps.maxBitrate)
+        assertEquals(1080, caps.maxHeight)
+        assertTrue(caps.profileCappedBitrate)
+        assertTrue(caps.profileCappedHeight)
+    }
+
+    @Test
+    fun `user ORIGINAL with MEDIUM falls to the profile cap`() {
+        val caps = resolvedByUser(StreamingQuality.ORIGINAL, tier = DevicePerformanceTier.MEDIUM)
+        assertEquals(20_000_000L, caps.maxBitrate)
+        assertEquals(1440, caps.maxHeight)
+        assertTrue(caps.profileCappedBitrate)
+        assertTrue(caps.profileCappedHeight)
+    }
+
+    @Test
+    fun `user ORIGINAL with HIGH stays uncapped`() {
+        val caps = resolvedByUser(StreamingQuality.ORIGINAL, tier = DevicePerformanceTier.HIGH)
+        assertNull(caps.maxBitrate)
+        assertNull(caps.maxHeight)
+        assertFalse(caps.profileCappedBitrate)
+        assertFalse(caps.profileCappedHeight)
     }
 
     @Test
@@ -175,11 +206,25 @@ class PlaybackCapResolverTest {
 
     @Test
     fun `home 4K tier with LOW caps at 1080p and 8 Mbps`() {
-        // A LOCAL server honours the home tier for the bitrate; 4K home is
-        // uncapped by the network, so LOW's 8 Mbps becomes the effective cap.
+        // A LOCAL server honours the home tier for the bitrate; the 4K
+        // tier's 40 Mbps ceiling is still above LOW's 8 Mbps profile cap.
         val caps = resolvedByPersisted(
             serverHost = "192.168.1.10",
             stub = { stubStores(homeStreamingQuality = StreamingQuality.UHD_4K.name) },
+        )
+        assertEquals(8_000_000L, caps.maxBitrate)
+        assertEquals(1080, caps.maxHeight)
+        assertTrue(caps.profileCappedBitrate)
+        assertTrue(caps.profileCappedHeight)
+    }
+
+    @Test
+    fun `home ORIGINAL tier with LOW caps at 1080p and 8 Mbps`() {
+        // The ORIGINAL home tier is uncapped by the network, so LOW's 8 Mbps
+        // profile ceiling becomes the effective cap.
+        val caps = resolvedByPersisted(
+            serverHost = "192.168.1.10",
+            stub = { stubStores(homeStreamingQuality = StreamingQuality.ORIGINAL.name) },
         )
         assertEquals(8_000_000L, caps.maxBitrate)
         assertEquals(1080, caps.maxHeight)
@@ -221,7 +266,7 @@ class PlaybackCapResolverTest {
 
     @Test
     fun `null base cap with LOW falls to the profile cap`() {
-        val caps = resolvedByUser(StreamingQuality.UHD_4K)
+        val caps = resolvedByUser(StreamingQuality.ORIGINAL)
         assertEquals(8_000_000L, caps.maxBitrate)
         assertEquals(1080, caps.maxHeight)
     }

@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -22,6 +24,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +74,11 @@ fun SubtitleTesterScreen(
     val activeEngine by viewModel.activeEngine.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val host = remember { PreviewEngineHost(context, onSurfaceReady = {}) }
+    DisposableEffect(host) {
+        onDispose {
+            host.release()
+        }
+    }
     var showDiscardDialog by remember { mutableStateOf(false) }
 
     // TV: grab initial focus on the first control so the first D-pad press lands
@@ -201,7 +209,13 @@ fun SubtitleTesterScreen(
 private fun EnginePicker(selected: PlayerType, onSelect: (PlayerType) -> Unit) {
     val engines = PlayerType.entries.filter { it != PlayerType.EXTERNAL }
     var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
         OutlinedTextField(
             value = selected.name,
             onValueChange = {},
@@ -210,8 +224,7 @@ private fun EnginePicker(selected: PlayerType, onSelect: (PlayerType) -> Unit) {
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .menuAnchor(),
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             engines.forEach { type ->
@@ -230,7 +243,13 @@ private fun PresetPicker(selected: String, onSelect: (String) -> Unit) {
     val presets = SampleSubtitlePresets.ALL
     var expanded by remember { mutableStateOf(false) }
     val selectedName = stringResource(SampleSubtitlePresets.byId(selected).displayName)
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
         OutlinedTextField(
             value = selectedName,
             onValueChange = {},
@@ -239,8 +258,7 @@ private fun PresetPicker(selected: String, onSelect: (String) -> Unit) {
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .menuAnchor(),
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             presets.forEach { preset ->

@@ -197,6 +197,15 @@ class DownloadsStoreTest {
     }
 
     @Test
+    fun `auto-arm-from-arr defaults off and round-trips`() = runTest {
+        // The gh-225 follow-up opt-in: the write-through line the spec KDoc
+        // convention pins for every new row.
+        assertEquals(false, store.downloads.first().autoArmFromArr)
+        store.setAutoArmFromArr(true)
+        assertEquals(true, store.downloads.first().autoArmFromArr)
+    }
+
+    @Test
     fun `auto-download servers round-trips into the active user's namespace`() = runTest {
         val identity = ServerIdentityStore(dataStore, scope)
         identity.setActiveSession("srv-1", "user-1")

@@ -167,7 +167,9 @@ class SessionLoadHooks(
  *     `sessionManager.loadMedia`
  *  6. per-item hydration from the *hydrated* aggregate (fresh
  *     `aggregateRaw.first()`, not the cold-start snapshot)
- *  7. stream URL → media session → duration seed → detail apply
+ *  7. stream URL → duration seed → detail apply
+ *  7b. load settlement wait — ONLY a Ready phase continues; the media
+ *     session is created after it (never for a load that failed or timed out)
  *  8. loading-screen lift (seek bar's first paint is the resume fraction)
  *  9. trickplay selection
  * 10. start report → position/progress tracking → segments → episodes
@@ -324,7 +326,7 @@ internal class SessionLoadPipeline(
         // never started, so stop here; the finally lifts the loading veil.
         // (`isReady` is the derived projection of the phase — Loading/Failed
         // are distinguishable through loadPhase itself.)
-        if (!sessionManager.sessionState.value.isReady) return
+        if (sessionManager.sessionState.value.loadPhase is LoadPhase.Failed) return
 
         val sessionState = sessionManager.sessionState.value
         val source = sessionState.currentMediaSource
@@ -344,8 +346,6 @@ internal class SessionLoadPipeline(
 
         sessionState.streamUrl?.let { outputs.onStreamUrlResolved(it) }
 
-        hooks.createMediaSession(request.itemId, sessionState.title, sessionState.subtitle)
-
         if (detail != null) {
             // Pre-seed the seek-bar denominator from the server-reported
             // runtime so the playhead fraction is correct from open. The guard
@@ -358,8 +358,57 @@ internal class SessionLoadPipeline(
             hooks.applyMediaDetail(detail)
         }
 
-        // Position & duration are now seeded; lift the loading screen so the
-        // seek bar's first paint is the correct resume fraction (no 0-flicker).
+        // Hold loading veil in PrimingBuffer until the engine reaches READY with primed buffer.
+        // Awaits the engine settlement; for external player or pre-settled loads this returns instantly.
+        // ONLY a Ready settlement continues the spine: a Failed load must not
+        // create a media session or report playback start, and a release
+        // during the wait (Idle) means the session is dead — starting
+        // position/progress tracking for it would resurrect a released
+        // session. The budget renews across engine replacements during
+        // priming — reloadWithEngine re-arms the manager's watchdog, not this
+        // wait.
+        if (sessionManager.sessionState.value.loadPhase is LoadPhase.Loading) {
+            var settledPhase = sessionManager.sessionState.value.loadPhase
+            val settleDeadlineMs = System.currentTimeMillis() + LOAD_SETTLE_TOTAL_BUDGET_MS
+            while (settledPhase is LoadPhase.Loading) {
+                val remainingMs = settleDeadlineMs - System.currentTimeMillis()
+                if (remainingMs <= 0L) break
+                settledPhase = sessionManager.awaitLoadReadyOrFailed(remainingMs)
+            }
+            if (settledPhase !is LoadPhase.Ready) {
+                // The gate's timeout arm is TERMINATING, never abandoning:
+                // the manager's awaitLoadReadyOrFailed fails its own expiry
+                // (land Failed + stop the engine) so a wait can no longer
+                // return Loading with the active engine and readiness watcher
+                // still running; the re-check here covers the budget boundary
+                // — a settlement that raced the expiry is honored, a
+                // genuinely stalled load is failed, and either way the spine
+                // stops before media-session creation / playback-start
+                // reporting / tracking.
+                if (sessionManager.sessionState.value.loadPhase is LoadPhase.Loading) {
+                    sessionManager.failStalledLoad()
+                }
+                return
+            }
+        } else if (sessionManager.sessionState.value.loadPhase !is LoadPhase.Ready) {
+            return
+        }
+
+        // Settled-state re-snapshot: a recovery quality/mode switch during
+        // priming re-POSTs PlaybackInfo and can write a NEW playMethod into
+        // the session state, so the start report below reflects the settled
+        // session — the pre-wait snapshot's playMethod may be stale.
+        val settledState = sessionManager.sessionState.value
+
+        // Media session AFTER the settlement gate: only a Ready load ever
+        // publishes one — the former pre-wait creation built a media session
+        // for loads that failed or timed out during priming, and a
+        // media-notification for dead air. Loads already Ready past the gate
+        // (external player, pre-settled engines) still reach it.
+        hooks.createMediaSession(request.itemId, sessionState.title, sessionState.subtitle)
+
+        // Position & duration are now seeded, and buffer is primed; lift the loading screen so the
+        // seek bar's first paint is the correct resume fraction (no 0-flicker or secondary stall).
         outputs.onInitializing(false)
 
         hooks.initializeTrickplay(request.itemId, source)
@@ -374,7 +423,7 @@ internal class SessionLoadPipeline(
         // the progress loop's first cycle runs after its interval delay, and
         // both run FIFO on the same main dispatcher.
         scope.launch {
-            hooks.reportPlaybackStart(request.itemId, source, sessionState.playMethod)
+            hooks.reportPlaybackStart(request.itemId, source, settledState.playMethod)
         }
 
         hooks.startPositionTracking()
@@ -468,5 +517,13 @@ internal class SessionLoadPipeline(
          * bounded resolve.
          */
         const val PERFORMANCE_SEED_RESOLVE_TIMEOUT_MS = 1_000L
+
+        /**
+         * The settlement gate's terminal budget: the manager's initial 20 s
+         * PrimingBuffer watchdog window plus one replacement engine's fresh
+         * 20 s window (a mid-priming reloadWithEngine re-arms the manager's
+         * watchdog, not this wait) — one deadline for the whole gate.
+         */
+        const val LOAD_SETTLE_TOTAL_BUDGET_MS = 40_000L
     }
 }

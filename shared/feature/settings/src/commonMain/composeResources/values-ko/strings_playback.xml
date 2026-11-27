@@ -76,6 +76,8 @@
     <string name="settings_quality_720p">720p</string>
     <string name="settings_quality_1080p">1080p</string>
     <string name="settings_quality_4k">4K</string>
+    <string name="settings_quality_original_uncapped">원본(비트레이트 무제한)</string>
+    <string name="settings_quality_original">원본</string>
     <string name="settings_network_timeouts">네트워크 시간 초과</string>
     <string name="settings_network_timeouts_subtitle">연결/읽기/쓰기 시간 초과 사전 설정(적용하려면 재시작)</string>
     <string name="settings_dialogue_boost">대화 부스트</string>
@@ -247,6 +249,23 @@
     <string name="settings_dvr_quality_medium">중간 품질로 트랜스코드(720p)</string>
     <string name="settings_dvr_quality_low">저품질로 트랜스코드(480p)</string>
     <string name="settings_playback_subtitle">재생 엔진: %1$s</string>
+    <string name="settings_playback_sections">재생 섹션</string>
+    <string name="settings_playback_entry_basics">기본</string>
+    <string name="settings_playback_entry_basics_subtitle">엔진, 자동 재생, 이어보기 및 플레이어 동작</string>
+    <string name="settings_playback_entry_controls">컨트롤 &amp; 제스처</string>
+    <string name="settings_playback_entry_controls_subtitle">터치, 방향, 제스처 및 입력 할당</string>
+    <string name="settings_playback_entry_chrome">플레이어 UI</string>
+    <string name="settings_playback_entry_chrome_subtitle">오버레이, 재생 바, 버튼 및 HUD 레이아웃</string>
+    <string name="settings_playback_entry_video_quality">비디오 &amp; 트랜스코딩</string>
+    <string name="settings_playback_entry_video_quality_subtitle">품질, 디코더, 패스스루 및 트랜스코딩 상한</string>
+    <string name="settings_playback_entry_engines">플레이어 엔진</string>
+    <string name="settings_playback_entry_engines_subtitle">MPV, VLC, ExoPlayer 및 외부 플레이어 조정</string>
+    <string name="settings_playback_entry_segments">건너뛰기 &amp; 세그먼트</string>
+    <string name="settings_playback_entry_segments_subtitle">인트로/아웃트로 건너뛰기, 리캡 및 다음 작품 프리롤</string>
+    <string name="settings_playback_entry_syncplay_casting">SyncPlay &amp; 캐스트</string>
+    <string name="settings_playback_entry_syncplay_casting_subtitle">시청 파티, DLNA 및 렌더러 선택</string>
+    <string name="settings_playback_entry_live_tv">라이브 TV &amp; DVR</string>
+    <string name="settings_playback_entry_live_tv_subtitle">녹화 여유 시간 및 품질</string>
     <string name="settings_player_engine">재생 엔진</string>
     <string name="settings_player_engine_subtitle">미디어 재생 엔진 선택</string>
     <string name="settings_shader_pack">셰이더 팩</string>
@@ -311,6 +330,8 @@
     <string name="settings_video_resume_chip_ms_subtitle">\'탭하여 다시 시작\' 칩이 유지되는 시간(0 = 안 함)</string>
     <string name="settings_video_show_prev_next_buttons">이전/다음 버튼</string>
     <string name="settings_video_show_prev_next_buttons_subtitle">재생 버튼 옆에 에피소드 건너뛰기 버튼을 표시합니다</string>
+    <string name="settings_video_playback_diagnostics">재생 진단</string>
+    <string name="settings_video_playback_diagnostics_subtitle">실시간 네트워크 처리량 및 버퍼링 텔레메트리 표시</string>
     <string name="settings_video_swipe_sensitivity">스와이프 감도</string>
     <string name="settings_video_swipe_sensitivity_subtitle">밝기/볼륨 스와이프의 반응 속도</string>
     <string name="settings_video_gesture_overlay_linger_ms">제스처 오버레이 유지 시간</string>

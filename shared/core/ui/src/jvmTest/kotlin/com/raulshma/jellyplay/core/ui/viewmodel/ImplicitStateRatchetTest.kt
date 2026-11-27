@@ -76,6 +76,12 @@ import kotlin.test.fail
  *    the self-dismissing menu) — the stack REPLACED seven parallel booleans
  *    with one slot; its declared stragglers are the genuinely-two-state kind
  *    this allowlist exists for.
+ *  - DownloadsScreen.kt (2026-11-21): the armed-series section's ONE sheet
+ *    latch (`showRowsSheet`, the short-viewport escape hatch that re-renders
+ *    the armed card at sheet height) — a single genuinely-two-state latch
+ *    with no siblings in its scope, so the ResyncSheet-slot migration
+ *    ("one of N" encoding; makes an illegal combination unrepresentable) has
+ *    no combination to collapse; a one-member slot would be ceremony.
  *
  * THE OUTS when a count grows (each failure message says this):
  *  1. MIGRATE — fold the flags into one sealed phase/slot or route the
@@ -213,6 +219,17 @@ class ImplicitStateRatchetTest {
                 "REPLACED seven parallel booleans with one `current` slot; its declared " +
                 "stragglers are the genuinely-two-state kind",
             date = "2026-11-15",
+        ),
+        DeclaredDivergence(
+            pathSuffix =
+                "feature/downloads/src/commonMain/kotlin/com/raulshma/jellyplay/feature/downloads/DownloadsScreen.kt",
+            pattern = patternCompositionFlags,
+            reason = "the armed-series section's ONE sheet latch (`showRowsSheet`, the " +
+                "short-viewport escape hatch that re-renders the armed card at sheet " +
+                "height) — a single genuinely-two-state latch with no siblings in its " +
+                "scope, so the ResyncSheet-slot migration's \"one of N\" encoding has no " +
+                "illegal combination to collapse; a one-member slot would be ceremony",
+            date = "2026-11-21",
         ),
         // ── Parked-message exemptions (2026-11-17, the R4 widening): immutable
         // UiState data-class fields (`val xError: String? = null` constructor

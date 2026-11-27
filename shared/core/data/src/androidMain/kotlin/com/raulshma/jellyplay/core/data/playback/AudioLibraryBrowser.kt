@@ -140,10 +140,11 @@ class AudioLibraryBrowser(
         MediaLibrarySession.Builder(context, player, callback)
             .setId(sessionId)
             // The car's "open on phone" affordance and Assistant entry points
-            // launch the session activity; MainActivity is singleTask like
-            // PlayerActivity, so an existing instance is brought forward
-            // instead of stacking. The notification keeps its own content
-            // intent (JellyPlayNotificationProvider).
+            // launch the session activity; MainActivity is the task's
+            // singleTop root, so SINGLE_TOP|CLEAR_TOP brings an existing
+            // instance forward instead of stacking (the PendingIntent's
+            // callerless start supplies NEW_TASK). The notification keeps its
+            // own content intent (JellyPlayNotificationProvider).
             .setSessionActivity(
                 PendingIntent.getActivity(
                     context,

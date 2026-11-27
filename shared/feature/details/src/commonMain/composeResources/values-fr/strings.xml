@@ -213,6 +213,7 @@
     <string name="detail_error_download_failed">Échec du téléchargement</string>
     <string name="detail_error_not_a_series">Ceci n'est pas une série</string>
     <string name="detail_error_queue_failed">Échec de la mise en file des téléchargements</string>
+    <string name="detail_error_arm_failed">Impossible d\'activer cette série</string>
     <string name="detail_error_unavailable_offline">Cet élément n'est pas disponible hors ligne.</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
@@ -525,4 +526,8 @@
     <string name="detail_option_stop_notify_new_episodes">Ne plus notifier les nouveaux épisodes</string>
     <string name="detail_msg_series_notifications_on">Notifications des nouveaux épisodes activées</string>
     <string name="detail_msg_series_notifications_off">Notifications des nouveaux épisodes désactivées</string>
+    <string name="detail_download_series_arm">Téléchargement automatique</string>
+    <string name="detail_download_series_arm_hint">Active cette série sans télécharger d\'épisodes. Les nouveaux épisodes suivent votre réglage de téléchargement automatique.</string>
+    <string name="detail_download_series_arm_action">Activer</string>
+    <string name="detail_download_series_armed">Série activée — les nouveaux épisodes suivront votre réglage de téléchargement automatique.</string>
 </resources>

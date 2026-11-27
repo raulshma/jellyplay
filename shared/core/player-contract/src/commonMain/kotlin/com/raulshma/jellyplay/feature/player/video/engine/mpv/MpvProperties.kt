@@ -67,6 +67,7 @@ public object MpvProperties {
     public const val HTTP_HEADER_FIELDS_APPEND: String = "http-header-fields-append"
     public const val USER_AGENT: String = "user-agent"
     public const val DEMUXER_READAHEAD_SECS: String = "demuxer-readahead-secs"
+    public const val DEMUXER_MAX_BYTES: String = "demuxer-max-bytes"
 
     // ── Init-only options (the platform shells' pre-init setup) ─────────────
     public const val CONFIG: String = "config"

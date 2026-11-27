@@ -33,6 +33,12 @@ val downloadsModule: Module = module {
             downloadsStore = get(),
             policyStore = get(),
             intake = get(),
+            // The arm picker's series search rides the library browse family
+            // (the MediaRepositoryImpl single behind the seam).
+            libraryFeed = get(),
+            // The manual arm's schedule reconcile (core:data's scheduler
+            // single — the WorkManager arm on Android, the desktop loop).
+            autoDownloadScheduler = get(),
         )
     }
     viewModel {

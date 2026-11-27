@@ -344,6 +344,8 @@
     <string name="player_video_quality_description">適応ストリーミングでは変更は直ちに適用されます。ダイレクトプレイの場合、再生の最大ビットレートを設定します。</string>
     <string name="player_video_quality_source">ソース: %1$dx%2$d</string>
     <string name="player_video_quality_original_uncapped">オリジナル（ビットレート無制限）</string>
+    <string name="player_video_quality_manual_cap_caveat">手動の帯域制限（%1$s Mbps）はすべての画質に引き続き適用されます。</string>
+    <string name="player_video_quality_data_saver_caveat">データセーバーは自動再生を1.5 Mbpsに制限します。</string>
     <string name="player_video_adaptive_bitrate_cap">適応ビットレート上限</string>
     <string name="player_video_adaptive_bitrate_on">従量制ネットワークで品質を制限</string>
     <string name="player_video_adaptive_bitrate_off">オフ - 最高品質（ダイレクトプレイ）</string>
@@ -465,4 +467,31 @@
     <string name="player_video_stats_buffer_back_keyframes">キーフレーム単位</string>
     <string name="player_video_playback_options_level_line">レベル: %1$s</string>
     <string name="player_video_playback_options_level_caption">アプリ全体の効果の調整 — 完全なコントロールは 設定 → パフォーマンス にあります。</string>
+
+    <!-- Progressive Loading HUD (起動ステージ・バッファテレメトリ・低速警告)。 -->
+    <string name="player_video_load_stage_preparing">ストリームを準備しています…</string>
+    <string name="player_video_load_stage_fetching_metadata">メディアの詳細を読み込み中…</string>
+    <string name="player_video_load_stage_resolving_stream">ストリームを解決しています…</string>
+    <string name="player_video_load_stage_resolving_stream_slow">ストリームを解決しています（サーバーがメディアを解析中）…</string>
+    <string name="player_video_load_stage_initializing_engine">%1$s を初期化しています…</string>
+    <string name="player_video_load_stage_priming_buffer">再生の初期バッファリング中…</string>
+    <string name="player_video_load_stage_failed">再生に失敗しました: %1$s</string>
+    <string name="player_video_load_stage_connecting">接続しています…</string>
+    <string name="player_video_load_buffer_progress">バッファリング: %1$s秒 / %2$s秒 (%3$s)</string>
+    <string name="player_video_load_warning_transcoding">サーバーがトランスコード済みストリームを準備しています…</string>
+    <string name="player_video_load_warning_slow_connection">サーバーへの接続が遅いと検出されました…</string>
+    <string name="player_video_load_warning_slow_server">サーバーの応答が遅いです…</string>
+
+    <!-- リカバリーバナー（低速再生時の修復アクション）とバッファリング診断ピル。 -->
+    <string name="player_video_stall_network_starvation">ネットワーク帯域不足</string>
+    <string name="player_video_stall_transcode_lag">トランスコードの遅延</string>
+    <string name="player_video_stall_decoder_bottleneck">デコーダーのボトルネック</string>
+    <string name="player_video_pill_stream">ストリーム: %1$s</string>
+    <string name="player_video_pill_transcode">トランスコード: %1$sx</string>
+    <string name="player_video_pill_estimate">≈ %1$s (推定)</string>
+    <string name="player_video_recovery_keep_waiting">待機を続ける</string>
+    <string name="player_video_recovery_switch_quality">%1$dp に切り替え</string>
+    <string name="player_video_recovery_switch_engine">%1$s に切り替え</string>
+    <string name="player_video_recovery_switch_engine_generic">エンジンを切り替え</string>
+    <string name="player_video_recovery_boost_buffer">バッファを増加 (30秒)</string>
 </resources>

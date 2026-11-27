@@ -39,6 +39,8 @@
     <string name="settings_notifications">Notifications</string>
     <string name="settings_notifications_checking">Vérification de %1$s</string>
     <string name="settings_downloads_storage">Téléchargements &amp; stockage</string>
+    <string name="settings_storage_network">Stockage &amp; réseau</string>
+    <string name="settings_downloads_subtitle">Qualité de téléchargement, téléchargements auto intelligents &amp; planifications</string>
     <string name="settings_cache_subtitle">Cache : %1$d Mo</string>
     <string name="settings_security">Sécurité</string>
     <string name="settings_pin_biometric_on">Verrouillage PIN + biométrique : Activé</string>
@@ -48,6 +50,11 @@
     <string name="settings_backup_restore">Sauvegarde &amp; restauration</string>
     <string name="settings_backup_restore_subtitle">Exporter ou importer les paramètres de l'application</string>
     <string name="settings_screensaver">Écran de veille</string>
+    <string name="settings_ambient">Ambiant</string>
+    <string name="settings_ambient_subtitle">Écran de veille &amp; écran d'inactivité</string>
+    <string name="settings_cat_media_playback">Médias &amp; lecture</string>
+    <string name="settings_cat_look_and_feel">Apparence</string>
+    <string name="settings_cat_system_data">Système &amp; données</string>
     <string name="settings_show_title">Afficher le titre</string>
     <string name="settings_display_media_title">Afficher le titre du média</string>
     <string name="settings_hide_media_title">Masquer le titre du média</string>
@@ -298,6 +305,7 @@
     <string name="settings_max_cache_size_subtitle">Espace disque maximum pour la mise en cache</string>
     <string name="settings_unlimited">Illimité</string>
     <string name="settings_network_offline">Réseau &amp; hors ligne</string>
+    <string name="settings_network_diagnostics">Diagnostic réseau</string>
     <string name="settings_status_value">Statut : %1$s</string>
     <string name="settings_offline_mode">Mode hors ligne</string>
     <string name="settings_online">En ligne</string>
@@ -370,6 +378,27 @@
     <string name="settings_custom_options">option(s) personnalisée(s)</string>
     <string name="settings_reset_to_defaults">Réinitialiser par défaut</string>
     <string name="settings_living_room_tv">TV du salon</string>
+
+    <!-- Entrance-summary tokens (ADR-0017 decision 3): the short faces the
+         per-domain *SummaryParts folds emit where no row face exists. -->
+    <string name="settings_subtitle_label">Sous-titres : %1$s</string>
+    <string name="settings_sum_chrome_chapters_off">Aucun marqueur de chapitre</string>
+    <string name="settings_sum_chrome_buffer_off">Aucune plage en mémoire tampon</string>
+    <string name="settings_sum_plugin_sync_on">Synchronisation activée</string>
+    <string name="settings_sum_plugin_sync_off">Synchronisation désactivée</string>
+    <string name="settings_sum_quality_badges_off">Aucun badge de qualité</string>
+    <string name="settings_sum_new_badges_off">Aucun badge NOUVEAU</string>
+    <string name="settings_sum_detail_hide_watched">Masquer les épisodes vus</string>
+    <string name="settings_sum_detail_confirm_played">Confirmer le marquage comme vu</string>
+    <string name="settings_sum_haptics_off">Retour haptique désactivé</string>
+    <plurals name="settings_sum_pinned_sections">
+        <item quantity="one">%1$d section épinglée</item>
+        <item quantity="other">%1$d sections épinglées</item>
+    </plurals>
+    <plurals name="settings_sum_badges_on">
+        <item quantity="one">%1$d jeu de badges activé</item>
+        <item quantity="other">%1$d jeux de badges activés</item>
+    </plurals>
 
     <!-- Streaming quality labels -->
 
@@ -493,7 +522,6 @@
     <string name="settings_show_advanced">Afficher les parametres avances</string>
     <string name="settings_advanced_hidden">Parametres avances masques</string>
     <string name="settings_advanced_shown">Parametres avances affiches</string>
-
 
     <plurals name="settings_advanced_settings_hidden">
         <item quantity="one">%1$d parametre avance masque</item>
@@ -849,6 +877,8 @@
 
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">Plugin serveur</string>
+    <string name="settings_jellyplay_plugin_entry">Plugin JellyPlay</string>
+    <string name="settings_jellyplay_plugin_entry_subtitle">Fonctions du plugin serveur &amp; synchronisation des paramètres</string>
     <string name="settings_jellyplay_plugin_section_summary">Choisissez les fonctionnalités fournies par le plugin JellyPlay</string>
     <string name="settings_jellyplay_plugin_version_summary">Plugin serveur v%1$s</string>
     <string name="settings_jellyplay_contract_mismatch_title">Mise à jour du plugin requise</string>
@@ -1268,9 +1298,9 @@
     <string name="settings_perf_group_ambient">Effets ambiants</string>
     <string name="settings_perf_group_buffers">Mémoires tampons de lecture</string>
     <string name="settings_perf_crossref_profile_title">Profil de l’appareil et redétection</string>
-    <string name="settings_perf_crossref_profile_subtitle">Le palier détecté de l’appareil et son action de redétection se trouvent dans Lecture → Vidéo avancée</string>
+    <string name="settings_perf_crossref_profile_subtitle">Le palier détecté de l’appareil et son action de redétection se trouvent dans Lecture → Vidéo &amp; transcodage</string>
     <string name="settings_perf_crossref_back_buffer_title">Durée du tampon arrière</string>
-    <string name="settings_perf_crossref_back_buffer_subtitle">La ligne de tampon arrière du domaine moteur se trouve dans Lecture → Configuration du moteur (ExoPlayer)</string>
+    <string name="settings_perf_crossref_back_buffer_subtitle">La ligne de tampon arrière du domaine moteur se trouve dans Lecture → Moteurs de lecture (ExoPlayer)</string>
     <string name="settings_perf_customize">Personnaliser…</string>
     <string name="settings_perf_customize_subtitle">Toutes les lignes de performance granulaires se trouvent dans le hub Performances</string>
     <string name="settings_perf_animations">Animations</string>
@@ -1318,4 +1348,8 @@
     <string name="ss_exo_target_buffer_mb_subtitle">Tampon aval total en Mo (0 = auto dérivé du moteur, 5–512 explicite)</string>
     <string name="ss_exo_retain_back_buffer_title">Conserver le tampon arrière</string>
     <string name="ss_exo_retain_back_buffer_subtitle">Conserve le tampon arrière indépendamment des limites d’images clés (rembobinage instantané, mémoire plus élevée)</string>
+    <string name="settings_auto_arm_from_arr">Surveiller automatiquement les séries suivies dans Sonarr</string>
+    <string name="settings_auto_arm_from_arr_subtitle">Active automatiquement le téléchargement pour les séries suivies dans Sonarr, même sans épisodes téléchargés (expérimental)</string>
+    <string name="ss_auto_arm_from_arr_title">Surveiller automatiquement les séries suivies dans Sonarr</string>
+    <string name="ss_auto_arm_from_arr_subtitle">Active automatiquement le téléchargement pour les séries suivies dans Sonarr, même sans épisodes téléchargés</string>
 </resources>

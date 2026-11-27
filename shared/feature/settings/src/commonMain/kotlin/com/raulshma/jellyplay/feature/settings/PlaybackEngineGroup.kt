@@ -34,7 +34,7 @@ internal fun PlaybackEngineGroup(
                     title = stringResource(Res.string.settings_engine_config),
                     summary = { preferences.preferredPlayer.displayName },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackEngine.itemIdSet,
+                    initiallyExpanded = highlightSettingId == null || highlightSettingId in SettingsScreenGroups.playbackEngine.itemIdSet,
                 ) {
                     when (preferences.preferredPlayer) {
                         PlayerType.MPV -> {

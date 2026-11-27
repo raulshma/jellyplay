@@ -32,7 +32,8 @@ import kotlin.test.Test
  *    slice's single writer, re-derives that slice from the post-rebuild
  *    state (the declared contract on [keepAcrossItems]);
  * 2. the session-owned teardown half runs immediately before the VM half
- *    (`hooks.releaseInternalsVmPart`) on BOTH teardown paths, back-to-back
+ *    (`hooks.releaseInternalsVmPart`) on BOTH teardown paths plus the
+ *    cancel-abandon path, back-to-back
  *    on the same synchronous call chain — a dispatch hop between them would
  *    let an interleaved recomposition flash the outgoing item's rebuilt
  *    stale title (the declared contract on
@@ -82,16 +83,18 @@ class ItemSwitchResetOrderTest {
         val session = moduleSource("PlaybackSession.kt")
         // Only whitespace may sit between the session half's call and the VM
         // half's hook: the pair is one synchronous call chain on both the
-        // per-item re-initialization path and the full-release path. The VM
-        // half rides the session's own lifecycleHooks override since the 
+        // per-item re-initialization path and the full-release path, and on
+        // the cancel-abandon path (inside the ledger's teardown bracket). The
+        // VM half rides the session's own lifecycleHooks override since the
         // collapse (the former wiring builder's receiver).
         val adjacency = Regex("releaseInternalsSessionPart\\(\\)\\s*\\n\\s*lifecycleHooks\\.releaseInternalsVmPart\\(\\)")
         val sites = adjacency.findAll(session).toList()
         assertEquals(
-            2,
+            3,
             sites.size,
             "expected the session half immediately before the VM half on BOTH teardown paths " +
-                "(per-item re-initialization + full release); a dispatch hop between the halves lets an " +
+                "(per-item re-initialization + full release) plus the cancel-abandon path; a " +
+                "dispatch hop between the halves lets an " +
                 "interleaved recomposition flash the outgoing item's rebuilt stale title. Found: " +
                 sites.map { it.value },
         )

@@ -209,6 +209,7 @@
     <string name="detail_error_download_failed">ダウンロードに失敗しました</string>
     <string name="detail_error_not_a_series">これはシリーズではありません</string>
     <string name="detail_error_queue_failed">ダウンロードのキュー追加に失敗しました</string>
+    <string name="detail_error_arm_failed">シリーズを自動ダウンロードの対象にできませんでした</string>
     <string name="detail_error_unavailable_offline">このアイテムはオフラインでは利用できません。</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
@@ -513,4 +514,8 @@
     <string name="detail_option_stop_notify_new_episodes">新しいエピソードの通知を停止</string>
     <string name="detail_msg_series_notifications_on">新エピソードの通知をオンにしました</string>
     <string name="detail_msg_series_notifications_off">新エピソードの通知をオフにしました</string>
+    <string name="detail_download_series_arm">自動ダウンロード</string>
+    <string name="detail_download_series_arm_hint">エピソードをダウンロードせずに、このシリーズを自動ダウンロードの対象にします。新しいエピソードは自動ダウンロード設定に従います。</string>
+    <string name="detail_download_series_arm_action">追加</string>
+    <string name="detail_download_series_armed">シリーズを自動ダウンロードの対象にしました。新しいエピソードは自動ダウンロード設定に従います。</string>
 </resources>

@@ -1,11 +1,13 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -68,8 +70,14 @@ class ExoPlayerEngineSurfaceAttachRaceTest {
             playerView?.player,
         )
 
+        val releasedExo = engine.media3Player as? ExoPlayer
+        assertNotNull(releasedExo)
         engine.release()
         assertNull("release still tears the player off the view", playerView?.player)
+        assertTrue(
+            "exo.release() must run on the application looper so Media3 actually releases the player instead of throwing wrong-thread",
+            releasedExo?.isReleased == true,
+        )
     }
 
     @Test

@@ -4,6 +4,9 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
+import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeScreenPreferences
+import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_home
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -26,10 +29,22 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_entry_cards_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_entry_rows_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_focus_backdrop
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_focus_backdrop_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_music
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_video
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_sections_visible
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_badges_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sum_pinned_sections
+import org.jetbrains.compose.resources.StringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_tv
@@ -44,8 +59,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_stats_card
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_stats_card_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_entry_cards
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_entry_cards_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_entry_display
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_entry_display_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_entry_rows
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_entry_rows_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_trickplay_preview
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_trickplay_preview_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_tuning
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_section_announcements
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_section_announcements_subtitle
@@ -888,6 +910,48 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.settings_anti_spoiler_home_subtitle,
     )
 
+    // ── The home hub's composite entrance rows (ADR-0017's home split) ──
+    // One residual launcher row per leaf: the row renders on the hub screen
+    // and deep-links the leaf route it opens (the appearance hub's
+    // entrance-row shape — the route lives on the row). The on-screen
+    // subtitle is the leaf's live summary (homeDisplaySummaryParts and
+    // siblings, wired at the hub screen); the static subtitleRes here stays
+    // the declaration's fallback face and the search face. The order
+    // here IS the hub's entrance order.
+
+    /** Home display — the mainstream presentation leaf ([Route.HomeDisplaySettings]). */
+    val DisplayEntrance = SettingsRow(
+        id = "home_display",
+        icon = Tabler.Outline.Home,
+        titleRes = Res.string.settings_home_entry_display,
+        subtitleRes = Res.string.settings_home_entry_display_subtitle,
+        searchSubtitleRes = Res.string.settings_home_entry_display_subtitle,
+        keywords = listOf("home", "display", "hero", "clock", "dock", "backdrop", "stats", "greeting"),
+        route = Route.HomeDisplaySettings(),
+    )
+
+    /** Rows & layout — the home-rows curation leaf ([Route.HomeRowsSettings]). */
+    val RowsLayoutEntrance = SettingsRow(
+        id = "home_rows_layout",
+        icon = Tabler.Outline.LayoutGrid,
+        titleRes = Res.string.settings_home_entry_rows,
+        subtitleRes = Res.string.settings_home_entry_rows_subtitle,
+        searchSubtitleRes = Res.string.settings_home_entry_rows_subtitle,
+        keywords = listOf("home", "rows", "layout", "next up", "sections", "hidden", "presets", "pinned"),
+        route = Route.HomeRowsSettings(),
+    )
+
+    /** Cards & badges — the card-display leaf ([Route.HomeCardsSettings]). */
+    val CardsEntrance = SettingsRow(
+        id = "home_cards",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_home_entry_cards,
+        subtitleRes = Res.string.settings_home_entry_cards_subtitle,
+        searchSubtitleRes = Res.string.settings_home_entry_cards_subtitle,
+        keywords = listOf("home", "cards", "badges", "ratings", "spoiler", "poster"),
+        route = Route.HomeCardsSettings(),
+    )
+
     /**
      * Every fused home row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
@@ -895,7 +959,8 @@ internal object HomeRows {
      * object-to-file-facade initialization order into a cycle.
      */
     val all: List<SettingsRow>
-        get() = HomeDisplayRows + HomeNextUpRows + HomeLayoutRows + HomeCardsRows
+        get() = HomeHubRows + HomeTuningRows + HomeDisplayMainRows + HomeNextUpRows +
+            HomeLayoutRows + HomeCurationRows + HomeCardsRows
 }
 
 // ---------------------------------------------------------------------
@@ -906,6 +971,9 @@ internal object HomeRows {
 
 private val searchRoutes: Map<String, Route> = mapOf(
     HomeDiscoveryPreferenceSpecs.ROUTE_HOME_SETTINGS to Route.HomeSettings(),
+    HomeDiscoveryPreferenceSpecs.ROUTE_HOME_DISPLAY_SETTINGS to Route.HomeDisplaySettings(),
+    HomeDiscoveryPreferenceSpecs.ROUTE_HOME_ROWS_SETTINGS to Route.HomeRowsSettings(),
+    HomeDiscoveryPreferenceSpecs.ROUTE_HOME_CARDS_SETTINGS to Route.HomeCardsSettings(),
     HomeDiscoveryPreferenceSpecs.ROUTE_NEXT_UP_EXCLUDED to Route.NextUpExcluded,
     HomeDiscoveryPreferenceSpecs.ROUTE_MY_MEDIA_HIDDEN to Route.MyMediaHidden,
     HomeDiscoveryPreferenceSpecs.ROUTE_PINNED_HOME_SECTIONS to Route.PinnedHomeSections(),
@@ -918,14 +986,48 @@ private val homeSpecEntries: List<PreferenceSearchSpec> = HomeDiscoveryPreferenc
 
 private val homeCategory = CoreUiRes.string.ss_cat_home
 
-internal val HomeDisplayRows: List<SettingsRow> = listOf(
+/**
+ * The home hub's entrance rows, in hub order (the [HomeRows] entrance
+ * declarations' order) — the [Route.HomeSettings] hub's whole entrance group.
+ */
+internal val HomeHubRows: List<SettingsRow> = listOf(
+    HomeRows.DisplayEntrance,
+    HomeRows.RowsLayoutEntrance,
+    HomeRows.CardsEntrance,
+)
+
+/**
+ * The hub's advanced-gated Fine-tuning group (ADR-0017's home split): the
+ * tuning/fine-tune subset of the former combined display group — the hero
+ * pacing/behavior trio, the presence cadence/limit pair, the feed refresh
+ * cadence, the genre-rail limit and the search-results height. The rows keep
+ * the hub route kind ([HomeDiscoveryPreferenceSpecs.ROUTE_HOME_SETTINGS]),
+ * so a search hit lands on the hub and highlights here, and their spec
+ * `isAdvanced` flags make the search hits auto-arm the gate (the phase-5
+ * parity fix: the group-level derivation and the search faces agree).
+ */
+internal val HomeTuningRows: List<SettingsRow> = listOf(
+    HomeRows.HomeHeroIdleRotation,
+    HomeRows.HeroScrollDefer,
+    HomeRows.HomeHeroRandomStart,
+    HomeRows.HomePresenceChipsLimit,
+    HomeRows.HomePresencePollSeconds,
+    HomeRows.HomeRefreshCadence,
+    HomeRows.HomeSearchResultsHeight,
+    HomeRows.HomeGenreRailLimit,
+)
+
+/**
+ * The Home display leaf's mainstream presentation group (ADR-0017's home
+ * split): the former `home.display` group's mainstream rows — the mode/hero/
+ * backdrop cluster (with its gates), the clock/dock/chrome toggles, the
+ * stats-card and genre-rail/presence features and their presentation picks.
+ */
+internal val HomeDisplayMainRows: List<SettingsRow> = listOf(
     HomeRows.HomeMode,
     HomeRows.HeroSection,
     HomeRows.HomeHeroStyle,
     HomeRows.HomeHeroSlideshowInterval,
-    HomeRows.HomeHeroIdleRotation,
-    HomeRows.HeroScrollDefer,
-    HomeRows.HomeHeroRandomStart,
     HomeRows.HeroVideo,
     HomeRows.HeroVideoTv,
     HomeRows.HomeBackdrop,
@@ -941,39 +1043,25 @@ internal val HomeDisplayRows: List<SettingsRow> = listOf(
     HomeRows.StatsCard,
     HomeRows.HomeStatsMetrics,
     HomeRows.GenreRail,
-    HomeRows.HomeGenreRailLimit,
     HomeRows.PresenceChips,
-    HomeRows.HomePresenceChipsLimit,
-    HomeRows.HomePresencePollSeconds,
     HomeRows.NewSectionAnnouncements,
     HomeRows.HomeNewsletterBanner,
     HomeRows.HomeNewsletterWindow,
-    HomeRows.HomeRefreshCadence,
     HomeRows.HomeDiscoverPattern,
     HomeRows.HomePreSectionOrder,
-    HomeRows.HomeSearchResultsHeight,
     HomeRows.HomeMyMediaColumns,
     HomeRows.HomeHideSeeAll,
-    HomeRows.HomeCardScale,
-    HomeRows.HomeCardCornerRadius,
-    HomeRows.HomeRowsAnimations,
     HomeRows.ContinueWatchingClick,
-    HomeRows.ClassicRows,
-    HomeRows.NextUpHidden,
-    HomeRows.HiddenLibraries,
-    HomeRows.UnhideCw,
 )
 
 /**
- * The display group's gated pair — the two rows the screen's total carries
- * conditionally: the unhide row ([RowAdmission.ContentGated] — the screen
- * adds the +1 once hidden CW items exist) and the slideshow-interval row
- * (its declared WhenOn(home_hero_style) gate). Named where the rows are
- * declared so the contract tests' count arithmetic derives from this list
- * instead of restating a hand-counted literal.
+ * The display leaf's gated row — the slideshow-interval row (its declared
+ * WhenOn(home_hero_style) gate; the screen feeds "style is slideshow" as the
+ * parent's on-state). Named where the rows are declared so the contract
+ * tests' count arithmetic derives from this list instead of restating a
+ * hand-counted literal.
  */
-internal val HomeDisplayGatedRows: List<SettingsRow> = listOf(
-    HomeRows.UnhideCw,
+internal val HomeDisplayMainGatedRows: List<SettingsRow> = listOf(
     HomeRows.HomeHeroSlideshowInterval,
 )
 
@@ -994,6 +1082,31 @@ internal val HomeLayoutRows: List<SettingsRow> = listOf(
     HomeRows.LayoutAutopush,
 )
 
+/**
+ * The Rows & layout leaf's curation quartet (ADR-0017's home split): the
+ * rows-style toggle and the hidden/exclusion restore trio, moved whole off
+ * the former display group. The unhide row rides its [RowAdmission.ContentGated]
+ * exception (hidden-CW content state the flags vocabulary does not carry —
+ * the screen adds the +1 explicitly).
+ */
+internal val HomeCurationRows: List<SettingsRow> = listOf(
+    HomeRows.ClassicRows,
+    HomeRows.NextUpHidden,
+    HomeRows.HiddenLibraries,
+    HomeRows.UnhideCw,
+)
+
+/** The curation group's [RowAdmission.ContentGated] exception — the unhide row ([HomeCurationRows]). */
+internal val HomeCurationContentGatedRows: List<SettingsRow> = listOf(
+    HomeRows.UnhideCw,
+)
+
+/**
+ * The Cards & badges leaf's group (ADR-0017's home split): the former cards
+ * group's dozen rows (the card-display toggles, the badge cluster, the TV
+ * trickplay fork) plus the card-chrome trio moved off the former display
+ * group — the same concern, its scattered siblings rejoined.
+ */
 internal val HomeCardsRows: List<SettingsRow> = listOf(
     HomeRows.ShowUnwatchedBadge,
     HomeRows.ShowWatchedCheckmark,
@@ -1007,6 +1120,9 @@ internal val HomeCardsRows: List<SettingsRow> = listOf(
     HomeRows.TrickplayPreview,
     HomeRows.HomeTrickplayPeekMs,
     HomeRows.AntiSpoilerHome,
+    HomeRows.HomeCardScale,
+    HomeRows.HomeCardCornerRadius,
+    HomeRows.HomeRowsAnimations,
 )
 
 /** The cards group's TV-only trickplay fork — the preview toggle and the peek hold ([RowAdmission.Tv]). */
@@ -1016,18 +1132,48 @@ internal val HomeCardsTvOnlyRows: List<SettingsRow> = listOf(
 )
 
 /**
- * The screen groups — items AND per-row admissions derive from the row
- * lists above in one act ([List.asRowGroup]), so the declaration is the
- * single home of the groups' order, faces and gates.
+ * The home domain's screen groups (ADR-0017's hub + three leaves) — items AND
+ * per-row admissions derive from the row lists above in one act
+ * ([List.asRowGroup]), so the declaration is the single home of the groups'
+ * order, faces and gates. The former `home.display` group's id retired with
+ * the split (the phase-2/3 pattern — ids never renamed to mean something
+ * new): its mainstream remainder became `home.displayMain`, its tuning
+ * subset the hub's `home.tuning`, and its hidden/restore trio the new
+ * `home.curation`; `home.nextUp`/`home.layout`/`home.cards` moved whole
+ * (the cards group gaining its card-chrome siblings).
  */
-internal val HomeDisplayGroup =
-    HomeDisplayRows.asRowGroup("home.display", specEntriesFor(HomeDisplayRows, homeSpecEntries), searchRoutes, homeCategory)
+internal val HomeHubGroup =
+    HomeHubRows.asRowGroup("home.hub", emptyList(), searchRoutes, homeCategory)
+
+/**
+ * The hub's advanced Fine-tuning group WITH its card face: the rendered
+ * "Fine-tuning" card is searchable as ONE group-card hit (`home.tuning`)
+ * landing on the first member row ([SettingsSearchItemGroup.cardItem]) —
+ * the whole group only composes behind the power-user gate, so the hit
+ * auto-arms it.
+ */
+internal val HomeTuningGroup =
+    HomeTuningRows.asRowGroup(
+        "home.tuning",
+        specEntriesFor(HomeTuningRows, homeSpecEntries),
+        searchRoutes,
+        homeCategory,
+        cardTitleRes = Res.string.settings_home_tuning,
+        cardSubtitleRes = Res.string.settings_home_title,
+        cardKeywords = listOf("fine-tuning", "tuning", "hero", "presence", "refresh", "genre"),
+    )
+
+internal val HomeDisplayMainGroup =
+    HomeDisplayMainRows.asRowGroup("home.displayMain", specEntriesFor(HomeDisplayMainRows, homeSpecEntries), searchRoutes, homeCategory)
 
 internal val HomeNextUpGroup =
     HomeNextUpRows.asRowGroup("home.nextUp", specEntriesFor(HomeNextUpRows, homeSpecEntries), searchRoutes, homeCategory)
 
 internal val HomeLayoutGroup =
     HomeLayoutRows.asRowGroup("home.layout", specEntriesFor(HomeLayoutRows, homeSpecEntries), searchRoutes, homeCategory)
+
+internal val HomeCurationGroup =
+    HomeCurationRows.asRowGroup("home.curation", specEntriesFor(HomeCurationRows, homeSpecEntries), searchRoutes, homeCategory)
 
 internal val HomeCardsGroup =
     HomeCardsRows.asRowGroup("home.cards", specEntriesFor(HomeCardsRows, homeSpecEntries), searchRoutes, homeCategory)
@@ -1036,11 +1182,17 @@ internal val HomeCardsGroup =
 // pins (SpecDerivedSearchItemsTest, SettingsSearchCatalogTest) read these
 // lists.
 
-internal val HomeDisplaySearchItems: List<SettingsSearchItem> = HomeDisplayGroup.items
+internal val HomeHubSearchItems: List<SettingsSearchItem> = HomeHubGroup.items
+
+internal val HomeTuningSearchItems: List<SettingsSearchItem> = HomeTuningGroup.items
+
+internal val HomeDisplayMainSearchItems: List<SettingsSearchItem> = HomeDisplayMainGroup.items
 
 internal val HomeNextUpSearchItems: List<SettingsSearchItem> = HomeNextUpGroup.items
 
 internal val HomeLayoutSearchItems: List<SettingsSearchItem> = HomeLayoutGroup.items
+
+internal val HomeCurationSearchItems: List<SettingsSearchItem> = HomeCurationGroup.items
 
 internal val HomeCardsSearchItems: List<SettingsSearchItem> = HomeCardsGroup.items
 
@@ -1053,3 +1205,78 @@ internal val HomeEntrance = SettingsEntranceSectionRow(
     icon = Tabler.Outline.Home,
     titleRes = Res.string.settings_home_title,
 )
+
+// ── Entrance summaries (ADR-0017 decision 3) ────────────────────────────
+// The root Home row's and the home hub's three entrance rows' live subtitles.
+// Pure folds over [HomeScreenPreferences] (the `homeScreenPreferences`
+// projection — the same slice the home hub and its leaves read), emitting
+// [SettingsSummaryPart]s the call sites resolve at composition. Pinned by
+// SettingsSummariesTest (exact verdicts).
+
+/** The home mode's summary token (the two-mode vocabulary's own faces). */
+internal fun homeModeLabelRes(mode: HomeMode): StringResource = when (mode) {
+    HomeMode.VIDEO -> Res.string.settings_home_mode_video
+    HomeMode.MUSIC -> Res.string.settings_home_mode_music
+}
+
+/**
+ * The root Home entrance's summary: the home mode, the hero's on/off state
+ * and the visible-sections count ("N of M sections visible" — the root's
+ * long-standing live face, kept as the third term).
+ */
+internal fun homeSummaryParts(preferences: HomeScreenPreferences): List<SettingsSummaryPart> = listOf(
+    SettingsSummaryPart.Token(homeModeLabelRes(preferences.homeMode)),
+    SettingsSummaryPart.Token(
+        if (preferences.homeHeroEnabled) Res.string.settings_show_hero_on else Res.string.settings_show_hero_off,
+    ),
+    SettingsSummaryPart.Formatted2(
+        Res.string.settings_home_sections_visible,
+        preferences.enabledHomeSectionTypes.size,
+        HomeSectionType.CONFIGURABLE.size,
+    ),
+)
+
+/** Home display — the home mode, the hero state and the clock chip while on. */
+internal fun homeDisplaySummaryParts(preferences: HomeScreenPreferences): List<SettingsSummaryPart> = buildList {
+    add(SettingsSummaryPart.Token(homeModeLabelRes(preferences.homeMode)))
+    add(
+        SettingsSummaryPart.Token(
+            if (preferences.homeHeroEnabled) Res.string.settings_show_hero_on else Res.string.settings_show_hero_off,
+        ),
+    )
+    if (preferences.showClockOnHome) add(SettingsSummaryPart.Token(Res.string.settings_show_clock_on))
+}
+
+/**
+ * Rows & layout — the CW/Next-Up merge while on and the pinned-section count;
+ * at the untouched default the entrance's static subtitle carries.
+ */
+internal fun homeRowsLayoutSummaryParts(preferences: HomeScreenPreferences): List<SettingsSummaryPart> = buildList {
+    if (preferences.mergeContinueWatchingAndNextUp) {
+        add(SettingsSummaryPart.Token(Res.string.settings_merge_continue_next_up_on))
+    }
+    val pinnedCount = preferences.pinnedHomeSections.size
+    if (pinnedCount > 0) {
+        add(SettingsSummaryPart.Plural(Res.plurals.settings_sum_pinned_sections, pinnedCount))
+    }
+    if (isEmpty()) add(SettingsSummaryPart.Token(Res.string.settings_home_entry_rows_subtitle))
+}
+
+/**
+ * Cards & badges — how many of the badge quartet are on (unwatched badge,
+ * watched checkmark, quality badges, NEW badges); all-off falls back to the
+ * entrance's static subtitle.
+ */
+internal fun homeCardsSummaryParts(preferences: HomeScreenPreferences): List<SettingsSummaryPart> {
+    val badgesOn = listOf(
+        preferences.showUnwatchedBadge,
+        preferences.showWatchedCheckmark,
+        preferences.showQualityBadges,
+        preferences.showNewBadges,
+    ).count { it }
+    return if (badgesOn > 0) {
+        listOf(SettingsSummaryPart.Plural(Res.plurals.settings_sum_badges_on, badgesOn))
+    } else {
+        listOf(SettingsSummaryPart.Token(Res.string.settings_home_entry_cards_subtitle))
+    }
+}

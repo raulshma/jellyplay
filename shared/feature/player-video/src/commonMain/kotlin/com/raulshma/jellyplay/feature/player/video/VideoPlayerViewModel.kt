@@ -404,7 +404,7 @@ class VideoPlayerViewModel(
      */
     // The route-button projection rides the platform cast-chrome seam.
     internal val sessionSlices: PlayerSessionSlices = playbackSession.createSessionSlices(
-        routeButton = platformCastRouteButton(),
+        routeButton = platformCastRouteButton(), networkOffline = stores.networkOffline.networkOffline,
     )
 
     /**

@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.feature.subtitle.tester.generated.resources.subtit
 import com.raulshma.jellyplay.feature.subtitle.tester.generated.resources.subtitle_tester_track_sample
 import com.raulshma.jellyplay.shared.feature.subtitle.tester.R
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.getString
 
 /**
@@ -39,19 +41,19 @@ import org.jetbrains.compose.resources.getString
 class PlaybackRequestFactory(private val context: Context) {
 
     /** Subdirectory holding the extracted preview assets. */
-    private val assetDir: File = File(context.filesDir, ASSET_DIR).apply { mkdirs() }
+    private val assetDir: File by lazy { File(context.filesDir, ASSET_DIR).apply { mkdirs() } }
 
     suspend fun forPreview(
         preset: SampleSubtitlePreset,
         useAssTrack: Boolean,
-    ): PlaybackRequest {
+    ): PlaybackRequest = withContext(Dispatchers.IO) {
         val hostUri = materialize(R.raw.subtester_host_clip, HOST_CLIP_NAME).toUri()
         val trackResId = if (useAssTrack) preset.assResId else preset.srtResId
         val trackExt = if (useAssTrack) ASS_EXT else SRT_EXT
         val trackFile = materialize(trackResId, "${preset.id}_$trackExt")
         val mimeType = if (useAssTrack) "text/x-ssa" else "application/x-subrip"
 
-        return PlaybackRequest(
+        PlaybackRequest(
             uri = hostUri,
             title = getString(Res.string.subtitle_tester_preview_title),
             externalSubtitles = listOf(

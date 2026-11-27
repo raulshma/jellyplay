@@ -345,6 +345,8 @@
     <string name="player_video_quality_description">As alteracoes se aplicam imediatamente para streams adaptativos. Para reproducao direta, isso define a taxa de bits maxima de reproducao.</string>
     <string name="player_video_quality_source">Origem: %1$dx%2$d</string>
     <string name="player_video_quality_original_uncapped">Original (sem limite)</string>
+    <string name="player_video_quality_manual_cap_caveat">O limite manual de largura de banda (%1$s Mbps) continua a aplicar-se a todas as qualidades.</string>
+    <string name="player_video_quality_data_saver_caveat">A Poupança de dados limita a reprodução automática a 1,5 Mbps.</string>
     <string name="player_video_adaptive_bitrate_cap">Limite de bitrate adaptativo</string>
     <string name="player_video_adaptive_bitrate_on">Limita a qualidade em redes limitadas</string>
     <string name="player_video_adaptive_bitrate_off">Desativado - qualidade total (reproducao direta)</string>
@@ -466,4 +468,31 @@
     <string name="player_video_stats_buffer_back_keyframes">Limitado por fotogramas-chave</string>
     <string name="player_video_playback_options_level_line">Nível: %1$s</string>
     <string name="player_video_playback_options_level_caption">Ajuste de efeitos para toda a aplicação — todos os controlos em Definições → Desempenho.</string>
+
+    <!-- Progressive Loading HUD (etapas de inicialização, telemetria de buffer, avisos de carregamento lento). -->
+    <string name="player_video_load_stage_preparing">Preparando a transmissão…</string>
+    <string name="player_video_load_stage_fetching_metadata">Carregando detalhes da mídia…</string>
+    <string name="player_video_load_stage_resolving_stream">Resolvendo a transmissão…</string>
+    <string name="player_video_load_stage_resolving_stream_slow">Resolvendo a transmissão (o servidor está analisando a mídia)…</string>
+    <string name="player_video_load_stage_initializing_engine">Inicializando %1$s…</string>
+    <string name="player_video_load_stage_priming_buffer">Armazenando o buffer inicial…</string>
+    <string name="player_video_load_stage_failed">Falha na reprodução: %1$s</string>
+    <string name="player_video_load_stage_connecting">Conectando…</string>
+    <string name="player_video_load_buffer_progress">Buffer: %1$ss / %2$ss (%3$s)</string>
+    <string name="player_video_load_warning_transcoding">O servidor está preparando a transmissão transcodificada…</string>
+    <string name="player_video_load_warning_slow_connection">Conexão lenta com o servidor detectada…</string>
+    <string name="player_video_load_warning_slow_server">O servidor está respondendo lentamente…</string>
+
+    <!-- Banner de recuperação (remediação de reprodução lenta) e pílula de diagnóstico de buffer. -->
+    <string name="player_video_stall_network_starvation">Largura de banda insuficiente</string>
+    <string name="player_video_stall_transcode_lag">Atraso de transcodificação</string>
+    <string name="player_video_stall_decoder_bottleneck">Gargalo do decodificador</string>
+    <string name="player_video_pill_stream">Stream: %1$s</string>
+    <string name="player_video_pill_transcode">Transcodificação: %1$sx</string>
+    <string name="player_video_pill_estimate">≈ %1$s (est.)</string>
+    <string name="player_video_recovery_keep_waiting">Continuar esperando</string>
+    <string name="player_video_recovery_switch_quality">Mudar para %1$dp</string>
+    <string name="player_video_recovery_switch_engine">Mudar para %1$s</string>
+    <string name="player_video_recovery_switch_engine_generic">Mudar de motor</string>
+    <string name="player_video_recovery_boost_buffer">Aumentar buffer (30s)</string>
 </resources>

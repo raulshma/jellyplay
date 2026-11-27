@@ -714,12 +714,73 @@ class DownloadRepositoryImpl(
             }
         }
 
+    override suspend fun armSeries(seriesId: String, seriesName: String) {
+        // Arm without downloading — the arr auto-arm sync's add-only write
+        // (gh-225 follow-up). The OfflineDownloadWriterCore implicit-arm
+        // pattern: insert-if-absent never clobbers an existing row (an
+        // explicit INSTANT/ASK/NEVER sheet override, or an earlier arm), and
+        // a blank display name is backfilled without overwriting a set one.
+        val existingArm = downloadPolicyDao.getPolicyBySeriesId(seriesId)
+        if (existingArm == null) {
+            downloadPolicyDao.insertPolicyIfAbsent(
+                SeriesDownloadPolicyEntity(
+                    seriesId = seriesId,
+                    mode = AutoDownloadMode.FOLLOW_GLOBAL.name,
+                    seriesName = seriesName,
+                ),
+            )
+        } else if (existingArm.seriesName.isBlank() && seriesName.isNotBlank()) {
+            downloadPolicyDao.updatePolicySeriesName(seriesId, seriesName)
+        }
+    }
+
+    override suspend fun manualArmSeries(seriesId: String, seriesName: String) {
+        // The manual entries' verb: a raw NEVER tombstone flips back to
+        // FOLLOW_GLOBAL through the one upsert body (setSeriesPolicy), then
+        // armSeries runs insert-if-absent — a no-op on the now-existing row
+        // except the blank-name backfill. Any other row state rides
+        // armSeries alone, so an explicit override is never demoted. The arr
+        // sync keeps calling armSeries directly: only a user action re-arms
+        // a tombstone. One write transaction so a concurrent sweep/pass
+        // cannot interleave between the read, the flip and the insert.
+        database.withTransaction {
+            if (downloadPolicyDao.getPolicyBySeriesId(seriesId).isNeverTombstone()) {
+                setSeriesPolicy(seriesId, AutoDownloadMode.FOLLOW_GLOBAL)
+            }
+            armSeries(seriesId, seriesName)
+        }
+    }
+
     override suspend fun clearSeriesArmIfNoDownloads(seriesId: String) {
-        if (downloadDao.getDownloadsForSeries(seriesId).isEmpty()) {
+        // One write transaction (the manualArmSeries shape): the download
+        // check, the tombstone check and the deletions must be atomic against
+        // a concurrent setSeriesPolicy(NEVER) — a read-then-delete outside a
+        // transaction could erase a tombstone that landed between the two,
+        // and the follow-up arr auto-arm sync would resurrect it.
+        database.withTransaction {
+            if (downloadDao.getDownloadsForSeries(seriesId).isNotEmpty()) return@withTransaction
+            // An explicit NEVER row is the "never auto-download" tombstone,
+            // not a live arm: it must survive the zero-rows clear, because the
+            // follow-up arr auto-arm sync re-arms any series with NO policy
+            // row — an erased tombstone would be resurrected (re-arming a
+            // series the user explicitly barred). Unparseable rows stay
+            // deletable as before. The ROW survives, but its pending Ask
+            // prompts die exactly like a setSeriesPolicy(NEVER): prompts
+            // recorded under a policy that no longer wants them are dead.
+            if (downloadPolicyDao.getPolicyBySeriesId(seriesId).isNeverTombstone()) {
+                downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
+                return@withTransaction
+            }
             downloadPolicyDao.deletePolicyBySeriesId(seriesId)
             downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
         }
     }
+
+    // The raw-mode tombstone fold shared by the manual re-arm and the
+    // zero-rows clear: decode through the same toEnumOrNull helper the
+    // armed reads use, never the resolved mode.
+    private fun SeriesDownloadPolicyEntity?.isNeverTombstone(): Boolean =
+        this?.mode.toEnumOrNull<AutoDownloadMode>() == AutoDownloadMode.NEVER
 
     override suspend fun seriesPolicies(seriesIds: List<String>): Map<String, AutoDownloadMode> =
         if (seriesIds.isEmpty()) {

@@ -662,4 +662,12 @@ data class PlaybackRequestSpecific(
     val normalizationGain: Float? = null,
     val mimeType: String? = null,
     val tls: PlaybackTls? = null,
+    /**
+     * True when the media container carries at least one embedded ASS/SSA
+     * subtitle stream. On Direct Play, embedded tracks are demuxed natively
+     * rather than placed in `PlaybackRequest.externalSubtitles`, so ExoPlayer
+     * needs this signal to engage `ass-media` (libass) instead of falling back
+     * to Media3's `SsaParser`.
+     */
+    val hasEmbeddedAssSubtitles: Boolean = false,
 ) : EngineSpecificConfig

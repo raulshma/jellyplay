@@ -102,6 +102,9 @@ class StorageSettingsViewModelTest {
     private val downloadPrefs = MutableStateFlow(DownloadPreferences())
     private val showAdvanced = MutableStateFlow(false)
 
+    /** The mocked gate's flow (named to disambiguate from the mock property inside `every { }`). */
+    private val directArrFlag = MutableStateFlow(false)
+
     @BeforeTest
     fun setUp() {
         projections = mockk(relaxed = true)
@@ -139,6 +142,7 @@ class StorageSettingsViewModelTest {
         every { appearanceStore.showAdvancedSettings } returns showAdvanced
         coEvery { storageMountsProvider.availableMounts() } returns emptyList()
         autoDownloadSyncs.clear()
+        directArrFlag.value = false
     }
 
     /** Real editor over the mocked scope so `edit { … }` blocks actually run. */
@@ -193,6 +197,9 @@ class StorageSettingsViewModelTest {
             storageAreas = storageAreas,
             storageMountsProvider = storageMountsProvider,
             authRepository = authRepository,
+            experimentalGate = mockk {
+                every { directArrEnabled } returns directArrFlag
+            },
         )
     }
 
@@ -220,6 +227,19 @@ class StorageSettingsViewModelTest {
         advanceUntilIdle()
 
         assertTrue(vm.storageMounts.isEmpty(), "a dead mount provider must not crash construction")
+    }
+
+    // ------------------------------------------------------------- arr gate mirror
+
+    @Test
+    fun `init mirrors the experimental Direct arr flag for the auto-arm row`() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertEquals(false, vm.directArrEnabled)
+
+        directArrFlag.value = true
+        advanceUntilIdle()
+        assertEquals(true, vm.directArrEnabled)
     }
 
     // ---------------------------------------------------------------- breakdown
@@ -328,6 +348,27 @@ class StorageSettingsViewModelTest {
 
         coVerify(exactly = 1) { downloadsStore.setAutoDownloadMode(AutoDownloadMode.INSTANT) }
         assertEquals(1, autoDownloadSyncs.size, "the WorkManager sync must fire with the preference write")
+    }
+
+    @Test
+    fun `arr auto-arm toggle also pokes the scheduler`() = runTest(mainDispatcherRule.testDispatcher) {
+        // shouldStayScheduled is true on the pref alone — turning it on must
+        // schedule the pass even under a global NEVER with zero arms, and
+        // turning it off re-evaluates the gate (the mode-write poke's shape).
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.setAutoArmFromArr(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { downloadsStore.setAutoArmFromArr(true) }
+        assertEquals(1, autoDownloadSyncs.size, "the WorkManager sync must fire with the preference write")
+
+        vm.setAutoArmFromArr(false)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { downloadsStore.setAutoArmFromArr(false) }
+        assertEquals(2, autoDownloadSyncs.size, "the off-write must re-evaluate the keep-alive gate too")
     }
 
     @Test

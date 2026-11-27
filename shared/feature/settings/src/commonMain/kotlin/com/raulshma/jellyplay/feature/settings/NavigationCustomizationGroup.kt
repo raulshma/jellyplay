@@ -139,10 +139,14 @@ fun NavigationCustomizationGroup(
     viewModel: AppearanceSettingsViewModel,
     modifier: Modifier = Modifier,
     onCustomizeShortcuts: () -> Unit = {},
+    /** The master haptics switch's direct link: lands on the Library views leaf with the row highlighted. */
+    onOpenHapticsSwitch: () -> Unit = {},
     /** The appearance-screen slice — the global interface rows read it (24h clock, press animation, pull-to-refresh). */
     screen: AppearanceScreenPreferences,
     /** The scaffold's picker host state — the start-tab list picker rides it. */
     activePicker: MutableState<PickerState<*>?>,
+    /** The leaf's deep-link id: the matching declared row highlights (null = none). */
+    highlightSettingId: String? = null,
 ) {
     val isTv = LocalTvMode.current
     // The row set per form factor derives from the registry's placement
@@ -172,7 +176,9 @@ fun NavigationCustomizationGroup(
         modifier = modifier,
     ) {
         // hide-on-scroll toggle + the 11 global interface & interaction rows
-        SettingsItemList(total = navItems.size + 1 + 11) {
+        // + the master-haptics-switch link row (+1, the explicit screen-local
+        // term — it owns no knob of its own).
+        SettingsItemList(total = navItems.size + 1 + 11 + 1) {
         SettingToggleItem(
             icon = Tabler.Outline.ArrowBarToDown,
             title = rowTitle(AppearanceRows.NavHideOnScroll),
@@ -180,6 +186,7 @@ fun NavigationCustomizationGroup(
                 if (preferences.hideBottomNavOnScroll) Res.string.settings_nav_hide_on_scroll_on else Res.string.settings_nav_hide_on_scroll_off,
             ),
             checked = preferences.hideBottomNavOnScroll,
+            highlighted = highlightSettingId == AppearanceRows.NavHideOnScroll.id,
             onCheckedChange = { viewModel.edit { scope -> scope.navigation.setHideBottomNavOnScroll(it) } },
         )
 
@@ -192,6 +199,7 @@ fun NavigationCustomizationGroup(
             title = startTabTitle,
             subtitle = rowSubtitle(AppearanceRows.StartTab),
             trailingText = preferences.startTab.ifBlank { defaultTabLabel },
+            highlighted = highlightSettingId == AppearanceRows.StartTab.id,
             onClick = {
                 activePicker.value = PickerState.List(
                     title = startTabTitle,
@@ -208,6 +216,7 @@ fun NavigationCustomizationGroup(
             title = rowTitle(AppearanceRows.TimeUse24h),
             subtitle = rowSubtitle(AppearanceRows.TimeUse24h),
             checked = screen.timeUse24h,
+            highlighted = highlightSettingId == AppearanceRows.TimeUse24h.id,
             onCheckedChange = { viewModel.edit { scope -> scope.appearance.setTimeUse24h(it) } },
         )
 
@@ -216,6 +225,7 @@ fun NavigationCustomizationGroup(
             title = rowTitle(AppearanceRows.CardPressAnimations),
             subtitle = rowSubtitle(AppearanceRows.CardPressAnimations),
             checked = screen.cardPressAnimations,
+            highlighted = highlightSettingId == AppearanceRows.CardPressAnimations.id,
             onCheckedChange = { viewModel.edit { scope -> scope.appearance.setCardPressAnimations(it) } },
         )
 
@@ -224,6 +234,7 @@ fun NavigationCustomizationGroup(
             title = rowTitle(AppearanceRows.PullToRefresh),
             subtitle = rowSubtitle(AppearanceRows.PullToRefresh),
             checked = screen.pullToRefreshEnabled,
+            highlighted = highlightSettingId == AppearanceRows.PullToRefresh.id,
             onCheckedChange = { viewModel.edit { scope -> scope.appearance.setPullToRefreshEnabled(it) } },
         )
 
@@ -234,6 +245,7 @@ fun NavigationCustomizationGroup(
             title = backdropDimTitle,
             subtitle = rowSubtitle(AppearanceRows.BackdropDim),
             trailingText = screen.appBackdropDim.displayName,
+            highlighted = highlightSettingId == AppearanceRows.BackdropDim.id,
             onClick = {
                 activePicker.value = PickerState.List(
                     title = backdropDimTitle,
@@ -251,6 +263,7 @@ fun NavigationCustomizationGroup(
             title = hapticsIntensityTitle,
             subtitle = rowSubtitle(AppearanceRows.HapticsIntensity),
             trailingText = screen.hapticsIntensity.displayName,
+            highlighted = highlightSettingId == AppearanceRows.HapticsIntensity.id,
             onClick = {
                 activePicker.value = PickerState.List(
                     title = hapticsIntensityTitle,
@@ -262,12 +275,27 @@ fun NavigationCustomizationGroup(
             },
         )
 
+        // The master haptics ON/OFF switch lives on the Library views leaf
+        // (its single catalog home — the intensity picker beside it here is
+        // level-only). This direct link lands there with the row highlighted
+        // (the "Customize shortcuts" row's screen-local action-row shape —
+        // no duplicate setting, the existing toggle is reused).
+        SettingListItem(
+            icon = rowIcon(AppearanceRows.HapticsEnabled),
+            title = rowTitle(AppearanceRows.HapticsEnabled),
+            subtitle = rowSubtitle(AppearanceRows.HapticsEnabled),
+            trailingText = "",
+            highlighted = false,
+            onClick = onOpenHapticsSwitch,
+        )
+
         val imageQualityTitle = rowTitle(AppearanceRows.ImageQuality)
         SettingListItem(
             icon = rowIcon(AppearanceRows.ImageQuality),
             title = imageQualityTitle,
             subtitle = rowSubtitle(AppearanceRows.ImageQuality),
             trailingText = screen.imageQualityPreset.displayName,
+            highlighted = highlightSettingId == AppearanceRows.ImageQuality.id,
             onClick = {
                 activePicker.value = PickerState.List(
                     title = imageQualityTitle,
@@ -285,6 +313,7 @@ fun NavigationCustomizationGroup(
             title = listDensityTitle,
             subtitle = rowSubtitle(AppearanceRows.ListDensity),
             trailingText = screen.appListDensity.displayName,
+            highlighted = highlightSettingId == AppearanceRows.ListDensity.id,
             onClick = {
                 activePicker.value = PickerState.List(
                     title = listDensityTitle,
@@ -303,6 +332,7 @@ fun NavigationCustomizationGroup(
             title = pressEffectTitle,
             subtitle = rowSubtitle(AppearanceRows.PressEffect),
             trailingText = screen.appPressEffect.displayName,
+            highlighted = highlightSettingId == AppearanceRows.PressEffect.id,
             onClick = {
                 activePicker.value = PickerState.List(
                     title = pressEffectTitle,
@@ -319,6 +349,7 @@ fun NavigationCustomizationGroup(
             title = rowTitle(AppearanceRows.FlatCards),
             subtitle = rowSubtitle(AppearanceRows.FlatCards),
             checked = screen.appFlatCards,
+            highlighted = highlightSettingId == AppearanceRows.FlatCards.id,
             onCheckedChange = { viewModel.edit { scope -> scope.appearance.setAppFlatCards(it) } },
         )
 
@@ -328,6 +359,7 @@ fun NavigationCustomizationGroup(
             title = overscrollTitle,
             subtitle = rowSubtitle(AppearanceRows.Overscroll),
             trailingText = screen.appOverscrollStyle.displayName,
+            highlighted = highlightSettingId == AppearanceRows.Overscroll.id,
             onClick = {
                 activePicker.value = PickerState.List(
                     title = overscrollTitle,

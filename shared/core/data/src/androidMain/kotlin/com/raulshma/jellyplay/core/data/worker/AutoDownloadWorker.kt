@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.download.ArrAutoArmSync
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
@@ -38,6 +39,8 @@ class AutoDownloadWorker(
     serverIdentityStore: ServerIdentityStore,
     /** gh-181: the Ask-mode suggestion shade summary (Android posts, desktop no-op). */
     private val suggestionNotifier: AutoDownloadSuggestionNotifier,
+    /** The arr auto-arm stage (gh-225 follow-up) the shared check runs mid-pass. */
+    arrAutoArmSync: ArrAutoArmSync,
 ) : CoroutineWorker(context, params) {
 
     private val check = AutoDownloadCheck(
@@ -46,6 +49,7 @@ class AutoDownloadWorker(
         policyStore = policyStore,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
+        arrAutoArmSync = arrAutoArmSync,
         serverIdentityStore = serverIdentityStore,
         isStopped = { isStopped },
     )

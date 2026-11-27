@@ -1,90 +1,85 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_account
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_activity_insights
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cat_look_and_feel
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cat_media_playback
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cat_system_data
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the settings root screen's derived entrance steps to the exact literal
- * numbers the hand-typed `settingsSection(key, phoneStep, tvStep)` call sites
- * carried before the derivation replaced them. The screen must not renumber —
- * any drift here is a visible stagger change (each step seeds a 20 ms delay),
- * so every (phone, tv) pair is asserted literally.
- *
- * Shape notes (both pinned):
- *  - `group_screensaver` is TV-only; its phone number (17) is the slot it
- *    occupies in [SETTINGS_ENTRANCE_SECTIONS] but no phone section ever reads
- *    it — the phone axis skips tvOnly entries, which is why `group_idle_ambient`
- *    keeps phone 17 while its tv step shifts to 18.
- *  - `item_notifications` keeps its (13, 13) slot and the capability-gated
- *    `group_idle_ambient` / `group_discord_presence` / `group_shell_hooks`
- *    groups keep their slots even though those sections only compose where
- *    the matching `settingsCapabilities` flag holds — the literal numbering
- *    counts them on every platform (the accepted stagger hole on platforms
- *    without the capability), and this pin holds for both capability variants.
+ * Pins the settings root screen's derived entrance steps and the declared
+ * category headers to the ADR-0017 root: a media-first flat list under
+ * non-clickable category headers, account pinned top, ONE step axis across
+ * phone/TV/desktop (the former separate phone/TV lists are converged onto
+ * the single declaration — a hand-maintained second step taxonomy is the
+ * wizard-mirror defect). The stagger seeds a 20 ms delay per step, so every
+ * index is asserted literally.
  */
 class SettingsEntranceStepsTest {
 
-    /** Today's literal (phone, tv) pairs, key-by-key — the pin's authority. */
-    private val literalSteps: Map<String, Pair<Int, Int>> = mapOf(
-        "profile" to (0 to 0),
-        "power_user_mode" to (1 to 1),
-        "active_devices" to (2 to 2),
-        "account" to (3 to 3),
-        "activity" to (4 to 4),
-        "system" to (5 to 5),
-        "group_jellyplay" to (6 to 6),
-        "item_home" to (7 to 7),
-        "item_appearance" to (8 to 8),
-        "item_performance" to (9 to 9),
-        "item_playback" to (10 to 10),
-        "item_audio" to (11 to 11),
-        "item_language" to (12 to 12),
-        "item_notifications" to (13 to 13),
-        "item_storage" to (14 to 14),
-        "item_security" to (15 to 15),
-        "item_privacy_data" to (16 to 16),
-        "item_backup" to (17 to 17),
-        "group_screensaver" to (18 to 18),
-        "group_idle_ambient" to (18 to 19),
-        "group_discord_presence" to (19 to 20),
-        "group_shell_hooks" to (20 to 21),
-        "item_experimental" to (21 to 22),
-        "item_integrations" to (22 to 23),
-        "item_about" to (23 to 24),
-        "item_whatsnew" to (24 to 25),
+    /** The pinned render order, key-by-key — the pin's authority. */
+    private val pinnedOrder: List<String> = listOf(
+        "profile",
+        "power_user_mode",
+        "active_devices",
+        "account",
+        "activity",
+        "item_playback",
+        "item_audio",
+        "item_language",
+        "item_appearance",
+        "item_home",
+        "item_performance",
+        "item_ambient",
+        "item_storage",
+        "item_downloads",
+        "item_notifications",
+        "item_security",
+        "item_privacy_data",
+        "item_backup",
+        "system",
+        "item_jellyplay_plugin",
+        "item_integrations",
+        "item_experimental",
+        "item_about",
+        "item_whatsnew",
     )
 
     @Test
-    fun `every derived step pair equals the hand-typed literal`() {
-        literalSteps.forEach { (key, expected) ->
-            val (phone, tv) = settingsEntranceStep(key) ?: error("section '$key' missing from SETTINGS_ENTRANCE_SECTIONS")
-            assertEquals(expected.first, phone, "$key phone step drifted")
-            assertEquals(expected.second, tv, "$key tv step drifted")
+    fun `every derived step equals the section's declaration index`() {
+        pinnedOrder.forEachIndexed { index, key ->
+            assertEquals(index, settingsEntranceStep(key), "$key step drifted")
         }
     }
 
     @Test
     fun `the section list declares exactly the pinned sections in order`() {
-        assertEquals(literalSteps.keys.toList(), SETTINGS_ENTRANCE_SECTIONS.map { it.key },
+        assertEquals(pinnedOrder, SETTINGS_ENTRANCE_SECTIONS.map { it.key },
             "SETTINGS_ENTRANCE_SECTIONS drifted from the pinned render order")
     }
 
     @Test
-    fun `only the screensaver group is tv-only`() {
-        assertEquals(listOf("group_screensaver"), SETTINGS_ENTRANCE_SECTIONS.filter { it.tvOnly }.map { it.key })
-    }
-
-    @Test
-    fun `the tv-only group shifts only its tv followers`() {
-        // Today's hand-typed trio: the tv-only screensaver group costs the
-        // sections after it one tv step but no phone step (the capability-
-        // gated idle-ambient / discord-presence / shell-hooks groups keep
-        // their slots on both axes).
-        assertEquals(21 to 22, settingsEntranceStep("item_experimental")?.let { it.phone to it.tv })
-        assertEquals(22 to 23, settingsEntranceStep("item_integrations")?.let { it.phone to it.tv })
-        assertEquals(23 to 24, settingsEntranceStep("item_about")?.let { it.phone to it.tv })
+    fun `the category headers ride exactly the category lead sections`() {
+        val expected = mapOf(
+            "active_devices" to Res.string.settings_account,
+            "activity" to Res.string.settings_activity_insights,
+            "item_playback" to Res.string.settings_cat_media_playback,
+            "item_appearance" to Res.string.settings_cat_look_and_feel,
+            "item_storage" to Res.string.settings_cat_system_data,
+            "item_jellyplay_plugin" to Res.string.settings_integrations,
+            "item_about" to Res.string.settings_about,
+        )
+        val declared = SETTINGS_ENTRANCE_SECTIONS.mapNotNull { section ->
+            section.headerRes?.let { section.key to it }
+        }.toMap()
+        assertEquals(expected, declared, "the category-header carriers drifted")
     }
 
     @Test

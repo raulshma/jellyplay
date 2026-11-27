@@ -12,9 +12,9 @@ import kotlin.test.fail
  *
  * The search-reveal contract lives in TWO halves the data tests split
  * between them:
- *  - WHICH ids reveal on-screen → the root screen's coverage is pinned by
- *    `SettingsCatalogScreenContractTest`'s reveal tests over
- *    [SettingsScreenGroups.rootRevealGroups];
+ *  - WHICH ids reveal on which screen → the catalog↔screen route totality is
+ *    pinned by `SettingsCatalogScreenContractTest` (ADR-0017: the root hosts
+ *    no reveal rows — every group's ids deep-link their declared screen);
  *  - HOW a group expands for a highlight → every highlight-driven
  *    `SettingsGroup(initiallyExpanded = …)` expression must DERIVE from a
  *    declaration (`… in SettingsScreenGroups.<group>.itemIdSet`), never
@@ -109,6 +109,55 @@ class SettingsGroupExpansionGuardTest {
                         "added to the declaration cannot search-navigate into a collapsed group."
                 },
             )
+        }
+    }
+
+    /**
+     * Single-section screens must auto-expand when navigated to directly
+     * (`highlightSettingId == null`). When a screen hosts only one group,
+     * opening it with the group collapsed leaves an empty/card-only landing.
+     */
+    @Test
+    fun singleSectionScreens_expandWhenHighlightIsNull() {
+        val root = repoRoot()
+        val packageDir = root.resolve(featurePackageDir)
+        assertTrue(packageDir.isDirectory, "missing $featurePackageDir — repo layout changed?")
+
+        val singleSectionChecks = listOf(
+            "PlaybackBasicsScreen.kt" to "playbackBasics",
+            "PlaybackControlsScreen.kt" to "playbackControls",
+            "PlayerChromeSettingsScreen.kt" to "playbackPlayerChrome",
+            "PlaybackAdvancedVideoGroup.kt" to "playbackAdvancedVideo",
+            "PlaybackEngineGroup.kt" to "playbackEngine",
+            "LibraryDisplaySettingsScreen.kt" to "appearanceLibraryViews",
+            "JellyPlayPluginSettingsSection.kt" to "jellyplayFeatures",
+            "PlaybackGroups.kt" to "playbackMediaSegments",
+            "PlaybackGroups.kt" to "playbackDvr",
+            "SettingsSections.kt" to "systemScreensaver",
+            "SettingsSections.kt" to "systemIdleAmbient",
+        )
+
+        for ((fileName, groupName) in singleSectionChecks) {
+            val file = packageDir.walkTopDown().firstOrNull { it.name == fileName }
+            requireNotNull(file) { "missing $fileName" }
+            val text = stripComments(file.readText())
+            var from = 0
+            var matched = false
+            while (true) {
+                val idx = text.indexOf("initiallyExpanded =", from)
+                if (idx < 0) break
+                from = idx + "initiallyExpanded =".length
+                val expression = extractExpression(text, from)
+                if (groupName in expression) {
+                    assertTrue(
+                        "highlightSettingId == null" in expression,
+                        "$fileName ($groupName): single-section screen group must expand when highlightSettingId == null: got $expression",
+                    )
+                    matched = true
+                    break
+                }
+            }
+            assertTrue(matched, "$fileName missing initiallyExpanded expression for $groupName")
         }
     }
 

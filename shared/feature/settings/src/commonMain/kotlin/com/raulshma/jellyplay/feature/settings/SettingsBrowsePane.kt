@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -16,14 +16,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.ContrastLevel
-import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PerformanceLevel
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
-import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.core.ui.model.labelResource
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -38,28 +36,14 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backup_restore_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_biometric_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cache_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast_suffix
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed_value
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_token
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_early_access_features
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_experimental
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_features_enabled
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_sections_visible
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lang_default
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_language_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lock_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notifications_checking
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_token
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_token
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_biometric_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_privacy_data
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_privacy_data_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_whatsnew_subtitle
@@ -67,11 +51,17 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_what
 
 /**
  * The browse pane: the settings root list shown while search is inactive —
- * the CompositionLocalProvider-wrapped LazyColumn wiring the profile /
- * power-user / devices / account / activity / system groups, the item rows,
- * and the TV screensaver + platform-gated desktop groups through
- * [settingsSection]. The screen keeps the header chrome, dialogs, and state
- * ownership.
+ * the CompositionLocalProvider-wrapped LazyColumn emitting the root's flat
+ * entrance/action rows under the declared non-clickable category headers
+ * (ADR-0017), in the media-first order [SETTINGS_ENTRANCE_SECTIONS]
+ * declares: account pinned top, then Media & playback (Playback / Audio /
+ * Language), Look & feel (Appearance / Home / Performance / Ambient),
+ * System & data (Storage / Notifications / Security / Privacy / Backup /
+ * System), Integrations (plugin / Integrations / Experimental) and About.
+ * The former inline tuning groups are gone — screensaver + idle-ambient
+ * live on the Ambient screen, Discord + shell hooks on Integrations, the
+ * plugin section on its own screen (each behind its gate, as here).
+ * The screen keeps the header chrome, dialogs, and state ownership.
  */
 @Composable
 internal fun SettingsBrowsePane(
@@ -88,24 +78,11 @@ internal fun SettingsBrowsePane(
     onNavigate: (Route) -> Unit,
     onSetupWizard: () -> Unit,
     onNewsletterClick: () -> Unit,
-    lastClickedSettingId: String?,
     onLastClickedSettingIdChange: (String?) -> Unit,
     onSignOut: (fromServer: Boolean) -> Unit,
-    activeDialogState: MutableState<PickerState<*>?>,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
         CompositionLocalProvider(LocalAnimateSettingsEntrance provides animateEntrance) {
-            // The root-screen reveal scroll — the sub-screens'
-            // HighlightScrollEffect idiom (see resolveRootRevealItemIndex): a
-            // search-reveal tap must scroll the pane to the target section's
-            // lazy item, or the item never composes and the highlighted row's
-            // own focus choreography (its 400ms-delayed focus grab +
-            // bring-into-view) can never fire — the missing "focus animation
-            // after navigation" on below-fold groups.
-            HighlightScrollEffect(
-                scrollState = lazyListState,
-                scrollIndex = resolveRootRevealItemIndex(lastClickedSettingId, isTv, settingsCapabilities),
-            )
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -153,6 +130,9 @@ internal fun SettingsBrowsePane(
                     )
                 }
 
+                // The Account category's device row: admin-gated content in a
+                // always-composed slot (the category header renders even when
+                // the row drops).
                 settingsSection("active_devices", isTv) {
                     if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
                         ActiveDevicesRow(
@@ -179,57 +159,48 @@ internal fun SettingsBrowsePane(
                     )
                 }
 
-                settingsSection("system", isTv) {
-                    SettingsSystemSection(
-                        viewModel = viewModel,
-                        openSetting = openSetting,
-                        onSetupWizardClick = {
-                            onLastClickedSettingIdChange(SystemRows.SetupWizard.id)
-                            onSetupWizard()
-                        },
-                    )
-                }
-
-                // The JellyPlay companion plugin's whole root-screen face
-                // in ONE grouped row: the navigation entries
-                // (sync / messages / my ratings / your watching) above the
-                // per-feature switches, inside a single SettingsGroup card.
-                // Same
-                // graceful-absent gating: the section hides unless the probe
-                // reports AVAILABLE, and each row rides its own gate.
-                settingsSection("group_jellyplay", isTv) {
-                    SettingsJellyPlayPluginSection(
-                        viewModel = viewModel,
-                        lastClickedSettingId = lastClickedSettingId,
-                        onOpenSync = { onNavigate(Route.JellyPlaySync) },
-                        onOpenMessages = { onNavigate(Route.JellyPlayMessages) },
-                        onOpenUserRatings = { onNavigate(Route.JellyPlayUserRatings) },
-                        onOpenYourWatching = { onNavigate(Route.JellyPlayYourWatching) },
-                    )
-                }
-
-                settingsSection(HomeEntrance.section.key, isTv) {
-                    val homePrefs by viewModel.homePreferences.collectAsStateWithLifecycle()
+                // ── Media & Playback ────────────────────────────────────
+                // Each entrance's subtitle is its domain's live summary —
+                // a pure *SummaryParts fold over the slice the domain screen
+                // reads (exposed on the VM), resolved part-by-part at
+                // composition (ADR-0017 decision 3; folds jvmTest-pinned).
+                settingsSection(PlaybackEntrance.section.key, isTv) {
+                    val playback by viewModel.playbackPreferences.collectAsStateWithLifecycle()
                     SettingListItem(
-                        icon = HomeEntrance.icon,
-                        title = stringResource(HomeEntrance.titleRes),
-                        subtitle = stringResource(
-                            Res.string.settings_home_sections_visible,
-                            homePrefs.enabledHomeSectionTypes.size,
-                            HomeSectionType.CONFIGURABLE.size,
+                        icon = PlaybackEntrance.icon,
+                        title = stringResource(PlaybackEntrance.titleRes),
+                        subtitle = joinSummaryTokens(playbackSummaryParts(playback).map { it.resolveAtComposition() }),
+                        index = 0, count = 1,
+                        onClick = { openSetting(PlaybackEntrance.rowId) { Route.PlaybackSettings(it) } },
+                    )
+                }
+
+                settingsSection(AudioEntrance.section.key, isTv) {
+                    val audio by viewModel.audioPreferences.collectAsStateWithLifecycle()
+                    SettingListItem(
+                        icon = AudioEntrance.icon,
+                        title = stringResource(AudioEntrance.titleRes),
+                        subtitle = joinSummaryTokens(audioSummaryParts(audio).map { it.resolveAtComposition() }),
+                        index = 0, count = 1,
+                        onClick = { openSetting(AudioEntrance.rowId) { Route.AudioSettings(it) } },
+                    )
+                }
+
+                settingsSection(LanguageEntrance.section.key, isTv) {
+                    val language by viewModel.languagePreferences.collectAsStateWithLifecycle()
+                    val langDefaultFace = stringResource(Res.string.settings_lang_default)
+                    SettingListItem(
+                        icon = LanguageEntrance.icon,
+                        title = stringResource(LanguageEntrance.titleRes),
+                        subtitle = joinSummaryTokens(
+                            languageSummaryParts(language, langDefaultFace).map { it.resolveAtComposition() },
                         ),
                         index = 0, count = 1,
-                        onClick = { openSetting(HomeEntrance.rowId) { Route.HomeSettings(it) } },
+                        onClick = { openSetting(LanguageEntrance.rowId) { Route.LanguageSettings(it) } },
                     )
                 }
 
-                // The converted domains' entrances: key, icon, title and
-                // deep-link row id read the domain's declaration
-                // ([AppearanceEntrance] and the other entrance declarations)
-                // — the same
-                // declaration spliced into SETTINGS_ENTRANCE_SECTIONS derives
-                // the section's entrance step — so emission and numbering
-                // single-home on it.
+                // ── Look & Feel ─────────────────────────────────────────
                 settingsSection(AppearanceEntrance.section.key, isTv) {
                     SettingListItem(
                         icon = AppearanceEntrance.icon,
@@ -240,48 +211,85 @@ internal fun SettingsBrowsePane(
                     )
                 }
 
+                settingsSection(HomeEntrance.section.key, isTv) {
+                    val homePrefs by viewModel.homePreferences.collectAsStateWithLifecycle()
+                    SettingListItem(
+                        icon = HomeEntrance.icon,
+                        title = stringResource(HomeEntrance.titleRes),
+                        subtitle = joinSummaryTokens(homeSummaryParts(homePrefs).map { it.resolveAtComposition() }),
+                        index = 0, count = 1,
+                        onClick = { openSetting(HomeEntrance.rowId) { Route.HomeSettings(it) } },
+                    )
+                }
+
+                // The Performance value face, not the static explainer
+                // sentence — the explainer wrapped to two lines in most
+                // locales and broke the root list's uniform row height. Same
+                // value pattern as the playback/audio/language entrances
+                // beside it; the hub screen owns the explanatory copy.
                 settingsSection(PerformanceEntrance.section.key, isTv) {
-                    // The value face, not the static explainer sentence — the
-                    // explainer wrapped to two lines in most locales and broke
-                    // the root list's uniform row height. Same value pattern as
-                    // the playback/audio/language entrances beside it; the hub
-                    // screen owns the explanatory copy.
+                    val reduceMotion by viewModel.reduceMotionEnabled.collectAsStateWithLifecycle()
                     SettingListItem(
                         icon = PerformanceEntrance.icon,
                         title = stringResource(PerformanceEntrance.titleRes),
-                        subtitle = preferences.performanceLevel.localizedDisplayName(),
+                        subtitle = joinSummaryTokens(
+                            performanceSummaryParts(preferences.performanceLevel, reduceMotion)
+                                .map { it.resolveAtComposition() },
+                        ),
                         index = 0, count = 1,
                         onClick = { openSetting(PerformanceEntrance.rowId) { Route.PerformanceSettings(it) } },
                     )
                 }
 
-                settingsSection(PlaybackEntrance.section.key, isTv) {
+                // The Ambient entrance (ADR-0017): the TV dream group + the
+                // desktop idle-ambient group as ONE screen — visible when
+                // either gate can show content (TV mode OR the idle-screen
+                // capability). The summary reads the same fork the gate does.
+                settingsSection(AmbientEntrance.section.key, isTv) {
+                    if (ambientScreenAdmitted(isTv)) {
+                        SettingListItem(
+                            icon = AmbientEntrance.icon,
+                            title = stringResource(AmbientEntrance.titleRes),
+                            subtitle = joinSummaryTokens(
+                                ambientSummaryParts(
+                                    isTv = isTv,
+                                    idleAmbientEnabled = preferences.idleAmbientEnabled,
+                                    idleAmbientTimeoutMin = preferences.idleAmbientTimeoutMin,
+                                    dreamShowTitle = preferences.dreamShowTitle,
+                                    dreamKenBurnsEnabled = preferences.dreamKenBurnsEnabled,
+                                ).map { it.resolveAtComposition() },
+                            ),
+                            index = 0, count = 1,
+                            onClick = { openSetting(AmbientEntrance.rowId) { Route.AmbientSettings(it) } },
+                        )
+                    }
+                }
+
+                // ── System & Data ───────────────────────────────────────
+                settingsSection(StorageEntrance.section.key, isTv) {
+                    val storage by viewModel.storagePreferences.collectAsStateWithLifecycle()
                     SettingListItem(
-                        icon = PlaybackEntrance.icon,
-                        title = stringResource(PlaybackEntrance.titleRes),
-                        subtitle = stringResource(Res.string.settings_playback_subtitle, preferences.preferredPlayer.displayName),
+                        icon = StorageEntrance.icon,
+                        title = stringResource(StorageEntrance.titleRes),
+                        subtitle = joinSummaryTokens(
+                            storageSummaryParts(storage, viewModel.cacheSizeMb).map { it.resolveAtComposition() },
+                        ),
                         index = 0, count = 1,
-                        onClick = { openSetting(PlaybackEntrance.rowId) { Route.PlaybackSettings(it) } },
+                        onClick = { openSetting(StorageEntrance.rowId) { Route.StorageSettings(it) } },
                     )
                 }
 
-                settingsSection(AudioEntrance.section.key, isTv) {
+                // The Downloads sibling entrance (ADR-0017's storage split):
+                // the live-subtitle entrance opening the Downloads screen the
+                // cache/network screen's group moved out of.
+                settingsSection(DownloadsEntrance.section.key, isTv) {
+                    val downloads by viewModel.downloadPreferences.collectAsStateWithLifecycle()
                     SettingListItem(
-                        icon = AudioEntrance.icon,
-                        title = stringResource(AudioEntrance.titleRes),
-                        subtitle = stringResource(Res.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"),
+                        icon = DownloadsEntrance.icon,
+                        title = stringResource(DownloadsEntrance.titleRes),
+                        subtitle = joinSummaryTokens(downloadsSummaryParts(downloads).map { it.resolveAtComposition() }),
                         index = 0, count = 1,
-                        onClick = { openSetting(AudioEntrance.rowId) { Route.AudioSettings(it) } },
-                    )
-                }
-
-                settingsSection(LanguageEntrance.section.key, isTv) {
-                    SettingListItem(
-                        icon = LanguageEntrance.icon,
-                        title = stringResource(LanguageEntrance.titleRes),
-                        subtitle = stringResource(Res.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default)),
-                        index = 0, count = 1,
-                        onClick = { openSetting(LanguageEntrance.rowId) { Route.LanguageSettings(it) } },
+                        onClick = { openSetting(DownloadsEntrance.rowId) { Route.DownloadsSettings(it) } },
                     )
                 }
 
@@ -294,33 +302,23 @@ internal fun SettingsBrowsePane(
                         SettingListItem(
                             icon = NotificationEntrance.icon,
                             title = stringResource(NotificationEntrance.titleRes),
-                            subtitle = if (notifPrefs.enabled) stringResource(Res.string.settings_notifications_checking, notifPrefs.checkFrequency.localizedDisplayName().lowercase()) else stringResource(Res.string.settings_disabled),
+                            subtitle = joinSummaryTokens(
+                                notificationsSummaryParts(notifPrefs).map { it.resolveAtComposition() },
+                            ),
                             index = 0, count = 1,
                             onClick = { openSetting(NotificationEntrance.rowId) { Route.NotificationSettings(it) } },
                         )
                     }
                 }
 
-                settingsSection(StorageEntrance.section.key, isTv) {
-                    SettingListItem(
-                        icon = StorageEntrance.icon,
-                        title = stringResource(StorageEntrance.titleRes),
-                        subtitle = stringResource(Res.string.settings_cache_subtitle, viewModel.cacheSizeMb),
-                        index = 0, count = 1,
-                        onClick = { openSetting(StorageEntrance.rowId) { Route.StorageSettings(it) } },
-                    )
-                }
-
                 settingsSection(SecurityEntrance.section.key, isTv) {
                     SettingListItem(
                         icon = SecurityEntrance.icon,
                         title = stringResource(SecurityEntrance.titleRes),
-                        subtitle = when {
-                            preferences.pinLockEnabled && preferences.biometricLockEnabled -> stringResource(Res.string.settings_pin_biometric_on)
-                            preferences.biometricLockEnabled -> stringResource(Res.string.settings_biometric_on)
-                            preferences.pinLockEnabled -> stringResource(Res.string.settings_pin_on)
-                            else -> stringResource(Res.string.settings_lock_off)
-                        },
+                        subtitle = joinSummaryTokens(
+                            securitySummaryParts(preferences.pinLockEnabled, preferences.biometricLockEnabled)
+                                .map { it.resolveAtComposition() },
+                        ),
                         index = 0, count = 1,
                         onClick = { openSetting(SecurityEntrance.rowId) { Route.SecuritySettings(it) } },
                     )
@@ -346,70 +344,60 @@ internal fun SettingsBrowsePane(
                     )
                 }
 
-                if (isTv) {
-                    settingsSection("group_screensaver", isTv) {
-                        SettingsScreensaverSection(
-                            preferences = preferences,
-                            viewModel = viewModel,
-                            lastClickedSettingId = lastClickedSettingId,
-                            activeDialog = activeDialogState,
-                        )
-                    }
-                }
-
-                // the desktop idle "Ready to play" ambient
-                // screen rows — capability-gated (structurally absent
-                // on Android, whose lock-screen/screensaver story owns
-                // idle display), rendered as their own group beside
-                // the TV dream group so neither row total entangles.
-                if (settingsCapabilities.supportsIdleAmbientScreen) {
-                    settingsSection("group_idle_ambient", isTv) {
-                        SettingsIdleAmbientSection(
-                            preferences = preferences,
-                            viewModel = viewModel,
-                            lastClickedSettingId = lastClickedSettingId,
-                            activeDialog = activeDialogState,
-                        )
-                    }
-                }
-
-                // the desktop Discord Rich Presence toggle (feature
-                // 4.2) — capability-gated like the idle-ambient block
-                // beside it (the IPC client lives in the desktop
-                // shell only), rendered as its own group so neither
-                // row total entangles.
-                if (settingsCapabilities.supportsDiscordPresence) {
-                    settingsSection("group_discord_presence", isTv) {
-                        SettingsDiscordPresenceSection(
-                            preferences = preferences,
-                            viewModel = viewModel,
-                            lastClickedSettingId = lastClickedSettingId,
-                        )
-                    }
-                }
-
-                // the desktop playback-event shell hooks (feature
-                // 4.3) — same capability-gated shape; the command
-                // rows open the shared free-form text editor.
-                if (settingsCapabilities.supportsShellHooks) {
-                    settingsSection("group_shell_hooks", isTv) {
-                        SettingsShellHooksSection(
-                            preferences = preferences,
-                            viewModel = viewModel,
-                            lastClickedSettingId = lastClickedSettingId,
-                            activeDialog = activeDialogState,
-                        )
-                    }
-                }
-
-                settingsSection("item_experimental", isTv) {
-                    SettingListItem(
-                        icon = Tabler.Outline.Flask,
-                        title = stringResource(Res.string.settings_experimental),
-                        subtitle = experimentalSummarySubtitle(preferences),
-                        index = 0, count = 1,
-                        onClick = { openSetting(ExperimentalSettingsIds.EXPERIMENTAL) { Route.ExperimentalSettings(it) } },
+                settingsSection("system", isTv) {
+                    SettingsSystemSection(
+                        viewModel = viewModel,
+                        openSetting = openSetting,
+                        onSetupWizardClick = {
+                            onLastClickedSettingIdChange(SystemRows.SetupWizard.id)
+                            onSetupWizard()
+                        },
                     )
+                }
+
+                // ── Integrations ────────────────────────────────────────
+                // The companion plugin's ONE entrance (ADR-0017): the root's
+                // former inline plugin section is now one gated row into the
+                // plugin screen. The slot always composes (it carries the
+                // Integrations category header), the probe rides the slot's
+                // visibility exactly as the inline section's did — UNKNOWN
+                // probes once; UNAVAILABLE composes nothing except the
+                // refused-contract banner (the drift's only surface);
+                // AVAILABLE renders the row.
+                settingsSection(JellyPlayPluginEntrance.section.key, isTv) {
+                    val pluginStatus by viewModel.jellyPlayPluginStatus.collectAsStateWithLifecycle()
+                    val contractMismatch by viewModel.jellyPlayContractMismatch.collectAsStateWithLifecycle()
+                    LaunchedEffect(pluginStatus) {
+                        if (pluginStatus == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNKNOWN) {
+                            viewModel.refreshJellyPlayPluginStatus()
+                        }
+                    }
+                    val mismatch = contractMismatch
+                    when {
+                        pluginStatus == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNAVAILABLE && mismatch != null ->
+                            JellyPlayContractMismatchBanner(mismatch)
+                        pluginStatus == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.AVAILABLE -> {
+                            // The live summary's inputs: the sync engine's
+                            // enabled flag and the probe-exposed features the
+                            // user's toggles leave on (the section's own
+                            // switch-state intersection).
+                            val syncState by viewModel.jellyPlaySyncState.collectAsStateWithLifecycle()
+                            val exposedFeatures by viewModel.jellyPlayPluginFeatures.collectAsStateWithLifecycle()
+                            val featureToggles by viewModel.jellyPlayFeatureToggles.collectAsStateWithLifecycle()
+                            SettingListItem(
+                                icon = JellyPlayPluginEntrance.icon,
+                                title = stringResource(JellyPlayPluginEntrance.titleRes),
+                                subtitle = joinSummaryTokens(
+                                    jellyPlayPluginSummaryParts(
+                                        syncEnabled = syncState.enabled,
+                                        enabledFeatureCount = exposedFeatures.count { it in featureToggles },
+                                    ).map { it.resolveAtComposition() },
+                                ),
+                                index = 0, count = 1,
+                                onClick = { openSetting(JellyPlayPluginEntrance.rowId) { Route.JellyPlayPluginSettings(it) } },
+                            )
+                        }
+                    }
                 }
 
                 settingsSection(IntegrationsEntrance.section.key, isTv) {
@@ -422,6 +410,17 @@ internal fun SettingsBrowsePane(
                     )
                 }
 
+                settingsSection("item_experimental", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Flask,
+                        title = stringResource(Res.string.settings_experimental),
+                        subtitle = experimentalSummarySubtitle(preferences),
+                        index = 0, count = 1,
+                        onClick = { openSetting(ExperimentalSettingsIds.EXPERIMENTAL) { Route.ExperimentalSettings(it) } },
+                    )
+                }
+
+                // ── About ───────────────────────────────────────────────
                 settingsSection(AboutEntrance.section.key, isTv) {
                     SettingListItem(
                         icon = AboutEntrance.icon,
@@ -467,8 +466,11 @@ internal sealed interface SettingsSummaryPart {
     /** A plain string-resource token. */
     data class Token(val resource: StringResource) : SettingsSummaryPart
 
-    /** A formatted string-resource token (the contrast suffix with its cased label). */
-    data class Formatted(val resource: StringResource, val arg: String) : SettingsSummaryPart
+    /** A formatted string-resource token; [arg] carries the placeholder's own type (String/Int/Long). */
+    data class Formatted(val resource: StringResource, val arg: Any) : SettingsSummaryPart
+
+    /** A two-argument formatted string-resource token (the count-pair faces). */
+    data class Formatted2(val resource: StringResource, val arg1: Any, val arg2: Any) : SettingsSummaryPart
 
     /** A plural resource carrying its own count (features-enabled). */
     data class Plural(val resource: PluralStringResource, val count: Int) : SettingsSummaryPart
@@ -515,12 +517,25 @@ internal fun experimentalSummaryParts(preferences: SettingsScreenPreferences): L
 /** Joins rendered summary tokens with the summary separator policy (", "). */
 internal fun joinSummaryTokens(rendered: List<String>): String = rendered.joinToString(", ")
 
-/** Resolves a summary part at composition; called from the inline `map` lambdas below. */
+/**
+ * The default-speed face the playback/audio summaries share ("1x", "1.5x") —
+ * the row faces' long-standing shape, extracted so both folds render it one
+ * way (and the test can pin it).
+ */
+internal fun defaultSpeedFace(speed: Float): String =
+    if (speed == 1.0f) "1x" else "${speed}x"
+
+/**
+ * Resolves a summary part at composition; called from inline `map` lambdas at
+ * every summary wiring site (the root browse pane and the three domain hub
+ * screens — internal so the hub screens share the one resolver).
+ */
 @Composable
-private fun SettingsSummaryPart.resolveAtComposition(): String = when (this) {
+internal fun SettingsSummaryPart.resolveAtComposition(): String = when (this) {
     is SettingsSummaryPart.Literal -> text
     is SettingsSummaryPart.Token -> stringResource(resource)
     is SettingsSummaryPart.Formatted -> stringResource(resource, arg)
+    is SettingsSummaryPart.Formatted2 -> stringResource(resource, arg1, arg2)
     is SettingsSummaryPart.Plural -> pluralStringResource(resource, count, count)
 }
 

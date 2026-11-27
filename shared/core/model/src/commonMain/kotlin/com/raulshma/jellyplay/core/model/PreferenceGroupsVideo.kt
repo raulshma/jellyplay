@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * The video-playback preference aggregates: the logical VideoPlayer domain
- * and the PlaybackSettingsScreen slice.
+ * and the playback settings screens' slice (ADR-0017's hub + leaves).
  */
 
 @Immutable
@@ -77,7 +77,7 @@ data class VideoPlayerPreferences(
 // each slice de-duplicated.
 // ---------------------------------------------------------------------------
 
-/** Fields read by `PlaybackSettingsScreen`. */
+/** Fields read by the playback settings screens (the hub + its leaves, ADR-0017). */
 @Immutable
 @Serializable
 data class PlaybackPreferences(
@@ -201,6 +201,8 @@ data class PlaybackPreferences(
     val videoResumeChipMs: Long = 3_000L,
     /** The center prev/play/next cluster. Default on. */
     val videoShowPrevNextButtons: Boolean = true,
+    /** In-player playback diagnostics telemetry HUD & buffering pill. Default off. */
+    val videoPlaybackDiagnostics: Boolean = false,
     /** Brightness/volume swipe-curve sensitivity. Default DEFAULT. */
     val videoSwipeSensitivity: PlayerSwipeSensitivity = PlayerSwipeSensitivity.DEFAULT,
     /** Gesture-overlay dismiss delay (200–2 000). Default 800. */

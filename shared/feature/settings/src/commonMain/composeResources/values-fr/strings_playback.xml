@@ -76,6 +76,8 @@
     <string name="settings_quality_720p">720p</string>
     <string name="settings_quality_1080p">1080p</string>
     <string name="settings_quality_4k">4K</string>
+    <string name="settings_quality_original_uncapped">Original (sans limite de débit)</string>
+    <string name="settings_quality_original">Original</string>
     <string name="settings_network_timeouts">Délais réseau</string>
     <string name="settings_network_timeouts_subtitle">Préréglage de délai connexion/lecture/écriture (redémarrer pour appliquer)</string>
     <string name="settings_dialogue_boost">Amélioration des dialogues</string>
@@ -247,6 +249,23 @@
     <string name="settings_dvr_quality_medium">Transcoder en Qualité moyenne (720p)</string>
     <string name="settings_dvr_quality_low">Transcoder en Basse qualité (480p)</string>
     <string name="settings_playback_subtitle">Moteur de lecture : %1$s</string>
+    <string name="settings_playback_sections">Sections de lecture</string>
+    <string name="settings_playback_entry_basics">Essentiels</string>
+    <string name="settings_playback_entry_basics_subtitle">Moteur, lecture auto, reprise &amp; comportement du lecteur</string>
+    <string name="settings_playback_entry_controls">Commandes &amp; gestes</string>
+    <string name="settings_playback_entry_controls_subtitle">Tactile, orientation, gestes &amp; attribution des touches</string>
+    <string name="settings_playback_entry_chrome">Habillage du lecteur</string>
+    <string name="settings_playback_entry_chrome_subtitle">Superpositions, barre de progression, boutons &amp; disposition du HUD</string>
+    <string name="settings_playback_entry_video_quality">Vidéo &amp; transcodage</string>
+    <string name="settings_playback_entry_video_quality_subtitle">Qualité, décodeur, passthrough &amp; limites de transcodage</string>
+    <string name="settings_playback_entry_engines">Moteurs de lecture</string>
+    <string name="settings_playback_entry_engines_subtitle">Réglages de MPV, VLC, ExoPlayer &amp; lecteur externe</string>
+    <string name="settings_playback_entry_segments">Sauts &amp; segments</string>
+    <string name="settings_playback_entry_segments_subtitle">Saut d'intro/générique, récaps &amp; pré-roll de À suivre</string>
+    <string name="settings_playback_entry_syncplay_casting">SyncPlay &amp; diffusion</string>
+    <string name="settings_playback_entry_syncplay_casting_subtitle">Visionnage en groupe, DLNA &amp; choix du renderer</string>
+    <string name="settings_playback_entry_live_tv">TV en direct &amp; DVR</string>
+    <string name="settings_playback_entry_live_tv_subtitle">Marge d'enregistrement &amp; qualité</string>
     <string name="settings_player_engine">Moteur de lecture</string>
     <string name="settings_player_engine_subtitle">Choisir le moteur de lecture multimédia</string>
     <string name="settings_shader_pack">Pack de shaders</string>
@@ -311,6 +330,8 @@
     <string name="settings_video_resume_chip_ms_subtitle">Combien de temps reste la puce « touche pour redémarrer » (0 = jamais)</string>
     <string name="settings_video_show_prev_next_buttons">Boutons Précédent/Suivant</string>
     <string name="settings_video_show_prev_next_buttons_subtitle">Affiche les boutons de saut d’épisode à côté de Lire</string>
+    <string name="settings_video_playback_diagnostics">Diagnostics de lecture</string>
+    <string name="settings_video_playback_diagnostics_subtitle">Affiche le débit réseau et la télémétrie de mise en mémoire tampon en temps réel</string>
     <string name="settings_video_swipe_sensitivity">Sensibilité du balayage</string>
     <string name="settings_video_swipe_sensitivity_subtitle">À quelle vitesse répondent les balayages de luminosité/volume</string>
     <string name="settings_video_gesture_overlay_linger_ms">Persistance de la superposition de gestes</string>
