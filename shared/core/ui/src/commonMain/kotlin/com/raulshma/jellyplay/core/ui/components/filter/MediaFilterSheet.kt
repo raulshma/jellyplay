@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
+import com.raulshma.jellyplay.core.ui.components.jellyPlayToggleButtonColors
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.YearPresetSelection
 import com.raulshma.jellyplay.core.ui.components.toggleYearPreset
@@ -410,7 +411,7 @@ fun MediaFilterSheet(
                                             onCheckedChange = {
                                                 if (it) draft = draft.withSortBy(option)
                                             },
-                                            colors = ToggleButtonDefaults.toggleButtonColors(
+                                            colors = jellyPlayToggleButtonColors(
                                                 containerColor = glassBg,
                                                 contentColor = contentColor,
                                                 checkedContainerColor = MaterialTheme.colorScheme.primary,
@@ -461,7 +462,7 @@ fun MediaFilterSheet(
                                             onCheckedChange = {
                                                 if (it) draft = draft.withPlayedStatus(status)
                                             },
-                                            colors = ToggleButtonDefaults.toggleButtonColors(
+                                            colors = jellyPlayToggleButtonColors(
                                                 containerColor = glassBg,
                                                 contentColor = contentColor,
                                                 checkedContainerColor = MaterialTheme.colorScheme.primary,

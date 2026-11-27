@@ -52,6 +52,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import com.raulshma.jellyplay.core.ui.components.jellyPlayExposedDropdownMenu
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -761,7 +762,7 @@ private fun LabeledDropdown(
                     .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                     .fillMaxWidth(),
             )
-            ExposedDropdownMenu(
+            jellyPlayExposedDropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
                 containerColor = colorScheme.surfaceContainerHigh,

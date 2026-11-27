@@ -13,6 +13,15 @@ test-retry = "1.6.6"
 composeBom = "2026.09.00"
 # 1.5.0-rc01/stable are on the compose 1.13 pairing (BOM 2026.11.01); beta02
 # stays the newest 1.5-line artifact on the current compose 1.12.1 BOM.
+# ALIGNMENT RULE: KmpLibraryComposePlugin constrains every graph that contains
+# androidx.compose.material3:material3 to THIS version, so shared-module
+# compile classpaths resolve the same material3 the app ships (the JB CMP
+# redirect otherwise pins its own older androidx material3 — the
+# compile-vs-runtime drift behind the user-detail tab-switch NoSuchMethodError
+# crash). Bumping composeMaterial3 therefore moves every shared module's
+# compile graph: expect API-removal compile breaks (not silent crashes) here
+# first. Cross-train API divergences compile through core:ui's
+# *Seam expect/actuals (ExposedDropdownMenuSeam, ToggleButtonColorsSeam).
 composeMaterial3 = "1.5.0-beta02"
 composeMaterial3Adaptive = "1.3.0"
 # material3-adaptive-navigation-suite lives in the androidx.compose.material3

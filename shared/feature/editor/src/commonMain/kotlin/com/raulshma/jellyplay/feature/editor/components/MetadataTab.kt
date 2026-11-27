@@ -21,13 +21,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import com.raulshma.jellyplay.core.ui.components.jellyPlayExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -256,11 +257,11 @@ internal fun MetadataTab(
                 OutlinedTextField(
                     value = form.officialRating,
                     onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(officialRating = it) }) },                    label = { Text(stringResource(Res.string.editor_field_official_rating)) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                    modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
                     singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = officialExpanded) },
                 )
-                ExposedDropdownMenu(
+                jellyPlayExposedDropdownMenu(
                     expanded = officialExpanded,
                     onDismissRequest = { officialExpanded = false },
                 ) {
@@ -283,11 +284,11 @@ internal fun MetadataTab(
                 OutlinedTextField(
                     value = form.customRating,
                     onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(customRating = it) }) },                    label = { Text(stringResource(Res.string.editor_field_custom_rating)) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                    modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
                     singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customExpanded) },
                 )
-                ExposedDropdownMenu(
+                jellyPlayExposedDropdownMenu(
                     expanded = customExpanded,
                     onDismissRequest = { customExpanded = false },
                 ) {
@@ -384,11 +385,11 @@ internal fun MetadataTab(
                     OutlinedTextField(
                         value = form.status,
                         onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(status = it) }) },                        label = { Text(stringResource(Res.string.editor_field_status)) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusExpanded) },
                     )
-                    ExposedDropdownMenu(
+                    jellyPlayExposedDropdownMenu(
                         expanded = statusExpanded,
                         onDismissRequest = { statusExpanded = false },
                     ) {
@@ -411,11 +412,11 @@ internal fun MetadataTab(
                     OutlinedTextField(
                         value = form.displayOrder,
                         onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(displayOrder = it) }) },                        label = { Text(stringResource(Res.string.editor_field_display_order)) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = displayExpanded) },
                     )
-                    ExposedDropdownMenu(
+                    jellyPlayExposedDropdownMenu(
                         expanded = displayExpanded,
                         onDismissRequest = { displayExpanded = false },
                     ) {
@@ -784,11 +785,11 @@ private fun PersonEditorDialog(
                         value = type,
                         onValueChange = { type = it },
                         label = { Text(stringResource(Res.string.editor_field_type)) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
                     )
-                    ExposedDropdownMenu(
+                    jellyPlayExposedDropdownMenu(
                         expanded = typeExpanded,
                         onDismissRequest = { typeExpanded = false },
                     ) {
