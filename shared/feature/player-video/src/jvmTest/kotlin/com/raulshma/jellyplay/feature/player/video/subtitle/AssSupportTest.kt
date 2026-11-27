@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.subtitle
 
+import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import kotlin.test.assertFalse
@@ -56,5 +57,35 @@ class AssSupportTest {
     @Test
     fun hasAssSubtitles_emptySubtitles_false() {
         assertFalse(AssSupport.hasAssSubtitles(request(emptyList())))
+    }
+
+    @Test
+    fun hasAssSubtitles_embeddedAssFlag_trueEvenWithEmptyExternalSubtitles() {
+        val req = PlaybackRequest(
+            uri = "https://x/item.mkv",
+            title = "x",
+            externalSubtitles = emptyList(),
+            engineSpecific = PlaybackRequestSpecific(hasEmbeddedAssSubtitles = true),
+        )
+        assertTrue(AssSupport.hasAssSubtitles(req))
+    }
+
+    @Test
+    fun hasAssSubtitles_ssaMimeWithNullCodec_true() {
+        val req = PlaybackRequest(
+            uri = "https://x/item",
+            title = "x",
+            externalSubtitles = listOf(
+                SubtitleSource(
+                    url = "https://x/sub",
+                    label = "Sub",
+                    language = null,
+                    mimeType = "text/x-ssa",
+                    codec = null,
+                    id = "s1",
+                ),
+            ),
+        )
+        assertTrue(AssSupport.hasAssSubtitles(req))
     }
 }

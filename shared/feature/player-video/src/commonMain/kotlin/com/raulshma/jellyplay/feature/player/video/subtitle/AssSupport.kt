@@ -8,9 +8,14 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
  * (ass-media) rendering path for that session.
  */
 internal object AssSupport {
+    fun isAssCodec(codec: String?): Boolean {
+        val c = codec?.lowercase()
+        return c == "ass" || c == "ssa"
+    }
+
     fun hasAssSubtitles(request: PlaybackRequest): Boolean =
-        request.externalSubtitles.any { source ->
-            val c = source.codec?.lowercase()
-            c == "ass" || c == "ssa"
-        }
+        request.requestSpecific?.hasEmbeddedAssSubtitles == true ||
+            request.externalSubtitles.any {
+                isAssCodec(it.codec) || it.mimeType.equals("text/x-ssa", ignoreCase = true)
+            }
 }

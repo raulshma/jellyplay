@@ -7,11 +7,13 @@ import com.raulshma.jellyplay.core.model.LanguageRule
 import com.raulshma.jellyplay.core.model.LanguageRuleSet
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackTls
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleTrackMode
 import com.raulshma.jellyplay.core.model.TrackSelectionPreset
 import com.raulshma.jellyplay.core.model.VideoPerformanceMatrix
@@ -327,6 +329,30 @@ class PlaybackRequestPlanTest {
         assertNull(specific?.normalizationGain)
         assertNull(specific?.mimeType)
         assertNull(specific?.tls)
+        assertEquals(false, specific?.hasEmbeddedAssSubtitles)
         assertEquals(0L, request.serverDurationMs)
+    }
+
+    @Test
+    fun `embedded ASS or SSA subtitle stream sets hasEmbeddedAssSubtitles on requestSpecific`() {
+        val assRequest = PlaybackRequestPlan.of(
+            inputs().copy(
+                streams = listOf(
+                    MediaStream(index = 0, type = StreamType.VIDEO, codec = "h264"),
+                    MediaStream(index = 1, type = StreamType.SUBTITLE, codec = "ass"),
+                ),
+            ),
+        )
+        assertEquals(true, assRequest.requestSpecific?.hasEmbeddedAssSubtitles)
+
+        val srtOnlyRequest = PlaybackRequestPlan.of(
+            inputs().copy(
+                streams = listOf(
+                    MediaStream(index = 0, type = StreamType.VIDEO, codec = "h264"),
+                    MediaStream(index = 1, type = StreamType.SUBTITLE, codec = "subrip"),
+                ),
+            ),
+        )
+        assertEquals(false, srtOnlyRequest.requestSpecific?.hasEmbeddedAssSubtitles)
     }
 }
